@@ -109,8 +109,9 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 			t.Fatal(err)
 		}
 		rawLease := fmt.Sprintf("lease-token-that-is-long-enough-%d", i)
-		if _, err := repositories.Runs.ClaimHTTP(ctx, application.ClaimRunParams{
-			AgentID: agent.ID, LeaseTokenHash: tokens.Hash(rawLease),
+		if _, err := repositories.Runs.ClaimProbe(ctx, application.ClaimRunParams{
+			AgentID: agent.ID, Capabilities: []domain.AgentCapability{domain.CapabilityHTTP},
+			LeaseTokenHash: tokens.Hash(rawLease),
 			LeaseExpiresAt: now.Add(time.Minute), Now: scheduled,
 		}); err != nil {
 			t.Fatal(err)

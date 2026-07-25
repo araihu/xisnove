@@ -112,3 +112,19 @@ func TestMonitorEndpointsUseProbeDefinition(t *testing.T) {
 		}
 	}
 }
+
+func TestLeaseResponseUsesProtocolNeutralWork(t *testing.T) {
+	data, err := os.ReadFile("openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := openapi3.NewLoader().LoadFromData(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := doc.Paths.Value("/v1/agent/work:lease").Post.Responses.Value("200")
+	schema := response.Value.Content.Get("application/json").Schema
+	if schema.Ref != "#/components/schemas/ProbeWork" {
+		t.Fatalf("lease response schema = %q", schema.Ref)
+	}
+}

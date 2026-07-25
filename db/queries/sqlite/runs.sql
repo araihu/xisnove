@@ -7,7 +7,7 @@ INSERT INTO check_runs (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, 'available')
 ON CONFLICT (monitor_id, location_id, scheduled_for) DO NOTHING;
 
--- name: ClaimHTTPRun :one
+-- name: ClaimProbeRun :one
 UPDATE check_runs
 SET status = 'leased',
     lease_agent_id = sqlc.arg(agent_id),
@@ -22,6 +22,7 @@ WHERE id = (
     AND r.status IN ('available', 'leased')
     AND (r.status = 'available' OR r.lease_expires_at <= sqlc.arg(now))
     AND r.scheduled_for <= sqlc.arg(now)
+    AND r.probe_kind IN (sqlc.slice('capabilities'))
     AND a.revoked_at IS NULL
   ORDER BY r.scheduled_for, r.id
   LIMIT 1

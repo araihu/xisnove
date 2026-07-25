@@ -99,39 +99,6 @@ func (e DNSProbeDefinitionRecordType) Valid() bool {
 	}
 }
 
-// Defines values for HTTPProbeMethod.
-const (
-	HTTPProbeMethodDELETE  HTTPProbeMethod = "DELETE"
-	HTTPProbeMethodGET     HTTPProbeMethod = "GET"
-	HTTPProbeMethodHEAD    HTTPProbeMethod = "HEAD"
-	HTTPProbeMethodOPTIONS HTTPProbeMethod = "OPTIONS"
-	HTTPProbeMethodPATCH   HTTPProbeMethod = "PATCH"
-	HTTPProbeMethodPOST    HTTPProbeMethod = "POST"
-	HTTPProbeMethodPUT     HTTPProbeMethod = "PUT"
-)
-
-// Valid indicates whether the value is a known member of the HTTPProbeMethod enum.
-func (e HTTPProbeMethod) Valid() bool {
-	switch e {
-	case HTTPProbeMethodDELETE:
-		return true
-	case HTTPProbeMethodGET:
-		return true
-	case HTTPProbeMethodHEAD:
-		return true
-	case HTTPProbeMethodOPTIONS:
-		return true
-	case HTTPProbeMethodPATCH:
-		return true
-	case HTTPProbeMethodPOST:
-		return true
-	case HTTPProbeMethodPUT:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for HTTPProbeDefinitionKind.
 const (
 	HTTPProbeDefinitionKindHttp HTTPProbeDefinitionKind = "http"
@@ -149,31 +116,31 @@ func (e HTTPProbeDefinitionKind) Valid() bool {
 
 // Defines values for HTTPProbeDefinitionMethod.
 const (
-	HTTPProbeDefinitionMethodDELETE  HTTPProbeDefinitionMethod = "DELETE"
-	HTTPProbeDefinitionMethodGET     HTTPProbeDefinitionMethod = "GET"
-	HTTPProbeDefinitionMethodHEAD    HTTPProbeDefinitionMethod = "HEAD"
-	HTTPProbeDefinitionMethodOPTIONS HTTPProbeDefinitionMethod = "OPTIONS"
-	HTTPProbeDefinitionMethodPATCH   HTTPProbeDefinitionMethod = "PATCH"
-	HTTPProbeDefinitionMethodPOST    HTTPProbeDefinitionMethod = "POST"
-	HTTPProbeDefinitionMethodPUT     HTTPProbeDefinitionMethod = "PUT"
+	DELETE  HTTPProbeDefinitionMethod = "DELETE"
+	GET     HTTPProbeDefinitionMethod = "GET"
+	HEAD    HTTPProbeDefinitionMethod = "HEAD"
+	OPTIONS HTTPProbeDefinitionMethod = "OPTIONS"
+	PATCH   HTTPProbeDefinitionMethod = "PATCH"
+	POST    HTTPProbeDefinitionMethod = "POST"
+	PUT     HTTPProbeDefinitionMethod = "PUT"
 )
 
 // Valid indicates whether the value is a known member of the HTTPProbeDefinitionMethod enum.
 func (e HTTPProbeDefinitionMethod) Valid() bool {
 	switch e {
-	case HTTPProbeDefinitionMethodDELETE:
+	case DELETE:
 		return true
-	case HTTPProbeDefinitionMethodGET:
+	case GET:
 		return true
-	case HTTPProbeDefinitionMethodHEAD:
+	case HEAD:
 		return true
-	case HTTPProbeDefinitionMethodOPTIONS:
+	case OPTIONS:
 		return true
-	case HTTPProbeDefinitionMethodPATCH:
+	case PATCH:
 		return true
-	case HTTPProbeDefinitionMethodPOST:
+	case POST:
 		return true
-	case HTTPProbeDefinitionMethodPUT:
+	case PUT:
 		return true
 	default:
 		return false
@@ -443,18 +410,6 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
-// HTTPProbe defines model for HTTPProbe.
-type HTTPProbe struct {
-	BodyContains    string          `json:"bodyContains"`
-	ExpectedStatus  int32           `json:"expectedStatus"`
-	FollowRedirects bool            `json:"followRedirects"`
-	Method          HTTPProbeMethod `json:"method"`
-	Url             string          `json:"url"`
-}
-
-// HTTPProbeMethod defines model for HTTPProbe.Method.
-type HTTPProbeMethod string
-
 // HTTPProbeDefinition defines model for HTTPProbeDefinition.
 type HTTPProbeDefinition struct {
 	Body                       []byte                    `json:"body"`
@@ -474,16 +429,6 @@ type HTTPProbeDefinitionKind string
 
 // HTTPProbeDefinitionMethod defines model for HTTPProbeDefinition.Method.
 type HTTPProbeDefinitionMethod string
-
-// HTTPWork defines model for HTTPWork.
-type HTTPWork struct {
-	Http          HTTPProbe          `json:"http"`
-	LeaseToken    string             `json:"leaseToken"`
-	MonitorId     openapi_types.UUID `json:"monitorId"`
-	RunId         openapi_types.UUID `json:"runId"`
-	ScheduledFor  time.Time          `json:"scheduledFor"`
-	TimeoutMillis int32              `json:"timeoutMillis"`
-}
 
 // HealthState defines model for HealthState.
 type HealthState string
@@ -600,6 +545,16 @@ type ProbeResultInputErrorCode string
 
 // ProbeResultInputOutcome defines model for ProbeResultInput.Outcome.
 type ProbeResultInputOutcome string
+
+// ProbeWork defines model for ProbeWork.
+type ProbeWork struct {
+	LeaseToken    string             `json:"leaseToken"`
+	MonitorId     openapi_types.UUID `json:"monitorId"`
+	Probe         ProbeDefinition    `json:"probe"`
+	RunId         openapi_types.UUID `json:"runId"`
+	ScheduledFor  time.Time          `json:"scheduledFor"`
+	TimeoutMillis int32              `json:"timeoutMillis"`
+}
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -1340,7 +1295,7 @@ type LeaseAgentWorkResponseObject interface {
 	VisitLeaseAgentWorkResponse(w http.ResponseWriter) error
 }
 
-type LeaseAgentWork200JSONResponse HTTPWork
+type LeaseAgentWork200JSONResponse ProbeWork
 
 func (response LeaseAgentWork200JSONResponse) VisitLeaseAgentWorkResponse(w http.ResponseWriter) error {
 
@@ -2028,54 +1983,53 @@ func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -115,7 +115,7 @@ type fixedExecutor struct{}
 
 func (fixedExecutor) Execute(
 	_ context.Context,
-	_ controlplane.HTTPWork,
+	_ controlplane.ProbeWork,
 ) controlplane.ProbeResultInput {
 	now := time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC)
 	return controlplane.ProbeResultInput{
@@ -128,17 +128,24 @@ func (fixedExecutor) Execute(
 	}
 }
 
-func testHTTPWork() controlplane.HTTPWork {
-	return controlplane.HTTPWork{
+func testHTTPWork() controlplane.ProbeWork {
+	var definition controlplane.ProbeDefinition
+	if err := definition.FromHTTPProbeDefinition(controlplane.HTTPProbeDefinition{
+		Method: controlplane.GET, Url: "https://example.com/health",
+		Headers: map[string]string{}, Body: []byte{},
+		ExpectedStatus: []controlplane.StatusRange{{
+			Minimum: 200, Maximum: 200,
+		}},
+		BodyContains: []string{}, BodyDoesNotContain: []string{},
+	}); err != nil {
+		panic(err)
+	}
+	return controlplane.ProbeWork{
 		RunId:         uuid.MustParse("11111111-1111-4111-8111-111111111111"),
 		MonitorId:     uuid.MustParse("22222222-2222-4222-8222-222222222222"),
 		LeaseToken:    "lease-token",
 		ScheduledFor:  time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC),
 		TimeoutMillis: 5000,
-		Http: controlplane.HTTPProbe{
-			Method:         controlplane.HTTPProbeMethodGET,
-			Url:            "https://example.com/health",
-			ExpectedStatus: 200,
-		},
+		Probe:         definition,
 	}
 }

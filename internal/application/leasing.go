@@ -11,13 +11,13 @@ import (
 
 var ErrNoWork = errors.New("no work available")
 
-type HTTPWork struct {
+type ProbeWork struct {
 	RunID        domain.CheckRunID
 	MonitorID    domain.MonitorID
 	ScheduledFor time.Time
 	LeaseToken   string
 	Timeout      time.Duration
-	Probe        domain.HTTPProbe
+	Probe        domain.ProbeDefinition
 }
 
 type LeaseServiceConfig struct {
@@ -47,11 +47,12 @@ func NewLeaseService(config LeaseServiceConfig) *LeaseService {
 	}
 }
 
-func (s *LeaseService) LeaseHTTP(
+func (s *LeaseService) LeaseProbe(
 	ctx context.Context,
 	agentID domain.AgentID,
+	capabilities []domain.AgentCapability,
 	wait time.Duration,
-) (*HTTPWork, error) {
+) (*ProbeWork, error) {
 	agent, err := s.store.Repositories().Agents.Get(ctx, agentID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -59,10 +60,9 @@ func (s *LeaseService) LeaseHTTP(
 		}
 		return nil, fmt.Errorf("load leasing agent: %w", err)
 	}
-	if agent.Agent.RevokedAt != nil || !hasCapability(
-		agent.Agent.Capabilities,
-		domain.CapabilityHTTP,
-	) {
+	if agent.Agent.RevokedAt != nil ||
+		len(capabilities) == 0 ||
+		!capabilitiesSubset(capabilities, agent.Agent.Capabilities) {
 		return nil, ErrInvalidCredentials
 	}
 	if wait < 0 {
@@ -74,7 +74,7 @@ func (s *LeaseService) LeaseHTTP(
 
 	deadline := time.Now().Add(wait)
 	for {
-		work, err := s.tryLeaseHTTP(ctx, agentID)
+		work, err := s.tryLeaseProbe(ctx, agentID, capabilities)
 		if err == nil {
 			return work, nil
 		}
@@ -101,10 +101,11 @@ func (s *LeaseService) LeaseHTTP(
 	}
 }
 
-func (s *LeaseService) tryLeaseHTTP(
+func (s *LeaseService) tryLeaseProbe(
 	ctx context.Context,
 	agentID domain.AgentID,
-) (*HTTPWork, error) {
+	capabilities []domain.AgentCapability,
+) (*ProbeWork, error) {
 	now, err := s.store.Repositories().Runs.DatabaseNow(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read database time: %w", err)
@@ -113,8 +114,9 @@ func (s *LeaseService) tryLeaseHTTP(
 	if err != nil {
 		return nil, fmt.Errorf("issue lease token: %w", err)
 	}
-	run, err := s.store.Repositories().Runs.ClaimHTTP(ctx, ClaimRunParams{
+	run, err := s.store.Repositories().Runs.ClaimProbe(ctx, ClaimRunParams{
 		AgentID:        agentID,
+		Capabilities:   append([]domain.AgentCapability(nil), capabilities...),
 		LeaseTokenHash: token.Hash,
 		LeaseExpiresAt: now.Add(s.leaseDuration),
 		Now:            now,
@@ -123,23 +125,33 @@ func (s *LeaseService) tryLeaseHTTP(
 		if errors.Is(err, ErrNotFound) {
 			return nil, ErrNoWork
 		}
-		return nil, fmt.Errorf("claim HTTP run: %w", err)
+		return nil, fmt.Errorf("claim probe run: %w", err)
 	}
-	return &HTTPWork{
+	return &ProbeWork{
 		RunID:        run.ID,
 		MonitorID:    run.MonitorID,
 		ScheduledFor: run.ScheduledFor,
 		LeaseToken:   token.Raw,
 		Timeout:      run.Timeout,
-		Probe:        run.Probe.HTTP,
+		Probe:        run.Probe,
 	}, nil
 }
 
-func hasCapability(capabilities []domain.AgentCapability, want domain.AgentCapability) bool {
-	for _, capability := range capabilities {
-		if capability == want {
-			return true
+func capabilitiesSubset(
+	requested []domain.AgentCapability,
+	advertised []domain.AgentCapability,
+) bool {
+	for _, requestedCapability := range requested {
+		found := false
+		for _, advertisedCapability := range advertised {
+			if requestedCapability == advertisedCapability {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
 		}
 	}
-	return false
+	return true
 }

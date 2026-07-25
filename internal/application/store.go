@@ -80,6 +80,7 @@ type NewRunRecord struct {
 
 type ClaimRunParams struct {
 	AgentID        domain.AgentID
+	Capabilities   []domain.AgentCapability
 	LeaseTokenHash []byte
 	LeaseExpiresAt time.Time
 	Now            time.Time
@@ -191,7 +192,7 @@ type AgentRepository interface {
 type RunRepository interface {
 	DatabaseNow(context.Context) (time.Time, error)
 	Insert(context.Context, NewRunRecord) (bool, error)
-	ClaimHTTP(context.Context, ClaimRunParams) (RunRecord, error)
+	ClaimProbe(context.Context, ClaimRunParams) (RunRecord, error)
 	Get(context.Context, domain.CheckRunID) (RunRecord, error)
 	Resolve(
 		context.Context,

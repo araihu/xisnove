@@ -85,7 +85,14 @@ func TestHTTPExecutorRevalidatesRedirectTarget(t *testing.T) {
 	}))
 	defer target.Close()
 	work := testWork(target.URL, http.StatusOK, "")
-	work.Http.FollowRedirects = true
+	definition, err := work.Probe.AsHTTPProbeDefinition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition.FollowRedirects = true
+	if err := work.Probe.FromHTTPProbeDefinition(definition); err != nil {
+		t.Fatal(err)
+	}
 
 	result := probe.NewHTTPExecutor(loopbackPolicy()).Execute(context.Background(), work)
 	if result.ErrorCode != controlplane.TargetDenied {
@@ -118,19 +125,27 @@ func loopbackPolicy() probe.Policy {
 	}
 }
 
-func testWork(url string, expectedStatus int, bodyContains string) controlplane.HTTPWork {
-	return controlplane.HTTPWork{
+func testWork(url string, expectedStatus int, bodyContains string) controlplane.ProbeWork {
+	var definition controlplane.ProbeDefinition
+	contains := []string{}
+	if bodyContains != "" {
+		contains = append(contains, bodyContains)
+	}
+	if err := definition.FromHTTPProbeDefinition(controlplane.HTTPProbeDefinition{
+		Method: controlplane.GET, Url: url, Headers: map[string]string{}, Body: []byte{},
+		ExpectedStatus: []controlplane.StatusRange{{
+			Minimum: int32(expectedStatus), Maximum: int32(expectedStatus),
+		}},
+		BodyContains: contains, BodyDoesNotContain: []string{},
+	}); err != nil {
+		panic(err)
+	}
+	return controlplane.ProbeWork{
 		RunId:         uuid.MustParse("11111111-1111-4111-8111-111111111111"),
 		MonitorId:     uuid.MustParse("22222222-2222-4222-8222-222222222222"),
 		LeaseToken:    "lease-token",
 		ScheduledFor:  time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC),
 		TimeoutMillis: 5000,
-		Http: controlplane.HTTPProbe{
-			Method:          controlplane.HTTPProbeMethodGET,
-			Url:             url,
-			ExpectedStatus:  int32(expectedStatus),
-			BodyContains:    bodyContains,
-			FollowRedirects: false,
-		},
+		Probe:         definition,
 	}
 }

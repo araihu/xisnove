@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -31,7 +32,7 @@ func NewHTTPExecutor(policy Policy) *HTTPExecutor {
 
 func (e *HTTPExecutor) Execute(
 	ctx context.Context,
-	work controlplane.HTTPWork,
+	work controlplane.ProbeWork,
 ) controlplane.ProbeResultInput {
 	startedAt := time.Now().UTC()
 	result := controlplane.ProbeResultInput{
@@ -53,7 +54,17 @@ func (e *HTTPExecutor) Execute(
 		result.DiagnosticSample = "invalid timeout"
 		return finish()
 	}
-	target, err := url.Parse(work.Http.Url)
+	kind, err := work.Probe.Discriminator()
+	if err != nil || kind != "http" {
+		result.DiagnosticSample = "invalid HTTP probe"
+		return finish()
+	}
+	probe, err := work.Probe.AsHTTPProbeDefinition()
+	if err != nil {
+		result.DiagnosticSample = "invalid HTTP probe"
+		return finish()
+	}
+	target, err := url.Parse(probe.Url)
 	if err != nil || validateURL(target) != nil {
 		result.ErrorCode = controlplane.TargetDenied
 		result.DiagnosticSample = "target URL denied"
@@ -67,13 +78,16 @@ func (e *HTTPExecutor) Execute(
 	defer cancel()
 	request, err := http.NewRequestWithContext(
 		timeoutCtx,
-		string(work.Http.Method),
+		string(probe.Method),
 		target.String(),
-		nil,
+		bytes.NewReader(probe.Body),
 	)
 	if err != nil {
 		result.DiagnosticSample = diagnostic(err.Error())
 		return finish()
+	}
+	for name, value := range probe.Headers {
+		request.Header.Set(name, value)
 	}
 
 	transport := e.transport()
@@ -81,7 +95,7 @@ func (e *HTTPExecutor) Execute(
 	client := &http.Client{
 		Transport: transport,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
-			if !work.Http.FollowRedirects {
+			if !probe.FollowRedirects {
 				return http.ErrUseLastResponse
 			}
 			if len(via) > e.policy.MaxRedirects {
@@ -118,9 +132,8 @@ func (e *HTTPExecutor) Execute(
 		return finish()
 	}
 
-	statusPassed := response.StatusCode == int(work.Http.ExpectedStatus)
-	bodyPassed := work.Http.BodyContains == "" ||
-		strings.Contains(string(body), work.Http.BodyContains)
+	statusPassed := statusMatches(response.StatusCode, probe.ExpectedStatus)
+	bodyPassed := bodyMatches(body, probe.BodyContains, probe.BodyDoesNotContain)
 	result.BodyAssertionPassed = bodyPassed
 	switch {
 	case !statusPassed:
@@ -134,6 +147,30 @@ func (e *HTTPExecutor) Execute(
 		result.ErrorCode = controlplane.Empty
 	}
 	return finish()
+}
+
+func statusMatches(status int, expected []controlplane.StatusRange) bool {
+	for _, statusRange := range expected {
+		if status >= int(statusRange.Minimum) && status <= int(statusRange.Maximum) {
+			return true
+		}
+	}
+	return false
+}
+
+func bodyMatches(body []byte, contains []string, excludes []string) bool {
+	value := string(body)
+	for _, expected := range contains {
+		if !strings.Contains(value, expected) {
+			return false
+		}
+	}
+	for _, excluded := range excludes {
+		if strings.Contains(value, excluded) {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *HTTPExecutor) transport() *http.Transport {

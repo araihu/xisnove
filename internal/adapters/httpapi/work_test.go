@@ -14,7 +14,7 @@ import (
 	"github.com/araihu/xisnove/internal/domain"
 )
 
-func TestLeaseAgentWorkReturnsHTTPWorkThenNoContent(t *testing.T) {
+func TestLeaseAgentWorkReturnsCompatibleProbeThenNoContent(t *testing.T) {
 	server, agentID := newWorkServer(t)
 	ctx := httpapi.ContextWithPrincipal(
 		context.Background(),
@@ -39,7 +39,11 @@ func TestLeaseAgentWorkReturnsHTTPWorkThenNoContent(t *testing.T) {
 	if !ok {
 		t.Fatalf("response = %#v", response)
 	}
-	if work.Http.Url != "https://example.com/health" ||
+	probe, err := work.Probe.AsHTTPProbeDefinition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probe.Url != "https://example.com/health" ||
 		work.TimeoutMillis != 5000 ||
 		work.LeaseToken == "" {
 		t.Fatalf("work = %#v", work)
@@ -50,6 +54,28 @@ func TestLeaseAgentWorkReturnsHTTPWorkThenNoContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, ok := response.(httpapi.LeaseAgentWork204Response); !ok {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestLeaseAgentWorkRejectsCapabilitiesNotAdvertisedByAgent(t *testing.T) {
+	server, agentID := newWorkServer(t)
+	ctx := httpapi.ContextWithPrincipal(
+		context.Background(),
+		application.Principal{
+			Kind: application.PrincipalAgent, SubjectID: string(agentID),
+		},
+	)
+	response, err := server.LeaseAgentWork(ctx, httpapi.LeaseAgentWorkRequestObject{
+		Body: &httpapi.LeaseAgentWorkJSONRequestBody{
+			Capabilities: []httpapi.AgentCapability{httpapi.AgentCapabilityTcp},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	problem, ok := response.(httpapi.LeaseAgentWorkdefaultApplicationProblemPlusJSONResponse)
+	if !ok || problem.StatusCode != 401 {
 		t.Fatalf("response = %#v", response)
 	}
 }

@@ -94,39 +94,6 @@ func (e DNSProbeDefinitionRecordType) Valid() bool {
 	}
 }
 
-// Defines values for HTTPProbeMethod.
-const (
-	HTTPProbeMethodDELETE  HTTPProbeMethod = "DELETE"
-	HTTPProbeMethodGET     HTTPProbeMethod = "GET"
-	HTTPProbeMethodHEAD    HTTPProbeMethod = "HEAD"
-	HTTPProbeMethodOPTIONS HTTPProbeMethod = "OPTIONS"
-	HTTPProbeMethodPATCH   HTTPProbeMethod = "PATCH"
-	HTTPProbeMethodPOST    HTTPProbeMethod = "POST"
-	HTTPProbeMethodPUT     HTTPProbeMethod = "PUT"
-)
-
-// Valid indicates whether the value is a known member of the HTTPProbeMethod enum.
-func (e HTTPProbeMethod) Valid() bool {
-	switch e {
-	case HTTPProbeMethodDELETE:
-		return true
-	case HTTPProbeMethodGET:
-		return true
-	case HTTPProbeMethodHEAD:
-		return true
-	case HTTPProbeMethodOPTIONS:
-		return true
-	case HTTPProbeMethodPATCH:
-		return true
-	case HTTPProbeMethodPOST:
-		return true
-	case HTTPProbeMethodPUT:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for HTTPProbeDefinitionKind.
 const (
 	HTTPProbeDefinitionKindHttp HTTPProbeDefinitionKind = "http"
@@ -144,31 +111,31 @@ func (e HTTPProbeDefinitionKind) Valid() bool {
 
 // Defines values for HTTPProbeDefinitionMethod.
 const (
-	HTTPProbeDefinitionMethodDELETE  HTTPProbeDefinitionMethod = "DELETE"
-	HTTPProbeDefinitionMethodGET     HTTPProbeDefinitionMethod = "GET"
-	HTTPProbeDefinitionMethodHEAD    HTTPProbeDefinitionMethod = "HEAD"
-	HTTPProbeDefinitionMethodOPTIONS HTTPProbeDefinitionMethod = "OPTIONS"
-	HTTPProbeDefinitionMethodPATCH   HTTPProbeDefinitionMethod = "PATCH"
-	HTTPProbeDefinitionMethodPOST    HTTPProbeDefinitionMethod = "POST"
-	HTTPProbeDefinitionMethodPUT     HTTPProbeDefinitionMethod = "PUT"
+	DELETE  HTTPProbeDefinitionMethod = "DELETE"
+	GET     HTTPProbeDefinitionMethod = "GET"
+	HEAD    HTTPProbeDefinitionMethod = "HEAD"
+	OPTIONS HTTPProbeDefinitionMethod = "OPTIONS"
+	PATCH   HTTPProbeDefinitionMethod = "PATCH"
+	POST    HTTPProbeDefinitionMethod = "POST"
+	PUT     HTTPProbeDefinitionMethod = "PUT"
 )
 
 // Valid indicates whether the value is a known member of the HTTPProbeDefinitionMethod enum.
 func (e HTTPProbeDefinitionMethod) Valid() bool {
 	switch e {
-	case HTTPProbeDefinitionMethodDELETE:
+	case DELETE:
 		return true
-	case HTTPProbeDefinitionMethodGET:
+	case GET:
 		return true
-	case HTTPProbeDefinitionMethodHEAD:
+	case HEAD:
 		return true
-	case HTTPProbeDefinitionMethodOPTIONS:
+	case OPTIONS:
 		return true
-	case HTTPProbeDefinitionMethodPATCH:
+	case PATCH:
 		return true
-	case HTTPProbeDefinitionMethodPOST:
+	case POST:
 		return true
-	case HTTPProbeDefinitionMethodPUT:
+	case PUT:
 		return true
 	default:
 		return false
@@ -438,18 +405,6 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
-// HTTPProbe defines model for HTTPProbe.
-type HTTPProbe struct {
-	BodyContains    string          `json:"bodyContains"`
-	ExpectedStatus  int32           `json:"expectedStatus"`
-	FollowRedirects bool            `json:"followRedirects"`
-	Method          HTTPProbeMethod `json:"method"`
-	Url             string          `json:"url"`
-}
-
-// HTTPProbeMethod defines model for HTTPProbe.Method.
-type HTTPProbeMethod string
-
 // HTTPProbeDefinition defines model for HTTPProbeDefinition.
 type HTTPProbeDefinition struct {
 	Body                       []byte                    `json:"body"`
@@ -469,16 +424,6 @@ type HTTPProbeDefinitionKind string
 
 // HTTPProbeDefinitionMethod defines model for HTTPProbeDefinition.Method.
 type HTTPProbeDefinitionMethod string
-
-// HTTPWork defines model for HTTPWork.
-type HTTPWork struct {
-	Http          HTTPProbe          `json:"http"`
-	LeaseToken    string             `json:"leaseToken"`
-	MonitorId     openapi_types.UUID `json:"monitorId"`
-	RunId         openapi_types.UUID `json:"runId"`
-	ScheduledFor  time.Time          `json:"scheduledFor"`
-	TimeoutMillis int32              `json:"timeoutMillis"`
-}
 
 // HealthState defines model for HealthState.
 type HealthState string
@@ -595,6 +540,16 @@ type ProbeResultInputErrorCode string
 
 // ProbeResultInputOutcome defines model for ProbeResultInput.Outcome.
 type ProbeResultInputOutcome string
+
+// ProbeWork defines model for ProbeWork.
+type ProbeWork struct {
+	LeaseToken    string             `json:"leaseToken"`
+	MonitorId     openapi_types.UUID `json:"monitorId"`
+	Probe         ProbeDefinition    `json:"probe"`
+	RunId         openapi_types.UUID `json:"runId"`
+	ScheduledFor  time.Time          `json:"scheduledFor"`
+	TimeoutMillis int32              `json:"timeoutMillis"`
+}
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -1966,13 +1921,13 @@ type LeaseAgentWorkResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *HTTPWork
+	JSON200 *ProbeWork
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r LeaseAgentWorkResponse) GetJSON200() *HTTPWork {
+func (r LeaseAgentWorkResponse) GetJSON200() *ProbeWork {
 	return r.JSON200
 }
 
@@ -2650,7 +2605,7 @@ func ParseLeaseAgentWorkResponse(rsp *http.Response) (*LeaseAgentWorkResponse, e
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest HTTPWork
+		var dest ProbeWork
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

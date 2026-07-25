@@ -35,12 +35,18 @@ func TestExpiredLeaseCanBeReclaimedByCompatibleAgent(t *testing.T) {
 		LeaseDuration: 30 * time.Second,
 	})
 
-	first, err := service.LeaseHTTP(context.Background(), "a1", 0)
+	first, err := service.LeaseProbe(
+		context.Background(), "a1",
+		[]domain.AgentCapability{domain.CapabilityHTTP}, 0,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	store.now = store.now.Add(31 * time.Second)
-	second, err := service.LeaseHTTP(context.Background(), "a2", 0)
+	second, err := service.LeaseProbe(
+		context.Background(), "a2",
+		[]domain.AgentCapability{domain.CapabilityHTTP}, 0,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +58,7 @@ func TestExpiredLeaseCanBeReclaimedByCompatibleAgent(t *testing.T) {
 	}
 }
 
-func TestLeaseHTTPRejectsAgentWithoutHTTPCapability(t *testing.T) {
+func TestLeaseProbeRejectsAgentWithoutRequestedCapability(t *testing.T) {
 	store := newWorkStore(time.Now())
 	store.agents["a1"] = application.AgentRecord{Agent: domain.Agent{
 		ID: "a1", LocationID: "location-1",
@@ -62,7 +68,90 @@ func TestLeaseHTTPRejectsAgentWithoutHTTPCapability(t *testing.T) {
 		Store: store, Tokens: &leaseTokenIssuer{}, LeaseDuration: 30 * time.Second,
 	})
 
-	_, err := service.LeaseHTTP(context.Background(), "a1", 0)
+	_, err := service.LeaseProbe(
+		context.Background(), "a1",
+		[]domain.AgentCapability{domain.CapabilityHTTP}, 0,
+	)
+	if !errors.Is(err, application.ErrInvalidCredentials) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestHTTPOnlyAgentCannotLeaseTCPCompatibleProbe(t *testing.T) {
+	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	store := newWorkStore(now)
+	store.agents["a1"] = activeHTTPAgent("a1", "location-1")
+	store.runs["tcp-run"] = application.RunRecord{
+		ID: "tcp-run", LocationID: "location-1", ScheduledFor: now,
+		Probe: domain.ProbeDefinition{
+			Kind: domain.MonitorKindTCP,
+			TCP:  domain.TCPProbe{Host: "postgres.internal", Port: 5432},
+		},
+		Status: "available",
+	}
+	service := application.NewLeaseService(application.LeaseServiceConfig{
+		Store: store, Tokens: &leaseTokenIssuer{}, LeaseDuration: 30 * time.Second,
+	})
+
+	_, err := service.LeaseProbe(
+		context.Background(), "a1",
+		[]domain.AgentCapability{domain.CapabilityHTTP}, 0,
+	)
+	if !errors.Is(err, application.ErrNoWork) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAgentReceivesOldestCompatibleProbe(t *testing.T) {
+	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	store := newWorkStore(now)
+	store.agents["a1"] = application.AgentRecord{Agent: domain.Agent{
+		ID: "a1", LocationID: "location-1",
+		Capabilities: []domain.AgentCapability{domain.CapabilityTCP, domain.CapabilityDNS},
+	}}
+	store.runs["dns-newer"] = application.RunRecord{
+		ID: "dns-newer", LocationID: "location-1", ScheduledFor: now,
+		Probe: domain.ProbeDefinition{
+			Kind: domain.MonitorKindDNS,
+			DNS:  domain.DNSProbe{Name: "newer.internal", RecordType: "A"},
+		},
+		Status: "available",
+	}
+	store.runs["tcp-older"] = application.RunRecord{
+		ID: "tcp-older", LocationID: "location-1", ScheduledFor: now.Add(-time.Minute),
+		Probe: domain.ProbeDefinition{
+			Kind: domain.MonitorKindTCP,
+			TCP:  domain.TCPProbe{Host: "postgres.internal", Port: 5432},
+		},
+		Status: "available",
+	}
+	service := application.NewLeaseService(application.LeaseServiceConfig{
+		Store: store, Tokens: &leaseTokenIssuer{}, LeaseDuration: 30 * time.Second,
+	})
+
+	work, err := service.LeaseProbe(
+		context.Background(), "a1",
+		[]domain.AgentCapability{domain.CapabilityDNS, domain.CapabilityTCP}, 0,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if work.RunID != "tcp-older" || work.Probe.Kind != domain.MonitorKindTCP {
+		t.Fatalf("work = %#v", work)
+	}
+}
+
+func TestLeaseProbeRejectsCapabilitiesNotAdvertisedByAgent(t *testing.T) {
+	store := newWorkStore(time.Now())
+	store.agents["a1"] = activeHTTPAgent("a1", "location-1")
+	service := application.NewLeaseService(application.LeaseServiceConfig{
+		Store: store, Tokens: &leaseTokenIssuer{}, LeaseDuration: 30 * time.Second,
+	})
+
+	_, err := service.LeaseProbe(
+		context.Background(), "a1",
+		[]domain.AgentCapability{domain.CapabilityHTTP, domain.CapabilityTCP}, 0,
+	)
 	if !errors.Is(err, application.ErrInvalidCredentials) {
 		t.Fatalf("error = %v", err)
 	}
@@ -189,27 +278,51 @@ func (r *workRunRepository) Insert(
 	return true, nil
 }
 
-func (r *workRunRepository) ClaimHTTP(
+func (r *workRunRepository) ClaimProbe(
 	_ context.Context,
 	params application.ClaimRunParams,
 ) (application.RunRecord, error) {
 	agent := r.store.agents[params.AgentID].Agent
+	var selectedID domain.CheckRunID
+	var selected application.RunRecord
 	for id, run := range r.store.runs {
 		expired := run.LeaseExpiresAt != nil && !run.LeaseExpiresAt.After(params.Now)
 		if run.LocationID != agent.LocationID ||
+			run.ScheduledFor.After(params.Now) ||
+			!supportsProbe(params.Capabilities, run.Probe.Kind) ||
 			(run.Status != "available" && !(run.Status == "leased" && expired)) {
 			continue
 		}
-		run.Status = "leased"
-		run.LeaseAgentID = params.AgentID
-		run.LeaseTokenHash = bytes.Clone(params.LeaseTokenHash)
-		run.LeaseAttempt++
-		expiresAt := params.LeaseExpiresAt
-		run.LeaseExpiresAt = &expiresAt
-		r.store.runs[id] = run
-		return run, nil
+		if selectedID == "" ||
+			run.ScheduledFor.Before(selected.ScheduledFor) ||
+			(run.ScheduledFor.Equal(selected.ScheduledFor) && id < selectedID) {
+			selectedID = id
+			selected = run
+		}
 	}
-	return application.RunRecord{}, application.ErrNotFound
+	if selectedID == "" {
+		return application.RunRecord{}, application.ErrNotFound
+	}
+	selected.Status = "leased"
+	selected.LeaseAgentID = params.AgentID
+	selected.LeaseTokenHash = bytes.Clone(params.LeaseTokenHash)
+	selected.LeaseAttempt++
+	expiresAt := params.LeaseExpiresAt
+	selected.LeaseExpiresAt = &expiresAt
+	r.store.runs[selectedID] = selected
+	return selected, nil
+}
+
+func supportsProbe(
+	capabilities []domain.AgentCapability,
+	kind domain.MonitorKind,
+) bool {
+	for _, capability := range capabilities {
+		if string(capability) == string(kind) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *workRunRepository) Get(

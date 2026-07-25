@@ -14,11 +14,25 @@ type Scheduler struct {
 	newID func() string
 }
 
+type SchedulerStats struct {
+	Inserted         int
+	SkippedIntervals uint64
+	MaximumLag       time.Duration
+}
+
 func NewScheduler(store Store, newID func() string) *Scheduler {
 	return &Scheduler{store: store, newID: newID}
 }
 
 func (s *Scheduler) EnqueueDue(ctx context.Context, limit int) (int, error) {
+	stats, err := s.EnqueueDueWithStats(ctx, limit)
+	return stats.Inserted, err
+}
+
+func (s *Scheduler) EnqueueDueWithStats(
+	ctx context.Context,
+	limit int,
+) (SchedulerStats, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -27,24 +41,32 @@ func (s *Scheduler) EnqueueDue(ctx context.Context, limit int) (int, error) {
 	}
 	now, err := s.store.Repositories().Runs.DatabaseNow(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("read database time: %w", err)
+		return SchedulerStats{}, fmt.Errorf("read database time: %w", err)
 	}
 	due, err := s.store.Repositories().Monitors.ListDue(ctx, now, limit)
 	if err != nil {
-		return 0, fmt.Errorf("list due monitors: %w", err)
+		return SchedulerStats{}, fmt.Errorf("list due monitors: %w", err)
 	}
 
-	inserted := 0
+	stats := SchedulerStats{}
 	for _, item := range due {
-		nextRunAt, err := nextSchedule(item.NextRunAt, item.Monitor.Interval, now)
+		scheduledFor, nextRunAt, skipped, err := boundedSchedule(
+			item.NextRunAt,
+			item.Monitor.Interval,
+			now,
+		)
 		if err != nil {
-			return inserted, err
+			return stats, err
+		}
+		lag := now.Sub(item.NextRunAt)
+		if lag > stats.MaximumLag {
+			stats.MaximumLag = lag
 		}
 		run := NewRunRecord{
 			ID:           domain.CheckRunID(s.newID()),
 			MonitorID:    item.Monitor.ID,
 			LocationID:   item.LocationID,
-			ScheduledFor: item.NextRunAt,
+			ScheduledFor: scheduledFor,
 			Probe:        item.Monitor.Probe(),
 			Timeout:      item.Monitor.Timeout,
 		}
@@ -65,24 +87,30 @@ func (s *Scheduler) EnqueueDue(ctx context.Context, limit int) (int, error) {
 			return nil
 		})
 		if err != nil {
-			return inserted, err
+			return stats, err
 		}
 		if created {
-			inserted++
+			stats.Inserted++
+			stats.SkippedIntervals += skipped
 		}
 	}
-	return inserted, nil
+	return stats, nil
 }
 
-func nextSchedule(scheduledAt time.Time, interval time.Duration, now time.Time) (time.Time, error) {
+func boundedSchedule(
+	scheduledAt time.Time,
+	interval time.Duration,
+	now time.Time,
+) (time.Time, time.Time, uint64, error) {
 	if scheduledAt.IsZero() || interval <= 0 {
-		return time.Time{}, errors.New("invalid monitor schedule")
+		return time.Time{}, time.Time{}, 0, errors.New("invalid monitor schedule")
 	}
 	scheduledAt = scheduledAt.UTC()
 	now = now.UTC()
 	if scheduledAt.After(now) {
-		return scheduledAt, nil
+		return scheduledAt, scheduledAt, 0, nil
 	}
-	steps := now.Sub(scheduledAt)/interval + 1
-	return scheduledAt.Add(steps * interval), nil
+	skipped := now.Sub(scheduledAt) / interval
+	latest := scheduledAt.Add(skipped * interval)
+	return latest, latest.Add(interval), uint64(skipped), nil
 }

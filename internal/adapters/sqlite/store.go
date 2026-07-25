@@ -396,18 +396,23 @@ func (r *runRepository) Insert(
 	return affected == 1, nil
 }
 
-func (r *runRepository) ClaimHTTP(
+func (r *runRepository) ClaimProbe(
 	ctx context.Context,
 	params application.ClaimRunParams,
 ) (application.RunRecord, error) {
-	record, err := r.queries.ClaimHTTPRun(ctx, dbsqlite.ClaimHTTPRunParams{
+	capabilities := make([]string, len(params.Capabilities))
+	for i, capability := range params.Capabilities {
+		capabilities[i] = string(capability)
+	}
+	record, err := r.queries.ClaimProbeRun(ctx, dbsqlite.ClaimProbeRunParams{
 		AgentID:        nullableString(string(params.AgentID)),
 		LeaseTokenHash: params.LeaseTokenHash,
 		LeaseExpiresAt: nullableTimeValue(params.LeaseExpiresAt),
 		Now:            nullableTimeValue(params.Now),
+		Capabilities:   capabilities,
 	})
 	if err != nil {
-		return application.RunRecord{}, repositoryError("claim HTTP run", err)
+		return application.RunRecord{}, repositoryError("claim probe run", err)
 	}
 	return mapRun(record)
 }

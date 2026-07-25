@@ -12,7 +12,7 @@ type Querier interface {
 	AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) (int64, error)
 	AssignMonitorLocation(ctx context.Context, arg AssignMonitorLocationParams) error
 	ChangeIncident(ctx context.Context, arg ChangeIncidentParams) (int64, error)
-	ClaimHTTPRun(ctx context.Context, arg ClaimHTTPRunParams) (CheckRun, error)
+	ClaimProbeRun(ctx context.Context, arg ClaimProbeRunParams) (CheckRun, error)
 	ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CreateAdmin(ctx context.Context, arg CreateAdminParams) error

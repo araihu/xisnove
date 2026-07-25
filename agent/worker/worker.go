@@ -14,7 +14,7 @@ import (
 )
 
 type Executor interface {
-	Execute(context.Context, controlplane.HTTPWork) controlplane.ProbeResultInput
+	Execute(context.Context, controlplane.ProbeWork) controlplane.ProbeResultInput
 }
 
 type Worker struct {

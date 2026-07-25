@@ -21,15 +21,23 @@ func (s *Server) LeaseAgentWork(
 		response, _ := leaseAgentWorkProblem(application.ErrInvalidCredentials)
 		return response, nil
 	}
-	if request.Body == nil || !hasHTTPAPICapability(request.Body.Capabilities) {
+	if request.Body == nil {
 		response, _ := leaseAgentWorkProblem(&application.ValidationError{
-			Fields: map[string]string{"capabilities": "must include http"},
+			Fields: map[string]string{"body": "is required"},
 		})
 		return response, nil
 	}
-	work, err := s.lease.LeaseHTTP(
+	capabilities, err := capabilitiesFromAPI(request.Body.Capabilities)
+	if err != nil {
+		response, _ := leaseAgentWorkProblem(&application.ValidationError{
+			Fields: map[string]string{"capabilities": "contains invalid values"},
+		})
+		return response, nil
+	}
+	work, err := s.lease.LeaseProbe(
 		ctx,
 		domain.AgentID(principal.SubjectID),
+		capabilities,
 		time.Duration(request.Body.WaitSeconds)*time.Second,
 	)
 	if errors.Is(err, application.ErrNoWork) {
@@ -42,52 +50,55 @@ func (s *Server) LeaseAgentWork(
 		}
 		return nil, err
 	}
-	mapped, err := mapHTTPWork(*work)
+	mapped, err := mapProbeWork(*work)
 	if err != nil {
 		return nil, err
 	}
 	return LeaseAgentWork200JSONResponse(mapped), nil
 }
 
-func mapHTTPWork(work application.HTTPWork) (HTTPWork, error) {
+func mapProbeWork(work application.ProbeWork) (ProbeWork, error) {
 	runID, err := uuid.Parse(string(work.RunID))
 	if err != nil {
-		return HTTPWork{}, fmt.Errorf("map run ID: %w", err)
+		return ProbeWork{}, fmt.Errorf("map run ID: %w", err)
 	}
 	monitorID, err := uuid.Parse(string(work.MonitorID))
 	if err != nil {
-		return HTTPWork{}, fmt.Errorf("map work monitor ID: %w", err)
+		return ProbeWork{}, fmt.Errorf("map work monitor ID: %w", err)
 	}
-	if len(work.Probe.ExpectedStatus) == 0 {
-		return HTTPWork{}, errors.New("map HTTP work: expected status is missing")
+	probe, err := probeToAPI(work.Probe)
+	if err != nil {
+		return ProbeWork{}, err
 	}
-	bodyContains := ""
-	if len(work.Probe.BodyContains) != 0 {
-		bodyContains = work.Probe.BodyContains[0]
-	}
-	return HTTPWork{
+	return ProbeWork{
 		RunId:         runID,
 		MonitorId:     monitorID,
 		ScheduledFor:  work.ScheduledFor,
 		LeaseToken:    work.LeaseToken,
 		TimeoutMillis: int32(work.Timeout / time.Millisecond),
-		Http: HTTPProbe{
-			Method:          HTTPProbeMethod(work.Probe.Method),
-			Url:             work.Probe.URL,
-			ExpectedStatus:  int32(work.Probe.ExpectedStatus[0].Min),
-			BodyContains:    bodyContains,
-			FollowRedirects: work.Probe.FollowRedirects,
-		},
+		Probe:         probe,
 	}, nil
 }
 
-func hasHTTPAPICapability(capabilities []AgentCapability) bool {
-	for _, capability := range capabilities {
-		if capability == AgentCapabilityHttp {
-			return true
-		}
+func capabilitiesFromAPI(
+	capabilities []AgentCapability,
+) ([]domain.AgentCapability, error) {
+	if len(capabilities) == 0 {
+		return nil, errors.New("capabilities are required")
 	}
-	return false
+	mapped := make([]domain.AgentCapability, 0, len(capabilities))
+	seen := make(map[AgentCapability]struct{}, len(capabilities))
+	for _, capability := range capabilities {
+		if !capability.Valid() {
+			return nil, errors.New("invalid capability")
+		}
+		if _, duplicate := seen[capability]; duplicate {
+			return nil, errors.New("duplicate capability")
+		}
+		seen[capability] = struct{}{}
+		mapped = append(mapped, domain.AgentCapability(capability))
+	}
+	return mapped, nil
 }
 
 func leaseAgentWorkProblem(err error) (LeaseAgentWorkResponseObject, bool) {

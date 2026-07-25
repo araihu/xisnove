@@ -135,10 +135,10 @@ paths:
             schema: {$ref: '#/components/schemas/LeaseWorkRequest'}
       responses:
         '200':
-          description: Leased HTTP work
+          description: Leased protocol-neutral probe work
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/HTTPWork'}
+              schema: {$ref: '#/components/schemas/ProbeWork'}
         '204': {description: No compatible work before timeout}
         default: {$ref: '#/components/responses/Problem'}
   /v1/agent/results:batch:
@@ -253,18 +253,6 @@ components:
         locationId: {type: string, format: uuid}
         requiredLocation: {type: boolean}
         probe: {$ref: '#/components/schemas/ProbeDefinition'}
-    HTTPProbe:
-      type: object
-      additionalProperties: false
-      required: [method, url, expectedStatus, bodyContains, followRedirects]
-      properties:
-        method:
-          type: string
-          enum: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS]
-        url: {type: string, format: uri, maxLength: 4096}
-        expectedStatus: {type: integer, format: int32, minimum: 100, maximum: 599}
-        bodyContains: {type: string, maxLength: 4096}
-        followRedirects: {type: boolean}
     ProbeDefinition:
       oneOf:
         - {$ref: '#/components/schemas/HTTPProbeDefinition'}
@@ -440,17 +428,6 @@ components:
           minItems: 1
           uniqueItems: true
           items: {$ref: '#/components/schemas/AgentCapability'}
-    HTTPWork:
-      type: object
-      additionalProperties: false
-      required: [runId, leaseToken, monitorId, scheduledFor, timeoutMillis, http]
-      properties:
-        runId: {type: string, format: uuid}
-        leaseToken: {type: string, minLength: 32}
-        monitorId: {type: string, format: uuid}
-        scheduledFor: {type: string, format: date-time}
-        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
-        http: {$ref: '#/components/schemas/HTTPProbe'}
     ProbeWork:
       type: object
       additionalProperties: false

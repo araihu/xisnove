@@ -101,7 +101,7 @@ func TestFirstObservationOpensIncidentAfterThirdFailure(t *testing.T) {
 	t.Cleanup(target.Close)
 	var httpProbe sdk.ProbeDefinition
 	if err := httpProbe.FromHTTPProbeDefinition(sdk.HTTPProbeDefinition{
-		Method: sdk.HTTPProbeDefinitionMethodGET, Url: target.URL,
+		Method: sdk.GET, Url: target.URL,
 		Headers: map[string]string{},
 		Body:    []byte{},
 		ExpectedStatus: []sdk.StatusRange{{

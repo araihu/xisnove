@@ -83,7 +83,7 @@ func TestCreateAndGetMonitorMapsAPIDurationsAndAssignment(t *testing.T) {
 				FailureThreshold:  3,
 				RecoveryThreshold: 2,
 				Probe: mustHTTPProbe(t, httpapi.HTTPProbeDefinition{
-					Method: httpapi.HTTPProbeDefinitionMethodGET,
+					Method: httpapi.GET,
 					Url:    "https://example.com/health",
 					ExpectedStatus: []httpapi.StatusRange{{
 						Minimum: 200, Maximum: 299,
@@ -256,7 +256,7 @@ func TestCreateMonitorRejectsSecretLiteralHeader(t *testing.T) {
 			Name: "secret", LocationId: location.Id, IntervalSeconds: 60,
 			TimeoutMillis: 5000, FailureThreshold: 1, RecoveryThreshold: 1,
 			Probe: mustHTTPProbe(t, httpapi.HTTPProbeDefinition{
-				Method: httpapi.HTTPProbeDefinitionMethodGET,
+				Method: httpapi.GET,
 				Url:    "https://example.com",
 				Headers: map[string]string{
 					"Authorization": "Bearer should-not-be-persisted",
@@ -376,7 +376,7 @@ func TestCreateMonitorMapsMissingLocationToNotFoundProblem(t *testing.T) {
 				FailureThreshold:  3,
 				RecoveryThreshold: 2,
 				Probe: mustHTTPProbe(t, httpapi.HTTPProbeDefinition{
-					Method: httpapi.HTTPProbeDefinitionMethodGET,
+					Method: httpapi.GET,
 					Url:    "https://example.com/health",
 					ExpectedStatus: []httpapi.StatusRange{{
 						Minimum: 200, Maximum: 299,

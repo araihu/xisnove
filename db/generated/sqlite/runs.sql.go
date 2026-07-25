@@ -8,9 +8,10 @@ package dbsqlite
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
-const claimHTTPRun = `-- name: ClaimHTTPRun :one
+const claimProbeRun = `-- name: ClaimProbeRun :one
 UPDATE check_runs
 SET status = 'leased',
     lease_agent_id = ?1,
@@ -25,6 +26,7 @@ WHERE id = (
     AND r.status IN ('available', 'leased')
     AND (r.status = 'available' OR r.lease_expires_at <= ?4)
     AND r.scheduled_for <= ?4
+    AND r.probe_kind IN (/*SLICE:capabilities*/?)
     AND a.revoked_at IS NULL
   ORDER BY r.scheduled_for, r.id
   LIMIT 1
@@ -32,20 +34,30 @@ WHERE id = (
 RETURNING id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status, lease_agent_id, lease_token_hash, lease_attempt, lease_expires_at, resolved_at, probe_kind
 `
 
-type ClaimHTTPRunParams struct {
+type ClaimProbeRunParams struct {
 	AgentID        sql.NullString `json:"agent_id"`
 	LeaseTokenHash []byte         `json:"lease_token_hash"`
 	LeaseExpiresAt sql.NullString `json:"lease_expires_at"`
 	Now            sql.NullString `json:"now"`
+	Capabilities   []string       `json:"capabilities"`
 }
 
-func (q *Queries) ClaimHTTPRun(ctx context.Context, arg ClaimHTTPRunParams) (CheckRun, error) {
-	row := q.db.QueryRowContext(ctx, claimHTTPRun,
-		arg.AgentID,
-		arg.LeaseTokenHash,
-		arg.LeaseExpiresAt,
-		arg.Now,
-	)
+func (q *Queries) ClaimProbeRun(ctx context.Context, arg ClaimProbeRunParams) (CheckRun, error) {
+	query := claimProbeRun
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.AgentID)
+	queryParams = append(queryParams, arg.LeaseTokenHash)
+	queryParams = append(queryParams, arg.LeaseExpiresAt)
+	queryParams = append(queryParams, arg.Now)
+	if len(arg.Capabilities) > 0 {
+		for _, v := range arg.Capabilities {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:capabilities*/?", strings.Repeat(",?", len(arg.Capabilities))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:capabilities*/?", "NULL", 1)
+	}
+	row := q.db.QueryRowContext(ctx, query, queryParams...)
 	var i CheckRun
 	err := row.Scan(
 		&i.ID,
