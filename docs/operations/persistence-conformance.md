@@ -36,12 +36,28 @@ SQLite and local Turso always run as part of `make check`:
 make storage-check
 ```
 
-PostgreSQL is opt-in locally and mandatory in normal CI. The test creates and
-drops one random schema and opens two independent pools against it:
+PostgreSQL is self-provisioned locally with Testcontainers when a healthy
+container runtime is available and remains mandatory in normal CI. The test
+creates and drops one random schema and opens two independent pools against
+it:
+
+```bash
+go test -race ./integration -run TestStorageMatrix/Postgres -count=10
+```
+
+`XISNOVE_TEST_POSTGRES_URL` remains an external-server override:
 
 ```bash
 XISNOVE_TEST_POSTGRES_URL='postgres://postgres:password@127.0.0.1:5432/xisnove?sslmode=disable' \
   go test -race ./integration -run TestStorageMatrix -count=10
+```
+
+When Colima's active Docker context is not discovered automatically, follow
+the Testcontainers Colima setup and export its socket for the test process:
+
+```bash
+export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
+export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 ```
 
 ## Managed Turso run

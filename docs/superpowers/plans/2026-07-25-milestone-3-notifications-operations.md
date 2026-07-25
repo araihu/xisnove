@@ -765,6 +765,9 @@ Normal CI runs SQLite/local Turso plus ephemeral PostgreSQL, module-isolated
 tests, generated drift, race tests, and notification fault tests. Protected CI
 creates and tears down one managed Turso database only in a deletion-enabled
 group and uploads JUnit. Release gate requires all four profiles.
+Local PostgreSQL integration and E2E tests self-provision PostgreSQL 18 through
+Testcontainers when a healthy container runtime is available; the explicit
+`XISNOVE_TEST_POSTGRES_URL` override remains supported for CI and debugging.
 
 - [ ] **Step 4: Document exact operations**
 

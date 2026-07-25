@@ -10,7 +10,7 @@ requires `--database-auth-token-file`.
 | `sqlite` | `modernc.org/sqlite` v1.54.0 | No | One | SQLite-compatible Goose files | Online application backup; restore to a new file | Local path in `--database-url` | Every change, including full storage journey | Stable |
 | `turso-local` | `turso.tech/database/tursogo` v0.7.1 | No; `purego` calls the bundled Rust C ABI | One | SQLite-compatible Goose files | Quiesced whole-volume snapshot | Local path in `--database-url` | Every change, including full storage journey | Evolving |
 | `turso-cloud` | `github.com/tursodatabase/libsql-client-go` at `9d5d30a29a60` | No | Multiple stateless servers | Atomic remote batches from the SQLite-compatible files | Provider point-in-time recovery or export | `libsql://` URL plus token file | Protected weekly, release, and manual repository plus full-journey tests | Evolving |
-| `postgres` | `github.com/jackc/pgx/v5` v5.10.0 | No | Multiple stateless servers | Native PostgreSQL Goose files | PostgreSQL 18 `pg_dump` and `pg_restore` | PostgreSQL URL supplied through protected configuration | Every change with a PostgreSQL 18 service and full storage journey | Stable |
+| `postgres` | `github.com/jackc/pgx/v5` v5.10.0 | No | Multiple stateless servers | Native PostgreSQL Goose files | PostgreSQL 18 `pg_dump` and `pg_restore` | PostgreSQL URL supplied through protected configuration | Testcontainers locally; PostgreSQL 18 service in CI; full storage journey | Stable |
 
 SQLite and local Turso deliberately reject a requested server replica count
 above one. Their single process may use a bounded `database/sql` handle, but a

@@ -11,6 +11,7 @@ import (
 
 	"github.com/araihu/xisnove/internal/adapters/database"
 	postgresstore "github.com/araihu/xisnove/internal/adapters/postgres"
+	postgrescontainer "github.com/araihu/xisnove/internal/testsupport/postgrescontainer"
 	tursotest "github.com/araihu/xisnove/internal/testsupport/tursocloud"
 )
 
@@ -45,10 +46,7 @@ func newFileStorageHarness(t *testing.T, profile database.Profile) *storageHarne
 
 func newPostgresStorageHarness(t *testing.T) *storageHarness {
 	t.Helper()
-	baseURL := os.Getenv("XISNOVE_TEST_POSTGRES_URL")
-	if baseURL == "" {
-		t.Skip("XISNOVE_TEST_POSTGRES_URL is not set")
-	}
+	baseURL := postgrescontainer.URL(t, os.Getenv("XISNOVE_TEST_POSTGRES_URL"))
 	ctx := context.Background()
 	admin, err := postgresstore.Open(ctx, baseURL)
 	if err != nil {

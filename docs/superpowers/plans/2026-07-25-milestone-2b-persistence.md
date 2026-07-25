@@ -612,10 +612,12 @@ driver-specific types or messages.
 
 - [ ] **Step 2: Run the journey on all locally available profiles**
 
-SQLite and local Turso always run. PostgreSQL runs whenever
-`XISNOVE_TEST_POSTGRES_URL` is present and is mandatory in normal CI. Each
-profile starts empty and owns its isolated path/schema. PostgreSQL uses two
-independent pools during the same journey to prove replica visibility.
+SQLite and local Turso always run. PostgreSQL uses Testcontainers to provision
+PostgreSQL 18 when a healthy container runtime is available, accepts
+`XISNOVE_TEST_POSTGRES_URL` as an external-server override, and is mandatory in
+normal CI. Each profile starts empty and owns its isolated path/schema.
+PostgreSQL uses two independent pools during the same journey to prove replica
+visibility.
 
 - [ ] **Step 3: Provision a real managed Turso database**
 
@@ -688,9 +690,10 @@ Turso Cloud and state that local sync is not a lease coordinator.
 
 - [ ] **Step 2: Make local conformance part of `make check`**
 
-SQLite and local Turso run unconditionally. PostgreSQL tests run when
-`XISNOVE_TEST_POSTGRES_URL` is set and are mandatory in CI. Managed Turso tests
-remain a protected scheduled/release gate.
+SQLite and local Turso run unconditionally. PostgreSQL tests self-provision via
+Testcontainers when a container runtime is available, accept an external URL
+override, and are mandatory in CI. Managed Turso tests remain a protected
+scheduled/release gate.
 
 - [ ] **Step 3: Run final milestone verification**
 

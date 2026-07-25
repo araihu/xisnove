@@ -11,14 +11,12 @@ import (
 	"github.com/araihu/xisnove/application"
 	conformance "github.com/araihu/xisnove/contracttest"
 	"github.com/araihu/xisnove/internal/adapters/postgres"
+	postgrescontainer "github.com/araihu/xisnove/internal/testsupport/postgrescontainer"
 	"github.com/google/uuid"
 )
 
 func TestPersistenceConformance(t *testing.T) {
-	baseURL := os.Getenv("XISNOVE_TEST_POSTGRES_URL")
-	if baseURL == "" {
-		t.Skip("XISNOVE_TEST_POSTGRES_URL is not set")
-	}
+	baseURL := postgrescontainer.URL(t, os.Getenv("XISNOVE_TEST_POSTGRES_URL"))
 	conformance.Run(t, func(t *testing.T) application.Store {
 		t.Helper()
 		ctx := context.Background()

@@ -10,7 +10,7 @@ test:
 	cd agent && GOWORK=off go test ./...
 
 storage-check:
-	go test -race ./integration -run 'TestStorageMatrix/(SQLite|TursoLocal)' -count=1
+	go test -race ./integration -run 'TestStorageMatrix/(SQLite|TursoLocal|Postgres)' -count=1
 
 check: generate
 	git diff --exit-code
