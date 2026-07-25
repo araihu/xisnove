@@ -41,13 +41,13 @@ func TestOpenSQLiteHandleLifecycle(t *testing.T) {
 	}
 }
 
-func TestOpenRejectsUnimplementedValidProfileWithoutLeakingSecret(t *testing.T) {
+func TestOpenRejectsInvalidRemoteProfileWithoutLeakingSecret(t *testing.T) {
 	t.Parallel()
 
 	const secret = "do-not-leak"
 	_, err := xisdatabase.Open(context.Background(), xisdatabase.Config{
 		Profile:   xisdatabase.ProfileTursoCloud,
-		URL:       "libsql://example.turso.io",
+		URL:       "https://example.turso.io",
 		AuthToken: secret,
 	})
 	if err == nil {

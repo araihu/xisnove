@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	dbsqlite "github.com/araihu/xisnove/db/generated/sqlite"
@@ -1216,6 +1217,14 @@ func repositoryError(operation string, err error) error {
 		return fmt.Errorf("%s: %w", operation, application.ErrConflict)
 	}
 	if errors.Is(err, turso.ErrTursoConstraint) {
+		return fmt.Errorf("%s: %w", operation, application.ErrConflict)
+	}
+	// libsql-client-go currently converts the structured Hrana error into
+	// errors.New(message), so no error code or public concrete type survives
+	// database/sql. Keep this fallback limited to libSQL's canonical SQLite
+	// constraint message instead of classifying arbitrary error strings.
+	if strings.Contains("\n"+err.Error(), "\nSQLite error: ") &&
+		strings.Contains(err.Error(), "constraint failed:") {
 		return fmt.Errorf("%s: %w", operation, application.ErrConflict)
 	}
 	return fmt.Errorf("%s: %w", operation, err)
