@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/araihu/xisnove/application"
+	application "github.com/araihu/xisnove/application/port"
 	conformance "github.com/araihu/xisnove/contracttest"
 	"github.com/araihu/xisnove/internal/adapters/tursolocal"
 )
 
 func TestPersistenceConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T) application.Store {
+	conformance.Run(t, func(t *testing.T) application.UnitOfWork {
 		t.Helper()
 		db, err := tursolocal.Open(
 			context.Background(),

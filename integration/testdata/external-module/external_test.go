@@ -35,6 +35,18 @@ type unitOfWork struct {
 	repositories port.Repositories
 }
 
+func newUnitOfWork(*testing.T) port.UnitOfWork {
+	return unitOfWork{
+		repositories: port.Repositories{
+			Locations: &locationRepository{
+				locations: make(map[domain.LocationID]domain.Location),
+			},
+		},
+	}
+}
+
+var _ contracttest.Factory = newUnitOfWork
+
 func (u unitOfWork) View(
 	ctx context.Context,
 	fn func(context.Context, port.Repositories) error,
@@ -68,8 +80,11 @@ func TestExternalModuleCanComposeCore(t *testing.T) {
 	if location.ID != "external-location" {
 		t.Fatalf("location ID = %q", location.ID)
 	}
+}
 
-	// Importing the public contract package is part of the supported extension
-	// surface; adapters can opt into its complete suites as they are implemented.
-	_ = contracttest.Run
+func TestContractFactoryAcceptsPlainUnitOfWork(t *testing.T) {
+	factory := contracttest.Factory(newUnitOfWork)
+	if got := factory(t); got == nil {
+		t.Fatal("contract factory returned a nil UnitOfWork")
+	}
 }

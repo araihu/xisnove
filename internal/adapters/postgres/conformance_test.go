@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/araihu/xisnove/application"
+	application "github.com/araihu/xisnove/application/port"
 	conformance "github.com/araihu/xisnove/contracttest"
 	"github.com/araihu/xisnove/internal/adapters/postgres"
 	postgrescontainer "github.com/araihu/xisnove/internal/testsupport/postgrescontainer"
@@ -17,7 +17,7 @@ import (
 
 func TestPersistenceConformance(t *testing.T) {
 	baseURL := postgrescontainer.URL(t, os.Getenv("XISNOVE_TEST_POSTGRES_URL"))
-	conformance.Run(t, func(t *testing.T) application.Store {
+	conformance.Run(t, func(t *testing.T) application.UnitOfWork {
 		t.Helper()
 		ctx := context.Background()
 		admin, err := postgres.Open(ctx, baseURL)
