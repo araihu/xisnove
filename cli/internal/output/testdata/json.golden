@@ -1,0 +1,9 @@
+{
+  "name": "edge-api",
+  "state": "degraded",
+  "count": 2,
+  "labels": {
+    "team": "platform",
+    "zone": "south"
+  }
+}
