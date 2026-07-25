@@ -28,6 +28,60 @@ will cover the smallest end-to-end slice: OpenAPI contract, monitor
 configuration, agent enrollment and leasing, an HTTP probe, result ingestion,
 health projection, and incident transition on SQLite.
 
+## Open Core product boundary
+
+### Architectural compatibility required now
+
+Xisnove is developed toward an Apache 2.0 Open Core model. The canonical public
+repository and Go module remain `github.com/araihu/xisnove`; they are never
+renamed to a separate `core` module. This repository is a complete,
+single-tenant, self-hosted monitoring product rather than a reduced community
+edition.
+
+Its domain model, application services, infrastructure ports, OpenAPI contract,
+SDK, and adapter conformance utilities form an intentional Go extension
+surface. The importable packages are rooted at:
+
+```text
+github.com/araihu/xisnove/domain
+github.com/araihu/xisnove/application
+github.com/araihu/xisnove/application/port
+github.com/araihu/xisnove/contracttest
+```
+
+Self-hosted adapters and composition stay under `internal/adapters` and
+`cmd/xisnove-server`. The server command is one composition root, not the owner
+of application behavior. External modules extend Xisnove with ordinary Go
+interfaces, constructors, and manual dependency injection; Go plugins,
+edition build tags, and forks of the core domain are not extension mechanisms.
+
+Before the repository is presented as Apache-licensed, the full Apache 2.0
+license and any required notices must be committed and release checks must
+verify them.
+
+### Private SaaS implementation deferred
+
+A future proprietary `github.com/araihu/xisnove-cloud` repository may import
+the public module and supply separate composition roots and adapters for
+multi-tenant authentication and authorization, billing, tenant-aware
+persistence, scalable analytics, and managed infrastructure. That repository
+is not created or implemented by v1.
+
+The public core remains SaaS-blind: it does not add tenant, organization,
+workspace, subscription, Stripe, or entitlement concepts merely to anticipate
+the hosted product. A future cloud boundary may place a validated tenant scope
+in `context.Context`; proprietary adapters must extract it and fail closed when
+it is missing. Context propagation enables that design but is not an
+authorization mechanism.
+
+### Single-tenant self-hosted v1 remains the product scope
+
+All behavior described by this specification remains available to one
+self-hosted installation without proprietary code or hosted services. Building
+or operating the proprietary SaaS edition is not a v1 deliverable. Open Core
+compatibility must not weaken the local-administrator flow, supported storage
+profiles, agents, operator, notifications, UI, CLI, or deployment resources.
+
 ## Goals
 
 - Provide HTTP(S), TCP, and DNS synthetic monitoring from multiple network
@@ -68,6 +122,9 @@ health projection, and incident transition on SQLite.
 - Direct Vault, OpenBao, External Secrets Operator, or cloud secret-manager
   API integrations.
 - Redis, Kafka, NATS, or another required queue.
+- Building, provisioning, billing, or operating a proprietary SaaS edition.
+- SaaS tenant, organization, workspace, subscription, or entitlement fields in
+  the public core domain.
 
 ## Success criteria
 
@@ -88,6 +145,9 @@ The v1 design is successful when:
    to read Secrets or silently create monitors.
 7. Releases include verifiable binaries, OCI images, Helm charts, Compose
    resources, CRDs, upgrade notes, checksums, signatures, SBOMs, and provenance.
+8. An external Go module can import the public domain, application, ports, and
+   contract tests, inject a replacement adapter, and construct an application
+   service without importing self-hosted implementation details.
 
 ## Homelab fit
 
@@ -227,8 +287,19 @@ independently versionable modules:
 ```
 
 The root module is `github.com/araihu/xisnove`. It owns the server, public
-contract, SDK, domain, application use cases, persistence adapters, migrations,
-and notification adapters.
+contract, SDK, public domain/application/port packages, public adapter contract
+tests, self-hosted persistence adapters, migrations, and notification adapters.
+
+The root layout includes these intentional extension packages:
+
+```text
+├── domain/                 # public entities, values, and pure transitions
+├── application/            # public use cases and service constructors
+│   └── port/               # public infrastructure and unit-of-work ports
+├── contracttest/           # public adapter behavioral suites
+├── internal/adapters/      # self-hosted implementations
+└── cmd/xisnove-server/     # self-hosted composition root
+```
 
 Each child module depends only on published packages that it legitimately
 consumes:
@@ -262,6 +333,10 @@ transitions:
 It receives explicit time values and has no global clock, storage, network, or
 framework dependency.
 
+The domain is public and imports neither application code nor `internal`
+packages. SaaS-specific identity, billing, and entitlement concepts do not
+enter it.
+
 ### Application
 
 The application layer orchestrates commands and queries:
@@ -279,6 +354,35 @@ Application services depend on ports for persistence, transactions, clock,
 random IDs, credential hashing, encryption, notification transport, and audit
 recording.
 
+All application services and port operations accept the caller's
+`context.Context` first and propagate it unchanged through the call chain.
+Application code never replaces an incoming context with
+`context.Background()`. Constructors require context only when construction
+performs bounded I/O.
+
+Ports consumed by application behavior live in `application/port`. The
+transactional boundary remains coarse enough to express consistency-sensitive
+operations atomically:
+
+```go
+type UnitOfWork interface {
+    View(context.Context, func(context.Context, Repositories) error) error
+    Transact(context.Context, func(context.Context, Repositories) error) error
+}
+```
+
+The callback receives the same context and a transaction-scoped repository
+set. Result ingestion can therefore commit the ProbeResult, health transition,
+Incident mutation, IncidentEvent, audit event, and notification outbox rows as
+one unit.
+
+Historical analytics is a separate concern. The operational UnitOfWork owns
+configuration, scheduling, leases, result idempotency, health, Incidents,
+outbox, and audit. A future `ObservationArchive` or `UptimeAnalytics` port may
+feed ClickHouse or another OLAP system asynchronously from committed events;
+an analytical database never replaces the transaction-capable operational
+store.
+
 ### Adapters
 
 Adapters translate external types at the boundary:
@@ -291,6 +395,11 @@ Adapters translate external types at the boundary:
 - system clock and ID generation.
 
 Generated API and sqlc types never leak into domain packages.
+
+Public application/domain packages cannot import self-hosted adapters.
+Dependency tests enforce this direction, while an external-module compile
+fixture proves the extension surface does not accidentally rely on Go
+`internal` visibility.
 
 ## Public API and generation
 
@@ -971,6 +1080,9 @@ dependent, end-to-end milestones:
 2. **Protocol and persistence breadth:** TCP/DNS/TLS behavior, batched uploads,
    scheduler recovery, PostgreSQL, local Turso, managed Turso, migrations,
    backup/restore, and multi-replica tests.
+   A cross-cutting Open Core compatibility gate then promotes domain,
+   application services, infrastructure ports, and adapter contracts into
+   stable importable packages before additional milestone-3 ports are added.
 3. **Reliable notification and operations:** transactional outbox workers,
    Shoutrrr, Alertmanager, routing, maintenance, retention, metrics, tracing,
    readiness, and graceful shutdown.
@@ -985,10 +1097,18 @@ dependent, end-to-end milestones:
 Each milestone must leave the repository buildable, testable, documented, and
 usable for its completed slice. The next planning step covers milestone 1 only.
 
+The Open Core compatibility gate is complete only when a temporary external Go
+module imports `github.com/araihu/xisnove`, implements a test UnitOfWork/adapter,
+constructs a core service, and passes `GOWORK=off go test`. Architecture checks
+also reject imports from public domain/application packages into
+`internal/adapters`, preserve caller contexts, and keep analytical ports
+separate from operational persistence. Public package and OpenAPI changes
+follow semantic-versioning compatibility discipline.
+
 ## Risks and accepted trade-offs
 
 - **One server deployable can grow large.** Hexagonal package boundaries and
-  internal ports preserve clarity without imposing an early distributed-system
+  public ports preserve clarity without imposing an early distributed-system
   tax.
 - **SQLite-compatible backends have a constrained write path.** Short
   transactions, bounded workers, and adapter conformance tests protect v1;
@@ -1024,6 +1144,11 @@ The design intentionally leaves ports or versioned contracts for:
 - alternative notification transports;
 - separately scalable control-plane processes;
 - later OpenAPI and generator revisions.
+- the proprietary `github.com/araihu/xisnove-cloud` repository and all hosted
+  product implementation;
+- tenant-aware authentication, authorization, billing, provisioning, and
+  analytical adapters;
+- ClickHouse or another separately scaled OLAP implementation.
 
 None of these are required for the v1 schema or deployment model to function.
 

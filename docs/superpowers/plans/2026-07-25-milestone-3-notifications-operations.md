@@ -20,6 +20,12 @@ every attempt. SQLite, local Turso, managed Turso, and PostgreSQL implement the
 same repository behavior. Kubernetes Jobs and Kubernetes API persistence are
 not part of notification delivery.
 
+Before Task 3 adds more infrastructure ports, the Open Core compatibility gate
+promotes the already-completed domain behavior, application services, ports,
+and adapter conformance suites into importable public packages. Tasks 1 and 2
+were initially landed under `internal`; Task 2.5 performs that promotion and
+all later task paths refer to the resulting public layout.
+
 **Tech Stack:** Go 1.26.1, OpenAPI 3.1.2, oapi-codegen v2.8.0, sqlc v1.31.1,
 Goose v3.27.3, `github.com/nicholas-fedor/shoutrrr` v0.16.2, Prometheus client
 library, and OpenTelemetry Go SDK/exporter packages pinned when Task 12 starts.
@@ -28,6 +34,15 @@ library, and OpenTelemetry Go SDK/exporter packages pinned when Task 12 starts.
 
 - The public OpenAPI document remains canonical; generated server and SDK
   artifacts are reviewed and committed.
+- The canonical module remains `github.com/araihu/xisnove`. Public extension
+  packages are `domain`, `application`, `application/port`, and `contracttest`;
+  self-hosted implementations remain under `internal/adapters`.
+- Every application/port operation accepts `context.Context` first and
+  propagates the incoming context. The public UnitOfWork exposes `View` and
+  `Transact`, and passes the same context to transaction-scoped callbacks.
+- Public packages remain free of SaaS tenancy, billing, subscription, and
+  entitlement concepts. Future OLAP integration uses a separate analytics
+  port and cannot replace operational transaction semantics.
 - Monitor `description`, `labels`, display order, and public-page selection are
   implemented now because routing and the milestone 4 status page consume
   them. Labels are copied into render snapshots so replay is historically
@@ -194,13 +209,51 @@ git commit -m "feat(notification): add relational outbox schema"
 
 ---
 
+### Task 2.5: Open Core extension-surface gate
+
+**Plan:** `docs/superpowers/plans/2026-07-25-open-core-extension-surface.md`
+
+**Files:**
+- Move: `internal/domain/**` to `domain/**`
+- Move: `internal/application/**` to `application/**`
+- Create: `application/port/**`
+- Move: `internal/adapters/conformance/**` to `contracttest/**`
+- Create: `internal/architecture/dependencies_test.go`
+- Create: `integration/testdata/external-module/go.mod`
+- Create: `integration/testdata/external-module/external_test.go`
+- Create: `integration/external_module_test.go`
+- Modify: all imports and composition roots
+
+**Acceptance:**
+
+- [ ] The canonical module path remains `github.com/araihu/xisnove`.
+- [ ] Domain, application services, infrastructure ports, and adapter contract
+  suites are importable by another module without access to `internal`.
+- [ ] The coarse public UnitOfWork preserves atomic `View`/`Transact`
+  boundaries and supplies the caller context to callbacks.
+- [ ] No application service replaces an incoming context with
+  `context.Background()`.
+- [ ] An architecture test enforces dependency direction and keeps operational
+  persistence separate from future analytical ports.
+- [ ] An external-module fixture passes with `GOWORK=off`, imports all four
+  public package roots, supplies a fake adapter, and constructs a service.
+- [ ] Public-package and OpenAPI compatibility follow semantic versioning; the
+  release process cannot claim Apache 2.0 until `LICENSE` and required notices
+  are present.
+- [ ] The core remains a complete single-tenant self-hosted product and gains
+  no SaaS tenant, billing, subscription, or entitlement concepts.
+
+Implement and verify this gate using the dedicated plan before resuming Task 3.
+
+---
+
 ### Task 3: Profile-neutral repositories and conformance
 
 **Files:**
-- Modify: `internal/application/store.go`
+- Modify: `application/port/store.go`
 - Modify: `internal/adapters/sqlitecompat/store.go`
 - Modify: `internal/adapters/postgres/store.go`
-- Create: `internal/adapters/conformance/notifications.go`
+- Create: `contracttest/notifications.go`
 - Modify: `internal/adapters/sqlite/conformance_test.go`
 - Modify: `internal/adapters/tursolocal/conformance_test.go`
 - Modify: `internal/adapters/tursocloud/conformance_test.go`
@@ -241,7 +294,7 @@ go test -race ./internal/adapters/sqlite ./internal/adapters/tursolocal \
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/application/store.go internal/adapters
+git add application/port contracttest internal/adapters
 git commit -m "feat(notification): persist durable delivery state"
 ```
 
@@ -250,8 +303,8 @@ git commit -m "feat(notification): persist durable delivery state"
 ### Task 4: Versioned encryption and secret resolution
 
 **Files:**
-- Create: `internal/application/secrets.go`
-- Create: `internal/application/secrets_test.go`
+- Create: `application/secrets.go`
+- Create: `application/secrets_test.go`
 - Create: `internal/adapters/crypto/envelope.go`
 - Create: `internal/adapters/crypto/envelope_test.go`
 - Create: `internal/adapters/secrets/file.go`
@@ -296,8 +349,8 @@ no row references them.
 
 ```bash
 go test -race ./internal/adapters/crypto ./internal/adapters/secrets \
-  ./internal/application ./internal/config ./cmd/xisnove-server
-git add internal cmd
+  ./application ./internal/config ./cmd/xisnove-server
+git add application internal cmd
 git commit -m "feat(notification): encrypt channel configuration"
 ```
 
@@ -306,12 +359,12 @@ git commit -m "feat(notification): encrypt channel configuration"
 ### Task 5: Transactional incident routing and outbox creation
 
 **Files:**
-- Create: `internal/application/notifications.go`
-- Create: `internal/application/notifications_test.go`
-- Modify: `internal/application/projection.go`
-- Modify: `internal/application/results_test.go`
-- Modify: `internal/application/staleness_test.go`
-- Modify: `internal/domain/incident.go`
+- Create: `application/notifications.go`
+- Create: `application/notifications_test.go`
+- Modify: `application/projection.go`
+- Modify: `application/results_test.go`
+- Modify: `application/staleness_test.go`
+- Modify: `domain/incident.go`
 
 **Interfaces:**
 - Produces: one transaction-scoped `RecordIncidentTransition` orchestration
@@ -341,13 +394,13 @@ history continue normally.
 - [ ] **Step 4: Verify all projection paths**
 
 ```bash
-go test -race ./internal/application -run 'Result|Projection|Stale|Notification'
+go test -race ./application -run 'Result|Projection|Stale|Notification'
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/application internal/domain
+git add application domain
 git commit -m "feat(notification): enqueue incident transitions atomically"
 ```
 
@@ -409,8 +462,8 @@ git commit -m "feat(api): expose notification operations"
 ### Task 7: Notification transport boundary and egress policy
 
 **Files:**
-- Create: `internal/application/transport.go`
-- Create: `internal/application/transport_test.go`
+- Create: `application/transport.go`
+- Create: `application/transport_test.go`
 - Create: `internal/adapters/egress/policy.go`
 - Create: `internal/adapters/egress/policy_test.go`
 - Modify: `go.mod`
@@ -443,7 +496,7 @@ URLs with userinfo/query secrets, headers, and message payloads.
 - [ ] **Step 4: Verify and commit**
 
 ```bash
-go test -race ./internal/application ./internal/adapters/egress
+go test -race ./application ./internal/adapters/egress
 git add internal go.mod go.sum
 git commit -m "feat(notification): define transport boundary"
 ```
@@ -491,8 +544,8 @@ git commit -m "feat(notification): add delivery transports"
 ### Task 9: Durable notification worker and replay
 
 **Files:**
-- Create: `internal/application/delivery_worker.go`
-- Create: `internal/application/delivery_worker_test.go`
+- Create: `application/delivery_worker.go`
+- Create: `application/delivery_worker_test.go`
 - Modify: `cmd/xisnove-server/serve.go`
 - Modify: `cmd/xisnove-server/serve_test.go`
 
@@ -519,9 +572,9 @@ replica may run the worker.
 - [ ] **Step 4: Verify and commit**
 
 ```bash
-go test -race ./internal/application ./cmd/xisnove-server \
+go test -race ./application ./cmd/xisnove-server \
   -run 'Delivery|NotificationWorker|Shutdown'
-git add internal/application cmd/xisnove-server
+git add application cmd/xisnove-server
 git commit -m "feat(notification): deliver durable outbox work"
 ```
 
@@ -530,8 +583,8 @@ git commit -m "feat(notification): deliver durable outbox work"
 ### Task 10: Maintenance lifecycle
 
 **Files:**
-- Create: `internal/application/maintenance.go`
-- Create: `internal/application/maintenance_test.go`
+- Create: `application/maintenance.go`
+- Create: `application/maintenance_test.go`
 - Modify: `cmd/xisnove-server/serve.go`
 - Modify: `integration/storage_journey_test.go`
 
@@ -556,8 +609,8 @@ lose the post-maintenance transition.
 - [ ] **Step 4: Verify and commit**
 
 ```bash
-go test -race ./internal/application ./integration -run 'Maintenance'
-git add internal/application cmd/xisnove-server integration
+go test -race ./application ./integration -run 'Maintenance'
+git add application cmd/xisnove-server integration
 git commit -m "feat(maintenance): preserve unhealthy transitions"
 ```
 
@@ -566,8 +619,8 @@ git commit -m "feat(maintenance): preserve unhealthy transitions"
 ### Task 11: Daily uptime aggregation and bounded retention
 
 **Files:**
-- Create: `internal/application/retention.go`
-- Create: `internal/application/retention_test.go`
+- Create: `application/retention.go`
+- Create: `application/retention_test.go`
 - Modify: `cmd/xisnove-server/serve.go`
 - Create: `integration/retention_test.go`
 
@@ -591,8 +644,8 @@ job audit/metrics without placing per-row payloads in logs.
 - [ ] **Step 4: Verify and commit**
 
 ```bash
-go test -race ./internal/application ./integration -run 'Retention|Uptime'
-git add internal/application cmd/xisnove-server integration
+go test -race ./application ./integration -run 'Retention|Uptime'
+git add application cmd/xisnove-server integration
 git commit -m "feat(retention): aggregate and prune bounded history"
 ```
 
