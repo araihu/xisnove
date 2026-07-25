@@ -428,13 +428,14 @@ git commit -m "feat(notification): enqueue incident transitions atomically"
 - Monitor representations include description, labels, display order, public
   selection.
 
-- [ ] **Step 1: Add failing OpenAPI contract assertions**
+- [x] **Step 1: Add failing OpenAPI contract assertions**
 
-Require OpenAPI 3.1.2 discriminated channel configuration inputs, `writeOnly`
+Require OpenAPI 3.0.3 (the latest version officially supported by the pinned
+`oapi-codegen`) with discriminated channel configuration inputs, `writeOnly`
 secret-bearing fields, redacted response schemas, bounded pagination, stable
 delivery states, RFC 9457 errors, and admin authorization on every operation.
 
-- [ ] **Step 2: Extend the canonical contract and regenerate**
+- [x] **Step 2: Extend the canonical contract and regenerate**
 
 ```bash
 go generate ./...
@@ -442,13 +443,13 @@ go tool vacuum lint -d api/openapi.yaml
 go test ./api ./sdk
 ```
 
-- [ ] **Step 3: Implement strict handlers**
+- [x] **Step 3: Implement strict handlers**
 
 Handlers only map generated HTTP types to application commands/queries. Never
 log request bodies for channel writes. Replay requires an explicit delivery ID
 and records an audit event.
 
-- [ ] **Step 4: Verify generated drift and commit**
+- [x] **Step 4: Verify generated drift and commit**
 
 ```bash
 git add api sdk internal/adapters/httpapi

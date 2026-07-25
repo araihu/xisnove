@@ -3,4 +3,10 @@ package: controlplane
 generate:
   models: true
   client: true
+output-options:
+  include-operation-ids:
+    - enrollAgent
+    - heartbeatAgent
+    - leaseAgentWork
+    - uploadProbeResults
 output: generated.gen.go

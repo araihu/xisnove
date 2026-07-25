@@ -1,15 +1,16 @@
-openapi: 3.1.2
+openapi: 3.0.3
 info:
   title: Xisnove API
   version: 0.1.0
   description: API for the Xisnove monitoring control plane and outbound agents.
-jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 servers:
   - url: /
 tags:
   - name: auth
   - name: management
   - name: agent
+  - name: notifications
+  - name: maintenance
 paths:
   /v1/sessions:
     post:
@@ -187,6 +188,270 @@ paths:
               schema: {$ref: '#/components/schemas/Incident'}
         '204': {description: No active Incident}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/notification-channels:
+    post:
+      operationId: createNotificationChannel
+      summary: Create an encrypted notification channel
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        description: Channel configuration is accepted only on writes and never reflected.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateNotificationChannelRequest'}
+      responses:
+        '201':
+          description: Notification channel created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationChannel'}
+        default: {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listNotificationChannels
+      summary: List redacted notification channels
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+      responses:
+        '200':
+          description: Bounded notification channel page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationChannelPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/notification-channels/{channelId}:
+    parameters:
+      - {$ref: '#/components/parameters/NotificationChannelID'}
+    get:
+      operationId: getNotificationChannel
+      summary: Get a redacted notification channel
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Redacted notification channel
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationChannel'}
+        default: {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: updateNotificationChannel
+      summary: Replace notification channel configuration
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        description: Replacement configuration is write-only.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateNotificationChannelRequest'}
+      responses:
+        '200':
+          description: Notification channel updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationChannel'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: disableNotificationChannel
+      summary: Disable a notification channel without deleting history
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      responses:
+        '204': {description: Notification channel disabled}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/notification-routes:
+    post:
+      operationId: createNotificationRoute
+      summary: Create a typed incident notification route
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        description: Route matchers and immutable render template.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NotificationRouteInput'}
+      responses:
+        '201':
+          description: Notification route created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationRoute'}
+        default: {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listNotificationRoutes
+      summary: List notification routes
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+      responses:
+        '200':
+          description: Bounded notification route page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationRoutePage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/notification-routes/{routeId}:
+    parameters:
+      - {$ref: '#/components/parameters/NotificationRouteID'}
+    get:
+      operationId: getNotificationRoute
+      summary: Get a notification route
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Notification route
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationRoute'}
+        default: {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: updateNotificationRoute
+      summary: Replace a notification route
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        description: Complete typed route replacement.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NotificationRouteInput'}
+      responses:
+        '200':
+          description: Notification route updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationRoute'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: disableNotificationRoute
+      summary: Disable a notification route without deleting history
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      responses:
+        '204': {description: Notification route disabled}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/notification-deliveries:
+    get:
+      operationId: listNotificationDeliveries
+      summary: List durable notification delivery state
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+      responses:
+        '200':
+          description: Bounded notification delivery page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationDeliveryPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/notification-deliveries/{deliveryId}:
+    parameters:
+      - {$ref: '#/components/parameters/NotificationDeliveryID'}
+    get:
+      operationId: getNotificationDelivery
+      summary: Get delivery state and bounded attempts
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Notification delivery
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationDeliveryDetail'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/notification-deliveries/{deliveryId}/replay:
+    parameters:
+      - {$ref: '#/components/parameters/NotificationDeliveryID'}
+    post:
+      operationId: replayNotificationDelivery
+      summary: Explicitly replay a permanently failed delivery
+      tags: [notifications]
+      security: [{adminBearer: []}]
+      responses:
+        '202': {description: Notification delivery queued for replay}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/maintenance:
+    post:
+      operationId: createMaintenance
+      summary: Create one-off or indefinite maintenance
+      tags: [maintenance]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        description: Maintenance interval for one monitor.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateMaintenanceRequest'}
+      responses:
+        '201':
+          description: Maintenance created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Maintenance'}
+        default: {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listMaintenance
+      summary: List maintenance intervals
+      tags: [maintenance]
+      security: [{adminBearer: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+      responses:
+        '200':
+          description: Bounded maintenance page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MaintenancePage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/maintenance/{maintenanceId}:
+    parameters:
+      - {$ref: '#/components/parameters/MaintenanceID'}
+    get:
+      operationId: getMaintenance
+      summary: Get a maintenance interval
+      tags: [maintenance]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Maintenance interval
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Maintenance'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: deleteMaintenance
+      summary: Delete maintenance that has not started
+      tags: [maintenance]
+      security: [{adminBearer: []}]
+      responses:
+        '204': {description: Future maintenance deleted}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/maintenance/{maintenanceId}/end:
+    parameters:
+      - {$ref: '#/components/parameters/MaintenanceID'}
+    post:
+      operationId: endMaintenance
+      summary: End active or indefinite maintenance now
+      tags: [maintenance]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Maintenance ended
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Maintenance'}
+        default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     adminBearer: {type: http, scheme: bearer, bearerFormat: opaque}
@@ -197,6 +462,40 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    NotificationChannelID:
+      name: channelId
+      in: path
+      required: true
+      description: Notification channel identifier.
+      schema: {type: string, format: uuid}
+    NotificationRouteID:
+      name: routeId
+      in: path
+      required: true
+      description: Notification route identifier.
+      schema: {type: string, format: uuid}
+    NotificationDeliveryID:
+      name: deliveryId
+      in: path
+      required: true
+      description: Notification delivery identifier.
+      schema: {type: string, format: uuid}
+    MaintenanceID:
+      name: maintenanceId
+      in: path
+      required: true
+      description: Maintenance interval identifier.
+      schema: {type: string, format: uuid}
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of records to return.
+      schema: {type: integer, format: int32, minimum: 1, maximum: 100, default: 50}
+    Offset:
+      name: offset
+      in: query
+      description: Number of records to skip.
+      schema: {type: integer, format: int32, minimum: 0, maximum: 1000000, default: 0}
   responses:
     Problem:
       description: Problem details
@@ -246,6 +545,14 @@ components:
         - probe
       properties:
         name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2048, default: ''}
+        labels:
+          type: object
+          maxProperties: 64
+          default: {}
+          additionalProperties: {type: string, maxLength: 253}
+        displayOrder: {type: integer, format: int32, minimum: 0, default: 0}
+        public: {type: boolean, default: false}
         intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
         timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
         failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
@@ -349,6 +656,11 @@ components:
         - id
         - kind
         - name
+        - description
+        - labels
+        - displayOrder
+        - public
+        - enabled
         - intervalSeconds
         - timeoutMillis
         - failureThreshold
@@ -362,6 +674,14 @@ components:
         id: {type: string, format: uuid}
         kind: {type: string, enum: [http, tcp, dns]}
         name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2048}
+        labels:
+          type: object
+          maxProperties: 64
+          additionalProperties: {type: string, maxLength: 253}
+        displayOrder: {type: integer, format: int32, minimum: 0}
+        public: {type: boolean}
+        enabled: {type: boolean}
         intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
         timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
         failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
@@ -552,6 +872,7 @@ components:
     HealthState:
       type: string
       enum: [pending, up, down, degraded, unknown]
+      x-enum-varnames: [Pending, Up, Down, Degraded, Unknown]
     Incident:
       type: object
       additionalProperties: false
@@ -560,9 +881,300 @@ components:
         id: {type: string, format: uuid}
         monitorId: {type: string, format: uuid}
         state: {type: string, enum: [open, resolved]}
-        severity: {type: string, enum: [warning, critical]}
+        severity: {$ref: '#/components/schemas/IncidentSeverity'}
         openedAt: {type: string, format: date-time}
         lastTransitionAt: {type: string, format: date-time}
+    NotificationChannelConfigurationInput:
+      oneOf:
+        - {$ref: '#/components/schemas/ShoutrrrChannelConfigurationInput'}
+        - {$ref: '#/components/schemas/AlertmanagerChannelConfigurationInput'}
+      discriminator:
+        propertyName: kind
+        mapping:
+          shoutrrr: '#/components/schemas/ShoutrrrChannelConfigurationInput'
+          alertmanager: '#/components/schemas/AlertmanagerChannelConfigurationInput'
+    ShoutrrrChannelConfigurationInput:
+      type: object
+      additionalProperties: false
+      required: [kind, serviceUrl]
+      properties:
+        kind: {type: string, enum: [shoutrrr]}
+        serviceUrl:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+          description: Shoutrrr service URL encrypted immediately after validation.
+    AlertmanagerChannelConfigurationInput:
+      type: object
+      additionalProperties: false
+      required: [kind, endpoint]
+      properties:
+        kind: {type: string, enum: [alertmanager]}
+        endpoint: {type: string, format: uri, maxLength: 4096}
+        bearerToken:
+          type: string
+          maxLength: 8192
+          writeOnly: true
+          description: Optional bearer token encrypted with the channel configuration.
+    CreateNotificationChannelRequest:
+      type: object
+      additionalProperties: false
+      required: [name, enabled, configuration]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+        enabled: {type: boolean}
+        configuration: {$ref: '#/components/schemas/NotificationChannelConfigurationInput'}
+    UpdateNotificationChannelRequest:
+      type: object
+      additionalProperties: false
+      required: [name, enabled, configuration]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+        enabled: {type: boolean}
+        configuration: {$ref: '#/components/schemas/NotificationChannelConfigurationInput'}
+    NotificationChannel:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind, enabled, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {type: string, enum: [shoutrrr, alertmanager]}
+        enabled: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    NotificationChannelPage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/NotificationChannel'}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 100}
+        offset: {type: integer, format: int32, minimum: 0}
+    NotificationAction:
+      type: string
+      enum: [open, change, recover, maintenance-ended]
+    IncidentSeverity:
+      type: string
+      enum: [warning, critical]
+    NotificationRouteInput:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - channelId
+        - labelMatchers
+        - actions
+        - severities
+        - template
+        - enabled
+        - precedence
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+        channelId: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        labelMatchers:
+          type: object
+          maxProperties: 64
+          additionalProperties: {type: string, maxLength: 253}
+        actions:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/NotificationAction'}
+        severities:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/IncidentSeverity'}
+        template: {type: string, maxLength: 16384}
+        enabled: {type: boolean}
+        precedence: {type: integer, format: int32, minimum: 0}
+    NotificationRoute:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - channelId
+        - labelMatchers
+        - actions
+        - severities
+        - template
+        - enabled
+        - precedence
+        - createdAt
+        - updatedAt
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 120}
+        channelId: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        labelMatchers:
+          type: object
+          maxProperties: 64
+          additionalProperties: {type: string, maxLength: 253}
+        actions:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/NotificationAction'}
+        severities:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/IncidentSeverity'}
+        template: {type: string, maxLength: 16384}
+        enabled: {type: boolean}
+        precedence: {type: integer, format: int32, minimum: 0}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    NotificationRoutePage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/NotificationRoute'}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 100}
+        offset: {type: integer, format: int32, minimum: 0}
+    NotificationDeliveryState:
+      type: string
+      enum: [pending, claimed, retrying, delivered, permanent-failure, suppressed]
+    NotificationRenderSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - action
+        - incidentId
+        - monitorId
+        - monitorName
+        - monitorDescription
+        - monitorLabels
+        - previousState
+        - state
+        - severity
+        - occurredAt
+        - routeId
+        - channelId
+        - channelKind
+        - template
+        - routeUpdatedAt
+      properties:
+        eventId: {type: string, format: uuid}
+        action: {$ref: '#/components/schemas/NotificationAction'}
+        incidentId: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        monitorName: {type: string}
+        monitorDescription: {type: string}
+        monitorLabels:
+          type: object
+          additionalProperties: {type: string}
+        previousState: {$ref: '#/components/schemas/HealthState'}
+        state: {$ref: '#/components/schemas/HealthState'}
+        severity: {$ref: '#/components/schemas/IncidentSeverity'}
+        occurredAt: {type: string, format: date-time}
+        routeId: {type: string, format: uuid}
+        channelId: {type: string, format: uuid}
+        channelKind: {type: string, enum: [shoutrrr, alertmanager]}
+        template: {type: string}
+        routeUpdatedAt: {type: string, format: date-time}
+    NotificationDelivery:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - routeId
+        - channelId
+        - state
+        - availableAt
+        - attemptCount
+        - renderSnapshot
+        - createdAt
+        - updatedAt
+      properties:
+        id: {type: string, format: uuid}
+        routeId: {type: string, format: uuid}
+        channelId: {type: string, format: uuid}
+        state: {$ref: '#/components/schemas/NotificationDeliveryState'}
+        availableAt: {type: string, format: date-time}
+        attemptCount: {type: integer, format: int32, minimum: 0}
+        lastErrorClass: {type: string, maxLength: 120}
+        lastDiagnostic: {type: string, maxLength: 512}
+        deliveredAt: {type: string, format: date-time}
+        suppressedAt: {type: string, format: date-time}
+        renderSnapshot: {$ref: '#/components/schemas/NotificationRenderSnapshot'}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    NotificationDeliveryAttempt:
+      type: object
+      additionalProperties: false
+      required: [id, ordinal, startedAt, finishedAt, outcome]
+      properties:
+        id: {type: string, format: uuid}
+        ordinal: {type: integer, format: int32, minimum: 1}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time}
+        outcome: {type: string, enum: [delivered, transient-failure, permanent-failure, abandoned]}
+        errorClass: {type: string, maxLength: 120}
+        diagnostic: {type: string, maxLength: 512}
+        providerReceipt: {type: string, maxLength: 512}
+    NotificationDeliveryDetail:
+      type: object
+      additionalProperties: false
+      required: [delivery, attempts]
+      properties:
+        delivery: {$ref: '#/components/schemas/NotificationDelivery'}
+        attempts:
+          type: array
+          maxItems: 1000
+          items: {$ref: '#/components/schemas/NotificationDeliveryAttempt'}
+    NotificationDeliveryPage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/NotificationDelivery'}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 100}
+        offset: {type: integer, format: int32, minimum: 0}
+    CreateMaintenanceRequest:
+      type: object
+      additionalProperties: false
+      required: [monitorId, startsAt, reason]
+      properties:
+        monitorId: {type: string, format: uuid}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        reason: {type: string, minLength: 1, maxLength: 512}
+    Maintenance:
+      type: object
+      additionalProperties: false
+      required: [id, monitorId, startsAt, reason, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        reason: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    MaintenancePage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Maintenance'}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 100}
+        offset: {type: integer, format: int32, minimum: 0}
     Problem:
       type: object
       additionalProperties: false

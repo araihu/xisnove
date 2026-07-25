@@ -79,6 +79,11 @@ func serveCommand(parent context.Context, args []string) error {
 				LeaseDuration: leaseDuration,
 			}),
 			Health: application.NewHealthService(store),
+			Notifications: application.NewNotificationAdminService(
+				application.NotificationAdminServiceConfig{
+					Store: store, Sealer: sealer, Now: xisclock.Now, NewID: ids.NewUUID,
+				},
+			),
 		}),
 		Ready: func(ctx context.Context) error { return handle.Ready(ctx) },
 	})

@@ -23,6 +23,7 @@ type ServerConfig struct {
 	Lease         *application.LeaseService
 	Results       *application.ResultService
 	Health        *application.HealthService
+	Notifications *application.NotificationAdminService
 }
 
 type Server struct {
@@ -32,6 +33,7 @@ type Server struct {
 	lease         *application.LeaseService
 	results       *application.ResultService
 	health        *application.HealthService
+	notifications *application.NotificationAdminService
 }
 
 func NewServer(config ServerConfig) *Server {
@@ -42,6 +44,7 @@ func NewServer(config ServerConfig) *Server {
 		lease:         config.Lease,
 		results:       config.Results,
 		health:        config.Health,
+		notifications: config.Notifications,
 	}
 }
 
@@ -103,6 +106,10 @@ func (s *Server) CreateMonitor(
 		ctx,
 		application.CreateMonitorCommand{
 			Name:              request.Body.Name,
+			Description:       pointerValue(request.Body.Description),
+			Labels:            mapPointerValue(request.Body.Labels),
+			DisplayOrder:      pointerValue(request.Body.DisplayOrder),
+			Public:            pointerValue(request.Body.Public),
 			LocationID:        domain.LocationID(request.Body.LocationId.String()),
 			RequiredLocation:  request.Body.RequiredLocation,
 			Interval:          time.Duration(request.Body.IntervalSeconds) * time.Second,
@@ -173,6 +180,11 @@ func mapMonitor(configured application.ConfiguredMonitor) (Monitor, error) {
 		Id:                id,
 		Kind:              MonitorKind(configured.Kind),
 		Name:              configured.Name,
+		Description:       configured.Description,
+		Labels:            configured.MetadataLabels(),
+		DisplayOrder:      configured.DisplayOrder,
+		Public:            configured.Public,
+		Enabled:           configured.Enabled,
 		IntervalSeconds:   int32(configured.Interval / time.Second),
 		TimeoutMillis:     int32(configured.Timeout / time.Millisecond),
 		FailureThreshold:  int32(configured.FailureThreshold),
@@ -183,6 +195,21 @@ func mapMonitor(configured application.ConfiguredMonitor) (Monitor, error) {
 		CreatedAt:         configured.CreatedAt,
 		UpdatedAt:         configured.UpdatedAt,
 	}, nil
+}
+
+func pointerValue[T any](value *T) T {
+	if value == nil {
+		var zero T
+		return zero
+	}
+	return *value
+}
+
+func mapPointerValue(value *map[string]string) map[string]string {
+	if value == nil {
+		return map[string]string{}
+	}
+	return *value
 }
 
 func probeFromAPI(probe ProbeDefinition) (domain.ProbeDefinition, error) {

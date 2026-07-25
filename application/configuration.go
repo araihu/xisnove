@@ -22,6 +22,10 @@ type CreateLocationCommand struct {
 
 type CreateMonitorCommand struct {
 	Name              string
+	Description       string
+	Labels            map[string]string
+	DisplayOrder      int32
+	Public            bool
 	LocationID        domain.LocationID
 	RequiredLocation  bool
 	Interval          time.Duration
@@ -139,21 +143,27 @@ func newConfiguredMonitor(
 	switch command.Probe.Kind {
 	case domain.MonitorKindHTTP:
 		return domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
-			ID: id, Name: command.Name, Interval: command.Interval, Timeout: command.Timeout,
+			ID: id, Name: command.Name, Description: command.Description, Labels: command.Labels,
+			DisplayOrder: command.DisplayOrder, Public: command.Public,
+			Interval: command.Interval, Timeout: command.Timeout,
 			FailureThreshold:  command.FailureThreshold,
 			RecoveryThreshold: command.RecoveryThreshold,
 			HTTP:              command.Probe.HTTP, CreatedAt: now,
 		})
 	case domain.MonitorKindTCP:
 		return domain.NewTCPMonitor(domain.NewTCPMonitorParams{
-			ID: id, Name: command.Name, Interval: command.Interval, Timeout: command.Timeout,
+			ID: id, Name: command.Name, Description: command.Description, Labels: command.Labels,
+			DisplayOrder: command.DisplayOrder, Public: command.Public,
+			Interval: command.Interval, Timeout: command.Timeout,
 			FailureThreshold:  command.FailureThreshold,
 			RecoveryThreshold: command.RecoveryThreshold,
 			TCP:               command.Probe.TCP, CreatedAt: now,
 		})
 	case domain.MonitorKindDNS:
 		return domain.NewDNSMonitor(domain.NewDNSMonitorParams{
-			ID: id, Name: command.Name, Interval: command.Interval, Timeout: command.Timeout,
+			ID: id, Name: command.Name, Description: command.Description, Labels: command.Labels,
+			DisplayOrder: command.DisplayOrder, Public: command.Public,
+			Interval: command.Interval, Timeout: command.Timeout,
 			FailureThreshold:  command.FailureThreshold,
 			RecoveryThreshold: command.RecoveryThreshold,
 			DNS:               command.Probe.DNS, CreatedAt: now,

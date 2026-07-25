@@ -51,6 +51,21 @@ func (e AgentCapability) Valid() bool {
 	}
 }
 
+// Defines values for AlertmanagerChannelConfigurationInputKind.
+const (
+	AlertmanagerChannelConfigurationInputKindAlertmanager AlertmanagerChannelConfigurationInputKind = "alertmanager"
+)
+
+// Valid indicates whether the value is a known member of the AlertmanagerChannelConfigurationInputKind enum.
+func (e AlertmanagerChannelConfigurationInputKind) Valid() bool {
+	switch e {
+	case AlertmanagerChannelConfigurationInputKindAlertmanager:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DNSProbeDefinitionKind.
 const (
 	DNSProbeDefinitionKindDns DNSProbeDefinitionKind = "dns"
@@ -149,25 +164,43 @@ func (e HTTPProbeDefinitionMethod) Valid() bool {
 
 // Defines values for HealthState.
 const (
-	Degraded HealthState = "degraded"
-	Down     HealthState = "down"
-	Pending  HealthState = "pending"
-	Unknown  HealthState = "unknown"
-	Up       HealthState = "up"
+	HealthStateDegraded HealthState = "degraded"
+	HealthStateDown     HealthState = "down"
+	HealthStatePending  HealthState = "pending"
+	HealthStateUnknown  HealthState = "unknown"
+	HealthStateUp       HealthState = "up"
 )
 
 // Valid indicates whether the value is a known member of the HealthState enum.
 func (e HealthState) Valid() bool {
 	switch e {
-	case Degraded:
+	case HealthStateDegraded:
 		return true
-	case Down:
+	case HealthStateDown:
 		return true
-	case Pending:
+	case HealthStatePending:
 		return true
-	case Unknown:
+	case HealthStateUnknown:
 		return true
-	case Up:
+	case HealthStateUp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentState.
+const (
+	IncidentStateOpen     IncidentState = "open"
+	IncidentStateResolved IncidentState = "resolved"
+)
+
+// Valid indicates whether the value is a known member of the IncidentState enum.
+func (e IncidentState) Valid() bool {
+	switch e {
+	case IncidentStateOpen:
+		return true
+	case IncidentStateResolved:
 		return true
 	default:
 		return false
@@ -192,24 +225,6 @@ func (e IncidentSeverity) Valid() bool {
 	}
 }
 
-// Defines values for IncidentState.
-const (
-	Open     IncidentState = "open"
-	Resolved IncidentState = "resolved"
-)
-
-// Valid indicates whether the value is a known member of the IncidentState enum.
-func (e IncidentState) Valid() bool {
-	switch e {
-	case Open:
-		return true
-	case Resolved:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for MonitorKind.
 const (
 	MonitorKindDns  MonitorKind = "dns"
@@ -225,6 +240,120 @@ func (e MonitorKind) Valid() bool {
 	case MonitorKindHttp:
 		return true
 	case MonitorKindTcp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationAction.
+const (
+	NotificationActionChange           NotificationAction = "change"
+	NotificationActionMaintenanceEnded NotificationAction = "maintenance-ended"
+	NotificationActionOpen             NotificationAction = "open"
+	NotificationActionRecover          NotificationAction = "recover"
+)
+
+// Valid indicates whether the value is a known member of the NotificationAction enum.
+func (e NotificationAction) Valid() bool {
+	switch e {
+	case NotificationActionChange:
+		return true
+	case NotificationActionMaintenanceEnded:
+		return true
+	case NotificationActionOpen:
+		return true
+	case NotificationActionRecover:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationChannelKind.
+const (
+	NotificationChannelKindAlertmanager NotificationChannelKind = "alertmanager"
+	NotificationChannelKindShoutrrr     NotificationChannelKind = "shoutrrr"
+)
+
+// Valid indicates whether the value is a known member of the NotificationChannelKind enum.
+func (e NotificationChannelKind) Valid() bool {
+	switch e {
+	case NotificationChannelKindAlertmanager:
+		return true
+	case NotificationChannelKindShoutrrr:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationDeliveryAttemptOutcome.
+const (
+	NotificationDeliveryAttemptOutcomeAbandoned        NotificationDeliveryAttemptOutcome = "abandoned"
+	NotificationDeliveryAttemptOutcomeDelivered        NotificationDeliveryAttemptOutcome = "delivered"
+	NotificationDeliveryAttemptOutcomePermanentFailure NotificationDeliveryAttemptOutcome = "permanent-failure"
+	NotificationDeliveryAttemptOutcomeTransientFailure NotificationDeliveryAttemptOutcome = "transient-failure"
+)
+
+// Valid indicates whether the value is a known member of the NotificationDeliveryAttemptOutcome enum.
+func (e NotificationDeliveryAttemptOutcome) Valid() bool {
+	switch e {
+	case NotificationDeliveryAttemptOutcomeAbandoned:
+		return true
+	case NotificationDeliveryAttemptOutcomeDelivered:
+		return true
+	case NotificationDeliveryAttemptOutcomePermanentFailure:
+		return true
+	case NotificationDeliveryAttemptOutcomeTransientFailure:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationDeliveryState.
+const (
+	NotificationDeliveryStateClaimed          NotificationDeliveryState = "claimed"
+	NotificationDeliveryStateDelivered        NotificationDeliveryState = "delivered"
+	NotificationDeliveryStatePending          NotificationDeliveryState = "pending"
+	NotificationDeliveryStatePermanentFailure NotificationDeliveryState = "permanent-failure"
+	NotificationDeliveryStateRetrying         NotificationDeliveryState = "retrying"
+	NotificationDeliveryStateSuppressed       NotificationDeliveryState = "suppressed"
+)
+
+// Valid indicates whether the value is a known member of the NotificationDeliveryState enum.
+func (e NotificationDeliveryState) Valid() bool {
+	switch e {
+	case NotificationDeliveryStateClaimed:
+		return true
+	case NotificationDeliveryStateDelivered:
+		return true
+	case NotificationDeliveryStatePending:
+		return true
+	case NotificationDeliveryStatePermanentFailure:
+		return true
+	case NotificationDeliveryStateRetrying:
+		return true
+	case NotificationDeliveryStateSuppressed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationRenderSnapshotChannelKind.
+const (
+	NotificationRenderSnapshotChannelKindAlertmanager NotificationRenderSnapshotChannelKind = "alertmanager"
+	NotificationRenderSnapshotChannelKindShoutrrr     NotificationRenderSnapshotChannelKind = "shoutrrr"
+)
+
+// Valid indicates whether the value is a known member of the NotificationRenderSnapshotChannelKind enum.
+func (e NotificationRenderSnapshotChannelKind) Valid() bool {
+	switch e {
+	case NotificationRenderSnapshotChannelKindAlertmanager:
+		return true
+	case NotificationRenderSnapshotChannelKindShoutrrr:
 		return true
 	default:
 		return false
@@ -318,6 +447,21 @@ func (e ProbeResultInputOutcome) Valid() bool {
 	}
 }
 
+// Defines values for ShoutrrrChannelConfigurationInputKind.
+const (
+	ShoutrrrChannelConfigurationInputKindShoutrrr ShoutrrrChannelConfigurationInputKind = "shoutrrr"
+)
+
+// Valid indicates whether the value is a known member of the ShoutrrrChannelConfigurationInputKind enum.
+func (e ShoutrrrChannelConfigurationInputKind) Valid() bool {
+	switch e {
+	case ShoutrrrChannelConfigurationInputKindShoutrrr:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TCPProbeDefinitionKind.
 const (
 	TCPProbeDefinitionKindTcp TCPProbeDefinitionKind = "tcp"
@@ -349,6 +493,17 @@ type AgentHeartbeat struct {
 	Version              string            `json:"version"`
 }
 
+// AlertmanagerChannelConfigurationInput defines model for AlertmanagerChannelConfigurationInput.
+type AlertmanagerChannelConfigurationInput struct {
+	// BearerToken Optional bearer token encrypted with the channel configuration.
+	BearerToken *string                                   `json:"bearerToken,omitempty"`
+	Endpoint    string                                    `json:"endpoint"`
+	Kind        AlertmanagerChannelConfigurationInputKind `json:"kind"`
+}
+
+// AlertmanagerChannelConfigurationInputKind defines model for AlertmanagerChannelConfigurationInput.Kind.
+type AlertmanagerChannelConfigurationInputKind string
+
 // CreateAgentEnrollmentTokenRequest defines model for CreateAgentEnrollmentTokenRequest.
 type CreateAgentEnrollmentTokenRequest struct {
 	ExpiresInSeconds int32              `json:"expiresInSeconds"`
@@ -360,16 +515,35 @@ type CreateLocationRequest struct {
 	Name string `json:"name"`
 }
 
+// CreateMaintenanceRequest defines model for CreateMaintenanceRequest.
+type CreateMaintenanceRequest struct {
+	EndsAt    *time.Time         `json:"endsAt,omitempty"`
+	MonitorId openapi_types.UUID `json:"monitorId"`
+	Reason    string             `json:"reason"`
+	StartsAt  time.Time          `json:"startsAt"`
+}
+
 // CreateMonitorRequest defines model for CreateMonitorRequest.
 type CreateMonitorRequest struct {
+	Description       *string            `json:"description,omitempty"`
+	DisplayOrder      *int32             `json:"displayOrder,omitempty"`
 	FailureThreshold  int32              `json:"failureThreshold"`
 	IntervalSeconds   int32              `json:"intervalSeconds"`
+	Labels            *map[string]string `json:"labels,omitempty"`
 	LocationId        openapi_types.UUID `json:"locationId"`
 	Name              string             `json:"name"`
 	Probe             ProbeDefinition    `json:"probe"`
+	Public            *bool              `json:"public,omitempty"`
 	RecoveryThreshold int32              `json:"recoveryThreshold"`
 	RequiredLocation  bool               `json:"requiredLocation"`
 	TimeoutMillis     int32              `json:"timeoutMillis"`
+}
+
+// CreateNotificationChannelRequest defines model for CreateNotificationChannelRequest.
+type CreateNotificationChannelRequest struct {
+	Configuration NotificationChannelConfigurationInput `json:"configuration"`
+	Enabled       bool                                  `json:"enabled"`
+	Name          string                                `json:"name"`
 }
 
 // CreateSessionRequest defines model for CreateSessionRequest.
@@ -446,11 +620,11 @@ type Incident struct {
 	State            IncidentState      `json:"state"`
 }
 
-// IncidentSeverity defines model for Incident.Severity.
-type IncidentSeverity string
-
 // IncidentState defines model for Incident.State.
 type IncidentState string
+
+// IncidentSeverity defines model for IncidentSeverity.
+type IncidentSeverity string
 
 // LeaseWorkRequest defines model for LeaseWorkRequest.
 type LeaseWorkRequest struct {
@@ -474,16 +648,39 @@ type LocationHealth struct {
 	State                HealthState        `json:"state"`
 }
 
+// Maintenance defines model for Maintenance.
+type Maintenance struct {
+	CreatedAt time.Time          `json:"createdAt"`
+	EndsAt    *time.Time         `json:"endsAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	MonitorId openapi_types.UUID `json:"monitorId"`
+	Reason    string             `json:"reason"`
+	StartsAt  time.Time          `json:"startsAt"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+}
+
+// MaintenancePage defines model for MaintenancePage.
+type MaintenancePage struct {
+	Items  []Maintenance `json:"items"`
+	Limit  int32         `json:"limit"`
+	Offset int32         `json:"offset"`
+}
+
 // Monitor defines model for Monitor.
 type Monitor struct {
 	CreatedAt         time.Time          `json:"createdAt"`
+	Description       string             `json:"description"`
+	DisplayOrder      int32              `json:"displayOrder"`
+	Enabled           bool               `json:"enabled"`
 	FailureThreshold  int32              `json:"failureThreshold"`
 	Id                openapi_types.UUID `json:"id"`
 	IntervalSeconds   int32              `json:"intervalSeconds"`
 	Kind              MonitorKind        `json:"kind"`
+	Labels            map[string]string  `json:"labels"`
 	LocationId        openapi_types.UUID `json:"locationId"`
 	Name              string             `json:"name"`
 	Probe             ProbeDefinition    `json:"probe"`
+	Public            bool               `json:"public"`
 	RecoveryThreshold int32              `json:"recoveryThreshold"`
 	RequiredLocation  bool               `json:"requiredLocation"`
 	TimeoutMillis     int32              `json:"timeoutMillis"`
@@ -499,6 +696,141 @@ type MonitorHealth struct {
 	Locations        []LocationHealth   `json:"locations"`
 	MonitorId        openapi_types.UUID `json:"monitorId"`
 	State            HealthState        `json:"state"`
+}
+
+// NotificationAction defines model for NotificationAction.
+type NotificationAction string
+
+// NotificationChannel defines model for NotificationChannel.
+type NotificationChannel struct {
+	CreatedAt time.Time               `json:"createdAt"`
+	Enabled   bool                    `json:"enabled"`
+	Id        openapi_types.UUID      `json:"id"`
+	Kind      NotificationChannelKind `json:"kind"`
+	Name      string                  `json:"name"`
+	UpdatedAt time.Time               `json:"updatedAt"`
+}
+
+// NotificationChannelKind defines model for NotificationChannel.Kind.
+type NotificationChannelKind string
+
+// NotificationChannelConfigurationInput defines model for NotificationChannelConfigurationInput.
+type NotificationChannelConfigurationInput struct {
+	union json.RawMessage
+}
+
+// NotificationChannelPage defines model for NotificationChannelPage.
+type NotificationChannelPage struct {
+	Items  []NotificationChannel `json:"items"`
+	Limit  int32                 `json:"limit"`
+	Offset int32                 `json:"offset"`
+}
+
+// NotificationDelivery defines model for NotificationDelivery.
+type NotificationDelivery struct {
+	AttemptCount   int32                      `json:"attemptCount"`
+	AvailableAt    time.Time                  `json:"availableAt"`
+	ChannelId      openapi_types.UUID         `json:"channelId"`
+	CreatedAt      time.Time                  `json:"createdAt"`
+	DeliveredAt    *time.Time                 `json:"deliveredAt,omitempty"`
+	Id             openapi_types.UUID         `json:"id"`
+	LastDiagnostic *string                    `json:"lastDiagnostic,omitempty"`
+	LastErrorClass *string                    `json:"lastErrorClass,omitempty"`
+	RenderSnapshot NotificationRenderSnapshot `json:"renderSnapshot"`
+	RouteId        openapi_types.UUID         `json:"routeId"`
+	State          NotificationDeliveryState  `json:"state"`
+	SuppressedAt   *time.Time                 `json:"suppressedAt,omitempty"`
+	UpdatedAt      time.Time                  `json:"updatedAt"`
+}
+
+// NotificationDeliveryAttempt defines model for NotificationDeliveryAttempt.
+type NotificationDeliveryAttempt struct {
+	Diagnostic      *string                            `json:"diagnostic,omitempty"`
+	ErrorClass      *string                            `json:"errorClass,omitempty"`
+	FinishedAt      time.Time                          `json:"finishedAt"`
+	Id              openapi_types.UUID                 `json:"id"`
+	Ordinal         int32                              `json:"ordinal"`
+	Outcome         NotificationDeliveryAttemptOutcome `json:"outcome"`
+	ProviderReceipt *string                            `json:"providerReceipt,omitempty"`
+	StartedAt       time.Time                          `json:"startedAt"`
+}
+
+// NotificationDeliveryAttemptOutcome defines model for NotificationDeliveryAttempt.Outcome.
+type NotificationDeliveryAttemptOutcome string
+
+// NotificationDeliveryDetail defines model for NotificationDeliveryDetail.
+type NotificationDeliveryDetail struct {
+	Attempts []NotificationDeliveryAttempt `json:"attempts"`
+	Delivery NotificationDelivery          `json:"delivery"`
+}
+
+// NotificationDeliveryPage defines model for NotificationDeliveryPage.
+type NotificationDeliveryPage struct {
+	Items  []NotificationDelivery `json:"items"`
+	Limit  int32                  `json:"limit"`
+	Offset int32                  `json:"offset"`
+}
+
+// NotificationDeliveryState defines model for NotificationDeliveryState.
+type NotificationDeliveryState string
+
+// NotificationRenderSnapshot defines model for NotificationRenderSnapshot.
+type NotificationRenderSnapshot struct {
+	Action             NotificationAction                    `json:"action"`
+	ChannelId          openapi_types.UUID                    `json:"channelId"`
+	ChannelKind        NotificationRenderSnapshotChannelKind `json:"channelKind"`
+	EventId            openapi_types.UUID                    `json:"eventId"`
+	IncidentId         openapi_types.UUID                    `json:"incidentId"`
+	MonitorDescription string                                `json:"monitorDescription"`
+	MonitorId          openapi_types.UUID                    `json:"monitorId"`
+	MonitorLabels      map[string]string                     `json:"monitorLabels"`
+	MonitorName        string                                `json:"monitorName"`
+	OccurredAt         time.Time                             `json:"occurredAt"`
+	PreviousState      HealthState                           `json:"previousState"`
+	RouteId            openapi_types.UUID                    `json:"routeId"`
+	RouteUpdatedAt     time.Time                             `json:"routeUpdatedAt"`
+	Severity           IncidentSeverity                      `json:"severity"`
+	State              HealthState                           `json:"state"`
+	Template           string                                `json:"template"`
+}
+
+// NotificationRenderSnapshotChannelKind defines model for NotificationRenderSnapshot.ChannelKind.
+type NotificationRenderSnapshotChannelKind string
+
+// NotificationRoute defines model for NotificationRoute.
+type NotificationRoute struct {
+	Actions       []NotificationAction `json:"actions"`
+	ChannelId     openapi_types.UUID   `json:"channelId"`
+	CreatedAt     time.Time            `json:"createdAt"`
+	Enabled       bool                 `json:"enabled"`
+	Id            openapi_types.UUID   `json:"id"`
+	LabelMatchers map[string]string    `json:"labelMatchers"`
+	MonitorId     *openapi_types.UUID  `json:"monitorId,omitempty"`
+	Name          string               `json:"name"`
+	Precedence    int32                `json:"precedence"`
+	Severities    []IncidentSeverity   `json:"severities"`
+	Template      string               `json:"template"`
+	UpdatedAt     time.Time            `json:"updatedAt"`
+}
+
+// NotificationRouteInput defines model for NotificationRouteInput.
+type NotificationRouteInput struct {
+	Actions       []NotificationAction `json:"actions"`
+	ChannelId     openapi_types.UUID   `json:"channelId"`
+	Enabled       bool                 `json:"enabled"`
+	LabelMatchers map[string]string    `json:"labelMatchers"`
+	MonitorId     *openapi_types.UUID  `json:"monitorId,omitempty"`
+	Name          string               `json:"name"`
+	Precedence    int32                `json:"precedence"`
+	Severities    []IncidentSeverity   `json:"severities"`
+	Template      string               `json:"template"`
+}
+
+// NotificationRoutePage defines model for NotificationRoutePage.
+type NotificationRoutePage struct {
+	Items  []NotificationRoute `json:"items"`
+	Limit  int32               `json:"limit"`
+	Offset int32               `json:"offset"`
 }
 
 // ProbeDefinition defines model for ProbeDefinition.
@@ -584,6 +916,17 @@ type Session struct {
 	Token     string    `json:"token"`
 }
 
+// ShoutrrrChannelConfigurationInput defines model for ShoutrrrChannelConfigurationInput.
+type ShoutrrrChannelConfigurationInput struct {
+	Kind ShoutrrrChannelConfigurationInputKind `json:"kind"`
+
+	// ServiceUrl Shoutrrr service URL encrypted immediately after validation.
+	ServiceUrl *string `json:"serviceUrl,omitempty"`
+}
+
+// ShoutrrrChannelConfigurationInputKind defines model for ShoutrrrChannelConfigurationInput.Kind.
+type ShoutrrrChannelConfigurationInputKind string
+
 // StatusRange defines model for StatusRange.
 type StatusRange struct {
 	Maximum int32 `json:"maximum"`
@@ -603,8 +946,69 @@ type TCPProbeDefinition struct {
 // TCPProbeDefinitionKind defines model for TCPProbeDefinition.Kind.
 type TCPProbeDefinitionKind string
 
+// UpdateNotificationChannelRequest defines model for UpdateNotificationChannelRequest.
+type UpdateNotificationChannelRequest struct {
+	Configuration NotificationChannelConfigurationInput `json:"configuration"`
+	Enabled       bool                                  `json:"enabled"`
+	Name          string                                `json:"name"`
+}
+
+// Limit defines model for Limit.
+type Limit = int32
+
+// MaintenanceID defines model for MaintenanceID.
+type MaintenanceID = openapi_types.UUID
+
 // MonitorID defines model for MonitorID.
 type MonitorID = openapi_types.UUID
+
+// NotificationChannelID defines model for NotificationChannelID.
+type NotificationChannelID = openapi_types.UUID
+
+// NotificationDeliveryID defines model for NotificationDeliveryID.
+type NotificationDeliveryID = openapi_types.UUID
+
+// NotificationRouteID defines model for NotificationRouteID.
+type NotificationRouteID = openapi_types.UUID
+
+// Offset defines model for Offset.
+type Offset = int32
+
+// ListMaintenanceParams defines parameters for ListMaintenance.
+type ListMaintenanceParams struct {
+	// Limit Maximum number of records to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of records to skip.
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListNotificationChannelsParams defines parameters for ListNotificationChannels.
+type ListNotificationChannelsParams struct {
+	// Limit Maximum number of records to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of records to skip.
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListNotificationDeliveriesParams defines parameters for ListNotificationDeliveries.
+type ListNotificationDeliveriesParams struct {
+	// Limit Maximum number of records to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of records to skip.
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListNotificationRoutesParams defines parameters for ListNotificationRoutes.
+type ListNotificationRoutesParams struct {
+	// Limit Maximum number of records to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of records to skip.
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
 
 // CreateAgentEnrollmentTokenJSONRequestBody defines body for CreateAgentEnrollmentToken for application/json ContentType.
 type CreateAgentEnrollmentTokenJSONRequestBody = CreateAgentEnrollmentTokenRequest
@@ -624,11 +1028,127 @@ type LeaseAgentWorkJSONRequestBody = LeaseWorkRequest
 // CreateLocationJSONRequestBody defines body for CreateLocation for application/json ContentType.
 type CreateLocationJSONRequestBody = CreateLocationRequest
 
+// CreateMaintenanceJSONRequestBody defines body for CreateMaintenance for application/json ContentType.
+type CreateMaintenanceJSONRequestBody = CreateMaintenanceRequest
+
 // CreateMonitorJSONRequestBody defines body for CreateMonitor for application/json ContentType.
 type CreateMonitorJSONRequestBody = CreateMonitorRequest
 
+// CreateNotificationChannelJSONRequestBody defines body for CreateNotificationChannel for application/json ContentType.
+type CreateNotificationChannelJSONRequestBody = CreateNotificationChannelRequest
+
+// UpdateNotificationChannelJSONRequestBody defines body for UpdateNotificationChannel for application/json ContentType.
+type UpdateNotificationChannelJSONRequestBody = UpdateNotificationChannelRequest
+
+// CreateNotificationRouteJSONRequestBody defines body for CreateNotificationRoute for application/json ContentType.
+type CreateNotificationRouteJSONRequestBody = NotificationRouteInput
+
+// UpdateNotificationRouteJSONRequestBody defines body for UpdateNotificationRoute for application/json ContentType.
+type UpdateNotificationRouteJSONRequestBody = NotificationRouteInput
+
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
+
+// AsShoutrrrChannelConfigurationInput returns the union data inside the NotificationChannelConfigurationInput as a ShoutrrrChannelConfigurationInput
+func (t NotificationChannelConfigurationInput) AsShoutrrrChannelConfigurationInput() (ShoutrrrChannelConfigurationInput, error) {
+	var body ShoutrrrChannelConfigurationInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromShoutrrrChannelConfigurationInput overwrites any union data inside the NotificationChannelConfigurationInput as the provided ShoutrrrChannelConfigurationInput
+func (t *NotificationChannelConfigurationInput) FromShoutrrrChannelConfigurationInput(v ShoutrrrChannelConfigurationInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"shoutrrr"}`))
+	t.union = b
+	return err
+}
+
+// MergeShoutrrrChannelConfigurationInput performs a merge with any union data inside the NotificationChannelConfigurationInput, using the provided ShoutrrrChannelConfigurationInput
+func (t *NotificationChannelConfigurationInput) MergeShoutrrrChannelConfigurationInput(v ShoutrrrChannelConfigurationInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"shoutrrr"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAlertmanagerChannelConfigurationInput returns the union data inside the NotificationChannelConfigurationInput as a AlertmanagerChannelConfigurationInput
+func (t NotificationChannelConfigurationInput) AsAlertmanagerChannelConfigurationInput() (AlertmanagerChannelConfigurationInput, error) {
+	var body AlertmanagerChannelConfigurationInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAlertmanagerChannelConfigurationInput overwrites any union data inside the NotificationChannelConfigurationInput as the provided AlertmanagerChannelConfigurationInput
+func (t *NotificationChannelConfigurationInput) FromAlertmanagerChannelConfigurationInput(v AlertmanagerChannelConfigurationInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"alertmanager"}`))
+	t.union = b
+	return err
+}
+
+// MergeAlertmanagerChannelConfigurationInput performs a merge with any union data inside the NotificationChannelConfigurationInput, using the provided AlertmanagerChannelConfigurationInput
+func (t *NotificationChannelConfigurationInput) MergeAlertmanagerChannelConfigurationInput(v AlertmanagerChannelConfigurationInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"alertmanager"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t NotificationChannelConfigurationInput) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"kind"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t NotificationChannelConfigurationInput) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "alertmanager":
+		return t.AsAlertmanagerChannelConfigurationInput()
+	case "shoutrrr":
+		return t.AsShoutrrrChannelConfigurationInput()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t NotificationChannelConfigurationInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *NotificationChannelConfigurationInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsHTTPProbeDefinition returns the union data inside the ProbeDefinition as a HTTPProbeDefinition
 func (t ProbeDefinition) AsHTTPProbeDefinition() (HTTPProbeDefinition, error) {
@@ -787,6 +1307,21 @@ type ServerInterface interface {
 
 	// (POST /v1/locations)
 	CreateLocation(w http.ResponseWriter, r *http.Request)
+	// ListMaintenance List maintenance intervals
+	// (GET /v1/maintenance)
+	ListMaintenance(w http.ResponseWriter, r *http.Request, params ListMaintenanceParams)
+	// CreateMaintenance Create one-off or indefinite maintenance
+	// (POST /v1/maintenance)
+	CreateMaintenance(w http.ResponseWriter, r *http.Request)
+	// DeleteMaintenance Delete maintenance that has not started
+	// (DELETE /v1/maintenance/{maintenanceId})
+	DeleteMaintenance(w http.ResponseWriter, r *http.Request, maintenanceId MaintenanceID)
+	// GetMaintenance Get a maintenance interval
+	// (GET /v1/maintenance/{maintenanceId})
+	GetMaintenance(w http.ResponseWriter, r *http.Request, maintenanceId MaintenanceID)
+	// EndMaintenance End active or indefinite maintenance now
+	// (POST /v1/maintenance/{maintenanceId}/end)
+	EndMaintenance(w http.ResponseWriter, r *http.Request, maintenanceId MaintenanceID)
 
 	// (POST /v1/monitors)
 	CreateMonitor(w http.ResponseWriter, r *http.Request)
@@ -799,6 +1334,45 @@ type ServerInterface interface {
 
 	// (GET /v1/monitors/{monitorId}/health)
 	GetMonitorHealth(w http.ResponseWriter, r *http.Request, monitorId MonitorID)
+	// ListNotificationChannels List redacted notification channels
+	// (GET /v1/notification-channels)
+	ListNotificationChannels(w http.ResponseWriter, r *http.Request, params ListNotificationChannelsParams)
+	// CreateNotificationChannel Create an encrypted notification channel
+	// (POST /v1/notification-channels)
+	CreateNotificationChannel(w http.ResponseWriter, r *http.Request)
+	// DisableNotificationChannel Disable a notification channel without deleting history
+	// (DELETE /v1/notification-channels/{channelId})
+	DisableNotificationChannel(w http.ResponseWriter, r *http.Request, channelId NotificationChannelID)
+	// GetNotificationChannel Get a redacted notification channel
+	// (GET /v1/notification-channels/{channelId})
+	GetNotificationChannel(w http.ResponseWriter, r *http.Request, channelId NotificationChannelID)
+	// UpdateNotificationChannel Replace notification channel configuration
+	// (PUT /v1/notification-channels/{channelId})
+	UpdateNotificationChannel(w http.ResponseWriter, r *http.Request, channelId NotificationChannelID)
+	// ListNotificationDeliveries List durable notification delivery state
+	// (GET /v1/notification-deliveries)
+	ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, params ListNotificationDeliveriesParams)
+	// GetNotificationDelivery Get delivery state and bounded attempts
+	// (GET /v1/notification-deliveries/{deliveryId})
+	GetNotificationDelivery(w http.ResponseWriter, r *http.Request, deliveryId NotificationDeliveryID)
+	// ReplayNotificationDelivery Explicitly replay a permanently failed delivery
+	// (POST /v1/notification-deliveries/{deliveryId}/replay)
+	ReplayNotificationDelivery(w http.ResponseWriter, r *http.Request, deliveryId NotificationDeliveryID)
+	// ListNotificationRoutes List notification routes
+	// (GET /v1/notification-routes)
+	ListNotificationRoutes(w http.ResponseWriter, r *http.Request, params ListNotificationRoutesParams)
+	// CreateNotificationRoute Create a typed incident notification route
+	// (POST /v1/notification-routes)
+	CreateNotificationRoute(w http.ResponseWriter, r *http.Request)
+	// DisableNotificationRoute Disable a notification route without deleting history
+	// (DELETE /v1/notification-routes/{routeId})
+	DisableNotificationRoute(w http.ResponseWriter, r *http.Request, routeId NotificationRouteID)
+	// GetNotificationRoute Get a notification route
+	// (GET /v1/notification-routes/{routeId})
+	GetNotificationRoute(w http.ResponseWriter, r *http.Request, routeId NotificationRouteID)
+	// UpdateNotificationRoute Replace a notification route
+	// (PUT /v1/notification-routes/{routeId})
+	UpdateNotificationRoute(w http.ResponseWriter, r *http.Request, routeId NotificationRouteID)
 
 	// (POST /v1/sessions)
 	CreateSession(w http.ResponseWriter, r *http.Request)
@@ -897,6 +1471,144 @@ func (siw *ServerInterfaceWrapper) CreateLocation(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) ListMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMaintenanceParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMaintenance(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) CreateMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMaintenance(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "maintenanceId" -------------
+	var maintenanceId MaintenanceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "maintenanceId", r.PathValue("maintenanceId"), &maintenanceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "maintenanceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMaintenance(w, r, maintenanceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) GetMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "maintenanceId" -------------
+	var maintenanceId MaintenanceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "maintenanceId", r.PathValue("maintenanceId"), &maintenanceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "maintenanceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMaintenance(w, r, maintenanceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EndMaintenance operation middleware
+func (siw *ServerInterfaceWrapper) EndMaintenance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "maintenanceId" -------------
+	var maintenanceId MaintenanceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "maintenanceId", r.PathValue("maintenanceId"), &maintenanceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "maintenanceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EndMaintenance(w, r, maintenanceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateMonitor operation middleware
 func (siw *ServerInterfaceWrapper) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 
@@ -980,6 +1692,380 @@ func (siw *ServerInterfaceWrapper) GetMonitorHealth(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMonitorHealth(w, r, monitorId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationChannels operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationChannels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNotificationChannelsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationChannels(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) CreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNotificationChannel(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisableNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) DisableNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId NotificationChannelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", r.PathValue("channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableNotificationChannel(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) GetNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId NotificationChannelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", r.PathValue("channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNotificationChannel(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) UpdateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId NotificationChannelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", r.PathValue("channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateNotificationChannel(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNotificationDeliveriesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationDeliveries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNotificationDelivery operation middleware
+func (siw *ServerInterfaceWrapper) GetNotificationDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deliveryId" -------------
+	var deliveryId NotificationDeliveryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deliveryId", r.PathValue("deliveryId"), &deliveryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deliveryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNotificationDelivery(w, r, deliveryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplayNotificationDelivery operation middleware
+func (siw *ServerInterfaceWrapper) ReplayNotificationDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deliveryId" -------------
+	var deliveryId NotificationDeliveryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deliveryId", r.PathValue("deliveryId"), &deliveryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deliveryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplayNotificationDelivery(w, r, deliveryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationRoutes operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationRoutes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNotificationRoutesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationRoutes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNotificationRoute operation middleware
+func (siw *ServerInterfaceWrapper) CreateNotificationRoute(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNotificationRoute(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisableNotificationRoute operation middleware
+func (siw *ServerInterfaceWrapper) DisableNotificationRoute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "routeId" -------------
+	var routeId NotificationRouteID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "routeId", r.PathValue("routeId"), &routeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "routeId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableNotificationRoute(w, r, routeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNotificationRoute operation middleware
+func (siw *ServerInterfaceWrapper) GetNotificationRoute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "routeId" -------------
+	var routeId NotificationRouteID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "routeId", r.PathValue("routeId"), &routeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "routeId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNotificationRoute(w, r, routeId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateNotificationRoute operation middleware
+func (siw *ServerInterfaceWrapper) UpdateNotificationRoute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "routeId" -------------
+	var routeId NotificationRouteID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "routeId", r.PathValue("routeId"), &routeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "routeId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateNotificationRoute(w, r, routeId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1134,6 +2220,24 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/agent/results:batch", wrapper.UploadProbeResults)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/monitors/{monitorId}/health", wrapper.GetMonitorHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/monitors/{monitorId}/active-incident", wrapper.GetActiveMonitorIncident)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notification-channels", wrapper.ListNotificationChannels)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notification-channels", wrapper.CreateNotificationChannel)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/notification-channels/{channelId}", wrapper.DisableNotificationChannel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notification-channels/{channelId}", wrapper.GetNotificationChannel)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/notification-channels/{channelId}", wrapper.UpdateNotificationChannel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notification-routes", wrapper.ListNotificationRoutes)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notification-routes", wrapper.CreateNotificationRoute)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/notification-routes/{routeId}", wrapper.DisableNotificationRoute)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notification-routes/{routeId}", wrapper.GetNotificationRoute)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/notification-routes/{routeId}", wrapper.UpdateNotificationRoute)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notification-deliveries", wrapper.ListNotificationDeliveries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notification-deliveries/{deliveryId}", wrapper.GetNotificationDelivery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notification-deliveries/{deliveryId}/replay", wrapper.ReplayNotificationDelivery)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/maintenance", wrapper.ListMaintenance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/maintenance", wrapper.CreateMaintenance)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/maintenance/{maintenanceId}", wrapper.DeleteMaintenance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/maintenance/{maintenanceId}", wrapper.GetMaintenance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/maintenance/{maintenanceId}/end", wrapper.EndMaintenance)
 
 	return m
 }
@@ -1376,6 +2480,195 @@ func (response CreateLocationdefaultApplicationProblemPlusJSONResponse) VisitCre
 	return err
 }
 
+type ListMaintenanceRequestObject struct {
+	Params ListMaintenanceParams
+}
+
+type ListMaintenanceResponseObject interface {
+	VisitListMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type ListMaintenance200JSONResponse MaintenancePage
+
+func (response ListMaintenance200JSONResponse) VisitListMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMaintenancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMaintenancedefaultApplicationProblemPlusJSONResponse) VisitListMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMaintenanceRequestObject struct {
+	Body *CreateMaintenanceJSONRequestBody
+}
+
+type CreateMaintenanceResponseObject interface {
+	VisitCreateMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type CreateMaintenance201JSONResponse Maintenance
+
+func (response CreateMaintenance201JSONResponse) VisitCreateMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMaintenancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateMaintenancedefaultApplicationProblemPlusJSONResponse) VisitCreateMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMaintenanceRequestObject struct {
+	MaintenanceId MaintenanceID `json:"maintenanceId"`
+}
+
+type DeleteMaintenanceResponseObject interface {
+	VisitDeleteMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type DeleteMaintenance204Response struct {
+}
+
+func (response DeleteMaintenance204Response) VisitDeleteMaintenanceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMaintenancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteMaintenancedefaultApplicationProblemPlusJSONResponse) VisitDeleteMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMaintenanceRequestObject struct {
+	MaintenanceId MaintenanceID `json:"maintenanceId"`
+}
+
+type GetMaintenanceResponseObject interface {
+	VisitGetMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type GetMaintenance200JSONResponse Maintenance
+
+func (response GetMaintenance200JSONResponse) VisitGetMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMaintenancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMaintenancedefaultApplicationProblemPlusJSONResponse) VisitGetMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndMaintenanceRequestObject struct {
+	MaintenanceId MaintenanceID `json:"maintenanceId"`
+}
+
+type EndMaintenanceResponseObject interface {
+	VisitEndMaintenanceResponse(w http.ResponseWriter) error
+}
+
+type EndMaintenance200JSONResponse Maintenance
+
+func (response EndMaintenance200JSONResponse) VisitEndMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndMaintenancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response EndMaintenancedefaultApplicationProblemPlusJSONResponse) VisitEndMaintenanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateMonitorRequestObject struct {
 	Body *CreateMonitorJSONRequestBody
 }
@@ -1540,6 +2833,497 @@ func (response GetMonitorHealthdefaultApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type ListNotificationChannelsRequestObject struct {
+	Params ListNotificationChannelsParams
+}
+
+type ListNotificationChannelsResponseObject interface {
+	VisitListNotificationChannelsResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationChannels200JSONResponse NotificationChannelPage
+
+func (response ListNotificationChannels200JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationChannelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListNotificationChannelsdefaultApplicationProblemPlusJSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationChannelRequestObject struct {
+	Body *CreateNotificationChannelJSONRequestBody
+}
+
+type CreateNotificationChannelResponseObject interface {
+	VisitCreateNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type CreateNotificationChannel201JSONResponse NotificationChannel
+
+func (response CreateNotificationChannel201JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationChanneldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateNotificationChanneldefaultApplicationProblemPlusJSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableNotificationChannelRequestObject struct {
+	ChannelId NotificationChannelID `json:"channelId"`
+}
+
+type DisableNotificationChannelResponseObject interface {
+	VisitDisableNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type DisableNotificationChannel204Response struct {
+}
+
+func (response DisableNotificationChannel204Response) VisitDisableNotificationChannelResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisableNotificationChanneldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisableNotificationChanneldefaultApplicationProblemPlusJSONResponse) VisitDisableNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNotificationChannelRequestObject struct {
+	ChannelId NotificationChannelID `json:"channelId"`
+}
+
+type GetNotificationChannelResponseObject interface {
+	VisitGetNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type GetNotificationChannel200JSONResponse NotificationChannel
+
+func (response GetNotificationChannel200JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNotificationChanneldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetNotificationChanneldefaultApplicationProblemPlusJSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateNotificationChannelRequestObject struct {
+	ChannelId NotificationChannelID `json:"channelId"`
+	Body      *UpdateNotificationChannelJSONRequestBody
+}
+
+type UpdateNotificationChannelResponseObject interface {
+	VisitUpdateNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type UpdateNotificationChannel200JSONResponse NotificationChannel
+
+func (response UpdateNotificationChannel200JSONResponse) VisitUpdateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateNotificationChanneldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateNotificationChanneldefaultApplicationProblemPlusJSONResponse) VisitUpdateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveriesRequestObject struct {
+	Params ListNotificationDeliveriesParams
+}
+
+type ListNotificationDeliveriesResponseObject interface {
+	VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationDeliveries200JSONResponse NotificationDeliveryPage
+
+func (response ListNotificationDeliveries200JSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveriesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListNotificationDeliveriesdefaultApplicationProblemPlusJSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNotificationDeliveryRequestObject struct {
+	DeliveryId NotificationDeliveryID `json:"deliveryId"`
+}
+
+type GetNotificationDeliveryResponseObject interface {
+	VisitGetNotificationDeliveryResponse(w http.ResponseWriter) error
+}
+
+type GetNotificationDelivery200JSONResponse NotificationDeliveryDetail
+
+func (response GetNotificationDelivery200JSONResponse) VisitGetNotificationDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNotificationDeliverydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetNotificationDeliverydefaultApplicationProblemPlusJSONResponse) VisitGetNotificationDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayNotificationDeliveryRequestObject struct {
+	DeliveryId NotificationDeliveryID `json:"deliveryId"`
+}
+
+type ReplayNotificationDeliveryResponseObject interface {
+	VisitReplayNotificationDeliveryResponse(w http.ResponseWriter) error
+}
+
+type ReplayNotificationDelivery202Response struct {
+}
+
+func (response ReplayNotificationDelivery202Response) VisitReplayNotificationDeliveryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type ReplayNotificationDeliverydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ReplayNotificationDeliverydefaultApplicationProblemPlusJSONResponse) VisitReplayNotificationDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationRoutesRequestObject struct {
+	Params ListNotificationRoutesParams
+}
+
+type ListNotificationRoutesResponseObject interface {
+	VisitListNotificationRoutesResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationRoutes200JSONResponse NotificationRoutePage
+
+func (response ListNotificationRoutes200JSONResponse) VisitListNotificationRoutesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationRoutesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListNotificationRoutesdefaultApplicationProblemPlusJSONResponse) VisitListNotificationRoutesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationRouteRequestObject struct {
+	Body *CreateNotificationRouteJSONRequestBody
+}
+
+type CreateNotificationRouteResponseObject interface {
+	VisitCreateNotificationRouteResponse(w http.ResponseWriter) error
+}
+
+type CreateNotificationRoute201JSONResponse NotificationRoute
+
+func (response CreateNotificationRoute201JSONResponse) VisitCreateNotificationRouteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationRoutedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateNotificationRoutedefaultApplicationProblemPlusJSONResponse) VisitCreateNotificationRouteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableNotificationRouteRequestObject struct {
+	RouteId NotificationRouteID `json:"routeId"`
+}
+
+type DisableNotificationRouteResponseObject interface {
+	VisitDisableNotificationRouteResponse(w http.ResponseWriter) error
+}
+
+type DisableNotificationRoute204Response struct {
+}
+
+func (response DisableNotificationRoute204Response) VisitDisableNotificationRouteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisableNotificationRoutedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisableNotificationRoutedefaultApplicationProblemPlusJSONResponse) VisitDisableNotificationRouteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNotificationRouteRequestObject struct {
+	RouteId NotificationRouteID `json:"routeId"`
+}
+
+type GetNotificationRouteResponseObject interface {
+	VisitGetNotificationRouteResponse(w http.ResponseWriter) error
+}
+
+type GetNotificationRoute200JSONResponse NotificationRoute
+
+func (response GetNotificationRoute200JSONResponse) VisitGetNotificationRouteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetNotificationRoutedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetNotificationRoutedefaultApplicationProblemPlusJSONResponse) VisitGetNotificationRouteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateNotificationRouteRequestObject struct {
+	RouteId NotificationRouteID `json:"routeId"`
+	Body    *UpdateNotificationRouteJSONRequestBody
+}
+
+type UpdateNotificationRouteResponseObject interface {
+	VisitUpdateNotificationRouteResponse(w http.ResponseWriter) error
+}
+
+type UpdateNotificationRoute200JSONResponse NotificationRoute
+
+func (response UpdateNotificationRoute200JSONResponse) VisitUpdateNotificationRouteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateNotificationRoutedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateNotificationRoutedefaultApplicationProblemPlusJSONResponse) VisitUpdateNotificationRouteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateSessionRequestObject struct {
 	Body *CreateSessionJSONRequestBody
 }
@@ -1599,6 +3383,21 @@ type StrictServerInterface interface {
 
 	// (POST /v1/locations)
 	CreateLocation(ctx context.Context, request CreateLocationRequestObject) (CreateLocationResponseObject, error)
+	// ListMaintenance List maintenance intervals
+	// (GET /v1/maintenance)
+	ListMaintenance(ctx context.Context, request ListMaintenanceRequestObject) (ListMaintenanceResponseObject, error)
+	// CreateMaintenance Create one-off or indefinite maintenance
+	// (POST /v1/maintenance)
+	CreateMaintenance(ctx context.Context, request CreateMaintenanceRequestObject) (CreateMaintenanceResponseObject, error)
+	// DeleteMaintenance Delete maintenance that has not started
+	// (DELETE /v1/maintenance/{maintenanceId})
+	DeleteMaintenance(ctx context.Context, request DeleteMaintenanceRequestObject) (DeleteMaintenanceResponseObject, error)
+	// GetMaintenance Get a maintenance interval
+	// (GET /v1/maintenance/{maintenanceId})
+	GetMaintenance(ctx context.Context, request GetMaintenanceRequestObject) (GetMaintenanceResponseObject, error)
+	// EndMaintenance End active or indefinite maintenance now
+	// (POST /v1/maintenance/{maintenanceId}/end)
+	EndMaintenance(ctx context.Context, request EndMaintenanceRequestObject) (EndMaintenanceResponseObject, error)
 
 	// (POST /v1/monitors)
 	CreateMonitor(ctx context.Context, request CreateMonitorRequestObject) (CreateMonitorResponseObject, error)
@@ -1611,6 +3410,45 @@ type StrictServerInterface interface {
 
 	// (GET /v1/monitors/{monitorId}/health)
 	GetMonitorHealth(ctx context.Context, request GetMonitorHealthRequestObject) (GetMonitorHealthResponseObject, error)
+	// ListNotificationChannels List redacted notification channels
+	// (GET /v1/notification-channels)
+	ListNotificationChannels(ctx context.Context, request ListNotificationChannelsRequestObject) (ListNotificationChannelsResponseObject, error)
+	// CreateNotificationChannel Create an encrypted notification channel
+	// (POST /v1/notification-channels)
+	CreateNotificationChannel(ctx context.Context, request CreateNotificationChannelRequestObject) (CreateNotificationChannelResponseObject, error)
+	// DisableNotificationChannel Disable a notification channel without deleting history
+	// (DELETE /v1/notification-channels/{channelId})
+	DisableNotificationChannel(ctx context.Context, request DisableNotificationChannelRequestObject) (DisableNotificationChannelResponseObject, error)
+	// GetNotificationChannel Get a redacted notification channel
+	// (GET /v1/notification-channels/{channelId})
+	GetNotificationChannel(ctx context.Context, request GetNotificationChannelRequestObject) (GetNotificationChannelResponseObject, error)
+	// UpdateNotificationChannel Replace notification channel configuration
+	// (PUT /v1/notification-channels/{channelId})
+	UpdateNotificationChannel(ctx context.Context, request UpdateNotificationChannelRequestObject) (UpdateNotificationChannelResponseObject, error)
+	// ListNotificationDeliveries List durable notification delivery state
+	// (GET /v1/notification-deliveries)
+	ListNotificationDeliveries(ctx context.Context, request ListNotificationDeliveriesRequestObject) (ListNotificationDeliveriesResponseObject, error)
+	// GetNotificationDelivery Get delivery state and bounded attempts
+	// (GET /v1/notification-deliveries/{deliveryId})
+	GetNotificationDelivery(ctx context.Context, request GetNotificationDeliveryRequestObject) (GetNotificationDeliveryResponseObject, error)
+	// ReplayNotificationDelivery Explicitly replay a permanently failed delivery
+	// (POST /v1/notification-deliveries/{deliveryId}/replay)
+	ReplayNotificationDelivery(ctx context.Context, request ReplayNotificationDeliveryRequestObject) (ReplayNotificationDeliveryResponseObject, error)
+	// ListNotificationRoutes List notification routes
+	// (GET /v1/notification-routes)
+	ListNotificationRoutes(ctx context.Context, request ListNotificationRoutesRequestObject) (ListNotificationRoutesResponseObject, error)
+	// CreateNotificationRoute Create a typed incident notification route
+	// (POST /v1/notification-routes)
+	CreateNotificationRoute(ctx context.Context, request CreateNotificationRouteRequestObject) (CreateNotificationRouteResponseObject, error)
+	// DisableNotificationRoute Disable a notification route without deleting history
+	// (DELETE /v1/notification-routes/{routeId})
+	DisableNotificationRoute(ctx context.Context, request DisableNotificationRouteRequestObject) (DisableNotificationRouteResponseObject, error)
+	// GetNotificationRoute Get a notification route
+	// (GET /v1/notification-routes/{routeId})
+	GetNotificationRoute(ctx context.Context, request GetNotificationRouteRequestObject) (GetNotificationRouteResponseObject, error)
+	// UpdateNotificationRoute Replace a notification route
+	// (PUT /v1/notification-routes/{routeId})
+	UpdateNotificationRoute(ctx context.Context, request UpdateNotificationRouteRequestObject) (UpdateNotificationRouteResponseObject, error)
 
 	// (POST /v1/sessions)
 	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
@@ -1841,6 +3679,141 @@ func (sh *strictHandler) CreateLocation(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// ListMaintenance operation middleware
+func (sh *strictHandler) ListMaintenance(w http.ResponseWriter, r *http.Request, params ListMaintenanceParams) {
+	var request ListMaintenanceRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMaintenance(ctx, request.(ListMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMaintenanceResponseObject); ok {
+		if err := validResponse.VisitListMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMaintenance operation middleware
+func (sh *strictHandler) CreateMaintenance(w http.ResponseWriter, r *http.Request) {
+	var request CreateMaintenanceRequestObject
+
+	var body CreateMaintenanceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMaintenance(ctx, request.(CreateMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMaintenanceResponseObject); ok {
+		if err := validResponse.VisitCreateMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMaintenance operation middleware
+func (sh *strictHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Request, maintenanceId MaintenanceID) {
+	var request DeleteMaintenanceRequestObject
+
+	request.MaintenanceId = maintenanceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMaintenance(ctx, request.(DeleteMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMaintenanceResponseObject); ok {
+		if err := validResponse.VisitDeleteMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMaintenance operation middleware
+func (sh *strictHandler) GetMaintenance(w http.ResponseWriter, r *http.Request, maintenanceId MaintenanceID) {
+	var request GetMaintenanceRequestObject
+
+	request.MaintenanceId = maintenanceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMaintenance(ctx, request.(GetMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMaintenanceResponseObject); ok {
+		if err := validResponse.VisitGetMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EndMaintenance operation middleware
+func (sh *strictHandler) EndMaintenance(w http.ResponseWriter, r *http.Request, maintenanceId MaintenanceID) {
+	var request EndMaintenanceRequestObject
+
+	request.MaintenanceId = maintenanceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EndMaintenance(ctx, request.(EndMaintenanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EndMaintenance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EndMaintenanceResponseObject); ok {
+		if err := validResponse.VisitEndMaintenanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateMonitor operation middleware
 func (sh *strictHandler) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 	var request CreateMonitorRequestObject
@@ -1950,6 +3923,368 @@ func (sh *strictHandler) GetMonitorHealth(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// ListNotificationChannels operation middleware
+func (sh *strictHandler) ListNotificationChannels(w http.ResponseWriter, r *http.Request, params ListNotificationChannelsParams) {
+	var request ListNotificationChannelsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationChannels(ctx, request.(ListNotificationChannelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationChannels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationChannelsResponseObject); ok {
+		if err := validResponse.VisitListNotificationChannelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNotificationChannel operation middleware
+func (sh *strictHandler) CreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	var request CreateNotificationChannelRequestObject
+
+	var body CreateNotificationChannelJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNotificationChannel(ctx, request.(CreateNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitCreateNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisableNotificationChannel operation middleware
+func (sh *strictHandler) DisableNotificationChannel(w http.ResponseWriter, r *http.Request, channelId NotificationChannelID) {
+	var request DisableNotificationChannelRequestObject
+
+	request.ChannelId = channelId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisableNotificationChannel(ctx, request.(DisableNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisableNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisableNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitDisableNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNotificationChannel operation middleware
+func (sh *strictHandler) GetNotificationChannel(w http.ResponseWriter, r *http.Request, channelId NotificationChannelID) {
+	var request GetNotificationChannelRequestObject
+
+	request.ChannelId = channelId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNotificationChannel(ctx, request.(GetNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitGetNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateNotificationChannel operation middleware
+func (sh *strictHandler) UpdateNotificationChannel(w http.ResponseWriter, r *http.Request, channelId NotificationChannelID) {
+	var request UpdateNotificationChannelRequestObject
+
+	request.ChannelId = channelId
+
+	var body UpdateNotificationChannelJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateNotificationChannel(ctx, request.(UpdateNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitUpdateNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNotificationDeliveries operation middleware
+func (sh *strictHandler) ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, params ListNotificationDeliveriesParams) {
+	var request ListNotificationDeliveriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationDeliveries(ctx, request.(ListNotificationDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListNotificationDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNotificationDelivery operation middleware
+func (sh *strictHandler) GetNotificationDelivery(w http.ResponseWriter, r *http.Request, deliveryId NotificationDeliveryID) {
+	var request GetNotificationDeliveryRequestObject
+
+	request.DeliveryId = deliveryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNotificationDelivery(ctx, request.(GetNotificationDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNotificationDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNotificationDeliveryResponseObject); ok {
+		if err := validResponse.VisitGetNotificationDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplayNotificationDelivery operation middleware
+func (sh *strictHandler) ReplayNotificationDelivery(w http.ResponseWriter, r *http.Request, deliveryId NotificationDeliveryID) {
+	var request ReplayNotificationDeliveryRequestObject
+
+	request.DeliveryId = deliveryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplayNotificationDelivery(ctx, request.(ReplayNotificationDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplayNotificationDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplayNotificationDeliveryResponseObject); ok {
+		if err := validResponse.VisitReplayNotificationDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNotificationRoutes operation middleware
+func (sh *strictHandler) ListNotificationRoutes(w http.ResponseWriter, r *http.Request, params ListNotificationRoutesParams) {
+	var request ListNotificationRoutesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationRoutes(ctx, request.(ListNotificationRoutesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationRoutes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationRoutesResponseObject); ok {
+		if err := validResponse.VisitListNotificationRoutesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNotificationRoute operation middleware
+func (sh *strictHandler) CreateNotificationRoute(w http.ResponseWriter, r *http.Request) {
+	var request CreateNotificationRouteRequestObject
+
+	var body CreateNotificationRouteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNotificationRoute(ctx, request.(CreateNotificationRouteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNotificationRoute")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNotificationRouteResponseObject); ok {
+		if err := validResponse.VisitCreateNotificationRouteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisableNotificationRoute operation middleware
+func (sh *strictHandler) DisableNotificationRoute(w http.ResponseWriter, r *http.Request, routeId NotificationRouteID) {
+	var request DisableNotificationRouteRequestObject
+
+	request.RouteId = routeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisableNotificationRoute(ctx, request.(DisableNotificationRouteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisableNotificationRoute")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisableNotificationRouteResponseObject); ok {
+		if err := validResponse.VisitDisableNotificationRouteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNotificationRoute operation middleware
+func (sh *strictHandler) GetNotificationRoute(w http.ResponseWriter, r *http.Request, routeId NotificationRouteID) {
+	var request GetNotificationRouteRequestObject
+
+	request.RouteId = routeId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNotificationRoute(ctx, request.(GetNotificationRouteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNotificationRoute")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNotificationRouteResponseObject); ok {
+		if err := validResponse.VisitGetNotificationRouteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateNotificationRoute operation middleware
+func (sh *strictHandler) UpdateNotificationRoute(w http.ResponseWriter, r *http.Request, routeId NotificationRouteID) {
+	var request UpdateNotificationRouteRequestObject
+
+	request.RouteId = routeId
+
+	var body UpdateNotificationRouteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateNotificationRoute(ctx, request.(UpdateNotificationRouteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateNotificationRoute")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateNotificationRouteResponseObject); ok {
+		if err := validResponse.VisitUpdateNotificationRouteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateSession operation middleware
 func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	var request CreateSessionRequestObject
@@ -1986,53 +4321,88 @@ func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -75,7 +75,7 @@ func (s *Server) GetActiveMonitorIncident(
 		return nil, fmt.Errorf("map incident monitor ID: %w", err)
 	}
 	return GetActiveMonitorIncident200JSONResponse{
-		Id: id, MonitorId: monitorID, State: Open,
+		Id: id, MonitorId: monitorID, State: IncidentStateOpen,
 		Severity: IncidentSeverity(incident.Severity),
 		OpenedAt: incident.OpenedAt, LastTransitionAt: incident.LastTransitionAt,
 	}, nil
