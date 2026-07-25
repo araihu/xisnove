@@ -399,7 +399,17 @@ components:
         bodyAssertionPassed: {type: boolean}
         errorCode:
           type: string
-          enum: ['', timeout, dns, connect, tls, protocol, status, body]
+          enum:
+            - ''
+            - timeout
+            - dns_error
+            - connect_error
+            - tls_error
+            - protocol_error
+            - status_mismatch
+            - body_mismatch
+            - target_denied
+            - response_too_large
         diagnosticSample: {type: string, maxLength: 512}
     ProbeResultBatchAcknowledgement:
       type: object
