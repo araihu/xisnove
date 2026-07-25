@@ -156,19 +156,19 @@ git commit -m "feat(notification): define routing domain"
   and observed duration.
 - Monitor columns for description, labels JSON, display order, and public flag.
 
-- [ ] **Step 1: Add failing schema/upgrade assertions**
+- [x] **Step 1: Add failing schema/upgrade assertions**
 
 Assert every table, foreign key, uniqueness rule, due-claim index, retention
 index, monitor metadata default, and migration version. Upgrade a version-3
 fixture containing an active Incident and prove it remains readable.
 
-- [ ] **Step 2: Author semantically equivalent migrations**
+- [x] **Step 2: Author semantically equivalent migrations**
 
 SQLite-compatible timestamps remain canonical UTC RFC3339 text and comparisons
 use `julianday`; PostgreSQL uses `timestamptz`, JSONB, and partial indexes where
 appropriate. Down migrations remove only version-4 additions.
 
-- [ ] **Step 3: Add query families**
+- [x] **Step 3: Add query families**
 
 Provide CRUD, deterministic route listing, atomic due claims, attempt append,
 delivery/retry/permanent/suppressed CAS updates, replay reset, active
@@ -176,7 +176,7 @@ maintenance lookup, ended-maintenance claim, daily aggregation upsert, and
 bounded deletion. PostgreSQL claims use `FOR UPDATE SKIP LOCKED`; compatible
 profiles use one-statement candidate/update CAS.
 
-- [ ] **Step 4: Generate and verify**
+- [x] **Step 4: Generate and verify**
 
 ```bash
 go tool sqlc generate
@@ -185,7 +185,7 @@ go test -race ./db/migrations/postgres ./integration -run 'Migration'
 git diff --check
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add db sqlc.yaml integration/migration_upgrade_test.go
