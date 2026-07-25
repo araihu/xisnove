@@ -3,6 +3,13 @@
 Assume the server is at `http://127.0.0.1:8080` and has been migrated and
 bootstrapped as described in the development guide.
 
+Run the control plane outside the infrastructure it is expected to monitor:
+an external VPS or a separate Kubernetes cluster is preferable for a hybrid
+homelab. Place outbound Agents inside each otherwise unreachable failure
+domain, such as a home Kubernetes cluster, physical-node network, Tailscale
+network, or private VPS segment. The control plane may use any supported
+[database profile](database-profiles.md); Agents never access that database.
+
 Log in and keep the opaque session token out of shell history where practical:
 
 ```bash

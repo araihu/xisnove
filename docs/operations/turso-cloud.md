@@ -36,7 +36,9 @@ after the migration job succeeds.
 ## Protected conformance workflow
 
 The `managed Turso conformance` workflow runs weekly, manually, and for release
-events. Configure:
+events. It runs both repository conformance and the same full storage journey
+used for SQLite, local Turso, and PostgreSQL, then retains a JUnit report.
+Configure:
 
 - repository secret `TURSO_API_KEY`, scoped to the test organization;
 - repository variable `TURSO_ORG` when the token can see multiple
@@ -45,10 +47,9 @@ events. Configure:
 
 The CI group must have delete protection disabled. The test preflights that
 property and refuses to create a database in a protected or missing group. It
-never changes group protection. Each run creates one cryptographically unique
-`xisnove-ci-*` database, mints a ten-minute database-scoped token, runs the
-same persistence conformance suite, deletes only that exact database, and
-polls until absence is confirmed.
+never changes group protection. Each test creates one cryptographically unique
+`xisnove-ci-*` database, mints a ten-minute database-scoped token, deletes only
+that exact database, and polls until absence is confirmed.
 
 For a local protected run, load the Platform API token without printing it and
 set the same non-secret organization and dedicated group values:
@@ -58,6 +59,7 @@ TURSO_API_KEY='<redacted>' \
 TURSO_ORG='your-organization' \
 TURSO_GROUP='xisnove-ci' \
 go test -race ./internal/adapters/tursocloud -run Conformance -count=1
+go test -race ./integration -run 'TestStorageMatrix/TursoCloud' -count=1
 ```
 
 Alternatively, `XISNOVE_TEST_TURSO_URL` and `XISNOVE_TEST_TURSO_TOKEN` may be
