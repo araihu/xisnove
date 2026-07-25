@@ -18,5 +18,5 @@ VALUES (?, ?, ?, ?, ?);
 SELECT id, admin_id, token_hash, expires_at, revoked_at
 FROM sessions
 WHERE token_hash = ?
-  AND expires_at > sqlc.arg(now)
+  AND julianday(expires_at) > julianday(sqlc.arg(now))
   AND revoked_at IS NULL;

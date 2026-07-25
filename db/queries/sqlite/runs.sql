@@ -20,11 +20,14 @@ WHERE id = (
   JOIN agents a ON a.id = sqlc.arg(agent_id)
   WHERE r.location_id = a.location_id
     AND r.status IN ('available', 'leased')
-    AND (r.status = 'available' OR r.lease_expires_at <= sqlc.arg(now))
-    AND r.scheduled_for <= sqlc.arg(now)
+    AND (
+      r.status = 'available'
+      OR julianday(r.lease_expires_at) <= julianday(sqlc.arg(now))
+    )
+    AND julianday(r.scheduled_for) <= julianday(sqlc.arg(now))
     AND r.probe_kind IN (sqlc.slice('capabilities'))
     AND a.revoked_at IS NULL
-  ORDER BY r.scheduled_for, r.id
+  ORDER BY julianday(r.scheduled_for), r.id
   LIMIT 1
 )
 RETURNING *;

@@ -40,6 +40,10 @@ jobs:
       - run: go test -race ./...
         env:
           XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
+      - name: Verify identical storage journey across local profiles
+        env:
+          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
+        run: go test -race ./integration -run TestStorageMatrix -count=1
       - name: PostgreSQL backup and restore smoke
         env:
           POSTGRES_HOST: 127.0.0.1

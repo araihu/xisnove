@@ -178,14 +178,14 @@ SELECT
 FROM monitors m
 JOIN monitor_locations ml ON ml.monitor_id = m.id
 WHERE m.enabled = 1
-  AND m.next_run_at <= ?1
-ORDER BY m.next_run_at, m.id, ml.location_id
+  AND julianday(m.next_run_at) <= julianday(?1)
+ORDER BY julianday(m.next_run_at), m.id, ml.location_id
 LIMIT ?2
 `
 
 type ListDueMonitorLocationsParams struct {
-	Now      string `json:"now"`
-	RowLimit int64  `json:"row_limit"`
+	Now      interface{} `json:"now"`
+	RowLimit int64       `json:"row_limit"`
 }
 
 type ListDueMonitorLocationsRow struct {

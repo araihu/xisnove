@@ -15,14 +15,14 @@ UPDATE agent_enrollment_tokens
 SET consumed_at = ?1
 WHERE token_hash = ?2
   AND consumed_at IS NULL
-  AND expires_at > ?3
+  AND julianday(expires_at) > julianday(?3)
 RETURNING id, location_id, token_hash, expires_at, consumed_at, created_at
 `
 
 type ConsumeAgentEnrollmentTokenParams struct {
 	ConsumedAt sql.NullString `json:"consumed_at"`
 	TokenHash  []byte         `json:"token_hash"`
-	Now        string         `json:"now"`
+	Now        interface{}    `json:"now"`
 }
 
 func (q *Queries) ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error) {

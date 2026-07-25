@@ -24,11 +24,14 @@ WHERE id = (
   JOIN agents a ON a.id = ?1
   WHERE r.location_id = a.location_id
     AND r.status IN ('available', 'leased')
-    AND (r.status = 'available' OR r.lease_expires_at <= ?4)
-    AND r.scheduled_for <= ?4
+    AND (
+      r.status = 'available'
+      OR julianday(r.lease_expires_at) <= julianday(?4)
+    )
+    AND julianday(r.scheduled_for) <= julianday(?4)
     AND r.probe_kind IN (/*SLICE:capabilities*/?)
     AND a.revoked_at IS NULL
-  ORDER BY r.scheduled_for, r.id
+  ORDER BY julianday(r.scheduled_for), r.id
   LIMIT 1
 )
 RETURNING id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status, lease_agent_id, lease_token_hash, lease_attempt, lease_expires_at, resolved_at, probe_kind
@@ -38,7 +41,7 @@ type ClaimProbeRunParams struct {
 	AgentID        sql.NullString `json:"agent_id"`
 	LeaseTokenHash []byte         `json:"lease_token_hash"`
 	LeaseExpiresAt sql.NullString `json:"lease_expires_at"`
-	Now            sql.NullString `json:"now"`
+	Now            interface{}    `json:"now"`
 	Capabilities   []string       `json:"capabilities"`
 }
 

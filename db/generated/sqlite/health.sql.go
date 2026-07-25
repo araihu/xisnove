@@ -20,7 +20,7 @@ SET state = 'unknown',
 WHERE monitor_id = ?2
   AND location_id = ?3
   AND stale_at = ?4
-  AND stale_at <= ?1
+  AND julianday(stale_at) <= julianday(?1)
 `
 
 type ClaimStaleLocationHealthParams struct {
@@ -211,14 +211,14 @@ const listStaleLocationHealth = `-- name: ListStaleLocationHealth :many
 SELECT monitor_id, location_id, state, consecutive_failures, consecutive_successes, last_observed_at, last_transition_at, stale_at
 FROM location_health
 WHERE stale_at IS NOT NULL
-  AND stale_at <= ?1
-ORDER BY stale_at, monitor_id, location_id
+  AND julianday(stale_at) <= julianday(?1)
+ORDER BY julianday(stale_at), monitor_id, location_id
 LIMIT ?2
 `
 
 type ListStaleLocationHealthParams struct {
-	Now      sql.NullString `json:"now"`
-	RowLimit int64          `json:"row_limit"`
+	Now      interface{} `json:"now"`
+	RowLimit int64       `json:"row_limit"`
 }
 
 func (q *Queries) ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error) {

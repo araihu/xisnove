@@ -68,8 +68,8 @@ ON CONFLICT (monitor_id) DO UPDATE SET
 SELECT *
 FROM location_health
 WHERE stale_at IS NOT NULL
-  AND stale_at <= sqlc.arg(now)
-ORDER BY stale_at, monitor_id, location_id
+  AND julianday(stale_at) <= julianday(sqlc.arg(now))
+ORDER BY julianday(stale_at), monitor_id, location_id
 LIMIT sqlc.arg(row_limit);
 
 -- name: ClaimStaleLocationHealth :execrows
@@ -82,4 +82,4 @@ SET state = 'unknown',
 WHERE monitor_id = sqlc.arg(monitor_id)
   AND location_id = sqlc.arg(location_id)
   AND stale_at = sqlc.arg(stale_at)
-  AND stale_at <= sqlc.arg(transition_at);
+  AND julianday(stale_at) <= julianday(sqlc.arg(transition_at));

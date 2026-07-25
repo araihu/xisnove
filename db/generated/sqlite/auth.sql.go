@@ -71,13 +71,13 @@ const findActiveSessionByTokenHash = `-- name: FindActiveSessionByTokenHash :one
 SELECT id, admin_id, token_hash, expires_at, revoked_at
 FROM sessions
 WHERE token_hash = ?
-  AND expires_at > ?2
+  AND julianday(expires_at) > julianday(?2)
   AND revoked_at IS NULL
 `
 
 type FindActiveSessionByTokenHashParams struct {
-	TokenHash []byte `json:"token_hash"`
-	Now       string `json:"now"`
+	TokenHash []byte      `json:"token_hash"`
+	Now       interface{} `json:"now"`
 }
 
 func (q *Queries) FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error) {

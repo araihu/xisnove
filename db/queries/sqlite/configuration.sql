@@ -50,8 +50,8 @@ SELECT
 FROM monitors m
 JOIN monitor_locations ml ON ml.monitor_id = m.id
 WHERE m.enabled = 1
-  AND m.next_run_at <= sqlc.arg(now)
-ORDER BY m.next_run_at, m.id, ml.location_id
+  AND julianday(m.next_run_at) <= julianday(sqlc.arg(now))
+ORDER BY julianday(m.next_run_at), m.id, ml.location_id
 LIMIT sqlc.arg(row_limit);
 
 -- name: AdvanceMonitorSchedule :execrows
