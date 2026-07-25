@@ -1,22 +1,29 @@
-openapi: 3.0.3
+openapi: 3.1.2
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Xisnove API
-  version: 0.1.0
+  version: 0.4.0
   description: API for the Xisnove monitoring control plane and outbound agents.
 servers:
   - url: /
+security:
+  - adminBearer: []
 tags:
   - name: auth
   - name: management
   - name: agent
+  - name: incidents
+  - name: discovery
   - name: notifications
   - name: maintenance
+  - name: public-status
 paths:
   /v1/sessions:
     post:
       operationId: createSession
       tags: [auth]
       security: []
+      x-xisnove-scopes: []
       requestBody:
         required: true
         content:
@@ -29,11 +36,104 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Session'}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/sessions/current:
+    delete:
+      operationId: revokeSession
+      summary: Revoke the credential used for this request
+      tags: [auth]
+      security: [{adminBearer: []}]
+      x-xisnove-scopes: [sessions:write]
+      responses:
+        '204': {description: Session revoked}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/api-tokens:
+    post:
+      operationId: createAPIToken
+      summary: Create a scoped API token
+      tags: [auth]
+      security: [{adminBearer: []}]
+      x-xisnove-scopes: [tokens:write]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAPITokenRequest'}
+      responses:
+        '201':
+          description: API token created; the credential is returned only once
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/APITokenCreated'}
+        default: {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listAPITokens
+      summary: List redacted API tokens
+      tags: [auth]
+      security: [{adminBearer: []}]
+      x-xisnove-scopes: [tokens:read]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+      responses:
+        '200':
+          description: Bounded API token page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/APITokenPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/api-tokens/{apiTokenId}:
+    parameters:
+      - {$ref: '#/components/parameters/APITokenID'}
+    get:
+      operationId: getAPIToken
+      summary: Get a redacted API token
+      tags: [auth]
+      security: [{adminBearer: []}]
+      x-xisnove-scopes: [tokens:read]
+      responses:
+        '200':
+          description: Redacted API token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/APIToken'}
+        default: {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: updateAPIToken
+      summary: Update API token metadata and scopes
+      tags: [auth]
+      security: [{adminBearer: []}]
+      x-xisnove-scopes: [tokens:write]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAPITokenRequest'}
+      responses:
+        '200':
+          description: Redacted updated API token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/APIToken'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: revokeAPIToken
+      summary: Revoke an API token
+      tags: [auth]
+      security: [{adminBearer: []}]
+      x-xisnove-scopes: [tokens:write]
+      responses:
+        '204': {description: API token revoked}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/locations:
     post:
       operationId: createLocation
       tags: [management]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
       requestBody:
         required: true
         content:
@@ -46,11 +146,70 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Location'}
         default: {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listLocations
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+      responses:
+        '200':
+          description: Bounded location page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LocationPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/locations/{locationId}:
+    parameters:
+      - {$ref: '#/components/parameters/LocationID'}
+    get:
+      operationId: getLocation
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
+      responses:
+        '200':
+          description: Location
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Location'}
+        default: {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: updateLocation
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateLocationRequest'}
+      responses:
+        '200':
+          description: Updated location
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Location'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: disableLocation
+      summary: Disable a location without deleting history
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
+      responses:
+        '204': {description: Location disabled}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/monitors:
     post:
       operationId: createMonitor
       tags: [management]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
       requestBody:
         required: true
         content:
@@ -63,13 +222,29 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Monitor'}
         default: {$ref: '#/components/responses/Problem'}
+    get:
+      operationId: listMonitors
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+      responses:
+        '200':
+          description: Bounded monitor page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MonitorPage'}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/monitors/{monitorId}:
     parameters:
       - {$ref: '#/components/parameters/MonitorID'}
     get:
       operationId: getMonitor
       tags: [management]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
       responses:
         '200':
           description: Monitor
@@ -77,11 +252,40 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Monitor'}
         default: {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: updateMonitor
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateMonitorRequest'}
+      responses:
+        '200':
+          description: Updated monitor
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Monitor'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: disableMonitor
+      summary: Disable a monitor without deleting history
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
+      responses:
+        '204': {description: Monitor disabled}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/agent-enrollment-tokens:
     post:
       operationId: createAgentEnrollmentToken
       tags: [management]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [agents:enroll]
       requestBody:
         required: true
         content:
@@ -99,6 +303,7 @@ paths:
       operationId: enrollAgent
       tags: [agent]
       security: []
+      x-xisnove-scopes: []
       requestBody:
         required: true
         content:
@@ -116,6 +321,7 @@ paths:
       operationId: heartbeatAgent
       tags: [agent]
       security: [{agentBearer: []}]
+      x-xisnove-scopes: [agent:heartbeat]
       requestBody:
         required: true
         content:
@@ -129,6 +335,7 @@ paths:
       operationId: leaseAgentWork
       tags: [agent]
       security: [{agentBearer: []}]
+      x-xisnove-scopes: [agent:work]
       requestBody:
         required: true
         content:
@@ -147,6 +354,7 @@ paths:
       operationId: uploadProbeResults
       tags: [agent]
       security: [{agentBearer: []}]
+      x-xisnove-scopes: [agent:results]
       requestBody:
         required: true
         content:
@@ -165,7 +373,8 @@ paths:
     get:
       operationId: getMonitorHealth
       tags: [management]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
       responses:
         '200':
           description: Monitor health
@@ -179,7 +388,8 @@ paths:
     get:
       operationId: getActiveMonitorIncident
       tags: [management]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [incidents:read]
       responses:
         '200':
           description: Active Incident
@@ -188,12 +398,202 @@ paths:
               schema: {$ref: '#/components/schemas/Incident'}
         '204': {description: No active Incident}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/agents:
+    get:
+      operationId: listAgents
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+      responses:
+        '200':
+          description: Bounded agent page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agents/{agentId}:
+    parameters:
+      - {$ref: '#/components/parameters/AgentID'}
+    get:
+      operationId: getAgent
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
+      responses:
+        '200':
+          description: Agent
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Agent'}
+        default: {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: updateAgent
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAgentRequest'}
+      responses:
+        '200':
+          description: Updated agent
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Agent'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: disableAgent
+      summary: Revoke an agent credential and disable the agent
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
+      responses:
+        '204': {description: Agent disabled}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/incidents:
+    get:
+      operationId: listIncidents
+      tags: [incidents]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [incidents:read]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - name: state
+          in: query
+          schema: {type: string, enum: [open, resolved]}
+      responses:
+        '200':
+          description: Bounded incident page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IncidentPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/incidents/{incidentId}:
+    parameters:
+      - {$ref: '#/components/parameters/IncidentID'}
+    get:
+      operationId: getIncident
+      tags: [incidents]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [incidents:read]
+      responses:
+        '200':
+          description: Incident
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Incident'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/incidents/{incidentId}/events:
+    parameters:
+      - {$ref: '#/components/parameters/IncidentID'}
+    get:
+      operationId: listIncidentEvents
+      tags: [incidents]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [incidents:read]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+      responses:
+        '200':
+          description: Bounded incident event page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IncidentEventPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agent/discovery-candidates:batch:
+    post:
+      operationId: upsertDiscoveryCandidatesBatch
+      summary: Idempotently upsert a bounded discovery candidate batch
+      tags: [agent, discovery]
+      security: [{agentBearer: []}]
+      x-xisnove-scopes: [agent:discovery]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DiscoveryCandidateBatch'}
+      responses:
+        '200':
+          description: Discovery candidates accepted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DiscoveryBatchAcknowledgement'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/discovery-candidates:
+    get:
+      operationId: listDiscoveryCandidates
+      tags: [discovery]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [discovery:read]
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - name: state
+          in: query
+          schema: {$ref: '#/components/schemas/DiscoveryCandidateState'}
+      responses:
+        '200':
+          description: Bounded discovery candidate catalog
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DiscoveryCandidatePage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/discovery-candidates/{candidateId}:
+    parameters:
+      - {$ref: '#/components/parameters/DiscoveryCandidateID'}
+    get:
+      operationId: getDiscoveryCandidate
+      tags: [discovery]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [discovery:read]
+      responses:
+        '200':
+          description: Discovery candidate
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DiscoveryCandidate'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/discovery-candidates/{candidateId}:promote:
+    parameters:
+      - {$ref: '#/components/parameters/DiscoveryCandidateID'}
+    post:
+      operationId: promoteDiscoveryCandidate
+      summary: Explicitly promote one discovery candidate to a monitor
+      tags: [discovery]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [discovery:write]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PromoteDiscoveryCandidateRequest'}
+      responses:
+        '201':
+          description: Discovery candidate promoted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DiscoveryPromotion'}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/notification-channels:
     post:
       operationId: createNotificationChannel
       summary: Create an encrypted notification channel
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:write]
       requestBody:
         required: true
         description: Channel configuration is accepted only on writes and never reflected.
@@ -211,9 +611,11 @@ paths:
       operationId: listNotificationChannels
       summary: List redacted notification channels
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:read]
       parameters:
         - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
         - {$ref: '#/components/parameters/Offset'}
       responses:
         '200':
@@ -229,7 +631,8 @@ paths:
       operationId: getNotificationChannel
       summary: Get a redacted notification channel
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:read]
       responses:
         '200':
           description: Redacted notification channel
@@ -241,7 +644,8 @@ paths:
       operationId: updateNotificationChannel
       summary: Replace notification channel configuration
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:write]
       requestBody:
         required: true
         description: Replacement configuration is write-only.
@@ -259,7 +663,8 @@ paths:
       operationId: disableNotificationChannel
       summary: Disable a notification channel without deleting history
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:write]
       responses:
         '204': {description: Notification channel disabled}
         default: {$ref: '#/components/responses/Problem'}
@@ -268,7 +673,8 @@ paths:
       operationId: createNotificationRoute
       summary: Create a typed incident notification route
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:write]
       requestBody:
         required: true
         description: Route matchers and immutable render template.
@@ -286,9 +692,11 @@ paths:
       operationId: listNotificationRoutes
       summary: List notification routes
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:read]
       parameters:
         - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
         - {$ref: '#/components/parameters/Offset'}
       responses:
         '200':
@@ -304,7 +712,8 @@ paths:
       operationId: getNotificationRoute
       summary: Get a notification route
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:read]
       responses:
         '200':
           description: Notification route
@@ -316,7 +725,8 @@ paths:
       operationId: updateNotificationRoute
       summary: Replace a notification route
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:write]
       requestBody:
         required: true
         description: Complete typed route replacement.
@@ -334,7 +744,8 @@ paths:
       operationId: disableNotificationRoute
       summary: Disable a notification route without deleting history
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:write]
       responses:
         '204': {description: Notification route disabled}
         default: {$ref: '#/components/responses/Problem'}
@@ -343,9 +754,11 @@ paths:
       operationId: listNotificationDeliveries
       summary: List durable notification delivery state
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:read]
       parameters:
         - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
         - {$ref: '#/components/parameters/Offset'}
       responses:
         '200':
@@ -361,7 +774,8 @@ paths:
       operationId: getNotificationDelivery
       summary: Get delivery state and bounded attempts
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:read]
       responses:
         '200':
           description: Notification delivery
@@ -376,7 +790,8 @@ paths:
       operationId: replayNotificationDelivery
       summary: Explicitly replay a permanently failed delivery
       tags: [notifications]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [notifications:write]
       responses:
         '202': {description: Notification delivery queued for replay}
         default: {$ref: '#/components/responses/Problem'}
@@ -385,7 +800,8 @@ paths:
       operationId: createMaintenance
       summary: Create one-off or indefinite maintenance
       tags: [maintenance]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
       requestBody:
         required: true
         description: Maintenance interval for one monitor.
@@ -403,9 +819,11 @@ paths:
       operationId: listMaintenance
       summary: List maintenance intervals
       tags: [maintenance]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
       parameters:
         - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
         - {$ref: '#/components/parameters/Offset'}
       responses:
         '200':
@@ -421,7 +839,8 @@ paths:
       operationId: getMaintenance
       summary: Get a maintenance interval
       tags: [maintenance]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:read]
       responses:
         '200':
           description: Maintenance interval
@@ -433,7 +852,8 @@ paths:
       operationId: deleteMaintenance
       summary: Delete maintenance that has not started
       tags: [maintenance]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
       responses:
         '204': {description: Future maintenance deleted}
         default: {$ref: '#/components/responses/Problem'}
@@ -444,7 +864,8 @@ paths:
       operationId: endMaintenance
       summary: End active or indefinite maintenance now
       tags: [maintenance]
-      security: [{adminBearer: []}]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [management:write]
       responses:
         '200':
           description: Maintenance ended
@@ -452,13 +873,91 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Maintenance'}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/status:
+    get:
+      operationId: getPublicStatus
+      summary: Get the single aggregate public status page
+      tags: [public-status]
+      security: []
+      x-xisnove-scopes: []
+      responses:
+        '200':
+          description: Aggregate status for explicitly public monitors
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PublicStatus'}
+        default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
-    adminBearer: {type: http, scheme: bearer, bearerFormat: opaque}
-    agentBearer: {type: http, scheme: bearer, bearerFormat: opaque}
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session
+      description: Revocable administrator session credential.
+      x-xisnove-scopes:
+        - sessions:write
+        - tokens:read
+        - tokens:write
+        - management:read
+        - management:write
+        - incidents:read
+        - notifications:read
+        - notifications:write
+        - discovery:read
+        - discovery:write
+        - agents:enroll
+    apiTokenBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-api-token
+      description: Revocable API token constrained to its stored scopes.
+      x-xisnove-scopes:
+        - management:read
+        - management:write
+        - incidents:read
+        - notifications:read
+        - notifications:write
+        - discovery:read
+        - discovery:write
+        - agents:enroll
+    agentBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-agent
+      description: Revocable per-agent credential.
+      x-xisnove-scopes:
+        - agent:heartbeat
+        - agent:work
+        - agent:results
+        - agent:discovery
   parameters:
+    APITokenID:
+      name: apiTokenId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    LocationID:
+      name: locationId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
     MonitorID:
       name: monitorId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    AgentID:
+      name: agentId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IncidentID:
+      name: incidentId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    DiscoveryCandidateID:
+      name: candidateId
       in: path
       required: true
       schema: {type: string, format: uuid}
@@ -491,11 +990,27 @@ components:
       in: query
       description: Maximum number of records to return.
       schema: {type: integer, format: int32, minimum: 1, maximum: 100, default: 50}
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque continuation token returned as nextCursor by a previous page.
+      schema: {type: string, minLength: 1, maxLength: 1024}
     Offset:
       name: offset
       in: query
-      description: Number of records to skip.
+      description: Deprecated compatibility offset; new clients use cursor.
+      deprecated: true
       schema: {type: integer, format: int32, minimum: 0, maximum: 1000000, default: 0}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Caller-generated key that makes a retry return the original mutation result.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 200
+        pattern: '^[A-Za-z0-9._~:+/-]+$'
   responses:
     Problem:
       description: Problem details
@@ -517,6 +1032,80 @@ components:
       properties:
         token: {type: string, minLength: 32}
         expiresAt: {type: string, format: date-time}
+    APITokenScope:
+      type: string
+      enum:
+        - management:read
+        - management:write
+        - incidents:read
+        - notifications:read
+        - notifications:write
+        - discovery:read
+        - discovery:write
+        - agents:enroll
+    CreateAPITokenRequest:
+      type: object
+      additionalProperties: false
+      required: [name, scopes]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/APITokenScope'}
+        expiresAt: {type: string, format: date-time}
+    UpdateAPITokenRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/APITokenScope'}
+        expiresAt: {type: string, format: date-time}
+    APIToken:
+      type: object
+      additionalProperties: false
+      required: [id, name, scopes, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 120}
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/APITokenScope'}
+        expiresAt: {type: string, format: date-time}
+        lastUsedAt: {type: string, format: date-time}
+        revokedAt: {type: string, format: date-time}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    APITokenCreated:
+      type: object
+      additionalProperties: false
+      required: [apiToken, token]
+      properties:
+        apiToken: {$ref: '#/components/schemas/APIToken'}
+        token:
+          type: string
+          minLength: 32
+          description: One-time plaintext credential; it is never returned again.
+    APITokenPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/APIToken'}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
     CreateLocationRequest:
       type: object
       additionalProperties: false
@@ -530,7 +1119,25 @@ components:
       properties:
         id: {type: string, format: uuid}
         name: {type: string, minLength: 1, maxLength: 120}
+        enabled: {type: boolean}
         createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    UpdateLocationRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+        enabled: {type: boolean}
+    LocationPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Location'}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
     CreateMonitorRequest:
       type: object
       additionalProperties: false
@@ -553,6 +1160,27 @@ components:
           additionalProperties: {type: string, maxLength: 253}
         displayOrder: {type: integer, format: int32, minimum: 0, default: 0}
         public: {type: boolean, default: false}
+        intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
+        failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        recoveryThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        locationId: {type: string, format: uuid}
+        requiredLocation: {type: boolean}
+        probe: {$ref: '#/components/schemas/ProbeDefinition'}
+    UpdateMonitorRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2048}
+        labels:
+          type: object
+          maxProperties: 64
+          additionalProperties: {type: string, maxLength: 253}
+        displayOrder: {type: integer, format: int32, minimum: 0}
+        public: {type: boolean}
+        enabled: {type: boolean}
         intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
         timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
         failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
@@ -691,6 +1319,15 @@ components:
         probe: {$ref: '#/components/schemas/ProbeDefinition'}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
+    MonitorPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Monitor'}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
     CreateAgentEnrollmentTokenRequest:
       type: object
       additionalProperties: false
@@ -725,6 +1362,54 @@ components:
         agentId: {type: string, format: uuid}
         credential: {type: string, minLength: 32}
         credentialGeneration: {type: integer, format: int64, minimum: 1}
+    Agent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - locationId
+        - enabled
+        - credentialGeneration
+        - capabilities
+        - createdAt
+        - updatedAt
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 120}
+        locationId: {type: string, format: uuid}
+        enabled: {type: boolean}
+        credentialGeneration: {type: integer, format: int64, minimum: 1}
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/AgentCapability'}
+        version: {type: string, minLength: 1, maxLength: 64}
+        lastSeenAt: {type: string, format: date-time}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    UpdateAgentRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+        enabled: {type: boolean}
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/AgentCapability'}
+    AgentPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Agent'}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
     AgentHeartbeat:
       type: object
       additionalProperties: false
@@ -883,7 +1568,154 @@ components:
         state: {type: string, enum: [open, resolved]}
         severity: {$ref: '#/components/schemas/IncidentSeverity'}
         openedAt: {type: string, format: date-time}
+        resolvedAt: {type: string, format: date-time}
         lastTransitionAt: {type: string, format: date-time}
+    IncidentPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Incident'}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
+    IncidentEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - incidentId
+        - action
+        - previousState
+        - state
+        - severity
+        - occurredAt
+      properties:
+        id: {type: string, format: uuid}
+        incidentId: {type: string, format: uuid}
+        action: {$ref: '#/components/schemas/NotificationAction'}
+        previousState: {$ref: '#/components/schemas/HealthState'}
+        state: {$ref: '#/components/schemas/HealthState'}
+        severity: {$ref: '#/components/schemas/IncidentSeverity'}
+        occurredAt: {type: string, format: date-time}
+    IncidentEventPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/IncidentEvent'}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
+    DiscoveryCandidateState:
+      type: string
+      enum: [pending, promoted, ignored]
+    DiscoveryCandidateInput:
+      type: object
+      additionalProperties: false
+      required: [externalId, kind, name, target, labels, observedAt]
+      properties:
+        externalId: {type: string, minLength: 1, maxLength: 512}
+        kind: {type: string, enum: [http, tcp, dns]}
+        name: {type: string, minLength: 1, maxLength: 200}
+        target: {type: string, minLength: 1, maxLength: 4096}
+        labels:
+          type: object
+          maxProperties: 64
+          additionalProperties: {type: string, maxLength: 253}
+        observedAt: {type: string, format: date-time}
+    DiscoveryCandidateBatch:
+      type: object
+      additionalProperties: false
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {$ref: '#/components/schemas/DiscoveryCandidateInput'}
+    DiscoveryBatchAcknowledgement:
+      type: object
+      additionalProperties: false
+      required: [accepted, created, updated]
+      properties:
+        accepted: {type: integer, format: int32, minimum: 0, maximum: 100}
+        created: {type: integer, format: int32, minimum: 0, maximum: 100}
+        updated: {type: integer, format: int32, minimum: 0, maximum: 100}
+    DiscoveryCandidate:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - externalId
+        - agentId
+        - locationId
+        - kind
+        - name
+        - target
+        - labels
+        - state
+        - firstSeenAt
+        - lastSeenAt
+      properties:
+        id: {type: string, format: uuid}
+        externalId: {type: string, minLength: 1, maxLength: 512}
+        agentId: {type: string, format: uuid}
+        locationId: {type: string, format: uuid}
+        kind: {type: string, enum: [http, tcp, dns]}
+        name: {type: string, minLength: 1, maxLength: 200}
+        target: {type: string, minLength: 1, maxLength: 4096}
+        labels:
+          type: object
+          maxProperties: 64
+          additionalProperties: {type: string, maxLength: 253}
+        state: {$ref: '#/components/schemas/DiscoveryCandidateState'}
+        promotedMonitorId: {type: string, format: uuid}
+        firstSeenAt: {type: string, format: date-time}
+        lastSeenAt: {type: string, format: date-time}
+    DiscoveryCandidatePage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DiscoveryCandidate'}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
+    PromoteDiscoveryCandidateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - intervalSeconds
+        - timeoutMillis
+        - failureThreshold
+        - recoveryThreshold
+        - locationId
+        - requiredLocation
+        - public
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2048, default: ''}
+        labels:
+          type: object
+          maxProperties: 64
+          default: {}
+          additionalProperties: {type: string, maxLength: 253}
+        intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
+        failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        recoveryThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        locationId: {type: string, format: uuid}
+        requiredLocation: {type: boolean}
+        public: {type: boolean}
+    DiscoveryPromotion:
+      type: object
+      additionalProperties: false
+      required: [candidate, monitor]
+      properties:
+        candidate: {$ref: '#/components/schemas/DiscoveryCandidate'}
+        monitor: {$ref: '#/components/schemas/Monitor'}
     NotificationChannelConfigurationInput:
       oneOf:
         - {$ref: '#/components/schemas/ShoutrrrChannelConfigurationInput'}
@@ -954,6 +1786,7 @@ components:
           items: {$ref: '#/components/schemas/NotificationChannel'}
         limit: {type: integer, format: int32, minimum: 1, maximum: 100}
         offset: {type: integer, format: int32, minimum: 0}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
     NotificationAction:
       type: string
       enum: [open, change, recover, maintenance-ended]
@@ -1042,6 +1875,7 @@ components:
           items: {$ref: '#/components/schemas/NotificationRoute'}
         limit: {type: integer, format: int32, minimum: 1, maximum: 100}
         offset: {type: integer, format: int32, minimum: 0}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
     NotificationDeliveryState:
       type: string
       enum: [pending, claimed, retrying, delivered, permanent-failure, suppressed]
@@ -1144,6 +1978,7 @@ components:
           items: {$ref: '#/components/schemas/NotificationDelivery'}
         limit: {type: integer, format: int32, minimum: 1, maximum: 100}
         offset: {type: integer, format: int32, minimum: 0}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
     CreateMaintenanceRequest:
       type: object
       additionalProperties: false
@@ -1175,6 +2010,45 @@ components:
           items: {$ref: '#/components/schemas/Maintenance'}
         limit: {type: integer, format: int32, minimum: 1, maximum: 100}
         offset: {type: integer, format: int32, minimum: 0}
+        nextCursor: {type: string, minLength: 1, maxLength: 1024}
+    PublicStatusMonitor:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, state, uptime24Hours, uptime30Days]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2048}
+        state: {$ref: '#/components/schemas/HealthState'}
+        uptime24Hours: {type: number, format: double, minimum: 0, maximum: 100}
+        uptime30Days: {type: number, format: double, minimum: 0, maximum: 100}
+    PublicStatusIncident:
+      type: object
+      additionalProperties: false
+      required: [id, monitorId, monitorName, state, severity, openedAt, lastTransitionAt]
+      properties:
+        id: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        monitorName: {type: string, minLength: 1, maxLength: 200}
+        state: {type: string, enum: [open]}
+        severity: {$ref: '#/components/schemas/IncidentSeverity'}
+        openedAt: {type: string, format: date-time}
+        lastTransitionAt: {type: string, format: date-time}
+    PublicStatus:
+      type: object
+      additionalProperties: false
+      required: [generatedAt, state, monitors, activeIncidents]
+      properties:
+        generatedAt: {type: string, format: date-time}
+        state: {$ref: '#/components/schemas/HealthState'}
+        monitors:
+          type: array
+          maxItems: 1000
+          items: {$ref: '#/components/schemas/PublicStatusMonitor'}
+        activeIncidents:
+          type: array
+          maxItems: 1000
+          items: {$ref: '#/components/schemas/PublicStatusIncident'}
     Problem:
       type: object
       additionalProperties: false
@@ -1186,6 +2060,7 @@ components:
         code: {type: string, minLength: 1}
         correlationId: {type: string, minLength: 1}
         detail: {type: string}
+        instance: {type: string, format: uri-reference}
         fieldErrors:
           type: array
           items: {$ref: '#/components/schemas/FieldError'}

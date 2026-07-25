@@ -1,0 +1,331 @@
+package mockapi
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+const (
+	// Fixture credentials are intentionally public, deterministic mock values.
+	FixtureAdminEmail       = "admin@xisnove.test"
+	FixtureAdminPassword    = "mock-password"
+	FixtureSessionToken     = "xisnove_mock_session_admin_0000000000000001"
+	FixtureAgentToken       = "xisnove_mock_agent_000000000000000000000001"
+	FixtureFullAPIToken     = "xisnove_mock_api_full_0000000000000000000001"
+	FixtureReadOnlyAPIToken = "xisnove_mock_api_read_0000000000000000000001"
+
+	fixtureTime       = "2026-07-25T12:00:00Z"
+	fixtureLocationID = "00000000-0000-4000-8000-000000000001"
+)
+
+type Server struct {
+	mu sync.Mutex
+
+	sessionActive bool
+	tokensByID    map[string]*apiTokenRecord
+	tokensByValue map[string]*apiTokenRecord
+	monitors      []map[string]any
+	incidents     []map[string]any
+	events        map[string][]map[string]any
+	candidates    []map[string]any
+	channels      []map[string]any
+	routes        []map[string]any
+	deliveries    []map[string]any
+	idempotency   map[string]storedResponse
+	counters      map[string]int
+}
+
+type apiTokenRecord struct {
+	ID        string
+	Token     string
+	Name      string
+	Scopes    []string
+	RevokedAt string
+}
+
+type storedResponse struct {
+	status      int
+	contentType string
+	body        []byte
+}
+
+func NewServer() *Server {
+	server := &Server{
+		tokensByID:    map[string]*apiTokenRecord{},
+		tokensByValue: map[string]*apiTokenRecord{},
+		events:        map[string][]map[string]any{},
+		idempotency:   map[string]storedResponse{},
+		counters: map[string]int{
+			"token": 1000, "monitor": 2000, "candidate": 3000, "channel": 4000,
+		},
+	}
+	server.seedFixtures()
+	return server
+}
+
+func (s *Server) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.serveScenario(w, r) {
+			return
+		}
+		s.serveHTTP(w, r)
+	})
+}
+
+func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/sessions":
+		s.createSession(w, r)
+	case r.Method == http.MethodDelete && r.URL.Path == "/v1/sessions/current":
+		s.revokeSession(w, r)
+	case r.URL.Path == "/v1/api-tokens":
+		s.apiTokens(w, r)
+	case strings.HasPrefix(r.URL.Path, "/v1/api-tokens/"):
+		s.apiToken(w, r, strings.TrimPrefix(r.URL.Path, "/v1/api-tokens/"))
+	case r.URL.Path == "/v1/monitors":
+		s.monitorCollection(w, r)
+	case strings.HasPrefix(r.URL.Path, "/v1/monitors/"):
+		s.monitor(w, r, strings.TrimPrefix(r.URL.Path, "/v1/monitors/"))
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/incidents":
+		s.listIncidents(w, r)
+	case strings.HasPrefix(r.URL.Path, "/v1/incidents/"):
+		s.incident(w, r, strings.TrimPrefix(r.URL.Path, "/v1/incidents/"))
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/agent/discovery-candidates:batch":
+		s.upsertDiscoveryCandidates(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/discovery-candidates":
+		s.listDiscoveryCandidates(w, r)
+	case strings.HasPrefix(r.URL.Path, "/v1/discovery-candidates/"):
+		s.discoveryCandidate(w, r, strings.TrimPrefix(r.URL.Path, "/v1/discovery-candidates/"))
+	case r.URL.Path == "/v1/notification-channels":
+		s.notificationChannels(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/notification-routes":
+		s.listNotificationRoutes(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/notification-deliveries":
+		s.listNotificationDeliveries(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/status":
+		s.publicStatus(w, r)
+	default:
+		writeProblem(w, r, http.StatusNotFound, "not_found", "Resource not found", nil)
+	}
+}
+
+func (s *Server) serveScenario(w http.ResponseWriter, r *http.Request) bool {
+	scenario := r.Header.Get("X-Xisnove-Mock-Scenario")
+	if scenario == "" {
+		return false
+	}
+	type failure struct {
+		status int
+		code   string
+		title  string
+	}
+	failures := map[string]failure{
+		"validation":   {http.StatusUnprocessableEntity, "mock_validation", "Mock validation failure"},
+		"unauthorized": {http.StatusUnauthorized, "unauthorized", "Authentication required"},
+		"forbidden":    {http.StatusForbidden, "insufficient_scope", "Insufficient scope"},
+		"not-found":    {http.StatusNotFound, "not_found", "Resource not found"},
+		"conflict":     {http.StatusConflict, "mock_conflict", "Mock conflict"},
+		"rate-limit":   {http.StatusTooManyRequests, "mock_rate_limit", "Mock rate limit"},
+		"server-error": {http.StatusServiceUnavailable, "mock_unavailable", "Mock service unavailable"},
+	}
+	selected, ok := failures[scenario]
+	if !ok {
+		writeProblem(w, r, http.StatusBadRequest, "unknown_mock_scenario", "Unknown mock scenario", nil)
+		return true
+	}
+	if scenario == "rate-limit" {
+		w.Header().Set("Retry-After", "60")
+	}
+	var fields []FieldError
+	if scenario == "validation" {
+		fields = []FieldError{{Field: "body.name", Message: "is reserved by the mock scenario"}}
+	}
+	writeProblem(w, r, selected.status, selected.code, selected.title, fields)
+	return true
+}
+
+func (s *Server) authorize(w http.ResponseWriter, r *http.Request, scope string) bool {
+	token := bearerToken(r)
+	if token == "" {
+		writeProblem(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required", nil)
+		return false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if token == FixtureSessionToken && s.sessionActive {
+		return true
+	}
+	if token == FixtureAgentToken && strings.HasPrefix(scope, "agent:") {
+		return true
+	}
+	record := s.tokensByValue[token]
+	if record == nil || record.RevokedAt != "" {
+		writeProblem(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required", nil)
+		return false
+	}
+	for _, granted := range record.Scopes {
+		if granted == scope {
+			return true
+		}
+	}
+	writeProblem(w, r, http.StatusForbidden, "insufficient_scope", "Insufficient scope", nil)
+	return false
+}
+
+func (s *Server) authorizeSession(w http.ResponseWriter, r *http.Request) bool {
+	token := bearerToken(r)
+	s.mu.Lock()
+	active := token == FixtureSessionToken && s.sessionActive
+	s.mu.Unlock()
+	if !active {
+		writeProblem(w, r, http.StatusUnauthorized, "unauthorized", "Administrator session required", nil)
+	}
+	return active
+}
+
+func bearerToken(r *http.Request) string {
+	fields := strings.Fields(r.Header.Get("Authorization"))
+	if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") {
+		return ""
+	}
+	return fields[1]
+}
+
+func (s *Server) replay(w http.ResponseWriter, r *http.Request) bool {
+	key := r.Header.Get("Idempotency-Key")
+	if key == "" {
+		return false
+	}
+	s.mu.Lock()
+	response, ok := s.idempotency[idempotencyMapKey(r, key)]
+	s.mu.Unlock()
+	if !ok {
+		return false
+	}
+	writeStored(w, response)
+	return true
+}
+
+func (s *Server) writeMutation(w http.ResponseWriter, r *http.Request, status int, value any) {
+	body, err := json.Marshal(value)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "mock_encoding_failed", "Mock encoding failed", nil)
+		return
+	}
+	response := storedResponse{status: status, contentType: "application/json", body: body}
+	if key := r.Header.Get("Idempotency-Key"); key != "" {
+		s.mu.Lock()
+		s.idempotency[idempotencyMapKey(r, key)] = response
+		s.mu.Unlock()
+	}
+	writeStored(w, response)
+}
+
+func idempotencyMapKey(r *http.Request, key string) string {
+	return r.Method + " " + r.URL.Path + " " + key
+}
+
+func writeStored(w http.ResponseWriter, response storedResponse) {
+	w.Header().Set("Content-Type", response.contentType)
+	w.WriteHeader(response.status)
+	_, _ = w.Write(response.body)
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeProblem(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	code, title string,
+	fields []FieldError,
+) {
+	correlationID := r.Header.Get("X-Request-ID")
+	if correlationID == "" {
+		correlationID = "mock-request-0001"
+	}
+	instance := r.URL.RequestURI()
+	problem := Problem{
+		Type: "https://xisnove.dev/problems/" + code, Title: title,
+		Status: int32(status), Code: code, CorrelationId: correlationID,
+		Instance: &instance,
+	}
+	if len(fields) > 0 {
+		problem.FieldErrors = &fields
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if status == http.StatusUnauthorized {
+		w.Header().Set("WWW-Authenticate", "Bearer")
+	}
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(problem)
+}
+
+func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", []FieldError{
+			{Field: "body", Message: "must match the API contract"},
+		})
+		return false
+	}
+	return true
+}
+
+func pageBounds(r *http.Request, length int) (int, int, error) {
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return 0, 0, fmt.Errorf("limit must be between 1 and 100")
+		}
+		limit = parsed
+	}
+	start := 0
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(cursor)
+		if err != nil {
+			return 0, 0, fmt.Errorf("cursor is invalid")
+		}
+		parsed, err := strconv.Atoi(string(decoded))
+		if err != nil || parsed < 0 || parsed > length {
+			return 0, 0, fmt.Errorf("cursor is invalid")
+		}
+		start = parsed
+	}
+	end := min(start+limit, length)
+	return start, end, nil
+}
+
+func nextCursor(end, length int) string {
+	if end >= length {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(end)))
+}
+
+func deterministicID(kind string, sequence int) string {
+	group := map[string]string{
+		"token": "4100", "monitor": "4200", "candidate": "4400", "channel": "4500",
+	}[kind]
+	return fmt.Sprintf("00000000-0000-%s-8000-%012d", group, sequence)
+}
+
+func cloneMap(value map[string]any) map[string]any {
+	cloned := make(map[string]any, len(value))
+	for key, item := range value {
+		cloned[key] = item
+	}
+	return cloned
+}

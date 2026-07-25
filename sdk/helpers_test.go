@@ -92,3 +92,24 @@ func TestRequireMonitorIncludesUnexpectedHTTPStatus(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestAuthenticationAndIdempotencyRequestEditorsSetHeaders(t *testing.T) {
+	request, err := http.NewRequest(http.MethodPost, "https://xisnove.example.test/v1/monitors", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, editor := range []sdk.RequestEditorFn{
+		sdk.WithBearerToken("fixture-token"),
+		sdk.WithIdempotencyKey("monitor-create-1"),
+	} {
+		if err := editor(context.Background(), request); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if request.Header.Get("Authorization") != "Bearer fixture-token" {
+		t.Fatalf("Authorization = %q", request.Header.Get("Authorization"))
+	}
+	if request.Header.Get("Idempotency-Key") != "monitor-create-1" {
+		t.Fatalf("Idempotency-Key = %q", request.Header.Get("Idempotency-Key"))
+	}
+}

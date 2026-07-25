@@ -18,8 +18,11 @@ func TestContractUsesLatestOAPICodegenSupportedOpenAPIAndIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc.OpenAPI != "3.0.3" {
+	if doc.OpenAPI != "3.1.2" {
 		t.Fatalf("OpenAPI = %q", doc.OpenAPI)
+	}
+	if doc.JSONSchemaDialect != "https://json-schema.org/draft/2020-12/schema" {
+		t.Fatalf("JSON Schema dialect = %q", doc.JSONSchemaDialect)
 	}
 	if err := doc.Validate(context.Background()); err != nil {
 		t.Fatal(err)

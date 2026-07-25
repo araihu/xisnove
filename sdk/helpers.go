@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +17,20 @@ const (
 	Degraded = HealthStateDegraded
 	Unknown  = HealthStateUnknown
 )
+
+func WithBearerToken(token string) RequestEditorFn {
+	return func(_ context.Context, request *http.Request) error {
+		request.Header.Set("Authorization", "Bearer "+token)
+		return nil
+	}
+}
+
+func WithIdempotencyKey(key string) RequestEditorFn {
+	return func(_ context.Context, request *http.Request) error {
+		request.Header.Set("Idempotency-Key", key)
+		return nil
+	}
+}
 
 func (c *ClientWithResponses) RequireMonitor(
 	ctx context.Context,
