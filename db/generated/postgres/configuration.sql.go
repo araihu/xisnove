@@ -7,8 +7,8 @@ package dbpostgres
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"encoding/json"
+	"time"
 )
 
 const advanceMonitorSchedule = `-- name: AdvanceMonitorSchedule :execrows
@@ -20,17 +20,17 @@ WHERE id = $3
 `
 
 type AdvanceMonitorScheduleParams struct {
-	NextRunAt pgtype.Timestamptz `json:"next_run_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	ID        pgtype.UUID        `json:"id"`
+	NextRunAt time.Time `json:"next_run_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
 }
 
 func (q *Queries) AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, advanceMonitorSchedule, arg.NextRunAt, arg.UpdatedAt, arg.ID)
+	result, err := q.db.ExecContext(ctx, advanceMonitorSchedule, arg.NextRunAt, arg.UpdatedAt, arg.ID)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }
 
 const assignMonitorLocation = `-- name: AssignMonitorLocation :exec
@@ -41,13 +41,13 @@ DO UPDATE SET required = excluded.required
 `
 
 type AssignMonitorLocationParams struct {
-	MonitorID  pgtype.UUID `json:"monitor_id"`
-	LocationID pgtype.UUID `json:"location_id"`
-	Required   bool        `json:"required"`
+	MonitorID  string `json:"monitor_id"`
+	LocationID string `json:"location_id"`
+	Required   bool   `json:"required"`
 }
 
 func (q *Queries) AssignMonitorLocation(ctx context.Context, arg AssignMonitorLocationParams) error {
-	_, err := q.db.Exec(ctx, assignMonitorLocation, arg.MonitorID, arg.LocationID, arg.Required)
+	_, err := q.db.ExecContext(ctx, assignMonitorLocation, arg.MonitorID, arg.LocationID, arg.Required)
 	return err
 }
 
@@ -57,13 +57,13 @@ VALUES ($1, $2, $3)
 `
 
 type CreateLocationParams struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateLocation(ctx context.Context, arg CreateLocationParams) error {
-	_, err := q.db.Exec(ctx, createLocation, arg.ID, arg.Name, arg.CreatedAt)
+	_, err := q.db.ExecContext(ctx, createLocation, arg.ID, arg.Name, arg.CreatedAt)
 	return err
 }
 
@@ -80,22 +80,22 @@ INSERT INTO monitors (
 `
 
 type CreateMonitorParams struct {
-	ID                pgtype.UUID        `json:"id"`
-	Name              string             `json:"name"`
-	Kind              string             `json:"kind"`
-	IntervalMs        int64              `json:"interval_ms"`
-	TimeoutMs         int64              `json:"timeout_ms"`
-	FailureThreshold  int32              `json:"failure_threshold"`
-	RecoveryThreshold int32              `json:"recovery_threshold"`
-	ProbeJson         []byte             `json:"probe_json"`
-	Enabled           bool               `json:"enabled"`
-	NextRunAt         pgtype.Timestamptz `json:"next_run_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	Kind              string          `json:"kind"`
+	IntervalMs        int64           `json:"interval_ms"`
+	TimeoutMs         int64           `json:"timeout_ms"`
+	FailureThreshold  int32           `json:"failure_threshold"`
+	RecoveryThreshold int32           `json:"recovery_threshold"`
+	ProbeJson         json.RawMessage `json:"probe_json"`
+	Enabled           bool            `json:"enabled"`
+	NextRunAt         time.Time       `json:"next_run_at"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) error {
-	_, err := q.db.Exec(ctx, createMonitor,
+	_, err := q.db.ExecContext(ctx, createMonitor,
 		arg.ID,
 		arg.Name,
 		arg.Kind,
@@ -118,8 +118,8 @@ FROM locations
 WHERE id = $1
 `
 
-func (q *Queries) GetLocation(ctx context.Context, id pgtype.UUID) (Location, error) {
-	row := q.db.QueryRow(ctx, getLocation, id)
+func (q *Queries) GetLocation(ctx context.Context, id string) (Location, error) {
+	row := q.db.QueryRowContext(ctx, getLocation, id)
 	var i Location
 	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
 	return i, err
@@ -131,8 +131,8 @@ FROM monitors
 WHERE id = $1
 `
 
-func (q *Queries) GetMonitor(ctx context.Context, id pgtype.UUID) (Monitor, error) {
-	row := q.db.QueryRow(ctx, getMonitor, id)
+func (q *Queries) GetMonitor(ctx context.Context, id string) (Monitor, error) {
+	row := q.db.QueryRowContext(ctx, getMonitor, id)
 	var i Monitor
 	err := row.Scan(
 		&i.ID,
@@ -159,8 +159,8 @@ ORDER BY location_id
 LIMIT 1
 `
 
-func (q *Queries) GetMonitorLocation(ctx context.Context, monitorID pgtype.UUID) (MonitorLocation, error) {
-	row := q.db.QueryRow(ctx, getMonitorLocation, monitorID)
+func (q *Queries) GetMonitorLocation(ctx context.Context, monitorID string) (MonitorLocation, error) {
+	row := q.db.QueryRowContext(ctx, getMonitorLocation, monitorID)
 	var i MonitorLocation
 	err := row.Scan(&i.MonitorID, &i.LocationID, &i.Required)
 	return i, err
@@ -191,29 +191,29 @@ LIMIT $2
 `
 
 type ListDueMonitorLocationsParams struct {
-	Now      pgtype.Timestamptz `json:"now"`
-	RowLimit int32              `json:"row_limit"`
+	Now      time.Time `json:"now"`
+	RowLimit int32     `json:"row_limit"`
 }
 
 type ListDueMonitorLocationsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	Name              string             `json:"name"`
-	Kind              string             `json:"kind"`
-	IntervalMs        int64              `json:"interval_ms"`
-	TimeoutMs         int64              `json:"timeout_ms"`
-	FailureThreshold  int32              `json:"failure_threshold"`
-	RecoveryThreshold int32              `json:"recovery_threshold"`
-	ProbeJson         []byte             `json:"probe_json"`
-	Enabled           bool               `json:"enabled"`
-	NextRunAt         pgtype.Timestamptz `json:"next_run_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	LocationID        pgtype.UUID        `json:"location_id"`
-	Required          bool               `json:"required"`
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	Kind              string          `json:"kind"`
+	IntervalMs        int64           `json:"interval_ms"`
+	TimeoutMs         int64           `json:"timeout_ms"`
+	FailureThreshold  int32           `json:"failure_threshold"`
+	RecoveryThreshold int32           `json:"recovery_threshold"`
+	ProbeJson         json.RawMessage `json:"probe_json"`
+	Enabled           bool            `json:"enabled"`
+	NextRunAt         time.Time       `json:"next_run_at"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	LocationID        string          `json:"location_id"`
+	Required          bool            `json:"required"`
 }
 
 func (q *Queries) ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error) {
-	rows, err := q.db.Query(ctx, listDueMonitorLocations, arg.Now, arg.RowLimit)
+	rows, err := q.db.QueryContext(ctx, listDueMonitorLocations, arg.Now, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -240,6 +240,9 @@ func (q *Queries) ListDueMonitorLocations(ctx context.Context, arg ListDueMonito
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

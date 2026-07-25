@@ -5,139 +5,143 @@
 package dbpostgres
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
+	"encoding/json"
+	"time"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 type Admin struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"password_hash"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type Agent struct {
-	ID                   pgtype.UUID        `json:"id"`
-	LocationID           pgtype.UUID        `json:"location_id"`
-	Name                 string             `json:"name"`
-	CredentialHash       []byte             `json:"credential_hash"`
-	CredentialGeneration int64              `json:"credential_generation"`
-	CapabilitiesJson     []byte             `json:"capabilities_json"`
-	Version              pgtype.Text        `json:"version"`
-	LastSeenAt           pgtype.Timestamptz `json:"last_seen_at"`
-	RevokedAt            pgtype.Timestamptz `json:"revoked_at"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	ID                   string          `json:"id"`
+	LocationID           string          `json:"location_id"`
+	Name                 string          `json:"name"`
+	CredentialHash       []byte          `json:"credential_hash"`
+	CredentialGeneration int64           `json:"credential_generation"`
+	CapabilitiesJson     json.RawMessage `json:"capabilities_json"`
+	Version              sql.NullString  `json:"version"`
+	LastSeenAt           sql.NullTime    `json:"last_seen_at"`
+	RevokedAt            sql.NullTime    `json:"revoked_at"`
+	CreatedAt            time.Time       `json:"created_at"`
 }
 
 type AgentEnrollmentToken struct {
-	ID         pgtype.UUID        `json:"id"`
-	LocationID pgtype.UUID        `json:"location_id"`
-	TokenHash  []byte             `json:"token_hash"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
-	ConsumedAt pgtype.Timestamptz `json:"consumed_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID         string       `json:"id"`
+	LocationID string       `json:"location_id"`
+	TokenHash  []byte       `json:"token_hash"`
+	ExpiresAt  time.Time    `json:"expires_at"`
+	ConsumedAt sql.NullTime `json:"consumed_at"`
+	CreatedAt  time.Time    `json:"created_at"`
 }
 
 type CheckRun struct {
-	ID             pgtype.UUID        `json:"id"`
-	MonitorID      pgtype.UUID        `json:"monitor_id"`
-	LocationID     pgtype.UUID        `json:"location_id"`
-	ScheduledFor   pgtype.Timestamptz `json:"scheduled_for"`
-	ProbeJson      []byte             `json:"probe_json"`
-	TimeoutMs      int64              `json:"timeout_ms"`
-	Status         string             `json:"status"`
-	LeaseAgentID   pgtype.UUID        `json:"lease_agent_id"`
-	LeaseTokenHash []byte             `json:"lease_token_hash"`
-	LeaseAttempt   int32              `json:"lease_attempt"`
-	LeaseExpiresAt pgtype.Timestamptz `json:"lease_expires_at"`
-	ResolvedAt     pgtype.Timestamptz `json:"resolved_at"`
-	ProbeKind      string             `json:"probe_kind"`
+	ID             string          `json:"id"`
+	MonitorID      string          `json:"monitor_id"`
+	LocationID     string          `json:"location_id"`
+	ScheduledFor   time.Time       `json:"scheduled_for"`
+	ProbeJson      json.RawMessage `json:"probe_json"`
+	TimeoutMs      int64           `json:"timeout_ms"`
+	Status         string          `json:"status"`
+	LeaseAgentID   sql.NullString  `json:"lease_agent_id"`
+	LeaseTokenHash []byte          `json:"lease_token_hash"`
+	LeaseAttempt   int32           `json:"lease_attempt"`
+	LeaseExpiresAt sql.NullTime    `json:"lease_expires_at"`
+	ResolvedAt     sql.NullTime    `json:"resolved_at"`
+	ProbeKind      string          `json:"probe_kind"`
 }
 
 type Incident struct {
-	ID               pgtype.UUID        `json:"id"`
-	MonitorID        pgtype.UUID        `json:"monitor_id"`
-	State            string             `json:"state"`
-	Severity         string             `json:"severity"`
-	OpenedAt         pgtype.Timestamptz `json:"opened_at"`
-	LastTransitionAt pgtype.Timestamptz `json:"last_transition_at"`
-	RecoveredAt      pgtype.Timestamptz `json:"recovered_at"`
+	ID               string       `json:"id"`
+	MonitorID        string       `json:"monitor_id"`
+	State            string       `json:"state"`
+	Severity         string       `json:"severity"`
+	OpenedAt         time.Time    `json:"opened_at"`
+	LastTransitionAt time.Time    `json:"last_transition_at"`
+	RecoveredAt      sql.NullTime `json:"recovered_at"`
 }
 
 type IncidentEvent struct {
-	ID            pgtype.UUID        `json:"id"`
-	IncidentID    pgtype.UUID        `json:"incident_id"`
-	PreviousState pgtype.Text        `json:"previous_state"`
-	State         string             `json:"state"`
-	Severity      string             `json:"severity"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID            string         `json:"id"`
+	IncidentID    string         `json:"incident_id"`
+	PreviousState sql.NullString `json:"previous_state"`
+	State         string         `json:"state"`
+	Severity      string         `json:"severity"`
+	CreatedAt     time.Time      `json:"created_at"`
 }
 
 type Location struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type LocationHealth struct {
-	MonitorID            pgtype.UUID        `json:"monitor_id"`
-	LocationID           pgtype.UUID        `json:"location_id"`
-	State                string             `json:"state"`
-	ConsecutiveFailures  int32              `json:"consecutive_failures"`
-	ConsecutiveSuccesses int32              `json:"consecutive_successes"`
-	LastObservedAt       pgtype.Timestamptz `json:"last_observed_at"`
-	LastTransitionAt     pgtype.Timestamptz `json:"last_transition_at"`
-	StaleAt              pgtype.Timestamptz `json:"stale_at"`
+	MonitorID            string       `json:"monitor_id"`
+	LocationID           string       `json:"location_id"`
+	State                string       `json:"state"`
+	ConsecutiveFailures  int32        `json:"consecutive_failures"`
+	ConsecutiveSuccesses int32        `json:"consecutive_successes"`
+	LastObservedAt       sql.NullTime `json:"last_observed_at"`
+	LastTransitionAt     sql.NullTime `json:"last_transition_at"`
+	StaleAt              sql.NullTime `json:"stale_at"`
 }
 
 type Monitor struct {
-	ID                pgtype.UUID        `json:"id"`
-	Name              string             `json:"name"`
-	Kind              string             `json:"kind"`
-	IntervalMs        int64              `json:"interval_ms"`
-	TimeoutMs         int64              `json:"timeout_ms"`
-	FailureThreshold  int32              `json:"failure_threshold"`
-	RecoveryThreshold int32              `json:"recovery_threshold"`
-	ProbeJson         []byte             `json:"probe_json"`
-	Enabled           bool               `json:"enabled"`
-	NextRunAt         pgtype.Timestamptz `json:"next_run_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	Kind              string          `json:"kind"`
+	IntervalMs        int64           `json:"interval_ms"`
+	TimeoutMs         int64           `json:"timeout_ms"`
+	FailureThreshold  int32           `json:"failure_threshold"`
+	RecoveryThreshold int32           `json:"recovery_threshold"`
+	ProbeJson         json.RawMessage `json:"probe_json"`
+	Enabled           bool            `json:"enabled"`
+	NextRunAt         time.Time       `json:"next_run_at"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
 type MonitorHealth struct {
-	MonitorID        pgtype.UUID        `json:"monitor_id"`
-	State            string             `json:"state"`
-	LastTransitionAt pgtype.Timestamptz `json:"last_transition_at"`
+	MonitorID        string       `json:"monitor_id"`
+	State            string       `json:"state"`
+	LastTransitionAt sql.NullTime `json:"last_transition_at"`
 }
 
 type MonitorLocation struct {
-	MonitorID  pgtype.UUID `json:"monitor_id"`
-	LocationID pgtype.UUID `json:"location_id"`
-	Required   bool        `json:"required"`
+	MonitorID  string `json:"monitor_id"`
+	LocationID string `json:"location_id"`
+	Required   bool   `json:"required"`
 }
 
 type ProbeResult struct {
-	ID                  pgtype.UUID        `json:"id"`
-	RunID               pgtype.UUID        `json:"run_id"`
-	AgentID             pgtype.UUID        `json:"agent_id"`
-	StartedAt           pgtype.Timestamptz `json:"started_at"`
-	FinishedAt          pgtype.Timestamptz `json:"finished_at"`
-	ReceivedAt          pgtype.Timestamptz `json:"received_at"`
-	Outcome             string             `json:"outcome"`
-	LatencyMs           int64              `json:"latency_ms"`
-	ObservedStatus      pgtype.Int4        `json:"observed_status"`
-	BodyAssertionPassed pgtype.Bool        `json:"body_assertion_passed"`
-	ErrorCode           pgtype.Text        `json:"error_code"`
-	DiagnosticSample    pgtype.Text        `json:"diagnostic_sample"`
-	ObservedValuesJson  []byte             `json:"observed_values_json"`
-	TlsNotAfter         pgtype.Timestamptz `json:"tls_not_after"`
-	ProtocolTimingsJson []byte             `json:"protocol_timings_json"`
+	ID                  string                `json:"id"`
+	RunID               string                `json:"run_id"`
+	AgentID             string                `json:"agent_id"`
+	StartedAt           time.Time             `json:"started_at"`
+	FinishedAt          time.Time             `json:"finished_at"`
+	ReceivedAt          time.Time             `json:"received_at"`
+	Outcome             string                `json:"outcome"`
+	LatencyMs           int64                 `json:"latency_ms"`
+	ObservedStatus      sql.NullInt32         `json:"observed_status"`
+	BodyAssertionPassed sql.NullBool          `json:"body_assertion_passed"`
+	ErrorCode           sql.NullString        `json:"error_code"`
+	DiagnosticSample    sql.NullString        `json:"diagnostic_sample"`
+	ObservedValuesJson  pqtype.NullRawMessage `json:"observed_values_json"`
+	TlsNotAfter         sql.NullTime          `json:"tls_not_after"`
+	ProtocolTimingsJson pqtype.NullRawMessage `json:"protocol_timings_json"`
 }
 
 type Session struct {
-	ID        pgtype.UUID        `json:"id"`
-	AdminID   pgtype.UUID        `json:"admin_id"`
-	TokenHash []byte             `json:"token_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	ID        string       `json:"id"`
+	AdminID   string       `json:"admin_id"`
+	TokenHash []byte       `json:"token_hash"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	RevokedAt sql.NullTime `json:"revoked_at"`
 }

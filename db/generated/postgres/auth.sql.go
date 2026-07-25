@@ -7,8 +7,8 @@ package dbpostgres
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
+	"time"
 )
 
 const countAdmins = `-- name: CountAdmins :one
@@ -16,7 +16,7 @@ SELECT COUNT(*) FROM admins
 `
 
 func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countAdmins)
+	row := q.db.QueryRowContext(ctx, countAdmins)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -28,14 +28,14 @@ VALUES ($1, $2, $3, $4)
 `
 
 type CreateAdminParams struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"password_hash"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateAdmin(ctx context.Context, arg CreateAdminParams) error {
-	_, err := q.db.Exec(ctx, createAdmin,
+	_, err := q.db.ExecContext(ctx, createAdmin,
 		arg.ID,
 		arg.Email,
 		arg.PasswordHash,
@@ -53,15 +53,15 @@ VALUES (
 `
 
 type CreateSessionParams struct {
-	ID        pgtype.UUID        `json:"id"`
-	AdminID   pgtype.UUID        `json:"admin_id"`
-	TokenHash []byte             `json:"token_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	ID        string       `json:"id"`
+	AdminID   string       `json:"admin_id"`
+	TokenHash []byte       `json:"token_hash"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	RevokedAt sql.NullTime `json:"revoked_at"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
-	_, err := q.db.Exec(ctx, createSession,
+	_, err := q.db.ExecContext(ctx, createSession,
 		arg.ID,
 		arg.AdminID,
 		arg.TokenHash,
@@ -80,12 +80,12 @@ WHERE token_hash = $1
 `
 
 type FindActiveSessionByTokenHashParams struct {
-	TokenHash []byte             `json:"token_hash"`
-	Now       pgtype.Timestamptz `json:"now"`
+	TokenHash []byte    `json:"token_hash"`
+	Now       time.Time `json:"now"`
 }
 
 func (q *Queries) FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error) {
-	row := q.db.QueryRow(ctx, findActiveSessionByTokenHash, arg.TokenHash, arg.Now)
+	row := q.db.QueryRowContext(ctx, findActiveSessionByTokenHash, arg.TokenHash, arg.Now)
 	var i Session
 	err := row.Scan(
 		&i.ID,
@@ -104,7 +104,7 @@ WHERE email = $1
 `
 
 func (q *Queries) FindAdminByEmail(ctx context.Context, email string) (Admin, error) {
-	row := q.db.QueryRow(ctx, findAdminByEmail, email)
+	row := q.db.QueryRowContext(ctx, findAdminByEmail, email)
 	var i Admin
 	err := row.Scan(
 		&i.ID,

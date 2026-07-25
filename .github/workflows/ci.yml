@@ -8,6 +8,19 @@ on:
 jobs:
   root:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.3-alpine3.23
+        env:
+          POSTGRES_DB: xisnove
+          POSTGRES_PASSWORD: xisnove
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d xisnove"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -25,6 +38,8 @@ jobs:
       - run: git diff --exit-code
       - run: go vet ./...
       - run: go test -race ./...
+        env:
+          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
       - name: Check OpenAPI compatibility
         if: github.event_name == 'pull_request'
         env:

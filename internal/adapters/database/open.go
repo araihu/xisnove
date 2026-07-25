@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	postgresstore "github.com/araihu/xisnove/internal/adapters/postgres"
 	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
 	"github.com/araihu/xisnove/internal/adapters/tursolocal"
 	"github.com/araihu/xisnove/internal/application"
@@ -34,11 +35,33 @@ func Open(ctx context.Context, config Config) (*Handle, error) {
 		return openSQLite(ctx, config)
 	case ProfileTursoLocal:
 		return openTursoLocal(ctx, config)
-	case ProfileTursoCloud, ProfilePostgres:
+	case ProfilePostgres:
+		return openPostgres(ctx, config)
+	case ProfileTursoCloud:
 		return nil, fmt.Errorf("%s is not implemented", config)
 	default:
 		panic("validated database profile is not handled")
 	}
+}
+
+func openPostgres(ctx context.Context, config Config) (*Handle, error) {
+	db, err := postgresstore.Open(ctx, config.URL)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", config, err)
+	}
+	return &Handle{
+		DB:          db,
+		Store:       postgresstore.NewStore(db),
+		Profile:     config.Profile,
+		ReplicaSafe: config.Profile.ReplicaSafe(),
+		migrate: func(ctx context.Context) error {
+			return postgresstore.Migrate(ctx, db)
+		},
+		ready: func(ctx context.Context) error {
+			return postgresstore.Ready(ctx, db)
+		},
+		close: db.Close,
+	}, nil
 }
 
 func openTursoLocal(ctx context.Context, config Config) (*Handle, error) {

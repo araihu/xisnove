@@ -7,8 +7,11 @@ package dbpostgres
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/lib/pq"
 )
 
 const claimProbeRun = `-- name: ClaimProbeRun :one
@@ -38,20 +41,20 @@ RETURNING r.id, r.monitor_id, r.location_id, r.scheduled_for, r.probe_json, r.ti
 `
 
 type ClaimProbeRunParams struct {
-	AgentID        pgtype.UUID        `json:"agent_id"`
-	LeaseTokenHash []byte             `json:"lease_token_hash"`
-	LeaseExpiresAt pgtype.Timestamptz `json:"lease_expires_at"`
-	Now            pgtype.Timestamptz `json:"now"`
-	Capabilities   []string           `json:"capabilities"`
+	AgentID        sql.NullString `json:"agent_id"`
+	LeaseTokenHash []byte         `json:"lease_token_hash"`
+	LeaseExpiresAt sql.NullTime   `json:"lease_expires_at"`
+	Now            sql.NullTime   `json:"now"`
+	Capabilities   []string       `json:"capabilities"`
 }
 
 func (q *Queries) ClaimProbeRun(ctx context.Context, arg ClaimProbeRunParams) (CheckRun, error) {
-	row := q.db.QueryRow(ctx, claimProbeRun,
+	row := q.db.QueryRowContext(ctx, claimProbeRun,
 		arg.AgentID,
 		arg.LeaseTokenHash,
 		arg.LeaseExpiresAt,
 		arg.Now,
-		arg.Capabilities,
+		pq.Array(arg.Capabilities),
 	)
 	var i CheckRun
 	err := row.Scan(
@@ -76,9 +79,9 @@ const databaseNow = `-- name: DatabaseNow :one
 SELECT clock_timestamp()::timestamptz AS database_now
 `
 
-func (q *Queries) DatabaseNow(ctx context.Context) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, databaseNow)
-	var database_now pgtype.Timestamptz
+func (q *Queries) DatabaseNow(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, databaseNow)
+	var database_now time.Time
 	err := row.Scan(&database_now)
 	return database_now, err
 }
@@ -89,8 +92,8 @@ FROM check_runs
 WHERE id = $1
 `
 
-func (q *Queries) GetCheckRun(ctx context.Context, id pgtype.UUID) (CheckRun, error) {
-	row := q.db.QueryRow(ctx, getCheckRun, id)
+func (q *Queries) GetCheckRun(ctx context.Context, id string) (CheckRun, error) {
+	row := q.db.QueryRowContext(ctx, getCheckRun, id)
 	var i CheckRun
 	err := row.Scan(
 		&i.ID,
@@ -122,17 +125,17 @@ ON CONFLICT (monitor_id, location_id, scheduled_for) DO NOTHING
 `
 
 type InsertScheduledRunParams struct {
-	ID           pgtype.UUID        `json:"id"`
-	MonitorID    pgtype.UUID        `json:"monitor_id"`
-	LocationID   pgtype.UUID        `json:"location_id"`
-	ScheduledFor pgtype.Timestamptz `json:"scheduled_for"`
-	ProbeJson    []byte             `json:"probe_json"`
-	ProbeKind    string             `json:"probe_kind"`
-	TimeoutMs    int64              `json:"timeout_ms"`
+	ID           string          `json:"id"`
+	MonitorID    string          `json:"monitor_id"`
+	LocationID   string          `json:"location_id"`
+	ScheduledFor time.Time       `json:"scheduled_for"`
+	ProbeJson    json.RawMessage `json:"probe_json"`
+	ProbeKind    string          `json:"probe_kind"`
+	TimeoutMs    int64           `json:"timeout_ms"`
 }
 
 func (q *Queries) InsertScheduledRun(ctx context.Context, arg InsertScheduledRunParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertScheduledRun,
+	result, err := q.db.ExecContext(ctx, insertScheduledRun,
 		arg.ID,
 		arg.MonitorID,
 		arg.LocationID,
@@ -144,7 +147,7 @@ func (q *Queries) InsertScheduledRun(ctx context.Context, arg InsertScheduledRun
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }
 
 const resolveCheckRun = `-- name: ResolveCheckRun :execrows
@@ -158,14 +161,14 @@ WHERE id = $2
 `
 
 type ResolveCheckRunParams struct {
-	ResolvedAt     pgtype.Timestamptz `json:"resolved_at"`
-	ID             pgtype.UUID        `json:"id"`
-	AgentID        pgtype.UUID        `json:"agent_id"`
-	LeaseTokenHash []byte             `json:"lease_token_hash"`
+	ResolvedAt     sql.NullTime   `json:"resolved_at"`
+	ID             string         `json:"id"`
+	AgentID        sql.NullString `json:"agent_id"`
+	LeaseTokenHash []byte         `json:"lease_token_hash"`
 }
 
 func (q *Queries) ResolveCheckRun(ctx context.Context, arg ResolveCheckRunParams) (int64, error) {
-	result, err := q.db.Exec(ctx, resolveCheckRun,
+	result, err := q.db.ExecContext(ctx, resolveCheckRun,
 		arg.ResolvedAt,
 		arg.ID,
 		arg.AgentID,
@@ -174,5 +177,5 @@ func (q *Queries) ResolveCheckRun(ctx context.Context, arg ResolveCheckRunParams
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }

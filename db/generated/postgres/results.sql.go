@@ -7,8 +7,10 @@ package dbpostgres
 
 import (
 	"context"
+	"database/sql"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const getProbeResultByID = `-- name: GetProbeResultByID :one
@@ -17,8 +19,8 @@ FROM probe_results
 WHERE id = $1
 `
 
-func (q *Queries) GetProbeResultByID(ctx context.Context, id pgtype.UUID) (ProbeResult, error) {
-	row := q.db.QueryRow(ctx, getProbeResultByID, id)
+func (q *Queries) GetProbeResultByID(ctx context.Context, id string) (ProbeResult, error) {
+	row := q.db.QueryRowContext(ctx, getProbeResultByID, id)
 	var i ProbeResult
 	err := row.Scan(
 		&i.ID,
@@ -46,8 +48,8 @@ FROM probe_results
 WHERE run_id = $1
 `
 
-func (q *Queries) GetProbeResultByRun(ctx context.Context, runID pgtype.UUID) (ProbeResult, error) {
-	row := q.db.QueryRow(ctx, getProbeResultByRun, runID)
+func (q *Queries) GetProbeResultByRun(ctx context.Context, runID string) (ProbeResult, error) {
+	row := q.db.QueryRowContext(ctx, getProbeResultByRun, runID)
 	var i ProbeResult
 	err := row.Scan(
 		&i.ID,
@@ -86,25 +88,25 @@ ON CONFLICT DO NOTHING
 `
 
 type InsertProbeResultParams struct {
-	ID                  pgtype.UUID        `json:"id"`
-	RunID               pgtype.UUID        `json:"run_id"`
-	AgentID             pgtype.UUID        `json:"agent_id"`
-	StartedAt           pgtype.Timestamptz `json:"started_at"`
-	FinishedAt          pgtype.Timestamptz `json:"finished_at"`
-	ReceivedAt          pgtype.Timestamptz `json:"received_at"`
-	Outcome             string             `json:"outcome"`
-	LatencyMs           int64              `json:"latency_ms"`
-	ObservedStatus      pgtype.Int4        `json:"observed_status"`
-	BodyAssertionPassed pgtype.Bool        `json:"body_assertion_passed"`
-	ErrorCode           pgtype.Text        `json:"error_code"`
-	DiagnosticSample    pgtype.Text        `json:"diagnostic_sample"`
-	ObservedValuesJson  []byte             `json:"observed_values_json"`
-	TlsNotAfter         pgtype.Timestamptz `json:"tls_not_after"`
-	ProtocolTimingsJson []byte             `json:"protocol_timings_json"`
+	ID                  string                `json:"id"`
+	RunID               string                `json:"run_id"`
+	AgentID             string                `json:"agent_id"`
+	StartedAt           time.Time             `json:"started_at"`
+	FinishedAt          time.Time             `json:"finished_at"`
+	ReceivedAt          time.Time             `json:"received_at"`
+	Outcome             string                `json:"outcome"`
+	LatencyMs           int64                 `json:"latency_ms"`
+	ObservedStatus      sql.NullInt32         `json:"observed_status"`
+	BodyAssertionPassed sql.NullBool          `json:"body_assertion_passed"`
+	ErrorCode           sql.NullString        `json:"error_code"`
+	DiagnosticSample    sql.NullString        `json:"diagnostic_sample"`
+	ObservedValuesJson  pqtype.NullRawMessage `json:"observed_values_json"`
+	TlsNotAfter         sql.NullTime          `json:"tls_not_after"`
+	ProtocolTimingsJson pqtype.NullRawMessage `json:"protocol_timings_json"`
 }
 
 func (q *Queries) InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertProbeResult,
+	result, err := q.db.ExecContext(ctx, insertProbeResult,
 		arg.ID,
 		arg.RunID,
 		arg.AgentID,
@@ -124,5 +126,5 @@ func (q *Queries) InsertProbeResult(ctx context.Context, arg InsertProbeResultPa
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }

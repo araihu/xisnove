@@ -6,8 +6,7 @@ package dbpostgres
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 type Querier interface {
@@ -24,26 +23,26 @@ type Querier interface {
 	CreateLocation(ctx context.Context, arg CreateLocationParams) error
 	CreateMonitor(ctx context.Context, arg CreateMonitorParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
-	DatabaseNow(ctx context.Context) (pgtype.Timestamptz, error)
+	DatabaseNow(ctx context.Context) (time.Time, error)
 	FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error)
 	FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error)
 	FindAdminByEmail(ctx context.Context, email string) (Admin, error)
-	GetActiveIncidentByMonitor(ctx context.Context, monitorID pgtype.UUID) (Incident, error)
-	GetAgent(ctx context.Context, id pgtype.UUID) (Agent, error)
-	GetCheckRun(ctx context.Context, id pgtype.UUID) (CheckRun, error)
-	GetLocation(ctx context.Context, id pgtype.UUID) (Location, error)
+	GetActiveIncidentByMonitor(ctx context.Context, monitorID string) (Incident, error)
+	GetAgent(ctx context.Context, id string) (Agent, error)
+	GetCheckRun(ctx context.Context, id string) (CheckRun, error)
+	GetLocation(ctx context.Context, id string) (Location, error)
 	GetLocationHealth(ctx context.Context, arg GetLocationHealthParams) (LocationHealth, error)
-	GetMonitor(ctx context.Context, id pgtype.UUID) (Monitor, error)
-	GetMonitorHealth(ctx context.Context, monitorID pgtype.UUID) (MonitorHealth, error)
-	GetMonitorLocation(ctx context.Context, monitorID pgtype.UUID) (MonitorLocation, error)
-	GetProbeResultByID(ctx context.Context, id pgtype.UUID) (ProbeResult, error)
-	GetProbeResultByRun(ctx context.Context, runID pgtype.UUID) (ProbeResult, error)
+	GetMonitor(ctx context.Context, id string) (Monitor, error)
+	GetMonitorHealth(ctx context.Context, monitorID string) (MonitorHealth, error)
+	GetMonitorLocation(ctx context.Context, monitorID string) (MonitorLocation, error)
+	GetProbeResultByID(ctx context.Context, id string) (ProbeResult, error)
+	GetProbeResultByRun(ctx context.Context, runID string) (ProbeResult, error)
 	InsertIncidentEvent(ctx context.Context, arg InsertIncidentEventParams) error
 	InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error)
 	InsertScheduledRun(ctx context.Context, arg InsertScheduledRunParams) (int64, error)
 	ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error)
-	ListLocationHealth(ctx context.Context, monitorID pgtype.UUID) ([]ListLocationHealthRow, error)
-	ListRequiredLocationHealth(ctx context.Context, monitorID pgtype.UUID) ([]ListRequiredLocationHealthRow, error)
+	ListLocationHealth(ctx context.Context, monitorID string) ([]ListLocationHealthRow, error)
+	ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error)
 	ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error)
 	OpenIncident(ctx context.Context, arg OpenIncidentParams) error
 	RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error)

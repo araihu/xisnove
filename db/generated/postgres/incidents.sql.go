@@ -7,8 +7,8 @@ package dbpostgres
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
+	"time"
 )
 
 const changeIncident = `-- name: ChangeIncident :execrows
@@ -21,14 +21,14 @@ WHERE id = $4
 `
 
 type ChangeIncidentParams struct {
-	State            string             `json:"state"`
-	Severity         string             `json:"severity"`
-	LastTransitionAt pgtype.Timestamptz `json:"last_transition_at"`
-	ID               pgtype.UUID        `json:"id"`
+	State            string    `json:"state"`
+	Severity         string    `json:"severity"`
+	LastTransitionAt time.Time `json:"last_transition_at"`
+	ID               string    `json:"id"`
 }
 
 func (q *Queries) ChangeIncident(ctx context.Context, arg ChangeIncidentParams) (int64, error) {
-	result, err := q.db.Exec(ctx, changeIncident,
+	result, err := q.db.ExecContext(ctx, changeIncident,
 		arg.State,
 		arg.Severity,
 		arg.LastTransitionAt,
@@ -37,7 +37,7 @@ func (q *Queries) ChangeIncident(ctx context.Context, arg ChangeIncidentParams) 
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }
 
 const getActiveIncidentByMonitor = `-- name: GetActiveIncidentByMonitor :one
@@ -47,8 +47,8 @@ WHERE monitor_id = $1
   AND recovered_at IS NULL
 `
 
-func (q *Queries) GetActiveIncidentByMonitor(ctx context.Context, monitorID pgtype.UUID) (Incident, error) {
-	row := q.db.QueryRow(ctx, getActiveIncidentByMonitor, monitorID)
+func (q *Queries) GetActiveIncidentByMonitor(ctx context.Context, monitorID string) (Incident, error) {
+	row := q.db.QueryRowContext(ctx, getActiveIncidentByMonitor, monitorID)
 	var i Incident
 	err := row.Scan(
 		&i.ID,
@@ -72,16 +72,16 @@ INSERT INTO incident_events (
 `
 
 type InsertIncidentEventParams struct {
-	ID            pgtype.UUID        `json:"id"`
-	IncidentID    pgtype.UUID        `json:"incident_id"`
-	PreviousState pgtype.Text        `json:"previous_state"`
-	State         string             `json:"state"`
-	Severity      string             `json:"severity"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID            string         `json:"id"`
+	IncidentID    string         `json:"incident_id"`
+	PreviousState sql.NullString `json:"previous_state"`
+	State         string         `json:"state"`
+	Severity      string         `json:"severity"`
+	CreatedAt     time.Time      `json:"created_at"`
 }
 
 func (q *Queries) InsertIncidentEvent(ctx context.Context, arg InsertIncidentEventParams) error {
-	_, err := q.db.Exec(ctx, insertIncidentEvent,
+	_, err := q.db.ExecContext(ctx, insertIncidentEvent,
 		arg.ID,
 		arg.IncidentID,
 		arg.PreviousState,
@@ -102,16 +102,16 @@ INSERT INTO incidents (
 `
 
 type OpenIncidentParams struct {
-	ID               pgtype.UUID        `json:"id"`
-	MonitorID        pgtype.UUID        `json:"monitor_id"`
-	State            string             `json:"state"`
-	Severity         string             `json:"severity"`
-	OpenedAt         pgtype.Timestamptz `json:"opened_at"`
-	LastTransitionAt pgtype.Timestamptz `json:"last_transition_at"`
+	ID               string    `json:"id"`
+	MonitorID        string    `json:"monitor_id"`
+	State            string    `json:"state"`
+	Severity         string    `json:"severity"`
+	OpenedAt         time.Time `json:"opened_at"`
+	LastTransitionAt time.Time `json:"last_transition_at"`
 }
 
 func (q *Queries) OpenIncident(ctx context.Context, arg OpenIncidentParams) error {
-	_, err := q.db.Exec(ctx, openIncident,
+	_, err := q.db.ExecContext(ctx, openIncident,
 		arg.ID,
 		arg.MonitorID,
 		arg.State,
@@ -132,14 +132,14 @@ WHERE id = $4
 `
 
 type RecoverIncidentParams struct {
-	State            string             `json:"state"`
-	LastTransitionAt pgtype.Timestamptz `json:"last_transition_at"`
-	RecoveredAt      pgtype.Timestamptz `json:"recovered_at"`
-	ID               pgtype.UUID        `json:"id"`
+	State            string       `json:"state"`
+	LastTransitionAt time.Time    `json:"last_transition_at"`
+	RecoveredAt      sql.NullTime `json:"recovered_at"`
+	ID               string       `json:"id"`
 }
 
 func (q *Queries) RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recoverIncident,
+	result, err := q.db.ExecContext(ctx, recoverIncident,
 		arg.State,
 		arg.LastTransitionAt,
 		arg.RecoveredAt,
@@ -148,5 +148,5 @@ func (q *Queries) RecoverIncident(ctx context.Context, arg RecoverIncidentParams
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }

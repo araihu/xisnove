@@ -7,8 +7,9 @@ package dbpostgres
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
+	"encoding/json"
+	"time"
 )
 
 const consumeAgentEnrollmentToken = `-- name: ConsumeAgentEnrollmentToken :one
@@ -21,13 +22,13 @@ RETURNING id, location_id, token_hash, expires_at, consumed_at, created_at
 `
 
 type ConsumeAgentEnrollmentTokenParams struct {
-	ConsumedAt pgtype.Timestamptz `json:"consumed_at"`
-	TokenHash  []byte             `json:"token_hash"`
-	Now        pgtype.Timestamptz `json:"now"`
+	ConsumedAt sql.NullTime `json:"consumed_at"`
+	TokenHash  []byte       `json:"token_hash"`
+	Now        time.Time    `json:"now"`
 }
 
 func (q *Queries) ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error) {
-	row := q.db.QueryRow(ctx, consumeAgentEnrollmentToken, arg.ConsumedAt, arg.TokenHash, arg.Now)
+	row := q.db.QueryRowContext(ctx, consumeAgentEnrollmentToken, arg.ConsumedAt, arg.TokenHash, arg.Now)
 	var i AgentEnrollmentToken
 	err := row.Scan(
 		&i.ID,
@@ -52,20 +53,20 @@ INSERT INTO agents (
 `
 
 type CreateAgentParams struct {
-	ID                   pgtype.UUID        `json:"id"`
-	LocationID           pgtype.UUID        `json:"location_id"`
-	Name                 string             `json:"name"`
-	CredentialHash       []byte             `json:"credential_hash"`
-	CredentialGeneration int64              `json:"credential_generation"`
-	CapabilitiesJson     []byte             `json:"capabilities_json"`
-	Version              pgtype.Text        `json:"version"`
-	LastSeenAt           pgtype.Timestamptz `json:"last_seen_at"`
-	RevokedAt            pgtype.Timestamptz `json:"revoked_at"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	ID                   string          `json:"id"`
+	LocationID           string          `json:"location_id"`
+	Name                 string          `json:"name"`
+	CredentialHash       []byte          `json:"credential_hash"`
+	CredentialGeneration int64           `json:"credential_generation"`
+	CapabilitiesJson     json.RawMessage `json:"capabilities_json"`
+	Version              sql.NullString  `json:"version"`
+	LastSeenAt           sql.NullTime    `json:"last_seen_at"`
+	RevokedAt            sql.NullTime    `json:"revoked_at"`
+	CreatedAt            time.Time       `json:"created_at"`
 }
 
 func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error {
-	_, err := q.db.Exec(ctx, createAgent,
+	_, err := q.db.ExecContext(ctx, createAgent,
 		arg.ID,
 		arg.LocationID,
 		arg.Name,
@@ -90,15 +91,15 @@ INSERT INTO agent_enrollment_tokens (
 `
 
 type CreateAgentEnrollmentTokenParams struct {
-	ID         pgtype.UUID        `json:"id"`
-	LocationID pgtype.UUID        `json:"location_id"`
-	TokenHash  []byte             `json:"token_hash"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID         string    `json:"id"`
+	LocationID string    `json:"location_id"`
+	TokenHash  []byte    `json:"token_hash"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgentEnrollmentTokenParams) error {
-	_, err := q.db.Exec(ctx, createAgentEnrollmentToken,
+	_, err := q.db.ExecContext(ctx, createAgentEnrollmentToken,
 		arg.ID,
 		arg.LocationID,
 		arg.TokenHash,
@@ -116,7 +117,7 @@ WHERE credential_hash = $1
 `
 
 func (q *Queries) FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error) {
-	row := q.db.QueryRow(ctx, findActiveAgentByCredentialHash, credentialHash)
+	row := q.db.QueryRowContext(ctx, findActiveAgentByCredentialHash, credentialHash)
 	var i Agent
 	err := row.Scan(
 		&i.ID,
@@ -139,8 +140,8 @@ FROM agents
 WHERE id = $1
 `
 
-func (q *Queries) GetAgent(ctx context.Context, id pgtype.UUID) (Agent, error) {
-	row := q.db.QueryRow(ctx, getAgent, id)
+func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
+	row := q.db.QueryRowContext(ctx, getAgent, id)
 	var i Agent
 	err := row.Scan(
 		&i.ID,
@@ -169,15 +170,15 @@ WHERE id = $5
 `
 
 type UpdateAgentHeartbeatParams struct {
-	Version              pgtype.Text        `json:"version"`
-	CredentialGeneration int64              `json:"credential_generation"`
-	CapabilitiesJson     []byte             `json:"capabilities_json"`
-	LastSeenAt           pgtype.Timestamptz `json:"last_seen_at"`
-	ID                   pgtype.UUID        `json:"id"`
+	Version              sql.NullString  `json:"version"`
+	CredentialGeneration int64           `json:"credential_generation"`
+	CapabilitiesJson     json.RawMessage `json:"capabilities_json"`
+	LastSeenAt           sql.NullTime    `json:"last_seen_at"`
+	ID                   string          `json:"id"`
 }
 
 func (q *Queries) UpdateAgentHeartbeat(ctx context.Context, arg UpdateAgentHeartbeatParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateAgentHeartbeat,
+	result, err := q.db.ExecContext(ctx, updateAgentHeartbeat,
 		arg.Version,
 		arg.CredentialGeneration,
 		arg.CapabilitiesJson,
@@ -187,5 +188,5 @@ func (q *Queries) UpdateAgentHeartbeat(ctx context.Context, arg UpdateAgentHeart
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }

@@ -1,19 +1,19 @@
-package sqlitecompat
+package postgres
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 
-	migrations "github.com/araihu/xisnove/db/migrations/sqlite"
+	migrations "github.com/araihu/xisnove/db/migrations/postgres"
 	"github.com/pressly/goose/v3"
 )
 
-const LatestMigrationVersion = 3
+const LatestMigrationVersion = migrations.LatestVersion
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	provider, err := goose.NewProvider(
-		goose.DialectSQLite3,
+		goose.DialectPostgres,
 		db,
 		migrations.Files,
 		goose.WithTableName("schema_migrations"),
@@ -36,7 +36,7 @@ func Ready(ctx context.Context, db *sql.DB) error {
 		ctx,
 		`SELECT COALESCE(MAX(version_id), 0)
 		 FROM schema_migrations
-		 WHERE is_applied = 1`,
+		 WHERE is_applied`,
 	).Scan(&version)
 	if err != nil {
 		return fmt.Errorf("read schema version: %w", err)

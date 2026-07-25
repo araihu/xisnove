@@ -14,6 +14,12 @@ import (
 
 type Factory func(*testing.T) application.Store
 
+const (
+	locationID = domain.LocationID("00000000-0000-4000-8000-000000000001")
+	monitorID  = domain.MonitorID("00000000-0000-4000-8000-000000000002")
+	runID      = domain.CheckRunID("00000000-0000-4000-8000-000000000003")
+)
+
 func Run(t *testing.T, factory Factory) {
 	t.Helper()
 
@@ -43,7 +49,7 @@ func testTransactionRollback(t *testing.T, store application.Store) {
 	stop := errors.New("stop")
 
 	err := store.WithinTx(ctx, func(repositories application.Repositories) error {
-		location := mustLocation(t, "location-1")
+		location := mustLocation(t, locationID)
 		if err := repositories.Locations.Create(ctx, location); err != nil {
 			return err
 		}
@@ -52,7 +58,7 @@ func testTransactionRollback(t *testing.T, store application.Store) {
 	if !errors.Is(err, stop) {
 		t.Fatalf("WithinTx() error = %v, want %v", err, stop)
 	}
-	_, err = store.Repositories().Locations.Get(ctx, "location-1")
+	_, err = store.Repositories().Locations.Get(ctx, locationID)
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("Get() error = %v, want ErrNotFound", err)
 	}
@@ -63,7 +69,7 @@ func testDuplicateResult(t *testing.T, store application.Store) {
 	ctx := context.Background()
 	fixture := seed(t, store, 1)
 	result := application.ProbeResultRecord{
-		ID:         "result-1",
+		ID:         "00000000-0000-4000-8000-000000000004",
 		RunID:      fixture.runID,
 		AgentID:    fixture.agentIDs[0],
 		StartedAt:  fixture.now,
@@ -80,7 +86,7 @@ func testDuplicateResult(t *testing.T, store application.Store) {
 	if err != nil || inserted {
 		t.Fatalf("duplicate ID Insert() = %v, %v", inserted, err)
 	}
-	result.ID = "result-2"
+	result.ID = "00000000-0000-4000-8000-000000000005"
 	inserted, err = store.Repositories().Results.Insert(ctx, result)
 	if err != nil || inserted {
 		t.Fatalf("duplicate run Insert() = %v, %v", inserted, err)
@@ -92,7 +98,7 @@ func testOneActiveIncident(t *testing.T, store application.Store) {
 	ctx := context.Background()
 	fixture := seed(t, store, 1)
 	first := domain.Incident{
-		ID:               "incident-1",
+		ID:               "00000000-0000-4000-8000-000000000006",
 		MonitorID:        fixture.monitor.ID,
 		State:            domain.HealthDown,
 		Severity:         domain.IncidentCritical,
@@ -103,7 +109,7 @@ func testOneActiveIncident(t *testing.T, store application.Store) {
 		t.Fatal(err)
 	}
 	second := first
-	second.ID = "incident-2"
+	second.ID = "00000000-0000-4000-8000-000000000007"
 	err := store.Repositories().Incidents.Open(ctx, second)
 	if !errors.Is(err, application.ErrConflict) {
 		t.Fatalf("second Open() error = %v, want ErrConflict", err)
@@ -227,7 +233,7 @@ func testScheduleIdempotency(t *testing.T, store application.Store) {
 	ctx := context.Background()
 	fixture := seedWithoutRun(t, store, 1)
 	run := application.NewRunRecord{
-		ID:           "run-1",
+		ID:           runID,
 		MonitorID:    fixture.monitor.ID,
 		LocationID:   fixture.location.ID,
 		ScheduledFor: fixture.now,
@@ -238,7 +244,7 @@ func testScheduleIdempotency(t *testing.T, store application.Store) {
 	if err != nil || !inserted {
 		t.Fatalf("first Insert() = %v, %v", inserted, err)
 	}
-	run.ID = "run-duplicate"
+	run.ID = "00000000-0000-4000-8000-000000000008"
 	inserted, err = store.Repositories().Runs.Insert(ctx, run)
 	if err != nil || inserted {
 		t.Fatalf("duplicate schedule Insert() = %v, %v", inserted, err)
@@ -275,7 +281,7 @@ type seeded struct {
 func seed(t *testing.T, store application.Store, agentCount int) seeded {
 	t.Helper()
 	fixture := seedWithoutRun(t, store, agentCount)
-	fixture.runID = "run-1"
+	fixture.runID = runID
 	inserted, err := store.Repositories().Runs.Insert(
 		context.Background(),
 		application.NewRunRecord{
@@ -297,12 +303,12 @@ func seedWithoutRun(t *testing.T, store application.Store, agentCount int) seede
 	t.Helper()
 	ctx := context.Background()
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
-	location := mustLocation(t, "location-1")
+	location := mustLocation(t, locationID)
 	if err := store.Repositories().Locations.Create(ctx, location); err != nil {
 		t.Fatal(err)
 	}
 	monitor, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
-		ID:                "monitor-1",
+		ID:                monitorID,
 		Name:              "website",
 		Interval:          time.Minute,
 		Timeout:           5 * time.Second,
@@ -334,7 +340,10 @@ func seedWithoutRun(t *testing.T, store application.Store, agentCount int) seede
 
 	agentIDs := make([]domain.AgentID, 0, agentCount)
 	for index := range agentCount {
-		id := domain.AgentID(fmt.Sprintf("agent-%d", index+1))
+		id := domain.AgentID(fmt.Sprintf(
+			"00000000-0000-4000-8001-%012d",
+			index+1,
+		))
 		agent, err := domain.NewAgent(domain.NewAgentParams{
 			ID:                   id,
 			LocationID:           location.ID,

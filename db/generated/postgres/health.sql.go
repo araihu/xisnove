@@ -7,8 +7,7 @@ package dbpostgres
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const claimStaleLocationHealth = `-- name: ClaimStaleLocationHealth :execrows
@@ -25,14 +24,14 @@ WHERE monitor_id = $2
 `
 
 type ClaimStaleLocationHealthParams struct {
-	TransitionAt pgtype.Timestamptz `json:"transition_at"`
-	MonitorID    pgtype.UUID        `json:"monitor_id"`
-	LocationID   pgtype.UUID        `json:"location_id"`
-	StaleAt      pgtype.Timestamptz `json:"stale_at"`
+	TransitionAt sql.NullTime `json:"transition_at"`
+	MonitorID    string       `json:"monitor_id"`
+	LocationID   string       `json:"location_id"`
+	StaleAt      sql.NullTime `json:"stale_at"`
 }
 
 func (q *Queries) ClaimStaleLocationHealth(ctx context.Context, arg ClaimStaleLocationHealthParams) (int64, error) {
-	result, err := q.db.Exec(ctx, claimStaleLocationHealth,
+	result, err := q.db.ExecContext(ctx, claimStaleLocationHealth,
 		arg.TransitionAt,
 		arg.MonitorID,
 		arg.LocationID,
@@ -41,7 +40,7 @@ func (q *Queries) ClaimStaleLocationHealth(ctx context.Context, arg ClaimStaleLo
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected()
 }
 
 const getLocationHealth = `-- name: GetLocationHealth :one
@@ -52,12 +51,12 @@ WHERE monitor_id = $1
 `
 
 type GetLocationHealthParams struct {
-	MonitorID  pgtype.UUID `json:"monitor_id"`
-	LocationID pgtype.UUID `json:"location_id"`
+	MonitorID  string `json:"monitor_id"`
+	LocationID string `json:"location_id"`
 }
 
 func (q *Queries) GetLocationHealth(ctx context.Context, arg GetLocationHealthParams) (LocationHealth, error) {
-	row := q.db.QueryRow(ctx, getLocationHealth, arg.MonitorID, arg.LocationID)
+	row := q.db.QueryRowContext(ctx, getLocationHealth, arg.MonitorID, arg.LocationID)
 	var i LocationHealth
 	err := row.Scan(
 		&i.MonitorID,
@@ -78,8 +77,8 @@ FROM monitor_health
 WHERE monitor_id = $1
 `
 
-func (q *Queries) GetMonitorHealth(ctx context.Context, monitorID pgtype.UUID) (MonitorHealth, error) {
-	row := q.db.QueryRow(ctx, getMonitorHealth, monitorID)
+func (q *Queries) GetMonitorHealth(ctx context.Context, monitorID string) (MonitorHealth, error) {
+	row := q.db.QueryRowContext(ctx, getMonitorHealth, monitorID)
 	var i MonitorHealth
 	err := row.Scan(&i.MonitorID, &i.State, &i.LastTransitionAt)
 	return i, err
@@ -104,18 +103,18 @@ ORDER BY ml.location_id
 `
 
 type ListLocationHealthRow struct {
-	MonitorID            pgtype.UUID        `json:"monitor_id"`
-	LocationID           pgtype.UUID        `json:"location_id"`
-	State                string             `json:"state"`
-	ConsecutiveFailures  int32              `json:"consecutive_failures"`
-	ConsecutiveSuccesses int32              `json:"consecutive_successes"`
-	LastObservedAt       pgtype.Timestamptz `json:"last_observed_at"`
-	LastTransitionAt     pgtype.Timestamptz `json:"last_transition_at"`
-	StaleAt              pgtype.Timestamptz `json:"stale_at"`
+	MonitorID            string       `json:"monitor_id"`
+	LocationID           string       `json:"location_id"`
+	State                string       `json:"state"`
+	ConsecutiveFailures  int32        `json:"consecutive_failures"`
+	ConsecutiveSuccesses int32        `json:"consecutive_successes"`
+	LastObservedAt       sql.NullTime `json:"last_observed_at"`
+	LastTransitionAt     sql.NullTime `json:"last_transition_at"`
+	StaleAt              sql.NullTime `json:"stale_at"`
 }
 
-func (q *Queries) ListLocationHealth(ctx context.Context, monitorID pgtype.UUID) ([]ListLocationHealthRow, error) {
-	rows, err := q.db.Query(ctx, listLocationHealth, monitorID)
+func (q *Queries) ListLocationHealth(ctx context.Context, monitorID string) ([]ListLocationHealthRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLocationHealth, monitorID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +135,9 @@ func (q *Queries) ListLocationHealth(ctx context.Context, monitorID pgtype.UUID)
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -163,18 +165,18 @@ ORDER BY ml.location_id
 `
 
 type ListRequiredLocationHealthRow struct {
-	MonitorID            pgtype.UUID        `json:"monitor_id"`
-	LocationID           pgtype.UUID        `json:"location_id"`
-	State                string             `json:"state"`
-	ConsecutiveFailures  int32              `json:"consecutive_failures"`
-	ConsecutiveSuccesses int32              `json:"consecutive_successes"`
-	LastObservedAt       pgtype.Timestamptz `json:"last_observed_at"`
-	LastTransitionAt     pgtype.Timestamptz `json:"last_transition_at"`
-	StaleAt              pgtype.Timestamptz `json:"stale_at"`
+	MonitorID            string       `json:"monitor_id"`
+	LocationID           string       `json:"location_id"`
+	State                string       `json:"state"`
+	ConsecutiveFailures  int32        `json:"consecutive_failures"`
+	ConsecutiveSuccesses int32        `json:"consecutive_successes"`
+	LastObservedAt       sql.NullTime `json:"last_observed_at"`
+	LastTransitionAt     sql.NullTime `json:"last_transition_at"`
+	StaleAt              sql.NullTime `json:"stale_at"`
 }
 
-func (q *Queries) ListRequiredLocationHealth(ctx context.Context, monitorID pgtype.UUID) ([]ListRequiredLocationHealthRow, error) {
-	rows, err := q.db.Query(ctx, listRequiredLocationHealth, monitorID)
+func (q *Queries) ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRequiredLocationHealth, monitorID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +198,9 @@ func (q *Queries) ListRequiredLocationHealth(ctx context.Context, monitorID pgty
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -212,12 +217,12 @@ LIMIT $2
 `
 
 type ListStaleLocationHealthParams struct {
-	Now      pgtype.Timestamptz `json:"now"`
-	RowLimit int32              `json:"row_limit"`
+	Now      sql.NullTime `json:"now"`
+	RowLimit int32        `json:"row_limit"`
 }
 
 func (q *Queries) ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error) {
-	rows, err := q.db.Query(ctx, listStaleLocationHealth, arg.Now, arg.RowLimit)
+	rows, err := q.db.QueryContext(ctx, listStaleLocationHealth, arg.Now, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +243,9 @@ func (q *Queries) ListStaleLocationHealth(ctx context.Context, arg ListStaleLoca
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -264,18 +272,18 @@ ON CONFLICT (monitor_id, location_id) DO UPDATE SET
 `
 
 type UpsertLocationHealthParams struct {
-	MonitorID            pgtype.UUID        `json:"monitor_id"`
-	LocationID           pgtype.UUID        `json:"location_id"`
-	State                string             `json:"state"`
-	ConsecutiveFailures  int32              `json:"consecutive_failures"`
-	ConsecutiveSuccesses int32              `json:"consecutive_successes"`
-	LastObservedAt       pgtype.Timestamptz `json:"last_observed_at"`
-	LastTransitionAt     pgtype.Timestamptz `json:"last_transition_at"`
-	StaleAt              pgtype.Timestamptz `json:"stale_at"`
+	MonitorID            string       `json:"monitor_id"`
+	LocationID           string       `json:"location_id"`
+	State                string       `json:"state"`
+	ConsecutiveFailures  int32        `json:"consecutive_failures"`
+	ConsecutiveSuccesses int32        `json:"consecutive_successes"`
+	LastObservedAt       sql.NullTime `json:"last_observed_at"`
+	LastTransitionAt     sql.NullTime `json:"last_transition_at"`
+	StaleAt              sql.NullTime `json:"stale_at"`
 }
 
 func (q *Queries) UpsertLocationHealth(ctx context.Context, arg UpsertLocationHealthParams) error {
-	_, err := q.db.Exec(ctx, upsertLocationHealth,
+	_, err := q.db.ExecContext(ctx, upsertLocationHealth,
 		arg.MonitorID,
 		arg.LocationID,
 		arg.State,
@@ -297,12 +305,12 @@ ON CONFLICT (monitor_id) DO UPDATE SET
 `
 
 type UpsertMonitorHealthParams struct {
-	MonitorID        pgtype.UUID        `json:"monitor_id"`
-	State            string             `json:"state"`
-	LastTransitionAt pgtype.Timestamptz `json:"last_transition_at"`
+	MonitorID        string       `json:"monitor_id"`
+	State            string       `json:"state"`
+	LastTransitionAt sql.NullTime `json:"last_transition_at"`
 }
 
 func (q *Queries) UpsertMonitorHealth(ctx context.Context, arg UpsertMonitorHealthParams) error {
-	_, err := q.db.Exec(ctx, upsertMonitorHealth, arg.MonitorID, arg.State, arg.LastTransitionAt)
+	_, err := q.db.ExecContext(ctx, upsertMonitorHealth, arg.MonitorID, arg.State, arg.LastTransitionAt)
 	return err
 }
