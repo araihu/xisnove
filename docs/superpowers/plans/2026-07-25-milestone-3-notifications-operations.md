@@ -78,34 +78,34 @@ library, and OpenTelemetry Go SDK/exporter packages pinned when Task 12 starts.
 - Produces: `MaintenanceInterval`, `MaintenanceDecision`
 - Extends: `Monitor` with description, labels, display order, and public flag
 
-- [ ] **Step 1: Write failing monitor metadata tests**
+- [x] **Step 1: Write failing monitor metadata tests**
 
 Prove description trimming, label key/value validation, deterministic cloned
 label maps, non-negative display order, and unchanged defaults for existing
 monitor constructors. Valid label keys use the Kubernetes label-name character
 shape without importing Kubernetes packages.
 
-- [ ] **Step 2: Write failing routing and identity tests**
+- [x] **Step 2: Write failing routing and identity tests**
 
 Table tests cover exact label matchers, event actions (`open`, `change`,
 `recover`, and synthetic `maintenance-ended`), warning/critical filters,
 disabled routes/channels, deterministic ordering, and a stable dedupe identity
 derived from event ID, route ID, and channel ID.
 
-- [ ] **Step 3: Write failing retry and maintenance truth tables**
+- [x] **Step 3: Write failing retry and maintenance truth tables**
 
 Prove capped exponential retry with injected jitter, permanent versus transient
 classification, one-off `[start,end)` intervals, indefinite intervals, invalid
 ranges, and the fresh-transition decision after maintenance ends while health
 is unhealthy.
 
-- [ ] **Step 4: Implement pure domain behavior**
+- [x] **Step 4: Implement pure domain behavior**
 
 Do not import storage, HTTP, template engines, crypto, or clocks. Use explicit
 `time.Time` and injected random values. Clone every map/slice crossing an entity
 boundary.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 go test -race ./internal/domain -run 'MonitorMetadata|Notification|Route|Retry|Maintenance'
@@ -768,4 +768,3 @@ Milestone 3 is complete only when all of the following are directly proven:
   and ordered graceful shutdown are exercised by tests.
 - `make check`, module-isolated checks, race/fault suites, generation-drift
   checks, CI configuration, and operations runbooks are green and current.
-
