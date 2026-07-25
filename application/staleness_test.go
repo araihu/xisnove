@@ -99,15 +99,20 @@ func TestStalenessSweepUsesDurableDeadlineAndIsIdempotent(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM incident_events").Scan(&events); err != nil {
 		t.Fatal(err)
 	}
+	var audits int
+	if err := db.QueryRow("SELECT COUNT(*) FROM audit_events").Scan(&audits); err != nil {
+		t.Fatal(err)
+	}
 	if gotLocation.State != domain.HealthUnknown ||
 		!gotLocation.StaleAt.IsZero() ||
 		gotMonitor.State != domain.HealthUnknown ||
 		incident == nil ||
 		incident.Severity != domain.IncidentWarning ||
-		events != 1 {
+		events != 1 ||
+		audits != 1 {
 		t.Fatalf(
-			"location=%#v monitor=%#v incident=%#v events=%d",
-			gotLocation, gotMonitor, incident, events,
+			"location=%#v monitor=%#v incident=%#v events=%d audits=%d",
+			gotLocation, gotMonitor, incident, events, audits,
 		)
 	}
 }

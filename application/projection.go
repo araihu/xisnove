@@ -24,6 +24,7 @@ func projectAggregateAndIncident(
 	if err != nil {
 		return err
 	}
+	previousAggregate := monitorHealth.State
 	if aggregate != monitorHealth.State {
 		monitorHealth.State = aggregate
 		monitorHealth.LastTransitionAt = at.UTC()
@@ -46,26 +47,13 @@ func projectAggregateAndIncident(
 		at,
 		func() domain.IncidentID { return domain.IncidentID(newID()) },
 	)
+	if decision.Action == domain.IncidentOpen {
+		decision.PreviousState = previousAggregate
+	}
 	if decision.Action == domain.IncidentNone {
 		return nil
 	}
-	switch decision.Action {
-	case domain.IncidentOpen:
-		if err := repositories.Incidents.Open(ctx, decision.Incident); err != nil {
-			return err
-		}
-	case domain.IncidentChange, domain.IncidentRecover:
-		if err := repositories.Incidents.Update(ctx, decision.Incident); err != nil {
-			return err
-		}
-	}
-	return repositories.Incidents.AppendEvent(ctx, domain.IncidentEvent{
-		ID: newID(), IncidentID: decision.Incident.ID,
-		Action:        notificationAction(decision.Action),
-		PreviousState: decision.PreviousState,
-		State:         decision.Incident.State, Severity: decision.Incident.Severity,
-		CreatedAt: at.UTC(),
-	})
+	return RecordIncidentTransition(ctx, repositories, decision, at, newID)
 }
 
 func notificationAction(action domain.IncidentAction) domain.NotificationAction {

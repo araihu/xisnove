@@ -170,4 +170,11 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 	if eventCount != 1 {
 		t.Fatalf("incident events = %d", eventCount)
 	}
+	var auditCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM audit_events").Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("audit events = %d", auditCount)
+	}
 }

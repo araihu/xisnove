@@ -89,6 +89,7 @@ type RenderSnapshot struct {
 	ChannelID          NotificationChannelID
 	ChannelKind        NotificationChannelKind
 	Template           string
+	RouteUpdatedAt     time.Time
 }
 
 func NewNotificationChannel(

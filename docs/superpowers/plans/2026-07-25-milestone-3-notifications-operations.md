@@ -372,33 +372,33 @@ git commit -m "feat(notification): encrypt channel configuration"
 - Consumes: monitor, maintenance, route, channel, Incident, audit, and outbox
   repositories
 
-- [ ] **Step 1: Write failing transaction tests**
+- [x] **Step 1: Write failing transaction tests**
 
 For open/change/recover transitions prove health, Incident, IncidentEvent,
 audit, and all matching outbox rows commit together. Inject failure after each
 write and assert complete rollback. Replaying the same projection creates no
 duplicate event or outbox row.
 
-- [ ] **Step 2: Write routing snapshot tests**
+- [x] **Step 2: Write routing snapshot tests**
 
 Snapshots include event identity/action/state/severity/times, Incident and
 Monitor identity/name/description/labels, route template/version, and selected
 channel kind. They contain no decrypted channel URL/token. Later label or
 template edits do not alter existing snapshots.
 
-- [ ] **Step 3: Implement maintenance suppression in the transaction**
+- [x] **Step 3: Implement maintenance suppression in the transaction**
 
 When active maintenance matches, persist the IncidentEvent and audit decision
 but create outbox rows directly in `suppressed` state. Health and Incident
 history continue normally.
 
-- [ ] **Step 4: Verify all projection paths**
+- [x] **Step 4: Verify all projection paths**
 
 ```bash
 go test -race ./application -run 'Result|Projection|Stale|Notification'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add application domain
