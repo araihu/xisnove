@@ -567,7 +567,103 @@ git commit -m "feat(database): verify backup and restore workflows"
 
 ---
 
-### Task 9: Complete milestone 2B operational and release gate
+### Task 9: Broad cross-profile storage integration matrix
+
+**Files:**
+- Create: `integration/storage_matrix_test.go`
+- Create: `integration/storage_journey_test.go`
+- Create: `internal/testsupport/tursocloud/provision.go`
+- Create: `internal/testsupport/tursocloud/provision_test.go`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `.github/workflows/turso-conformance.yml`
+
+**Interfaces:**
+- Produces: one storage journey with identical operations and assertions
+- Produces: disposable managed-Turso provisioning with verified teardown
+- Consumes: all four `database.Handle` implementations and the public
+  application services
+
+- [ ] **Step 1: Define one literal storage journey**
+
+The test body must not branch by profile after it receives a migrated Handle.
+For every supported profile, execute the same ordered operations:
+
+1. migrate and require exact readiness;
+2. bootstrap an administrator and create/authenticate a session;
+3. create a Location and HTTP, TCP, and DNS Monitors with assignments;
+4. create and consume an Agent enrollment token, enroll the Agent, and record a
+   heartbeat;
+5. enqueue due work, claim each protocol from a second independent Handle or
+   pool, resolve leases, and ingest one mixed result batch;
+6. read persisted protocol observations, per-location/aggregate health, and the
+   active Incident;
+7. retry the same batch and scheduler tick and assert no duplicate result,
+   projection, run, or IncidentEvent;
+8. force lease expiry and stale-health deadlines through repository inputs and
+   assert safe reclaim and one warning unknown transition;
+9. inject a transaction callback failure and prove all writes rolled back;
+10. close/reopen and assert the same durable state and exact schema version.
+
+Use fixed UUID fixtures and UTC instants. Compare domain/application values,
+stable error classes, row counts, and transitions; never compare
+driver-specific types or messages.
+
+- [ ] **Step 2: Run the journey on all locally available profiles**
+
+SQLite and local Turso always run. PostgreSQL runs whenever
+`XISNOVE_TEST_POSTGRES_URL` is present and is mandatory in normal CI. Each
+profile starts empty and owns its isolated path/schema. PostgreSQL uses two
+independent pools during the same journey to prove replica visibility.
+
+- [ ] **Step 3: Provision a real managed Turso database**
+
+The test support package uses the official Platform API with a token supplied
+only through `TURSO_API_KEY` or the protected CI secret. It:
+
+- lists accessible organizations and requires an explicit organization when
+  more than one is available;
+- creates a unique `xisnove-ci-<timestamp>-<random>` database in an existing
+  configured group;
+- records the returned database name, ID, and hostname before any test runs;
+- mints a short-lived database-scoped full-access JWT;
+- supplies `libsql://<returned-hostname>` and the JWT only in memory;
+- deletes only the exact created database in `t.Cleanup`;
+- retries deletion with a deadline, then lists by exact name to prove absence;
+- redacts platform tokens, database JWTs, and authenticated URLs from every
+  error and log.
+
+Creation failure performs no deletion. A post-create test failure must still
+run cleanup. Local development may load the user-owned root `.env` outside the
+test binary; `.env` is never parsed by production code, copied into a worktree,
+or committed.
+
+- [ ] **Step 4: Run the identical journey on managed Turso**
+
+No managed-Turso assertion may be skipped or weakened. Use a second independent
+remote pool for competing claims and visibility. The test passes only after the
+database is confirmed deleted.
+
+```bash
+TURSO_API_KEY='<loaded without printing>' \
+  go test -race ./integration -run TestStorageMatrix/TursoCloud -v
+```
+
+- [ ] **Step 5: Gate CI and commit**
+
+Normal CI runs SQLite, local Turso, and PostgreSQL matrix cases. The protected
+scheduled/release workflow runs the same test binary with real Turso Platform
+credentials. Store JUnit output, but never database URLs or tokens.
+
+```bash
+go test -race ./integration -run TestStorageMatrix -count=10
+make check
+git add integration internal/testsupport .github/workflows
+git commit -m "test(database): verify cross-profile storage journey"
+```
+
+---
+
+### Task 10: Complete milestone 2B operational and release gate
 
 **Files:**
 - Modify: `README.md`
@@ -597,7 +693,7 @@ make check
 go test -race ./internal/adapters/sqlite ./internal/adapters/tursolocal -run Conformance -count=20
 XISNOVE_TEST_POSTGRES_URL='postgres://...' \
   go test -race ./internal/adapters/postgres -run 'Conformance|Competing' -count=20
-go test -race ./integration -run 'FirstObservation|ProtocolBreadth|BackupRestore' -count=10
+go test -race ./integration -run 'FirstObservation|ProtocolBreadth|BackupRestore|StorageMatrix' -count=10
 git status --short --branch
 ```
 
