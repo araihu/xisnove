@@ -96,6 +96,7 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 			ids++
 			return fmt.Sprintf("00000000-0000-4000-8000-%012d", ids+10)
 		},
+		LeaseDuration: 45 * time.Second,
 	})
 
 	var last application.ProbeResultCommand
@@ -138,6 +139,14 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 	}
 	if health.State != domain.HealthDown {
 		t.Fatalf("health = %s", health.State)
+	}
+	locationHealth, err := repositories.Health.GetLocation(ctx, monitor.ID, location.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantStaleAt := last.FinishedAt.Add(2*monitor.Interval + monitor.Timeout + 45*time.Second)
+	if !locationHealth.StaleAt.Equal(wantStaleAt) {
+		t.Fatalf("StaleAt = %v, want %v", locationHealth.StaleAt, wantStaleAt)
 	}
 	incident, err := store.Repositories().Incidents.GetActive(ctx, monitor.ID)
 	if err != nil {

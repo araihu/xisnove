@@ -10,8 +10,41 @@ import (
 	"database/sql"
 )
 
+const claimStaleLocationHealth = `-- name: ClaimStaleLocationHealth :execrows
+UPDATE location_health
+SET state = 'unknown',
+    consecutive_failures = 0,
+    consecutive_successes = 0,
+    last_transition_at = ?1,
+    stale_at = NULL
+WHERE monitor_id = ?2
+  AND location_id = ?3
+  AND stale_at = ?4
+  AND stale_at <= ?1
+`
+
+type ClaimStaleLocationHealthParams struct {
+	TransitionAt sql.NullString `json:"transition_at"`
+	MonitorID    string         `json:"monitor_id"`
+	LocationID   string         `json:"location_id"`
+	StaleAt      sql.NullString `json:"stale_at"`
+}
+
+func (q *Queries) ClaimStaleLocationHealth(ctx context.Context, arg ClaimStaleLocationHealthParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, claimStaleLocationHealth,
+		arg.TransitionAt,
+		arg.MonitorID,
+		arg.LocationID,
+		arg.StaleAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getLocationHealth = `-- name: GetLocationHealth :one
-SELECT monitor_id, location_id, state, consecutive_failures, consecutive_successes, last_observed_at, last_transition_at
+SELECT monitor_id, location_id, state, consecutive_failures, consecutive_successes, last_observed_at, last_transition_at, stale_at
 FROM location_health
 WHERE monitor_id = ?
   AND location_id = ?
@@ -33,6 +66,7 @@ func (q *Queries) GetLocationHealth(ctx context.Context, arg GetLocationHealthPa
 		&i.ConsecutiveSuccesses,
 		&i.LastObservedAt,
 		&i.LastTransitionAt,
+		&i.StaleAt,
 	)
 	return i, err
 }
@@ -58,7 +92,8 @@ SELECT
   COALESCE(lh.consecutive_failures, 0) AS consecutive_failures,
   COALESCE(lh.consecutive_successes, 0) AS consecutive_successes,
   lh.last_observed_at,
-  lh.last_transition_at
+  lh.last_transition_at,
+  lh.stale_at
 FROM monitor_locations ml
 LEFT JOIN location_health lh
   ON lh.monitor_id = ml.monitor_id
@@ -75,6 +110,7 @@ type ListLocationHealthRow struct {
 	ConsecutiveSuccesses int64          `json:"consecutive_successes"`
 	LastObservedAt       sql.NullString `json:"last_observed_at"`
 	LastTransitionAt     sql.NullString `json:"last_transition_at"`
+	StaleAt              sql.NullString `json:"stale_at"`
 }
 
 func (q *Queries) ListLocationHealth(ctx context.Context, monitorID string) ([]ListLocationHealthRow, error) {
@@ -94,6 +130,7 @@ func (q *Queries) ListLocationHealth(ctx context.Context, monitorID string) ([]L
 			&i.ConsecutiveSuccesses,
 			&i.LastObservedAt,
 			&i.LastTransitionAt,
+			&i.StaleAt,
 		); err != nil {
 			return nil, err
 		}
@@ -116,7 +153,8 @@ SELECT
   COALESCE(lh.consecutive_failures, 0) AS consecutive_failures,
   COALESCE(lh.consecutive_successes, 0) AS consecutive_successes,
   lh.last_observed_at,
-  lh.last_transition_at
+  lh.last_transition_at,
+  lh.stale_at
 FROM monitor_locations ml
 LEFT JOIN location_health lh
   ON lh.monitor_id = ml.monitor_id
@@ -134,6 +172,7 @@ type ListRequiredLocationHealthRow struct {
 	ConsecutiveSuccesses int64          `json:"consecutive_successes"`
 	LastObservedAt       sql.NullString `json:"last_observed_at"`
 	LastTransitionAt     sql.NullString `json:"last_transition_at"`
+	StaleAt              sql.NullString `json:"stale_at"`
 }
 
 func (q *Queries) ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error) {
@@ -153,6 +192,53 @@ func (q *Queries) ListRequiredLocationHealth(ctx context.Context, monitorID stri
 			&i.ConsecutiveSuccesses,
 			&i.LastObservedAt,
 			&i.LastTransitionAt,
+			&i.StaleAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStaleLocationHealth = `-- name: ListStaleLocationHealth :many
+SELECT monitor_id, location_id, state, consecutive_failures, consecutive_successes, last_observed_at, last_transition_at, stale_at
+FROM location_health
+WHERE stale_at IS NOT NULL
+  AND stale_at <= ?1
+ORDER BY stale_at, monitor_id, location_id
+LIMIT ?2
+`
+
+type ListStaleLocationHealthParams struct {
+	Now      sql.NullString `json:"now"`
+	RowLimit int64          `json:"row_limit"`
+}
+
+func (q *Queries) ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error) {
+	rows, err := q.db.QueryContext(ctx, listStaleLocationHealth, arg.Now, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LocationHealth{}
+	for rows.Next() {
+		var i LocationHealth
+		if err := rows.Scan(
+			&i.MonitorID,
+			&i.LocationID,
+			&i.State,
+			&i.ConsecutiveFailures,
+			&i.ConsecutiveSuccesses,
+			&i.LastObservedAt,
+			&i.LastTransitionAt,
+			&i.StaleAt,
 		); err != nil {
 			return nil, err
 		}
@@ -170,14 +256,15 @@ func (q *Queries) ListRequiredLocationHealth(ctx context.Context, monitorID stri
 const upsertLocationHealth = `-- name: UpsertLocationHealth :exec
 INSERT INTO location_health (
   monitor_id, location_id, state, consecutive_failures,
-  consecutive_successes, last_observed_at, last_transition_at
-) VALUES (?, ?, ?, ?, ?, ?, ?)
+  consecutive_successes, last_observed_at, last_transition_at, stale_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (monitor_id, location_id) DO UPDATE SET
   state = excluded.state,
   consecutive_failures = excluded.consecutive_failures,
   consecutive_successes = excluded.consecutive_successes,
   last_observed_at = excluded.last_observed_at,
-  last_transition_at = excluded.last_transition_at
+  last_transition_at = excluded.last_transition_at,
+  stale_at = excluded.stale_at
 `
 
 type UpsertLocationHealthParams struct {
@@ -188,6 +275,7 @@ type UpsertLocationHealthParams struct {
 	ConsecutiveSuccesses int64          `json:"consecutive_successes"`
 	LastObservedAt       sql.NullString `json:"last_observed_at"`
 	LastTransitionAt     sql.NullString `json:"last_transition_at"`
+	StaleAt              sql.NullString `json:"stale_at"`
 }
 
 func (q *Queries) UpsertLocationHealth(ctx context.Context, arg UpsertLocationHealthParams) error {
@@ -199,6 +287,7 @@ func (q *Queries) UpsertLocationHealth(ctx context.Context, arg UpsertLocationHe
 		arg.ConsecutiveSuccesses,
 		arg.LastObservedAt,
 		arg.LastTransitionAt,
+		arg.StaleAt,
 	)
 	return err
 }

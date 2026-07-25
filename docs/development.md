@@ -31,3 +31,19 @@ cd agent
 GOWORK=off go test -race ./...
 GOWORK=off go vet ./...
 ```
+
+The workspace path is also supported:
+
+```bash
+go test -race ./agent/...
+```
+
+Protocol tests use local HTTP/TLS, TCP, and UDP/TCP DNS servers. The Agent
+never resolves a custom DNS resolver behind the DNS client's back: policy
+validation produces the IP endpoint passed to the library. Run the focused
+control-plane integration repeatedly when changing scheduling or result
+projection:
+
+```bash
+go test -race ./integration -run TestProtocolBreadth -count=10
+```

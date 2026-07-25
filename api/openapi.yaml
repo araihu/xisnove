@@ -560,7 +560,7 @@ components:
         id: {type: string, format: uuid}
         monitorId: {type: string, format: uuid}
         state: {type: string, enum: [open, resolved]}
-        severity: {type: string, enum: [critical]}
+        severity: {type: string, enum: [warning, critical]}
         openedAt: {type: string, format: date-time}
         lastTransitionAt: {type: string, format: date-time}
     Problem:

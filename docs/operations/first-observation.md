@@ -14,7 +14,8 @@ export ADMIN_TOKEN="$(
 )"
 ```
 
-Create a Location and HTTP Monitor:
+Create a Location and HTTP Monitor. Probe configuration is a discriminated
+`probe` object; binary `body`, `send`, and `expect` values use base64 in JSON:
 
 ```bash
 export LOCATION_ID="$(
@@ -25,7 +26,7 @@ export LOCATION_ID="$(
 export MONITOR_ID="$(
   curl -fsS -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H 'Content-Type: application/json' \
-    -d "{\"name\":\"homepage\",\"locationId\":\"$LOCATION_ID\",\"requiredLocation\":true,\"intervalSeconds\":60,\"timeoutMillis\":5000,\"failureThreshold\":3,\"recoveryThreshold\":2,\"http\":{\"method\":\"GET\",\"url\":\"https://example.com/\",\"expectedStatus\":200,\"bodyContains\":\"\",\"followRedirects\":true}}" \
+    -d "{\"name\":\"homepage\",\"locationId\":\"$LOCATION_ID\",\"requiredLocation\":true,\"intervalSeconds\":60,\"timeoutMillis\":5000,\"failureThreshold\":3,\"recoveryThreshold\":2,\"probe\":{\"kind\":\"http\",\"method\":\"GET\",\"url\":\"https://example.com/\",\"headers\":{},\"body\":\"\",\"expectedStatus\":[{\"minimum\":200,\"maximum\":299}],\"bodyContains\":[],\"bodyDoesNotContain\":[],\"followRedirects\":true,\"tlsMinimumRemainingSeconds\":86400}}" \
     "$XISNOVE_URL/v1/monitors" | jq -r .id
 )"
 ```
@@ -40,7 +41,7 @@ export ENROLLMENT_TOKEN="$(
     "$XISNOVE_URL/v1/agent-enrollment-tokens" | jq -r .token
 )"
 curl -fsS -H 'Content-Type: application/json' \
-  -d "{\"token\":\"$ENROLLMENT_TOKEN\",\"name\":\"edge-1\",\"capabilities\":[\"http\"]}" \
+  -d "{\"token\":\"$ENROLLMENT_TOKEN\",\"name\":\"edge-1\",\"capabilities\":[\"http\",\"tcp\",\"dns\"]}" \
   "$XISNOVE_URL/v1/agent-enrollments" |
   jq -r .credential > ./agent-credential
 chmod 600 ./agent-credential
@@ -54,8 +55,22 @@ denied unless explicitly allow-listed:
 XISNOVE_URL="$XISNOVE_URL" \
 XISNOVE_AGENT_CREDENTIAL_FILE=./agent-credential \
 XISNOVE_AGENT_ALLOWED_PRIVATE_CIDRS='10.0.0.0/8,192.168.0.0/16' \
+XISNOVE_AGENT_CAPABILITIES='http,tcp,dns' \
 go run ./agent/cmd/xisnove-agent
 ```
+
+TCP probes use `{"kind":"tcp","host":"db.internal","port":5432,
+"send":"","expect":""}` and may set `tlsMinimumRemainingSeconds`. DNS probes
+use `{"kind":"dns","resolver":"10.0.0.53:53","name":"service.internal",
+"recordType":"A","expectedValues":["10.0.0.10"]}`. Custom resolvers and
+private targets must fall inside `XISNOVE_AGENT_ALLOWED_PRIVATE_CIDRS`;
+resolver addresses are validated and pinned before the DNS library runs.
+
+The scheduler emits only the latest due check after downtime and records the
+number of skipped intervals. After an accepted result, a durable stale
+deadline is stored as two monitor intervals plus its timeout and the lease
+duration. Missing that deadline changes the required Location and aggregate
+to `unknown` and opens a warning Incident exactly once.
 
 Query the projection and active Incident:
 

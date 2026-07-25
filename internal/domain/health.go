@@ -30,6 +30,7 @@ type LocationHealth struct {
 	ConsecutiveSuccesses uint16
 	LastObservedAt       time.Time
 	LastTransitionAt     time.Time
+	StaleAt              time.Time
 }
 
 type MonitorHealth struct {

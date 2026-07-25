@@ -734,6 +734,7 @@ func (r *healthRepository) GetLocation(
 		record.ConsecutiveSuccesses,
 		record.LastObservedAt,
 		record.LastTransitionAt,
+		record.StaleAt,
 	)
 }
 
@@ -749,6 +750,7 @@ func (r *healthRepository) UpsertLocation(
 		ConsecutiveSuccesses: int64(health.ConsecutiveSuccesses),
 		LastObservedAt:       nullableTimeValue(health.LastObservedAt),
 		LastTransitionAt:     nullableTimeValue(health.LastTransitionAt),
+		StaleAt:              nullableTimeValue(health.StaleAt),
 	})
 	if err != nil {
 		return fmt.Errorf("upsert location health: %w", err)
@@ -774,6 +776,7 @@ func (r *healthRepository) ListRequiredLocations(
 			record.ConsecutiveSuccesses,
 			record.LastObservedAt,
 			record.LastTransitionAt,
+			record.StaleAt,
 		)
 		if err != nil {
 			return nil, err
@@ -781,6 +784,56 @@ func (r *healthRepository) ListRequiredLocations(
 		health = append(health, item)
 	}
 	return health, nil
+}
+
+func (r *healthRepository) ListStale(
+	ctx context.Context,
+	now time.Time,
+	limit int,
+) ([]domain.LocationHealth, error) {
+	records, err := r.queries.ListStaleLocationHealth(
+		ctx,
+		dbsqlite.ListStaleLocationHealthParams{
+			Now: nullableTimeValue(now), RowLimit: int64(limit),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list stale location health: %w", err)
+	}
+	health := make([]domain.LocationHealth, 0, len(records))
+	for _, record := range records {
+		item, err := mapLocationHealth(
+			record.MonitorID, record.LocationID, record.State,
+			record.ConsecutiveFailures, record.ConsecutiveSuccesses,
+			record.LastObservedAt, record.LastTransitionAt, record.StaleAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		health = append(health, item)
+	}
+	return health, nil
+}
+
+func (r *healthRepository) ClaimStale(
+	ctx context.Context,
+	monitorID domain.MonitorID,
+	locationID domain.LocationID,
+	staleAt time.Time,
+	transitionAt time.Time,
+) (bool, error) {
+	affected, err := r.queries.ClaimStaleLocationHealth(
+		ctx,
+		dbsqlite.ClaimStaleLocationHealthParams{
+			TransitionAt: nullableTimeValue(transitionAt),
+			MonitorID:    string(monitorID), LocationID: string(locationID),
+			StaleAt: nullableTimeValue(staleAt),
+		},
+	)
+	if err != nil {
+		return false, fmt.Errorf("claim stale location health: %w", err)
+	}
+	return affected == 1, nil
 }
 
 func (r *healthRepository) GetMonitor(
@@ -858,6 +911,7 @@ func mapLocationHealth(
 	consecutiveSuccesses int64,
 	lastObservedAt sql.NullString,
 	lastTransitionAt sql.NullString,
+	staleAt sql.NullString,
 ) (domain.LocationHealth, error) {
 	if consecutiveFailures > math.MaxUint16 || consecutiveSuccesses > math.MaxUint16 {
 		return domain.LocationHealth{}, errors.New("map location health: counter exceeds uint16")
@@ -869,6 +923,10 @@ func mapLocationHealth(
 	transition, err := parseNullableTime(lastTransitionAt)
 	if err != nil {
 		return domain.LocationHealth{}, fmt.Errorf("map location transition: %w", err)
+	}
+	stale, err := parseNullableTime(staleAt)
+	if err != nil {
+		return domain.LocationHealth{}, fmt.Errorf("map stale deadline: %w", err)
 	}
 	health := domain.LocationHealth{
 		MonitorID:            domain.MonitorID(monitorID),
@@ -882,6 +940,9 @@ func mapLocationHealth(
 	}
 	if transition != nil {
 		health.LastTransitionAt = *transition
+	}
+	if stale != nil {
+		health.StaleAt = *stale
 	}
 	return health, nil
 }

@@ -13,6 +13,7 @@ type Querier interface {
 	AssignMonitorLocation(ctx context.Context, arg AssignMonitorLocationParams) error
 	ChangeIncident(ctx context.Context, arg ChangeIncidentParams) (int64, error)
 	ClaimProbeRun(ctx context.Context, arg ClaimProbeRunParams) (CheckRun, error)
+	ClaimStaleLocationHealth(ctx context.Context, arg ClaimStaleLocationHealthParams) (int64, error)
 	ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CreateAdmin(ctx context.Context, arg CreateAdminParams) error
@@ -41,6 +42,7 @@ type Querier interface {
 	ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error)
 	ListLocationHealth(ctx context.Context, monitorID string) ([]ListLocationHealthRow, error)
 	ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error)
+	ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error)
 	OpenIncident(ctx context.Context, arg OpenIncidentParams) error
 	RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error)
 	ResolveCheckRun(ctx context.Context, arg ResolveCheckRunParams) (int64, error)

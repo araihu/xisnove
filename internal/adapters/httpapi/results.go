@@ -30,6 +30,19 @@ func (s *Server) UploadProbeResults(
 	for index, result := range request.Body.Results {
 		status := int(result.ObservedStatus)
 		bodyPassed := result.BodyAssertionPassed
+		observedValues := []string(nil)
+		if result.ObservedValues != nil {
+			observedValues = append(observedValues, (*result.ObservedValues)...)
+		}
+		var timings application.ProtocolTimings
+		if result.ProtocolTimings != nil {
+			timings = application.ProtocolTimings{
+				DNS:       milliseconds(result.ProtocolTimings.DnsMillis),
+				Connect:   milliseconds(result.ProtocolTimings.ConnectMillis),
+				TLS:       milliseconds(result.ProtocolTimings.TlsMillis),
+				FirstByte: milliseconds(result.ProtocolTimings.FirstByteMillis),
+			}
+		}
 		commands[index] = application.ProbeResultCommand{
 			ID:                  result.ResultId.String(),
 			RunID:               domain.CheckRunID(result.RunId.String()),
@@ -42,6 +55,9 @@ func (s *Server) UploadProbeResults(
 			BodyAssertionPassed: &bodyPassed,
 			ErrorCode:           string(result.ErrorCode),
 			DiagnosticSample:    result.DiagnosticSample,
+			ObservedValues:      observedValues,
+			TLSNotAfter:         result.TlsNotAfter,
+			ProtocolTimings:     timings,
 		}
 	}
 	acknowledgements, err := s.results.UploadBatch(
@@ -70,6 +86,13 @@ func (s *Server) UploadProbeResults(
 	return UploadProbeResults200JSONResponse{
 		Acknowledgements: mapped,
 	}, nil
+}
+
+func milliseconds(value *int64) time.Duration {
+	if value == nil {
+		return 0
+	}
+	return time.Duration(*value) * time.Millisecond
 }
 
 func uploadProbeResultsProblem(err error) (UploadProbeResultsResponseObject, bool) {

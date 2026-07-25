@@ -36,6 +36,9 @@ type ProbeResultCommand struct {
 	BodyAssertionPassed *bool
 	ErrorCode           string
 	DiagnosticSample    string
+	ObservedValues      []string
+	TLSNotAfter         *time.Time
+	ProtocolTimings     ProtocolTimings
 }
 
 type ResultAcknowledgement struct {
@@ -44,22 +47,29 @@ type ResultAcknowledgement struct {
 }
 
 type ResultServiceConfig struct {
-	Store  Store
-	Tokens TokenIssuer
-	Now    func() time.Time
-	NewID  func() string
+	Store         Store
+	Tokens        TokenIssuer
+	Now           func() time.Time
+	NewID         func() string
+	LeaseDuration time.Duration
 }
 
 type ResultService struct {
-	store  Store
-	tokens TokenIssuer
-	now    func() time.Time
-	newID  func() string
+	store         Store
+	tokens        TokenIssuer
+	now           func() time.Time
+	newID         func() string
+	leaseDuration time.Duration
 }
 
 func NewResultService(config ResultServiceConfig) *ResultService {
+	leaseDuration := config.LeaseDuration
+	if leaseDuration <= 0 {
+		leaseDuration = 45 * time.Second
+	}
 	return &ResultService{
 		store: config.Store, tokens: config.Tokens, now: config.Now, newID: config.NewID,
+		leaseDuration: leaseDuration,
 	}
 }
 
@@ -148,6 +158,9 @@ func (s *ResultService) ingest(
 		BodyAssertionPassed: command.BodyAssertionPassed,
 		ErrorCode:           command.ErrorCode,
 		DiagnosticSample:    command.DiagnosticSample,
+		ObservedValues:      append([]string(nil), command.ObservedValues...),
+		TLSNotAfter:         command.TLSNotAfter,
+		ProtocolTimings:     command.ProtocolTimings,
 	})
 	if err != nil {
 		return err
@@ -185,61 +198,15 @@ func (s *ResultService) ingest(
 			Failures: monitor.FailureThreshold, Recoveries: monitor.RecoveryThreshold,
 		},
 	)
+	locationHealth.StaleAt = command.FinishedAt.UTC().Add(
+		2*monitor.Interval + monitor.Timeout + s.leaseDuration,
+	)
 	if err := repositories.Health.UpsertLocation(ctx, locationHealth); err != nil {
 		return err
 	}
-	required, err := repositories.Health.ListRequiredLocations(ctx, run.MonitorID)
-	if err != nil {
-		return err
-	}
-	aggregate := domain.RollupRequired(required)
-	monitorHealth, err := repositories.Health.GetMonitor(ctx, run.MonitorID)
-	if err != nil {
-		return err
-	}
-	if aggregate != monitorHealth.State {
-		monitorHealth.State = aggregate
-		monitorHealth.LastTransitionAt = command.FinishedAt.UTC()
-		if err := repositories.Health.UpsertMonitor(ctx, monitorHealth); err != nil {
-			return err
-		}
-	}
-
-	active, err := repositories.Incidents.GetActive(ctx, run.MonitorID)
-	if err != nil {
-		return err
-	}
-	if active == nil && aggregate == domain.HealthUnknown {
-		return nil
-	}
-	decision := domain.DecideIncident(
-		active,
-		run.MonitorID,
-		aggregate,
-		command.FinishedAt,
-		func() domain.IncidentID { return domain.IncidentID(s.newID()) },
+	return projectAggregateAndIncident(
+		ctx, repositories, run.MonitorID, command.FinishedAt, s.newID, false,
 	)
-	if decision.Action == domain.IncidentNone {
-		return nil
-	}
-	switch decision.Action {
-	case domain.IncidentOpen:
-		if err := repositories.Incidents.Open(ctx, decision.Incident); err != nil {
-			return err
-		}
-	case domain.IncidentChange, domain.IncidentRecover:
-		if err := repositories.Incidents.Update(ctx, decision.Incident); err != nil {
-			return err
-		}
-	}
-	return repositories.Incidents.AppendEvent(ctx, domain.IncidentEvent{
-		ID:            s.newID(),
-		IncidentID:    decision.Incident.ID,
-		PreviousState: decision.PreviousState,
-		State:         decision.Incident.State,
-		Severity:      decision.Incident.Severity,
-		CreatedAt:     command.FinishedAt.UTC(),
-	})
 }
 
 func validateResult(
@@ -267,6 +234,19 @@ func validateResult(
 	}
 	if len(command.DiagnosticSample) > 512 {
 		fields["diagnosticSample"] = "must not exceed 512 bytes"
+	}
+	observedBytes := 0
+	for _, value := range command.ObservedValues {
+		observedBytes += len(value)
+	}
+	if len(command.ObservedValues) > 20 || observedBytes > 4<<10 {
+		fields["observedValues"] = "must contain at most 20 values and 4096 bytes"
+	}
+	if command.ProtocolTimings.DNS < 0 ||
+		command.ProtocolTimings.Connect < 0 ||
+		command.ProtocolTimings.TLS < 0 ||
+		command.ProtocolTimings.FirstByte < 0 {
+		fields["protocolTimings"] = "must not be negative"
 	}
 	if command.Outcome != ProbePassed && command.Outcome != ProbeFailed {
 		fields["outcome"] = "is unsupported"

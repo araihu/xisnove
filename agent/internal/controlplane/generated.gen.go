@@ -172,12 +172,15 @@ func (e HealthState) Valid() bool {
 // Defines values for IncidentSeverity.
 const (
 	Critical IncidentSeverity = "critical"
+	Warning  IncidentSeverity = "warning"
 )
 
 // Valid indicates whether the value is a known member of the IncidentSeverity enum.
 func (e IncidentSeverity) Valid() bool {
 	switch e {
 	case Critical:
+		return true
+	case Warning:
 		return true
 	default:
 		return false

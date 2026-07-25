@@ -374,6 +374,24 @@ func (r *configurationHealthRepository) ListRequiredLocations(
 	return []domain.LocationHealth{health}, nil
 }
 
+func (*configurationHealthRepository) ListStale(
+	context.Context,
+	time.Time,
+	int,
+) ([]domain.LocationHealth, error) {
+	return nil, nil
+}
+
+func (*configurationHealthRepository) ClaimStale(
+	context.Context,
+	domain.MonitorID,
+	domain.LocationID,
+	time.Time,
+	time.Time,
+) (bool, error) {
+	return false, nil
+}
+
 func (r *configurationHealthRepository) GetMonitor(
 	_ context.Context,
 	monitorID domain.MonitorID,

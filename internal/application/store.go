@@ -164,6 +164,14 @@ type HealthRepository interface {
 	) (domain.LocationHealth, error)
 	UpsertLocation(context.Context, domain.LocationHealth) error
 	ListRequiredLocations(context.Context, domain.MonitorID) ([]domain.LocationHealth, error)
+	ListStale(context.Context, time.Time, int) ([]domain.LocationHealth, error)
+	ClaimStale(
+		context.Context,
+		domain.MonitorID,
+		domain.LocationID,
+		time.Time,
+		time.Time,
+	) (bool, error)
 	GetMonitor(context.Context, domain.MonitorID) (domain.MonitorHealth, error)
 	UpsertMonitor(context.Context, domain.MonitorHealth) error
 }

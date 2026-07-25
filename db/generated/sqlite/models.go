@@ -86,6 +86,7 @@ type LocationHealth struct {
 	ConsecutiveSuccesses int64          `json:"consecutive_successes"`
 	LastObservedAt       sql.NullString `json:"last_observed_at"`
 	LastTransitionAt     sql.NullString `json:"last_transition_at"`
+	StaleAt              sql.NullString `json:"stale_at"`
 }
 
 type Monitor struct {

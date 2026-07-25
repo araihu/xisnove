@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,6 +40,7 @@ func serveCommand(parent context.Context, args []string) error {
 	}
 
 	store := sqlitestore.NewStore(db)
+	const leaseDuration = 45 * time.Second
 	tokens := xiscrypto.NewProductionTokenIssuer()
 	auth := application.NewAuthService(application.AuthServiceConfig{
 		Store: store, Passwords: xiscrypto.NewProductionPasswordHasher(),
@@ -56,10 +58,11 @@ func serveCommand(parent context.Context, args []string) error {
 			),
 			Agents: agents,
 			Lease: application.NewLeaseService(application.LeaseServiceConfig{
-				Store: store, Tokens: tokens, LeaseDuration: 45 * time.Second,
+				Store: store, Tokens: tokens, LeaseDuration: leaseDuration,
 			}),
 			Results: application.NewResultService(application.ResultServiceConfig{
 				Store: store, Tokens: tokens, Now: xisclock.Now, NewID: ids.NewUUID,
+				LeaseDuration: leaseDuration,
 			}),
 			Health: application.NewHealthService(store),
 		}),
@@ -69,9 +72,22 @@ func serveCommand(parent context.Context, args []string) error {
 		return err
 	}
 	scheduler := application.NewScheduler(store, ids.NewUUID)
+	staleness := application.NewStalenessService(store, ids.NewUUID)
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go runScheduler(ctx, scheduler)
+	var loops sync.WaitGroup
+	loops.Add(2)
+	go func() {
+		defer loops.Done()
+		runScheduler(ctx, scheduler)
+	}()
+	go func() {
+		defer loops.Done()
+		runStaleness(ctx, staleness)
+	}()
+	defer func() {
+		stop()
+		loops.Wait()
+	}()
 
 	server := &http.Server{
 		Addr: *listen, Handler: handler,
@@ -95,12 +111,27 @@ func serveCommand(parent context.Context, args []string) error {
 	return server.Shutdown(shutdown)
 }
 
+func runStaleness(ctx context.Context, staleness *application.StalenessService) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		if _, err := staleness.MarkDue(ctx, 100); err != nil && ctx.Err() == nil {
+			slog.ErrorContext(ctx, "staleness tick failed", "error_class", "mark_due")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 func runScheduler(ctx context.Context, scheduler *application.Scheduler) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
 		if _, err := scheduler.EnqueueDue(ctx, 100); err != nil && ctx.Err() == nil {
-			slog.ErrorContext(ctx, "scheduler tick failed", "error", err)
+			slog.ErrorContext(ctx, "scheduler tick failed", "error_class", "enqueue_due")
 		}
 		select {
 		case <-ctx.Done():
