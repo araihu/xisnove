@@ -161,7 +161,8 @@ git commit -m "feat(domain): model TCP and DNS probes"
 
 **Interfaces:**
 - Produces: OpenAPI `ProbeDefinition` union with `kind` discriminator
-- Produces: `CreateMonitorRequest.probe`, `Monitor.probe`, and `ProbeWork.probe`
+- Produces: generated `ProbeDefinition` and `ProbeWork` union types
+- Preserves temporarily: HTTP-only endpoint fields so handwritten handlers remain buildable until Task 4
 - Produces: protocol-neutral nullable result observations and `ProtocolTimings`
 - Consumes: Task 1 domain kinds and existing stable operation IDs
 
@@ -198,7 +199,7 @@ Expected: FAIL because `ProbeDefinition` is absent.
 
 - [ ] **Step 3: Extend the OpenAPI schema**
 
-Replace the HTTP-only monitor shape with:
+Introduce:
 
 ```yaml
 ProbeDefinition:
@@ -220,8 +221,13 @@ and optional `tlsMinimumRemainingSeconds`. TCP requires host and port and has
 base64 `send`, base64 `expect`, and optional TLS threshold. DNS requires name
 and record type, with optional resolver and at most 20 expected values.
 
-Rename `HTTPWork` to protocol-neutral `ProbeWork`, preserving the existing
-lease endpoint and operation ID. `ProbeResultInput.observedStatus` and
+Add protocol-neutral `ProbeWork` while retaining the HTTP-only work response
+reference until Task 5 switches the leasing handler atomically. Keep the
+existing required `http` monitor fields deprecated until Task 4 switches
+create/get mappings atomically; the final milestone contract contains only
+`probe`.
+
+`ProbeResultInput.observedStatus` and
 `bodyAssertionPassed` become nullable. Add nullable `observedValues`,
 `tlsNotAfter`, and:
 
@@ -408,6 +414,10 @@ Decode base64 TCP send/expect with a 4 KiB post-decode bound. Sort HTTP header
 keys and DNS expected values when producing responses so fixtures remain
 stable. Never include secret-valued headers in response models; this milestone
 accepts only non-secret literal headers.
+
+In the same schema/generation change, replace the temporary deprecated
+`CreateMonitorRequest.http` and `Monitor.http` fields with required `probe`
+fields, regenerate root and Agent consumers, and then update these mappings.
 
 - [ ] **Step 5: Test and commit**
 
