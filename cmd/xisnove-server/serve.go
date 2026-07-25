@@ -14,32 +14,37 @@ import (
 
 	xisclock "github.com/araihu/xisnove/internal/adapters/clock"
 	xiscrypto "github.com/araihu/xisnove/internal/adapters/crypto"
+	"github.com/araihu/xisnove/internal/adapters/database"
 	"github.com/araihu/xisnove/internal/adapters/httpapi"
 	"github.com/araihu/xisnove/internal/adapters/ids"
-	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
 	"github.com/araihu/xisnove/internal/application"
 )
 
 func serveCommand(parent context.Context, args []string) error {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
-	database := flags.String("database", "", "SQLite database path")
+	databaseFlags := addDatabaseFlags(flags)
 	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
+	replicas := flags.Int("replicas", 1, "expected number of server replicas")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *database == "" {
-		return fmt.Errorf("--database is required")
-	}
-	db, err := sqlitestore.Open(*database)
+	config, err := databaseFlags.config()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	if err := sqlitestore.Ready(parent, db); err != nil {
+	if err := validateReplicaCount(config.Profile, *replicas); err != nil {
+		return err
+	}
+	handle, err := database.Open(parent, config)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	if err := handle.Ready(parent); err != nil {
 		return fmt.Errorf("database is not ready; run db migrate: %w", err)
 	}
 
-	store := sqlitestore.NewStore(db)
+	store := handle.Store
 	const leaseDuration = 45 * time.Second
 	tokens := xiscrypto.NewProductionTokenIssuer()
 	auth := application.NewAuthService(application.AuthServiceConfig{
@@ -66,7 +71,7 @@ func serveCommand(parent context.Context, args []string) error {
 			}),
 			Health: application.NewHealthService(store),
 		}),
-		Ready: func(ctx context.Context) error { return sqlitestore.Ready(ctx, db) },
+		Ready: func(ctx context.Context) error { return handle.Ready(ctx) },
 	})
 	if err != nil {
 		return err

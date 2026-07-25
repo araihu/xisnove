@@ -3,24 +3,24 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 
-	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
+	"github.com/araihu/xisnove/internal/adapters/database"
 )
 
 func migrateCommand(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("db migrate", flag.ContinueOnError)
-	database := flags.String("database", "", "SQLite database path")
+	databaseFlags := addDatabaseFlags(flags)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *database == "" {
-		return fmt.Errorf("--database is required")
-	}
-	db, err := sqlitestore.Open(*database)
+	config, err := databaseFlags.config()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	return sqlitestore.Migrate(ctx, db)
+	handle, err := database.Open(ctx, config)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	return handle.Migrate(ctx)
 }

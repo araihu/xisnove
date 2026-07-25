@@ -24,6 +24,7 @@ type Handle struct {
 	migrate func(context.Context) error
 	ready   func(context.Context) error
 	close   func() error
+	redact  func(error) error
 }
 
 func Open(ctx context.Context, config Config) (*Handle, error) {
@@ -48,7 +49,7 @@ func Open(ctx context.Context, config Config) (*Handle, error) {
 func openTursoCloud(ctx context.Context, config Config) (*Handle, error) {
 	db, err := tursocloud.Open(ctx, config.URL, config.AuthToken)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", config, err)
+		return nil, fmt.Errorf("open %s: %w", config, redactDatabaseError(err, config))
 	}
 	return &Handle{
 		DB:          db,
@@ -61,14 +62,15 @@ func openTursoCloud(ctx context.Context, config Config) (*Handle, error) {
 		ready: func(ctx context.Context) error {
 			return tursocloud.Ready(ctx, db)
 		},
-		close: db.Close,
+		close:  db.Close,
+		redact: func(err error) error { return redactDatabaseError(err, config) },
 	}, nil
 }
 
 func openPostgres(ctx context.Context, config Config) (*Handle, error) {
 	db, err := postgresstore.Open(ctx, config.URL)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", config, err)
+		return nil, fmt.Errorf("open %s: %w", config, redactDatabaseError(err, config))
 	}
 	return &Handle{
 		DB:          db,
@@ -81,14 +83,15 @@ func openPostgres(ctx context.Context, config Config) (*Handle, error) {
 		ready: func(ctx context.Context) error {
 			return postgresstore.Ready(ctx, db)
 		},
-		close: db.Close,
+		close:  db.Close,
+		redact: func(err error) error { return redactDatabaseError(err, config) },
 	}, nil
 }
 
 func openTursoLocal(ctx context.Context, config Config) (*Handle, error) {
 	db, err := tursolocal.Open(ctx, config.URL)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", config, err)
+		return nil, fmt.Errorf("open %s: %w", config, redactDatabaseError(err, config))
 	}
 	return &Handle{
 		DB:          db,
@@ -101,16 +104,17 @@ func openTursoLocal(ctx context.Context, config Config) (*Handle, error) {
 		ready: func(ctx context.Context) error {
 			return tursolocal.Ready(ctx, db)
 		},
-		close: db.Close,
+		close:  db.Close,
+		redact: func(err error) error { return redactDatabaseError(err, config) },
 	}, nil
 }
 
 func (h *Handle) Migrate(ctx context.Context) error {
-	return h.migrate(ctx)
+	return h.redacted(h.migrate(ctx))
 }
 
 func (h *Handle) Ready(ctx context.Context) error {
-	return h.ready(ctx)
+	return h.redacted(h.ready(ctx))
 }
 
 func (h *Handle) Close() error {
@@ -120,11 +124,11 @@ func (h *Handle) Close() error {
 func openSQLite(ctx context.Context, config Config) (*Handle, error) {
 	db, err := sqlitestore.Open(config.URL)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", config, err)
+		return nil, fmt.Errorf("open %s: %w", config, redactDatabaseError(err, config))
 	}
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("ping %s: %w", config, err)
+		return nil, fmt.Errorf("ping %s: %w", config, redactDatabaseError(err, config))
 	}
 	return &Handle{
 		DB:          db,
@@ -137,6 +141,14 @@ func openSQLite(ctx context.Context, config Config) (*Handle, error) {
 		ready: func(ctx context.Context) error {
 			return sqlitestore.Ready(ctx, db)
 		},
-		close: db.Close,
+		close:  db.Close,
+		redact: func(err error) error { return redactDatabaseError(err, config) },
 	}, nil
+}
+
+func (h *Handle) redacted(err error) error {
+	if err == nil || h.redact == nil {
+		return err
+	}
+	return h.redact(err)
 }

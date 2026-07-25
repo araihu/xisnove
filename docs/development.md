@@ -12,15 +12,27 @@ make check
 Start a local control plane:
 
 ```bash
-go run ./cmd/xisnove-server db migrate --database ./dev.db
+go run ./cmd/xisnove-server db migrate \
+  --database-profile sqlite --database-url ./dev.db
 printf '%s\n' 'replace-with-at-least-16-characters' > ./dev-admin-password
 chmod 600 ./dev-admin-password
 go run ./cmd/xisnove-server admin bootstrap \
-  --database ./dev.db \
+  --database-profile sqlite \
+  --database-url ./dev.db \
   --email admin@example.com \
   --password-file ./dev-admin-password
-go run ./cmd/xisnove-server serve --database ./dev.db
+go run ./cmd/xisnove-server serve \
+  --database-profile sqlite --database-url ./dev.db
 ```
+
+The same three commands accept `turso-local`, `turso-cloud`, and `postgres`.
+Managed Turso additionally requires `--database-auth-token-file`; the token is
+trimmed after reading and is never accepted in the database URL. The old
+`--database ./dev.db` form remains a deprecated SQLite-only alias during v1.
+
+`serve --replicas N` declares the expected number of server replicas. Values
+greater than one require the replica-safe `postgres` or `turso-cloud` profile;
+SQLite and local Turso deliberately reject them.
 
 `serve` never applies migrations. This makes rollout order explicit and causes
 readiness/startup to fail when the schema is behind. The Agent module is

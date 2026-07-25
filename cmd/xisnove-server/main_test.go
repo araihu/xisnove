@@ -24,3 +24,22 @@ func TestMigrateCommandCreatesCurrentDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMigrateCommandUsesProfileAwareFlags(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "xisnove.db")
+	if err := run(context.Background(), []string{
+		"db", "migrate",
+		"--database-profile", "sqlite",
+		"--database-url", path,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sqlitestore.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := sqlitestore.Ready(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+}
