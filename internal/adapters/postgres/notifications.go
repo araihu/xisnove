@@ -82,6 +82,34 @@ func (r *notificationChannelRepository) ListKeyVersions(ctx context.Context) ([]
 	return result, nil
 }
 
+func (r *notificationChannelRepository) ListNeedingKeyVersion(
+	ctx context.Context,
+	active uint32,
+	limit int,
+) ([]application.NotificationChannelRecord, error) {
+	if active > math.MaxInt32 {
+		return nil, errors.New("list notification channels needing key rotation: active key version out of range")
+	}
+	records, err := r.queries.ListNotificationChannelsNeedingKeyVersion(
+		ctx,
+		dbpostgres.ListNotificationChannelsNeedingKeyVersionParams{
+			ActiveKeyVersion: int32(active), RowLimit: int32(limit),
+		},
+	)
+	if err != nil {
+		return nil, repositoryError("list notification channels needing key rotation", err)
+	}
+	result := make([]application.NotificationChannelRecord, 0, len(records))
+	for _, record := range records {
+		mapped, err := mapNotificationChannel(record)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mapped)
+	}
+	return result, nil
+}
+
 type notificationRouteRepository struct{ queries *dbpostgres.Queries }
 
 func (r *notificationRouteRepository) Create(ctx context.Context, route domain.NotificationRoute) error {

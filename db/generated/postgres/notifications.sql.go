@@ -498,6 +498,51 @@ func (q *Queries) ListNotificationChannels(ctx context.Context, arg ListNotifica
 	return items, nil
 }
 
+const listNotificationChannelsNeedingKeyVersion = `-- name: ListNotificationChannelsNeedingKeyVersion :many
+SELECT id, name, kind, encrypted_config, key_version, enabled, created_at, updated_at
+FROM notification_channels
+WHERE key_version <> $1
+ORDER BY id
+LIMIT $2
+`
+
+type ListNotificationChannelsNeedingKeyVersionParams struct {
+	ActiveKeyVersion int32 `json:"active_key_version"`
+	RowLimit         int32 `json:"row_limit"`
+}
+
+func (q *Queries) ListNotificationChannelsNeedingKeyVersion(ctx context.Context, arg ListNotificationChannelsNeedingKeyVersionParams) ([]NotificationChannel, error) {
+	rows, err := q.db.QueryContext(ctx, listNotificationChannelsNeedingKeyVersion, arg.ActiveKeyVersion, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NotificationChannel{}
+	for rows.Next() {
+		var i NotificationChannel
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.EncryptedConfig,
+			&i.KeyVersion,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNotificationDeliveryAttempts = `-- name: ListNotificationDeliveryAttempts :many
 SELECT id, outbox_id, ordinal, started_at, finished_at, outcome, error_class, diagnostic, provider_receipt FROM notification_delivery_attempts
 WHERE outbox_id = $1

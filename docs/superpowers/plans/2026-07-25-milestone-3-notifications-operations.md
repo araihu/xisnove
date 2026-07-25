@@ -309,43 +309,44 @@ git commit -m "feat(notification): persist durable delivery state"
 - Create: `internal/adapters/crypto/envelope_test.go`
 - Create: `internal/adapters/secrets/file.go`
 - Create: `internal/adapters/secrets/file_test.go`
-- Modify: `internal/config/config.go`
-- Modify: `internal/config/config_test.go`
 - Modify: `cmd/xisnove-server/main.go`
+- Modify: `cmd/xisnove-server/serve.go`
+- Create: `cmd/xisnove-server/notification_keys.go`
+- Create: `cmd/xisnove-server/notification_keys_test.go`
 
 **Interfaces:**
 - Produces: `ConfigSealer` with versioned `Seal`/`Open`
 - Produces: `SecretResolver.Resolve(context.Context, SecretReference)`
 - Consumes: a master-key keyring file containing active version and base64 keys
 
-- [ ] **Step 1: Write failing cryptographic-envelope tests**
+- [x] **Step 1: Write failing cryptographic-envelope tests**
 
-Use AES-256-GCM with random nonces and associated data binding workspace,
-channel ID, kind, and envelope version. Prove ciphertext differs for equal
+Use AES-256-GCM with random nonces and associated data binding channel ID,
+kind, and envelope version. Prove ciphertext differs for equal
 plaintext, tampering/wrong identity fails closed, old versions decrypt after
 rotation, and new writes use only the active version.
 
-- [ ] **Step 2: Write failing keyring/file-resolution tests**
+- [x] **Step 2: Write failing keyring/file-resolution tests**
 
 Reject absent, malformed, duplicate-version, short-key, symlink, non-regular,
 and overly permissive key files. Bound secret size, trim one final newline only,
 and never include content in an error. The file resolver is the v1
 implementation; the port remains provider-neutral for ESO/Vault/OpenBao.
 
-- [ ] **Step 3: Implement keyring loading and sealing**
+- [x] **Step 3: Implement keyring loading and sealing**
 
 Accept `--notification-master-key-file`/`XISNOVE_NOTIFICATION_MASTER_KEY_FILE`.
 Configuration diagnostics expose only whether a keyring is configured and its
 active version. Startup refuses configured notification channels when their key
 versions cannot be opened.
 
-- [ ] **Step 4: Add rotation support**
+- [x] **Step 4: Add rotation support**
 
 Provide a bounded application operation and server subcommand that re-encrypts
 channel configurations in batches, is restart-safe, and keeps old keys until
 no row references them.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 go test -race ./internal/adapters/crypto ./internal/adapters/secrets \

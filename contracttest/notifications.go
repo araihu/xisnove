@@ -42,9 +42,32 @@ func testNotificationPersistence(t *testing.T, store application.Store) {
 	if gotChannel.Channel != channel || string(gotChannel.EncryptedConfig) != "ciphertext" || gotChannel.KeyVersion != 7 {
 		t.Fatalf("channel = %#v", gotChannel)
 	}
+	secondChannel, err := domain.NewNotificationChannel(
+		"00000000-0000-4000-8000-000000000028",
+		"secondary",
+		domain.NotificationChannelAlertmanager,
+		true,
+		fixture.now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Repositories().NotificationChannels.Create(ctx, application.NotificationChannelRecord{
+		Channel: secondChannel, EncryptedConfig: []byte("other-ciphertext"), KeyVersion: 9,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	versions, err := store.Repositories().NotificationChannels.ListKeyVersions(ctx)
-	if err != nil || len(versions) != 1 || versions[0] != 7 {
+	if err != nil || len(versions) != 2 || versions[0] != 7 || versions[1] != 9 {
 		t.Fatalf("key versions = %v, %v", versions, err)
+	}
+	needsRotation, err := store.Repositories().NotificationChannels.ListNeedingKeyVersion(ctx, 9, 1)
+	if err != nil || len(needsRotation) != 1 || needsRotation[0].Channel.ID != channelID {
+		t.Fatalf("channels needing version 9 = %#v, %v", needsRotation, err)
+	}
+	needsRotation, err = store.Repositories().NotificationChannels.ListNeedingKeyVersion(ctx, 7, 1)
+	if err != nil || len(needsRotation) != 1 || needsRotation[0].Channel.ID != secondChannel.ID {
+		t.Fatalf("channels needing version 7 = %#v, %v", needsRotation, err)
 	}
 
 	target := fixture.monitor.ID

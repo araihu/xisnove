@@ -24,6 +24,12 @@ WHERE id = sqlc.arg(id);
 -- name: ListNotificationChannelKeyVersions :many
 SELECT DISTINCT key_version FROM notification_channels ORDER BY key_version;
 
+-- name: ListNotificationChannelsNeedingKeyVersion :many
+SELECT * FROM notification_channels
+WHERE key_version <> sqlc.arg(active_key_version)
+ORDER BY id
+LIMIT sqlc.arg(row_limit);
+
 -- name: CreateNotificationRoute :exec
 INSERT INTO notification_routes (
   id, name, channel_id, monitor_id, label_matchers_json, actions_json,

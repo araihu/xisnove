@@ -67,6 +67,7 @@ type Querier interface {
 	ListMaintenanceIntervals(ctx context.Context, arg ListMaintenanceIntervalsParams) ([]MaintenanceInterval, error)
 	ListNotificationChannelKeyVersions(ctx context.Context) ([]int32, error)
 	ListNotificationChannels(ctx context.Context, arg ListNotificationChannelsParams) ([]NotificationChannel, error)
+	ListNotificationChannelsNeedingKeyVersion(ctx context.Context, arg ListNotificationChannelsNeedingKeyVersionParams) ([]NotificationChannel, error)
 	ListNotificationDeliveryAttempts(ctx context.Context, outboxID string) ([]NotificationDeliveryAttempt, error)
 	ListNotificationOutbox(ctx context.Context, arg ListNotificationOutboxParams) ([]NotificationOutbox, error)
 	ListNotificationRoutes(ctx context.Context, arg ListNotificationRoutesParams) ([]NotificationRoute, error)

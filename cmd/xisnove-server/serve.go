@@ -23,6 +23,7 @@ import (
 func serveCommand(parent context.Context, args []string) error {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	databaseFlags := addDatabaseFlags(flags)
+	keyFlags := addNotificationKeyFlags(flags, os.Getenv)
 	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	replicas := flags.Int("replicas", 1, "expected number of server replicas")
 	if err := flags.Parse(args); err != nil {
@@ -35,6 +36,10 @@ func serveCommand(parent context.Context, args []string) error {
 	if err := validateReplicaCount(config.Profile, *replicas); err != nil {
 		return err
 	}
+	sealer, err := keyFlags.load()
+	if err != nil {
+		return err
+	}
 	handle, err := database.Open(parent, config)
 	if err != nil {
 		return err
@@ -43,6 +48,10 @@ func serveCommand(parent context.Context, args []string) error {
 	if err := handle.Ready(parent); err != nil {
 		return fmt.Errorf("database is not ready; run db migrate: %w", err)
 	}
+	if err := validateNotificationKeyring(parent, handle.Store, sealer); err != nil {
+		return fmt.Errorf("notification keyring is not ready: %w", err)
+	}
+	logNotificationKeyring(sealer)
 
 	store := handle.Store
 	const leaseDuration = 45 * time.Second

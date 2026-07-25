@@ -131,6 +131,7 @@ type NotificationChannelRepository interface {
 	Update(context.Context, NotificationChannelRecord) (bool, error)
 	SetEnabled(context.Context, domain.NotificationChannelID, bool, time.Time) (bool, error)
 	ListKeyVersions(context.Context) ([]uint32, error)
+	ListNeedingKeyVersion(context.Context, uint32, int) ([]NotificationChannelRecord, error)
 }
 
 type NotificationRouteRepository interface {

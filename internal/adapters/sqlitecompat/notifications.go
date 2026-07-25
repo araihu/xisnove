@@ -82,6 +82,31 @@ func (r *notificationChannelRepository) ListKeyVersions(ctx context.Context) ([]
 	return result, nil
 }
 
+func (r *notificationChannelRepository) ListNeedingKeyVersion(
+	ctx context.Context,
+	active uint32,
+	limit int,
+) ([]application.NotificationChannelRecord, error) {
+	records, err := r.queries.ListNotificationChannelsNeedingKeyVersion(
+		ctx,
+		dbsqlite.ListNotificationChannelsNeedingKeyVersionParams{
+			ActiveKeyVersion: int64(active), RowLimit: int64(limit),
+		},
+	)
+	if err != nil {
+		return nil, repositoryError("list notification channels needing key rotation", err)
+	}
+	result := make([]application.NotificationChannelRecord, 0, len(records))
+	for _, record := range records {
+		mapped, err := mapNotificationChannel(record)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mapped)
+	}
+	return result, nil
+}
+
 type notificationRouteRepository struct{ queries *dbsqlite.Queries }
 
 func (r *notificationRouteRepository) Create(ctx context.Context, route domain.NotificationRoute) error {
