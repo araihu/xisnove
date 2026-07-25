@@ -14,6 +14,7 @@ import (
 	"github.com/araihu/xisnove/internal/domain"
 	modernsqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
+	turso "turso.tech/database/tursogo"
 )
 
 type store struct {
@@ -1212,6 +1213,9 @@ func repositoryError(operation string, err error) error {
 	var sqliteErr *modernsqlite.Error
 	if errors.As(err, &sqliteErr) &&
 		sqliteErr.Code()&0xff == sqlite3.SQLITE_CONSTRAINT {
+		return fmt.Errorf("%s: %w", operation, application.ErrConflict)
+	}
+	if errors.Is(err, turso.ErrTursoConstraint) {
 		return fmt.Errorf("%s: %w", operation, application.ErrConflict)
 	}
 	return fmt.Errorf("%s: %w", operation, err)

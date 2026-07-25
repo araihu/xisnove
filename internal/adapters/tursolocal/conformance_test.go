@@ -1,0 +1,29 @@
+package tursolocal_test
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/araihu/xisnove/internal/adapters/conformance"
+	"github.com/araihu/xisnove/internal/adapters/tursolocal"
+	"github.com/araihu/xisnove/internal/application"
+)
+
+func TestPersistenceConformance(t *testing.T) {
+	conformance.Run(t, func(t *testing.T) application.Store {
+		t.Helper()
+		db, err := tursolocal.Open(
+			context.Background(),
+			filepath.Join(t.TempDir(), "conformance.turso"),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = db.Close() })
+		if err := tursolocal.Migrate(context.Background(), db); err != nil {
+			t.Fatal(err)
+		}
+		return tursolocal.NewStore(db)
+	})
+}
