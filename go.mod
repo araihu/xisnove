@@ -7,6 +7,7 @@ toolchain go1.26.1
 require (
 	github.com/getkin/kin-openapi v0.144.0
 	github.com/google/uuid v1.6.0
+	github.com/oapi-codegen/nethttp-middleware v1.2.0
 	github.com/oapi-codegen/runtime v1.6.0
 	github.com/pressly/goose/v3 v3.27.3
 	golang.org/x/crypto v0.54.0
@@ -63,6 +64,7 @@ require (
 	github.com/google/cel-go v0.28.0 // indirect
 	github.com/google/pprof v0.0.0-20250501235452-c0086092b71a // indirect
 	github.com/gorilla/css v1.0.1 // indirect
+	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

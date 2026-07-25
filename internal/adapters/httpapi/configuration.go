@@ -15,6 +15,7 @@ import (
 )
 
 type ServerConfig struct {
+	Auth          *application.AuthService
 	Configuration *application.ConfigurationService
 	Agents        *application.AgentService
 	Lease         *application.LeaseService
@@ -23,6 +24,7 @@ type ServerConfig struct {
 }
 
 type Server struct {
+	auth          *application.AuthService
 	configuration *application.ConfigurationService
 	agents        *application.AgentService
 	lease         *application.LeaseService
@@ -32,6 +34,7 @@ type Server struct {
 
 func NewServer(config ServerConfig) *Server {
 	return &Server{
+		auth:          config.Auth,
 		configuration: config.Configuration,
 		agents:        config.Agents,
 		lease:         config.Lease,

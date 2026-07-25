@@ -71,3 +71,34 @@ func writeUnauthorized(w http.ResponseWriter, r *http.Request) {
 		CorrelationId: correlationID,
 	})
 }
+
+func (s *Server) CreateSession(
+	ctx context.Context,
+	request CreateSessionRequestObject,
+) (CreateSessionResponseObject, error) {
+	if request.Body == nil || request.Body.Password == nil {
+		problem, status, _ := problemFromError(&application.ValidationError{
+			Fields: map[string]string{"body": "is required"},
+		})
+		return CreateSessiondefaultApplicationProblemPlusJSONResponse{
+			Body: problem, StatusCode: status,
+		}, nil
+	}
+	session, err := s.auth.CreateSession(
+		ctx,
+		string(request.Body.Email),
+		*request.Body.Password,
+	)
+	if err != nil {
+		problem, status, mapped := problemFromError(err)
+		if mapped {
+			return CreateSessiondefaultApplicationProblemPlusJSONResponse{
+				Body: problem, StatusCode: status,
+			}, nil
+		}
+		return nil, err
+	}
+	return CreateSession201JSONResponse{
+		Token: session.Token, ExpiresAt: session.ExpiresAt,
+	}, nil
+}
