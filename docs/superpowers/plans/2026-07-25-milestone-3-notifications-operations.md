@@ -476,26 +476,26 @@ git commit -m "feat(api): expose notification operations"
 - Produces: stable transient/permanent error classes and provider receipt
 - Produces: DNS/IP/redirect-aware egress policy shared by transports
 
-- [ ] **Step 1: Pin and audit Shoutrrr v0.16.2**
+- [x] **Step 1: Pin and audit Shoutrrr v0.16.2**
 
 Pin `github.com/nicholas-fedor/shoutrrr@v0.16.2`. Record supported schemes that
 honor injected HTTP behavior. Reject schemes that cannot satisfy timeout and
 egress guarantees until a reviewed adapter exists.
 
-- [ ] **Step 2: Write failing egress tests**
+- [x] **Step 2: Write failing egress tests**
 
 Default policy blocks loopback, link-local, multicast, unspecified, private,
 carrier-grade NAT, Kubernetes service ranges when configured, and DNS rebinding.
 Explicit allow rules support homelab destinations. Every redirect and resolved
 address is revalidated.
 
-- [ ] **Step 3: Implement the provider-neutral boundary**
+- [x] **Step 3: Implement the provider-neutral boundary**
 
 Context cancellation and deadlines belong to Xisnove even if a provider API
 lacks context support. Diagnostics are bounded and scrubbed of credentials,
 URLs with userinfo/query secrets, headers, and message payloads.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 go test -race ./application ./internal/adapters/egress
