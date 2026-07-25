@@ -10,3 +10,14 @@ sql:
         emit_interface: true
         emit_json_tags: true
         emit_empty_slices: true
+  - engine: postgresql
+    schema: db/migrations/postgres
+    queries: db/queries/postgres
+    gen:
+      go:
+        package: dbpostgres
+        out: db/generated/postgres
+        sql_package: pgx/v5
+        emit_interface: true
+        emit_json_tags: true
+        emit_empty_slices: true
