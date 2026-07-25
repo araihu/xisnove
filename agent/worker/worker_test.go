@@ -136,7 +136,7 @@ func testHTTPWork() controlplane.HTTPWork {
 		ScheduledFor:  time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC),
 		TimeoutMillis: 5000,
 		Http: controlplane.HTTPProbe{
-			Method:         controlplane.GET,
+			Method:         controlplane.HTTPProbeMethodGET,
 			Url:            "https://example.com/health",
 			ExpectedStatus: 200,
 		},

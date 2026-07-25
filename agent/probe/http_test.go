@@ -126,7 +126,7 @@ func testWork(url string, expectedStatus int, bodyContains string) controlplane.
 		ScheduledFor:  time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC),
 		TimeoutMillis: 5000,
 		Http: controlplane.HTTPProbe{
-			Method:          controlplane.GET,
+			Method:          controlplane.HTTPProbeMethodGET,
 			Url:             url,
 			ExpectedStatus:  int32(expectedStatus),
 			BodyContains:    bodyContains,

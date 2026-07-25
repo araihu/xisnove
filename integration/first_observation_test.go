@@ -99,16 +99,26 @@ func TestFirstObservationOpensIncidentAfterThirdFailure(t *testing.T) {
 		fmt.Fprint(w, "not ready")
 	}))
 	t.Cleanup(target.Close)
+	var httpProbe sdk.ProbeDefinition
+	if err := httpProbe.FromHTTPProbeDefinition(sdk.HTTPProbeDefinition{
+		Method: sdk.HTTPProbeDefinitionMethodGET, Url: target.URL,
+		Headers: map[string]string{},
+		Body:    []byte{},
+		ExpectedStatus: []sdk.StatusRange{{
+			Minimum: 200, Maximum: 200,
+		}},
+		BodyContains:       []string{"ready"},
+		BodyDoesNotContain: []string{},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	monitorResponse, err := client.CreateMonitorWithResponse(
 		ctx,
 		sdk.CreateMonitorRequest{
 			Name: "target", LocationId: locationResponse.JSON201.Id,
 			RequiredLocation: true, IntervalSeconds: 60, TimeoutMillis: 5000,
 			FailureThreshold: 3, RecoveryThreshold: 2,
-			Http: sdk.HTTPProbe{
-				Method: sdk.GET, Url: target.URL, ExpectedStatus: 200,
-				BodyContains: "ready",
-			},
+			Probe: httpProbe,
 		},
 		adminAuth,
 	)

@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -50,33 +51,129 @@ func (e AgentCapability) Valid() bool {
 	}
 }
 
+// Defines values for DNSProbeDefinitionKind.
+const (
+	DNSProbeDefinitionKindDns DNSProbeDefinitionKind = "dns"
+)
+
+// Valid indicates whether the value is a known member of the DNSProbeDefinitionKind enum.
+func (e DNSProbeDefinitionKind) Valid() bool {
+	switch e {
+	case DNSProbeDefinitionKindDns:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DNSProbeDefinitionRecordType.
+const (
+	A     DNSProbeDefinitionRecordType = "A"
+	AAAA  DNSProbeDefinitionRecordType = "AAAA"
+	CNAME DNSProbeDefinitionRecordType = "CNAME"
+	MX    DNSProbeDefinitionRecordType = "MX"
+	NS    DNSProbeDefinitionRecordType = "NS"
+	SRV   DNSProbeDefinitionRecordType = "SRV"
+	TXT   DNSProbeDefinitionRecordType = "TXT"
+)
+
+// Valid indicates whether the value is a known member of the DNSProbeDefinitionRecordType enum.
+func (e DNSProbeDefinitionRecordType) Valid() bool {
+	switch e {
+	case A:
+		return true
+	case AAAA:
+		return true
+	case CNAME:
+		return true
+	case MX:
+		return true
+	case NS:
+		return true
+	case SRV:
+		return true
+	case TXT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HTTPProbeMethod.
 const (
-	DELETE  HTTPProbeMethod = "DELETE"
-	GET     HTTPProbeMethod = "GET"
-	HEAD    HTTPProbeMethod = "HEAD"
-	OPTIONS HTTPProbeMethod = "OPTIONS"
-	PATCH   HTTPProbeMethod = "PATCH"
-	POST    HTTPProbeMethod = "POST"
-	PUT     HTTPProbeMethod = "PUT"
+	HTTPProbeMethodDELETE  HTTPProbeMethod = "DELETE"
+	HTTPProbeMethodGET     HTTPProbeMethod = "GET"
+	HTTPProbeMethodHEAD    HTTPProbeMethod = "HEAD"
+	HTTPProbeMethodOPTIONS HTTPProbeMethod = "OPTIONS"
+	HTTPProbeMethodPATCH   HTTPProbeMethod = "PATCH"
+	HTTPProbeMethodPOST    HTTPProbeMethod = "POST"
+	HTTPProbeMethodPUT     HTTPProbeMethod = "PUT"
 )
 
 // Valid indicates whether the value is a known member of the HTTPProbeMethod enum.
 func (e HTTPProbeMethod) Valid() bool {
 	switch e {
-	case DELETE:
+	case HTTPProbeMethodDELETE:
 		return true
-	case GET:
+	case HTTPProbeMethodGET:
 		return true
-	case HEAD:
+	case HTTPProbeMethodHEAD:
 		return true
-	case OPTIONS:
+	case HTTPProbeMethodOPTIONS:
 		return true
-	case PATCH:
+	case HTTPProbeMethodPATCH:
 		return true
-	case POST:
+	case HTTPProbeMethodPOST:
 		return true
-	case PUT:
+	case HTTPProbeMethodPUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HTTPProbeDefinitionKind.
+const (
+	HTTPProbeDefinitionKindHttp HTTPProbeDefinitionKind = "http"
+)
+
+// Valid indicates whether the value is a known member of the HTTPProbeDefinitionKind enum.
+func (e HTTPProbeDefinitionKind) Valid() bool {
+	switch e {
+	case HTTPProbeDefinitionKindHttp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HTTPProbeDefinitionMethod.
+const (
+	HTTPProbeDefinitionMethodDELETE  HTTPProbeDefinitionMethod = "DELETE"
+	HTTPProbeDefinitionMethodGET     HTTPProbeDefinitionMethod = "GET"
+	HTTPProbeDefinitionMethodHEAD    HTTPProbeDefinitionMethod = "HEAD"
+	HTTPProbeDefinitionMethodOPTIONS HTTPProbeDefinitionMethod = "OPTIONS"
+	HTTPProbeDefinitionMethodPATCH   HTTPProbeDefinitionMethod = "PATCH"
+	HTTPProbeDefinitionMethodPOST    HTTPProbeDefinitionMethod = "POST"
+	HTTPProbeDefinitionMethodPUT     HTTPProbeDefinitionMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the HTTPProbeDefinitionMethod enum.
+func (e HTTPProbeDefinitionMethod) Valid() bool {
+	switch e {
+	case HTTPProbeDefinitionMethodDELETE:
+		return true
+	case HTTPProbeDefinitionMethodGET:
+		return true
+	case HTTPProbeDefinitionMethodHEAD:
+		return true
+	case HTTPProbeDefinitionMethodOPTIONS:
+		return true
+	case HTTPProbeDefinitionMethodPATCH:
+		return true
+	case HTTPProbeDefinitionMethodPOST:
+		return true
+	case HTTPProbeDefinitionMethodPUT:
 		return true
 	default:
 		return false
@@ -145,13 +242,19 @@ func (e IncidentState) Valid() bool {
 
 // Defines values for MonitorKind.
 const (
+	MonitorKindDns  MonitorKind = "dns"
 	MonitorKindHttp MonitorKind = "http"
+	MonitorKindTcp  MonitorKind = "tcp"
 )
 
 // Valid indicates whether the value is a known member of the MonitorKind enum.
 func (e MonitorKind) Valid() bool {
 	switch e {
+	case MonitorKindDns:
+		return true
 	case MonitorKindHttp:
+		return true
+	case MonitorKindTcp:
 		return true
 	default:
 		return false
@@ -245,6 +348,21 @@ func (e ProbeResultInputOutcome) Valid() bool {
 	}
 }
 
+// Defines values for TCPProbeDefinitionKind.
+const (
+	TCPProbeDefinitionKindTcp TCPProbeDefinitionKind = "tcp"
+)
+
+// Valid indicates whether the value is a known member of the TCPProbeDefinitionKind enum.
+func (e TCPProbeDefinitionKind) Valid() bool {
+	switch e {
+	case TCPProbeDefinitionKindTcp:
+		return true
+	default:
+		return false
+	}
+}
+
 // AgentCapability defines model for AgentCapability.
 type AgentCapability string
 
@@ -275,10 +393,10 @@ type CreateLocationRequest struct {
 // CreateMonitorRequest defines model for CreateMonitorRequest.
 type CreateMonitorRequest struct {
 	FailureThreshold  int32              `json:"failureThreshold"`
-	Http              HTTPProbe          `json:"http"`
 	IntervalSeconds   int32              `json:"intervalSeconds"`
 	LocationId        openapi_types.UUID `json:"locationId"`
 	Name              string             `json:"name"`
+	Probe             ProbeDefinition    `json:"probe"`
 	RecoveryThreshold int32              `json:"recoveryThreshold"`
 	RequiredLocation  bool               `json:"requiredLocation"`
 	TimeoutMillis     int32              `json:"timeoutMillis"`
@@ -289,6 +407,21 @@ type CreateSessionRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Password *string             `json:"password,omitempty"`
 }
+
+// DNSProbeDefinition defines model for DNSProbeDefinition.
+type DNSProbeDefinition struct {
+	ExpectedValues []string                     `json:"expectedValues"`
+	Kind           DNSProbeDefinitionKind       `json:"kind"`
+	Name           string                       `json:"name"`
+	RecordType     DNSProbeDefinitionRecordType `json:"recordType"`
+	Resolver       string                       `json:"resolver"`
+}
+
+// DNSProbeDefinitionKind defines model for DNSProbeDefinition.Kind.
+type DNSProbeDefinitionKind string
+
+// DNSProbeDefinitionRecordType defines model for DNSProbeDefinition.RecordType.
+type DNSProbeDefinitionRecordType string
 
 // EnrollAgentRequest defines model for EnrollAgentRequest.
 type EnrollAgentRequest struct {
@@ -321,6 +454,26 @@ type HTTPProbe struct {
 
 // HTTPProbeMethod defines model for HTTPProbe.Method.
 type HTTPProbeMethod string
+
+// HTTPProbeDefinition defines model for HTTPProbeDefinition.
+type HTTPProbeDefinition struct {
+	Body                       []byte                    `json:"body"`
+	BodyContains               []string                  `json:"bodyContains"`
+	BodyDoesNotContain         []string                  `json:"bodyDoesNotContain"`
+	ExpectedStatus             []StatusRange             `json:"expectedStatus"`
+	FollowRedirects            bool                      `json:"followRedirects"`
+	Headers                    map[string]string         `json:"headers"`
+	Kind                       HTTPProbeDefinitionKind   `json:"kind"`
+	Method                     HTTPProbeDefinitionMethod `json:"method"`
+	TlsMinimumRemainingSeconds *int64                    `json:"tlsMinimumRemainingSeconds,omitempty"`
+	Url                        string                    `json:"url"`
+}
+
+// HTTPProbeDefinitionKind defines model for HTTPProbeDefinition.Kind.
+type HTTPProbeDefinitionKind string
+
+// HTTPProbeDefinitionMethod defines model for HTTPProbeDefinition.Method.
+type HTTPProbeDefinitionMethod string
 
 // HTTPWork defines model for HTTPWork.
 type HTTPWork struct {
@@ -377,12 +530,12 @@ type LocationHealth struct {
 type Monitor struct {
 	CreatedAt         time.Time          `json:"createdAt"`
 	FailureThreshold  int32              `json:"failureThreshold"`
-	Http              HTTPProbe          `json:"http"`
 	Id                openapi_types.UUID `json:"id"`
 	IntervalSeconds   int32              `json:"intervalSeconds"`
 	Kind              MonitorKind        `json:"kind"`
 	LocationId        openapi_types.UUID `json:"locationId"`
 	Name              string             `json:"name"`
+	Probe             ProbeDefinition    `json:"probe"`
 	RecoveryThreshold int32              `json:"recoveryThreshold"`
 	RequiredLocation  bool               `json:"requiredLocation"`
 	TimeoutMillis     int32              `json:"timeoutMillis"`
@@ -398,6 +551,11 @@ type MonitorHealth struct {
 	Locations        []LocationHealth   `json:"locations"`
 	MonitorId        openapi_types.UUID `json:"monitorId"`
 	State            HealthState        `json:"state"`
+}
+
+// ProbeDefinition defines model for ProbeDefinition.
+type ProbeDefinition struct {
+	union json.RawMessage
 }
 
 // ProbeResultAcknowledgement defines model for ProbeResultAcknowledgement.
@@ -468,6 +626,25 @@ type Session struct {
 	Token     string    `json:"token"`
 }
 
+// StatusRange defines model for StatusRange.
+type StatusRange struct {
+	Maximum int32 `json:"maximum"`
+	Minimum int32 `json:"minimum"`
+}
+
+// TCPProbeDefinition defines model for TCPProbeDefinition.
+type TCPProbeDefinition struct {
+	Expect                     []byte                 `json:"expect"`
+	Host                       string                 `json:"host"`
+	Kind                       TCPProbeDefinitionKind `json:"kind"`
+	Port                       int32                  `json:"port"`
+	Send                       []byte                 `json:"send"`
+	TlsMinimumRemainingSeconds *int64                 `json:"tlsMinimumRemainingSeconds,omitempty"`
+}
+
+// TCPProbeDefinitionKind defines model for TCPProbeDefinition.Kind.
+type TCPProbeDefinitionKind string
+
 // MonitorID defines model for MonitorID.
 type MonitorID = openapi_types.UUID
 
@@ -494,6 +671,143 @@ type CreateMonitorJSONRequestBody = CreateMonitorRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
+
+// AsHTTPProbeDefinition returns the union data inside the ProbeDefinition as a HTTPProbeDefinition
+func (t ProbeDefinition) AsHTTPProbeDefinition() (HTTPProbeDefinition, error) {
+	var body HTTPProbeDefinition
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHTTPProbeDefinition overwrites any union data inside the ProbeDefinition as the provided HTTPProbeDefinition
+func (t *ProbeDefinition) FromHTTPProbeDefinition(v HTTPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"http"}`))
+	t.union = b
+	return err
+}
+
+// MergeHTTPProbeDefinition performs a merge with any union data inside the ProbeDefinition, using the provided HTTPProbeDefinition
+func (t *ProbeDefinition) MergeHTTPProbeDefinition(v HTTPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"http"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTCPProbeDefinition returns the union data inside the ProbeDefinition as a TCPProbeDefinition
+func (t ProbeDefinition) AsTCPProbeDefinition() (TCPProbeDefinition, error) {
+	var body TCPProbeDefinition
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTCPProbeDefinition overwrites any union data inside the ProbeDefinition as the provided TCPProbeDefinition
+func (t *ProbeDefinition) FromTCPProbeDefinition(v TCPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"tcp"}`))
+	t.union = b
+	return err
+}
+
+// MergeTCPProbeDefinition performs a merge with any union data inside the ProbeDefinition, using the provided TCPProbeDefinition
+func (t *ProbeDefinition) MergeTCPProbeDefinition(v TCPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"tcp"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDNSProbeDefinition returns the union data inside the ProbeDefinition as a DNSProbeDefinition
+func (t ProbeDefinition) AsDNSProbeDefinition() (DNSProbeDefinition, error) {
+	var body DNSProbeDefinition
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDNSProbeDefinition overwrites any union data inside the ProbeDefinition as the provided DNSProbeDefinition
+func (t *ProbeDefinition) FromDNSProbeDefinition(v DNSProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"dns"}`))
+	t.union = b
+	return err
+}
+
+// MergeDNSProbeDefinition performs a merge with any union data inside the ProbeDefinition, using the provided DNSProbeDefinition
+func (t *ProbeDefinition) MergeDNSProbeDefinition(v DNSProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"dns"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ProbeDefinition) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"kind"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t ProbeDefinition) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "dns":
+		return t.AsDNSProbeDefinition()
+	case "http":
+		return t.AsHTTPProbeDefinition()
+	case "tcp":
+		return t.AsTCPProbeDefinition()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t ProbeDefinition) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ProbeDefinition) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1714,47 +2028,54 @@ func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

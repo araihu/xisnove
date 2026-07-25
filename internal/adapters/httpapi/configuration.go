@@ -2,10 +2,12 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -84,21 +86,22 @@ func (s *Server) CreateMonitor(
 	if request.Body.FailureThreshold <= 0 ||
 		request.Body.FailureThreshold > math.MaxUint16 ||
 		request.Body.RecoveryThreshold <= 0 ||
-		request.Body.RecoveryThreshold > math.MaxUint16 ||
-		!request.Body.Http.Method.Valid() {
+		request.Body.RecoveryThreshold > math.MaxUint16 {
 		response, _ := createMonitorProblem(&application.ValidationError{
 			Fields: map[string]string{"monitor": "contains invalid configuration"},
 		})
 		return response, nil
 	}
-
-	bodyContains := []string{}
-	if request.Body.Http.BodyContains != "" {
-		bodyContains = append(bodyContains, request.Body.Http.BodyContains)
+	probe, err := probeFromAPI(request.Body.Probe)
+	if err != nil {
+		response, _ := createMonitorProblem(&application.ValidationError{
+			Fields: map[string]string{"probe": "contains invalid configuration"},
+		})
+		return response, nil
 	}
-	monitor, err := s.configuration.CreateHTTPMonitor(
+	monitor, err := s.configuration.CreateMonitor(
 		ctx,
-		application.CreateHTTPMonitorCommand{
+		application.CreateMonitorCommand{
 			Name:              request.Body.Name,
 			LocationID:        domain.LocationID(request.Body.LocationId.String()),
 			RequiredLocation:  request.Body.RequiredLocation,
@@ -106,16 +109,7 @@ func (s *Server) CreateMonitor(
 			Timeout:           time.Duration(request.Body.TimeoutMillis) * time.Millisecond,
 			FailureThreshold:  uint16(request.Body.FailureThreshold),
 			RecoveryThreshold: uint16(request.Body.RecoveryThreshold),
-			HTTP: domain.HTTPProbe{
-				Method: string(request.Body.Http.Method),
-				URL:    request.Body.Http.Url,
-				ExpectedStatus: []domain.StatusRange{{
-					Min: int(request.Body.Http.ExpectedStatus),
-					Max: int(request.Body.Http.ExpectedStatus),
-				}},
-				BodyContains:    bodyContains,
-				FollowRedirects: request.Body.Http.FollowRedirects,
-			},
+			Probe:             probe,
 		},
 	)
 	if err != nil {
@@ -171,16 +165,13 @@ func mapMonitor(configured application.ConfiguredMonitor) (Monitor, error) {
 	if err != nil {
 		return Monitor{}, fmt.Errorf("map monitor location ID: %w", err)
 	}
-	if len(configured.HTTP.ExpectedStatus) == 0 {
-		return Monitor{}, errors.New("map monitor: expected status is missing")
-	}
-	bodyContains := ""
-	if len(configured.HTTP.BodyContains) != 0 {
-		bodyContains = configured.HTTP.BodyContains[0]
+	probe, err := probeToAPI(configured.Probe())
+	if err != nil {
+		return Monitor{}, err
 	}
 	return Monitor{
 		Id:                id,
-		Kind:              MonitorKindHttp,
+		Kind:              MonitorKind(configured.Kind),
 		Name:              configured.Name,
 		IntervalSeconds:   int32(configured.Interval / time.Second),
 		TimeoutMillis:     int32(configured.Timeout / time.Millisecond),
@@ -188,16 +179,209 @@ func mapMonitor(configured application.ConfiguredMonitor) (Monitor, error) {
 		RecoveryThreshold: int32(configured.RecoveryThreshold),
 		LocationId:        locationID,
 		RequiredLocation:  configured.RequiredLocation,
-		Http: HTTPProbe{
-			Method:          HTTPProbeMethod(configured.HTTP.Method),
-			Url:             configured.HTTP.URL,
-			ExpectedStatus:  int32(configured.HTTP.ExpectedStatus[0].Min),
-			BodyContains:    bodyContains,
-			FollowRedirects: configured.HTTP.FollowRedirects,
-		},
-		CreatedAt: configured.CreatedAt,
-		UpdatedAt: configured.UpdatedAt,
+		Probe:             probe,
+		CreatedAt:         configured.CreatedAt,
+		UpdatedAt:         configured.UpdatedAt,
 	}, nil
+}
+
+func probeFromAPI(probe ProbeDefinition) (domain.ProbeDefinition, error) {
+	kind, err := probe.Discriminator()
+	if err != nil {
+		return domain.ProbeDefinition{}, fmt.Errorf("read probe discriminator: %w", err)
+	}
+	switch kind {
+	case "http":
+		if err := validateProbeFields(probe,
+			"kind", "method", "url", "headers", "body", "expectedStatus",
+			"bodyContains", "bodyDoesNotContain", "followRedirects",
+			"tlsMinimumRemainingSeconds",
+		); err != nil {
+			return domain.ProbeDefinition{}, err
+		}
+		value, err := probe.AsHTTPProbeDefinition()
+		if err != nil ||
+			!value.Method.Valid() ||
+			len(value.ExpectedStatus) == 0 ||
+			len(value.Body) > 4<<10 {
+			return domain.ProbeDefinition{}, errors.New("invalid HTTP probe")
+		}
+		headers := make(map[string]string, len(value.Headers))
+		for name, headerValue := range value.Headers {
+			if secretHeader(name) {
+				return domain.ProbeDefinition{}, errors.New("secret HTTP header is not accepted")
+			}
+			headers[name] = headerValue
+		}
+		statuses := make([]domain.StatusRange, len(value.ExpectedStatus))
+		for i, status := range value.ExpectedStatus {
+			statuses[i] = domain.StatusRange{
+				Min: int(status.Minimum), Max: int(status.Maximum),
+			}
+		}
+		return domain.ProbeDefinition{
+			Kind: domain.MonitorKindHTTP,
+			HTTP: domain.HTTPProbe{
+				Method:             string(value.Method),
+				URL:                value.Url,
+				Headers:            headers,
+				Body:               append([]byte(nil), value.Body...),
+				ExpectedStatus:     statuses,
+				BodyContains:       append([]string(nil), value.BodyContains...),
+				BodyDoesNotContain: append([]string(nil), value.BodyDoesNotContain...),
+				FollowRedirects:    value.FollowRedirects,
+				TLS:                tlsFromSeconds(value.TlsMinimumRemainingSeconds),
+			},
+		}, nil
+	case "tcp":
+		if err := validateProbeFields(probe,
+			"kind", "host", "port", "send", "expect", "tlsMinimumRemainingSeconds",
+		); err != nil {
+			return domain.ProbeDefinition{}, err
+		}
+		value, err := probe.AsTCPProbeDefinition()
+		if err != nil ||
+			value.Port <= 0 ||
+			value.Port > math.MaxUint16 ||
+			len(value.Send) > 4<<10 ||
+			len(value.Expect) > 4<<10 {
+			return domain.ProbeDefinition{}, errors.New("invalid TCP probe")
+		}
+		return domain.ProbeDefinition{
+			Kind: domain.MonitorKindTCP,
+			TCP: domain.TCPProbe{
+				Host: value.Host, Port: uint16(value.Port),
+				Send:   append([]byte(nil), value.Send...),
+				Expect: append([]byte(nil), value.Expect...),
+				TLS:    tlsFromSeconds(value.TlsMinimumRemainingSeconds),
+			},
+		}, nil
+	case "dns":
+		if err := validateProbeFields(
+			probe, "kind", "resolver", "name", "recordType", "expectedValues",
+		); err != nil {
+			return domain.ProbeDefinition{}, err
+		}
+		value, err := probe.AsDNSProbeDefinition()
+		if err != nil || !value.RecordType.Valid() {
+			return domain.ProbeDefinition{}, errors.New("invalid DNS probe")
+		}
+		return domain.ProbeDefinition{
+			Kind: domain.MonitorKindDNS,
+			DNS: domain.DNSProbe{
+				Resolver: value.Resolver, Name: value.Name,
+				RecordType:     string(value.RecordType),
+				ExpectedValues: append([]string(nil), value.ExpectedValues...),
+			},
+		}, nil
+	default:
+		return domain.ProbeDefinition{}, errors.New("unsupported probe kind")
+	}
+}
+
+func probeToAPI(probe domain.ProbeDefinition) (ProbeDefinition, error) {
+	var mapped ProbeDefinition
+	switch probe.Kind {
+	case domain.MonitorKindHTTP:
+		headers := make(map[string]string, len(probe.HTTP.Headers))
+		names := make([]string, 0, len(probe.HTTP.Headers))
+		for name := range probe.HTTP.Headers {
+			if secretHeader(name) {
+				return ProbeDefinition{}, errors.New("map probe: secret HTTP header")
+			}
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			headers[name] = probe.HTTP.Headers[name]
+		}
+		statuses := make([]StatusRange, len(probe.HTTP.ExpectedStatus))
+		for i, status := range probe.HTTP.ExpectedStatus {
+			statuses[i] = StatusRange{Minimum: int32(status.Min), Maximum: int32(status.Max)}
+		}
+		err := mapped.FromHTTPProbeDefinition(HTTPProbeDefinition{
+			Kind: HTTPProbeDefinitionKindHttp, Method: HTTPProbeDefinitionMethod(probe.HTTP.Method),
+			Url: probe.HTTP.URL, Headers: headers, Body: cloneBytesForAPI(probe.HTTP.Body),
+			ExpectedStatus:             statuses,
+			BodyContains:               cloneStringsForAPI(probe.HTTP.BodyContains),
+			BodyDoesNotContain:         cloneStringsForAPI(probe.HTTP.BodyDoesNotContain),
+			FollowRedirects:            probe.HTTP.FollowRedirects,
+			TlsMinimumRemainingSeconds: tlsToSeconds(probe.HTTP.TLS),
+		})
+		return mapped, err
+	case domain.MonitorKindTCP:
+		err := mapped.FromTCPProbeDefinition(TCPProbeDefinition{
+			Kind: TCPProbeDefinitionKindTcp, Host: probe.TCP.Host, Port: int32(probe.TCP.Port),
+			Send:                       cloneBytesForAPI(probe.TCP.Send),
+			Expect:                     cloneBytesForAPI(probe.TCP.Expect),
+			TlsMinimumRemainingSeconds: tlsToSeconds(probe.TCP.TLS),
+		})
+		return mapped, err
+	case domain.MonitorKindDNS:
+		values := cloneStringsForAPI(probe.DNS.ExpectedValues)
+		sort.Strings(values)
+		err := mapped.FromDNSProbeDefinition(DNSProbeDefinition{
+			Kind: DNSProbeDefinitionKindDns, Resolver: probe.DNS.Resolver,
+			Name: probe.DNS.Name, RecordType: DNSProbeDefinitionRecordType(probe.DNS.RecordType),
+			ExpectedValues: values,
+		})
+		return mapped, err
+	default:
+		return ProbeDefinition{}, errors.New("map probe: unsupported kind")
+	}
+}
+
+func validateProbeFields(probe ProbeDefinition, allowed ...string) error {
+	data, err := json.Marshal(probe)
+	if err != nil {
+		return fmt.Errorf("encode probe: %w", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return fmt.Errorf("decode probe fields: %w", err)
+	}
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, name := range allowed {
+		allowedSet[name] = struct{}{}
+	}
+	for name := range fields {
+		if _, ok := allowedSet[name]; !ok {
+			return fmt.Errorf("unexpected probe field %q", name)
+		}
+	}
+	return nil
+}
+
+func secretHeader(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "authorization", "cookie", "proxy-authorization", "set-cookie":
+		return true
+	default:
+		return false
+	}
+}
+
+func tlsFromSeconds(seconds *int64) *domain.TLSExpectation {
+	if seconds == nil {
+		return nil
+	}
+	return &domain.TLSExpectation{MinimumRemaining: time.Duration(*seconds) * time.Second}
+}
+
+func tlsToSeconds(expectation *domain.TLSExpectation) *int64 {
+	if expectation == nil {
+		return nil
+	}
+	seconds := int64(expectation.MinimumRemaining / time.Second)
+	return &seconds
+}
+
+func cloneBytesForAPI(value []byte) []byte {
+	return append([]byte{}, value...)
+}
+
+func cloneStringsForAPI(value []string) []string {
+	return append([]string{}, value...)
 }
 
 func createLocationProblem(err error) (CreateLocationResponseObject, bool) {

@@ -81,3 +81,34 @@ func TestProbeDefinitionHasThreeDiscriminatedVariants(t *testing.T) {
 		}
 	}
 }
+
+func TestMonitorEndpointsUseProbeDefinition(t *testing.T) {
+	data, err := os.ReadFile("openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := openapi3.NewLoader().LoadFromData(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"CreateMonitorRequest", "Monitor"} {
+		schema := doc.Components.Schemas[name].Value
+		if schema == nil {
+			t.Fatalf("%s schema is missing", name)
+		}
+		probe, ok := schema.Properties["probe"]
+		if !ok || probe.Ref != "#/components/schemas/ProbeDefinition" {
+			t.Fatalf("%s probe = %#v", name, probe)
+		}
+		if _, legacy := schema.Properties["http"]; legacy {
+			t.Fatalf("%s still exposes legacy http field", name)
+		}
+		required := false
+		for _, field := range schema.Required {
+			required = required || field == "probe"
+		}
+		if !required {
+			t.Fatalf("%s probe is not required", name)
+		}
+	}
+}

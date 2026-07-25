@@ -30,11 +30,15 @@ func TestRequireMonitorReturnsDecodedMonitor(t *testing.T) {
 			"recoveryThreshold":1,
 			"locationId":"0f9d676e-b04e-4a21-9353-7b70317a38ed",
 			"requiredLocation":true,
-			"http":{
+			"probe":{
+				"kind":"http",
 				"method":"GET",
 				"url":"https://router.example.test/health",
-				"expectedStatus":200,
-				"bodyContains":"ok",
+				"headers":{},
+				"body":"",
+				"expectedStatus":[{"minimum":200,"maximum":299}],
+				"bodyContains":["ok"],
+				"bodyDoesNotContain":[],
 				"followRedirects":false
 			},
 			"createdAt":"2026-07-25T00:00:00Z",
@@ -57,6 +61,10 @@ func TestRequireMonitorReturnsDecodedMonitor(t *testing.T) {
 	}
 	if monitor.Id.String() != monitorID {
 		t.Fatalf("Id = %q", monitor.Id)
+	}
+	probe, err := monitor.Probe.AsHTTPProbeDefinition()
+	if err != nil || probe.Url != "https://router.example.test/health" {
+		t.Fatalf("Probe = %#v, error = %v", probe, err)
 	}
 }
 

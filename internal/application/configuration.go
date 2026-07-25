@@ -23,7 +23,7 @@ type CreateLocationCommand struct {
 	Name string
 }
 
-type CreateHTTPMonitorCommand struct {
+type CreateMonitorCommand struct {
 	Name              string
 	LocationID        domain.LocationID
 	RequiredLocation  bool
@@ -31,7 +31,7 @@ type CreateHTTPMonitorCommand struct {
 	Timeout           time.Duration
 	FailureThreshold  uint16
 	RecoveryThreshold uint16
-	HTTP              domain.HTTPProbe
+	Probe             domain.ProbeDefinition
 }
 
 type ConfiguredMonitor struct {
@@ -74,25 +74,16 @@ func (s *ConfigurationService) CreateLocation(
 	return location, nil
 }
 
-func (s *ConfigurationService) CreateHTTPMonitor(
+func (s *ConfigurationService) CreateMonitor(
 	ctx context.Context,
-	command CreateHTTPMonitorCommand,
+	command CreateMonitorCommand,
 ) (ConfiguredMonitor, error) {
 	if _, err := s.store.Repositories().Locations.Get(ctx, command.LocationID); err != nil {
 		return ConfiguredMonitor{}, err
 	}
 
 	now := s.now().UTC()
-	monitor, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
-		ID:                domain.MonitorID(s.newID()),
-		Name:              command.Name,
-		Interval:          command.Interval,
-		Timeout:           command.Timeout,
-		FailureThreshold:  command.FailureThreshold,
-		RecoveryThreshold: command.RecoveryThreshold,
-		HTTP:              command.HTTP,
-		CreatedAt:         now,
-	})
+	monitor, err := newConfiguredMonitor(domain.MonitorID(s.newID()), command, now)
 	if err != nil {
 		return ConfiguredMonitor{}, &ValidationError{
 			Fields: map[string]string{"monitor": "contains invalid configuration"},
@@ -129,7 +120,7 @@ func (s *ConfigurationService) CreateHTTPMonitor(
 		return nil
 	})
 	if err != nil {
-		return ConfiguredMonitor{}, fmt.Errorf("create HTTP monitor: %w", err)
+		return ConfiguredMonitor{}, fmt.Errorf("create monitor: %w", err)
 	}
 
 	return ConfiguredMonitor{
@@ -137,6 +128,65 @@ func (s *ConfigurationService) CreateHTTPMonitor(
 		LocationID:       command.LocationID,
 		RequiredLocation: command.RequiredLocation,
 	}, nil
+}
+
+func newConfiguredMonitor(
+	id domain.MonitorID,
+	command CreateMonitorCommand,
+	now time.Time,
+) (domain.Monitor, error) {
+	if !probeVariantMatches(command.Probe) {
+		return domain.Monitor{}, domain.ErrInvalidMonitor
+	}
+	switch command.Probe.Kind {
+	case domain.MonitorKindHTTP:
+		return domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
+			ID: id, Name: command.Name, Interval: command.Interval, Timeout: command.Timeout,
+			FailureThreshold:  command.FailureThreshold,
+			RecoveryThreshold: command.RecoveryThreshold,
+			HTTP:              command.Probe.HTTP, CreatedAt: now,
+		})
+	case domain.MonitorKindTCP:
+		return domain.NewTCPMonitor(domain.NewTCPMonitorParams{
+			ID: id, Name: command.Name, Interval: command.Interval, Timeout: command.Timeout,
+			FailureThreshold:  command.FailureThreshold,
+			RecoveryThreshold: command.RecoveryThreshold,
+			TCP:               command.Probe.TCP, CreatedAt: now,
+		})
+	case domain.MonitorKindDNS:
+		return domain.NewDNSMonitor(domain.NewDNSMonitorParams{
+			ID: id, Name: command.Name, Interval: command.Interval, Timeout: command.Timeout,
+			FailureThreshold:  command.FailureThreshold,
+			RecoveryThreshold: command.RecoveryThreshold,
+			DNS:               command.Probe.DNS, CreatedAt: now,
+		})
+	default:
+		return domain.Monitor{}, domain.ErrInvalidMonitor
+	}
+}
+
+func probeVariantMatches(probe domain.ProbeDefinition) bool {
+	httpSet := probe.HTTP.Method != "" || probe.HTTP.URL != "" ||
+		len(probe.HTTP.Headers) != 0 || len(probe.HTTP.Body) != 0 ||
+		len(probe.HTTP.ExpectedStatus) != 0 || len(probe.HTTP.BodyContains) != 0 ||
+		len(probe.HTTP.BodyDoesNotContain) != 0 || probe.HTTP.FollowRedirects ||
+		probe.HTTP.TLS != nil
+	tcpSet := probe.TCP.Host != "" || probe.TCP.Port != 0 ||
+		len(probe.TCP.Send) != 0 || len(probe.TCP.Expect) != 0 ||
+		probe.TCP.TLS != nil
+	dnsSet := probe.DNS.Resolver != "" || probe.DNS.Name != "" ||
+		probe.DNS.RecordType != "" || len(probe.DNS.ExpectedValues) != 0
+
+	switch probe.Kind {
+	case domain.MonitorKindHTTP:
+		return httpSet && !tcpSet && !dnsSet
+	case domain.MonitorKindTCP:
+		return tcpSet && !httpSet && !dnsSet
+	case domain.MonitorKindDNS:
+		return dnsSet && !httpSet && !tcpSet
+	default:
+		return false
+	}
 }
 
 func (s *ConfigurationService) GetMonitor(

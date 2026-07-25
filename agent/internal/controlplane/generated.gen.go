@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -45,33 +46,129 @@ func (e AgentCapability) Valid() bool {
 	}
 }
 
+// Defines values for DNSProbeDefinitionKind.
+const (
+	DNSProbeDefinitionKindDns DNSProbeDefinitionKind = "dns"
+)
+
+// Valid indicates whether the value is a known member of the DNSProbeDefinitionKind enum.
+func (e DNSProbeDefinitionKind) Valid() bool {
+	switch e {
+	case DNSProbeDefinitionKindDns:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DNSProbeDefinitionRecordType.
+const (
+	A     DNSProbeDefinitionRecordType = "A"
+	AAAA  DNSProbeDefinitionRecordType = "AAAA"
+	CNAME DNSProbeDefinitionRecordType = "CNAME"
+	MX    DNSProbeDefinitionRecordType = "MX"
+	NS    DNSProbeDefinitionRecordType = "NS"
+	SRV   DNSProbeDefinitionRecordType = "SRV"
+	TXT   DNSProbeDefinitionRecordType = "TXT"
+)
+
+// Valid indicates whether the value is a known member of the DNSProbeDefinitionRecordType enum.
+func (e DNSProbeDefinitionRecordType) Valid() bool {
+	switch e {
+	case A:
+		return true
+	case AAAA:
+		return true
+	case CNAME:
+		return true
+	case MX:
+		return true
+	case NS:
+		return true
+	case SRV:
+		return true
+	case TXT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HTTPProbeMethod.
 const (
-	DELETE  HTTPProbeMethod = "DELETE"
-	GET     HTTPProbeMethod = "GET"
-	HEAD    HTTPProbeMethod = "HEAD"
-	OPTIONS HTTPProbeMethod = "OPTIONS"
-	PATCH   HTTPProbeMethod = "PATCH"
-	POST    HTTPProbeMethod = "POST"
-	PUT     HTTPProbeMethod = "PUT"
+	HTTPProbeMethodDELETE  HTTPProbeMethod = "DELETE"
+	HTTPProbeMethodGET     HTTPProbeMethod = "GET"
+	HTTPProbeMethodHEAD    HTTPProbeMethod = "HEAD"
+	HTTPProbeMethodOPTIONS HTTPProbeMethod = "OPTIONS"
+	HTTPProbeMethodPATCH   HTTPProbeMethod = "PATCH"
+	HTTPProbeMethodPOST    HTTPProbeMethod = "POST"
+	HTTPProbeMethodPUT     HTTPProbeMethod = "PUT"
 )
 
 // Valid indicates whether the value is a known member of the HTTPProbeMethod enum.
 func (e HTTPProbeMethod) Valid() bool {
 	switch e {
-	case DELETE:
+	case HTTPProbeMethodDELETE:
 		return true
-	case GET:
+	case HTTPProbeMethodGET:
 		return true
-	case HEAD:
+	case HTTPProbeMethodHEAD:
 		return true
-	case OPTIONS:
+	case HTTPProbeMethodOPTIONS:
 		return true
-	case PATCH:
+	case HTTPProbeMethodPATCH:
 		return true
-	case POST:
+	case HTTPProbeMethodPOST:
 		return true
-	case PUT:
+	case HTTPProbeMethodPUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HTTPProbeDefinitionKind.
+const (
+	HTTPProbeDefinitionKindHttp HTTPProbeDefinitionKind = "http"
+)
+
+// Valid indicates whether the value is a known member of the HTTPProbeDefinitionKind enum.
+func (e HTTPProbeDefinitionKind) Valid() bool {
+	switch e {
+	case HTTPProbeDefinitionKindHttp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HTTPProbeDefinitionMethod.
+const (
+	HTTPProbeDefinitionMethodDELETE  HTTPProbeDefinitionMethod = "DELETE"
+	HTTPProbeDefinitionMethodGET     HTTPProbeDefinitionMethod = "GET"
+	HTTPProbeDefinitionMethodHEAD    HTTPProbeDefinitionMethod = "HEAD"
+	HTTPProbeDefinitionMethodOPTIONS HTTPProbeDefinitionMethod = "OPTIONS"
+	HTTPProbeDefinitionMethodPATCH   HTTPProbeDefinitionMethod = "PATCH"
+	HTTPProbeDefinitionMethodPOST    HTTPProbeDefinitionMethod = "POST"
+	HTTPProbeDefinitionMethodPUT     HTTPProbeDefinitionMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the HTTPProbeDefinitionMethod enum.
+func (e HTTPProbeDefinitionMethod) Valid() bool {
+	switch e {
+	case HTTPProbeDefinitionMethodDELETE:
+		return true
+	case HTTPProbeDefinitionMethodGET:
+		return true
+	case HTTPProbeDefinitionMethodHEAD:
+		return true
+	case HTTPProbeDefinitionMethodOPTIONS:
+		return true
+	case HTTPProbeDefinitionMethodPATCH:
+		return true
+	case HTTPProbeDefinitionMethodPOST:
+		return true
+	case HTTPProbeDefinitionMethodPUT:
 		return true
 	default:
 		return false
@@ -140,13 +237,19 @@ func (e IncidentState) Valid() bool {
 
 // Defines values for MonitorKind.
 const (
+	MonitorKindDns  MonitorKind = "dns"
 	MonitorKindHttp MonitorKind = "http"
+	MonitorKindTcp  MonitorKind = "tcp"
 )
 
 // Valid indicates whether the value is a known member of the MonitorKind enum.
 func (e MonitorKind) Valid() bool {
 	switch e {
+	case MonitorKindDns:
+		return true
 	case MonitorKindHttp:
+		return true
+	case MonitorKindTcp:
 		return true
 	default:
 		return false
@@ -240,6 +343,21 @@ func (e ProbeResultInputOutcome) Valid() bool {
 	}
 }
 
+// Defines values for TCPProbeDefinitionKind.
+const (
+	TCPProbeDefinitionKindTcp TCPProbeDefinitionKind = "tcp"
+)
+
+// Valid indicates whether the value is a known member of the TCPProbeDefinitionKind enum.
+func (e TCPProbeDefinitionKind) Valid() bool {
+	switch e {
+	case TCPProbeDefinitionKindTcp:
+		return true
+	default:
+		return false
+	}
+}
+
 // AgentCapability defines model for AgentCapability.
 type AgentCapability string
 
@@ -270,10 +388,10 @@ type CreateLocationRequest struct {
 // CreateMonitorRequest defines model for CreateMonitorRequest.
 type CreateMonitorRequest struct {
 	FailureThreshold  int32              `json:"failureThreshold"`
-	Http              HTTPProbe          `json:"http"`
 	IntervalSeconds   int32              `json:"intervalSeconds"`
 	LocationId        openapi_types.UUID `json:"locationId"`
 	Name              string             `json:"name"`
+	Probe             ProbeDefinition    `json:"probe"`
 	RecoveryThreshold int32              `json:"recoveryThreshold"`
 	RequiredLocation  bool               `json:"requiredLocation"`
 	TimeoutMillis     int32              `json:"timeoutMillis"`
@@ -284,6 +402,21 @@ type CreateSessionRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Password *string             `json:"password,omitempty"`
 }
+
+// DNSProbeDefinition defines model for DNSProbeDefinition.
+type DNSProbeDefinition struct {
+	ExpectedValues []string                     `json:"expectedValues"`
+	Kind           DNSProbeDefinitionKind       `json:"kind"`
+	Name           string                       `json:"name"`
+	RecordType     DNSProbeDefinitionRecordType `json:"recordType"`
+	Resolver       string                       `json:"resolver"`
+}
+
+// DNSProbeDefinitionKind defines model for DNSProbeDefinition.Kind.
+type DNSProbeDefinitionKind string
+
+// DNSProbeDefinitionRecordType defines model for DNSProbeDefinition.RecordType.
+type DNSProbeDefinitionRecordType string
 
 // EnrollAgentRequest defines model for EnrollAgentRequest.
 type EnrollAgentRequest struct {
@@ -316,6 +449,26 @@ type HTTPProbe struct {
 
 // HTTPProbeMethod defines model for HTTPProbe.Method.
 type HTTPProbeMethod string
+
+// HTTPProbeDefinition defines model for HTTPProbeDefinition.
+type HTTPProbeDefinition struct {
+	Body                       []byte                    `json:"body"`
+	BodyContains               []string                  `json:"bodyContains"`
+	BodyDoesNotContain         []string                  `json:"bodyDoesNotContain"`
+	ExpectedStatus             []StatusRange             `json:"expectedStatus"`
+	FollowRedirects            bool                      `json:"followRedirects"`
+	Headers                    map[string]string         `json:"headers"`
+	Kind                       HTTPProbeDefinitionKind   `json:"kind"`
+	Method                     HTTPProbeDefinitionMethod `json:"method"`
+	TlsMinimumRemainingSeconds *int64                    `json:"tlsMinimumRemainingSeconds,omitempty"`
+	Url                        string                    `json:"url"`
+}
+
+// HTTPProbeDefinitionKind defines model for HTTPProbeDefinition.Kind.
+type HTTPProbeDefinitionKind string
+
+// HTTPProbeDefinitionMethod defines model for HTTPProbeDefinition.Method.
+type HTTPProbeDefinitionMethod string
 
 // HTTPWork defines model for HTTPWork.
 type HTTPWork struct {
@@ -372,12 +525,12 @@ type LocationHealth struct {
 type Monitor struct {
 	CreatedAt         time.Time          `json:"createdAt"`
 	FailureThreshold  int32              `json:"failureThreshold"`
-	Http              HTTPProbe          `json:"http"`
 	Id                openapi_types.UUID `json:"id"`
 	IntervalSeconds   int32              `json:"intervalSeconds"`
 	Kind              MonitorKind        `json:"kind"`
 	LocationId        openapi_types.UUID `json:"locationId"`
 	Name              string             `json:"name"`
+	Probe             ProbeDefinition    `json:"probe"`
 	RecoveryThreshold int32              `json:"recoveryThreshold"`
 	RequiredLocation  bool               `json:"requiredLocation"`
 	TimeoutMillis     int32              `json:"timeoutMillis"`
@@ -393,6 +546,11 @@ type MonitorHealth struct {
 	Locations        []LocationHealth   `json:"locations"`
 	MonitorId        openapi_types.UUID `json:"monitorId"`
 	State            HealthState        `json:"state"`
+}
+
+// ProbeDefinition defines model for ProbeDefinition.
+type ProbeDefinition struct {
+	union json.RawMessage
 }
 
 // ProbeResultAcknowledgement defines model for ProbeResultAcknowledgement.
@@ -463,6 +621,25 @@ type Session struct {
 	Token     string    `json:"token"`
 }
 
+// StatusRange defines model for StatusRange.
+type StatusRange struct {
+	Maximum int32 `json:"maximum"`
+	Minimum int32 `json:"minimum"`
+}
+
+// TCPProbeDefinition defines model for TCPProbeDefinition.
+type TCPProbeDefinition struct {
+	Expect                     []byte                 `json:"expect"`
+	Host                       string                 `json:"host"`
+	Kind                       TCPProbeDefinitionKind `json:"kind"`
+	Port                       int32                  `json:"port"`
+	Send                       []byte                 `json:"send"`
+	TlsMinimumRemainingSeconds *int64                 `json:"tlsMinimumRemainingSeconds,omitempty"`
+}
+
+// TCPProbeDefinitionKind defines model for TCPProbeDefinition.Kind.
+type TCPProbeDefinitionKind string
+
 // MonitorID defines model for MonitorID.
 type MonitorID = openapi_types.UUID
 
@@ -489,6 +666,143 @@ type CreateMonitorJSONRequestBody = CreateMonitorRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
+
+// AsHTTPProbeDefinition returns the union data inside the ProbeDefinition as a HTTPProbeDefinition
+func (t ProbeDefinition) AsHTTPProbeDefinition() (HTTPProbeDefinition, error) {
+	var body HTTPProbeDefinition
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHTTPProbeDefinition overwrites any union data inside the ProbeDefinition as the provided HTTPProbeDefinition
+func (t *ProbeDefinition) FromHTTPProbeDefinition(v HTTPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"http"}`))
+	t.union = b
+	return err
+}
+
+// MergeHTTPProbeDefinition performs a merge with any union data inside the ProbeDefinition, using the provided HTTPProbeDefinition
+func (t *ProbeDefinition) MergeHTTPProbeDefinition(v HTTPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"http"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTCPProbeDefinition returns the union data inside the ProbeDefinition as a TCPProbeDefinition
+func (t ProbeDefinition) AsTCPProbeDefinition() (TCPProbeDefinition, error) {
+	var body TCPProbeDefinition
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTCPProbeDefinition overwrites any union data inside the ProbeDefinition as the provided TCPProbeDefinition
+func (t *ProbeDefinition) FromTCPProbeDefinition(v TCPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"tcp"}`))
+	t.union = b
+	return err
+}
+
+// MergeTCPProbeDefinition performs a merge with any union data inside the ProbeDefinition, using the provided TCPProbeDefinition
+func (t *ProbeDefinition) MergeTCPProbeDefinition(v TCPProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"tcp"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDNSProbeDefinition returns the union data inside the ProbeDefinition as a DNSProbeDefinition
+func (t ProbeDefinition) AsDNSProbeDefinition() (DNSProbeDefinition, error) {
+	var body DNSProbeDefinition
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDNSProbeDefinition overwrites any union data inside the ProbeDefinition as the provided DNSProbeDefinition
+func (t *ProbeDefinition) FromDNSProbeDefinition(v DNSProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"dns"}`))
+	t.union = b
+	return err
+}
+
+// MergeDNSProbeDefinition performs a merge with any union data inside the ProbeDefinition, using the provided DNSProbeDefinition
+func (t *ProbeDefinition) MergeDNSProbeDefinition(v DNSProbeDefinition) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"dns"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ProbeDefinition) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"kind"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t ProbeDefinition) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "dns":
+		return t.AsDNSProbeDefinition()
+	case "http":
+		return t.AsHTTPProbeDefinition()
+	case "tcp":
+		return t.AsTCPProbeDefinition()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t ProbeDefinition) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ProbeDefinition) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error

@@ -20,9 +20,9 @@ func TestCreateHTTPMonitorPersistsAssignmentAndInitialHealth(t *testing.T) {
 	)
 	store.locations["l1"] = domain.Location{ID: "l1", Name: "public"}
 
-	monitor, err := service.CreateHTTPMonitor(
+	monitor, err := service.CreateMonitor(
 		context.Background(),
-		application.CreateHTTPMonitorCommand{
+		application.CreateMonitorCommand{
 			Name:              "website",
 			LocationID:        "l1",
 			RequiredLocation:  true,
@@ -30,10 +30,13 @@ func TestCreateHTTPMonitorPersistsAssignmentAndInitialHealth(t *testing.T) {
 			Timeout:           5 * time.Second,
 			FailureThreshold:  3,
 			RecoveryThreshold: 2,
-			HTTP: domain.HTTPProbe{
-				Method:         "GET",
-				URL:            "https://example.com/health",
-				ExpectedStatus: []domain.StatusRange{{Min: 200, Max: 299}},
+			Probe: domain.ProbeDefinition{
+				Kind: domain.MonitorKindHTTP,
+				HTTP: domain.HTTPProbe{
+					Method:         "GET",
+					URL:            "https://example.com/health",
+					ExpectedStatus: []domain.StatusRange{{Min: 200, Max: 299}},
+				},
 			},
 		},
 	)
@@ -57,7 +60,99 @@ func TestCreateHTTPMonitorPersistsAssignmentAndInitialHealth(t *testing.T) {
 	}
 }
 
-func TestCreateHTTPMonitorReturnsNotFoundForMissingLocation(t *testing.T) {
+func TestCreateTCPMonitorPersistsTypedProbe(t *testing.T) {
+	store := newConfigurationStore()
+	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+	service := application.NewConfigurationService(
+		store,
+		func() time.Time { return now },
+		func() string { return "m1" },
+	)
+	store.locations["l1"] = domain.Location{ID: "l1", Name: "private"}
+
+	monitor, err := service.CreateMonitor(
+		context.Background(),
+		application.CreateMonitorCommand{
+			Name: "postgres", LocationID: "l1", RequiredLocation: true,
+			Interval: time.Minute, Timeout: 5 * time.Second,
+			FailureThreshold: 3, RecoveryThreshold: 2,
+			Probe: domain.ProbeDefinition{
+				Kind: domain.MonitorKindTCP,
+				TCP: domain.TCPProbe{
+					Host: "postgres.internal", Port: 5432,
+					Send: []byte("PING"), Expect: []byte("PONG"),
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if monitor.Kind != domain.MonitorKindTCP ||
+		monitor.TCP.Host != "postgres.internal" ||
+		monitor.TCP.Port != 5432 {
+		t.Fatalf("monitor = %#v", monitor)
+	}
+}
+
+func TestCreateDNSMonitorPersistsTypedProbe(t *testing.T) {
+	store := newConfigurationStore()
+	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+	service := application.NewConfigurationService(
+		store,
+		func() time.Time { return now },
+		func() string { return "m1" },
+	)
+	store.locations["l1"] = domain.Location{ID: "l1", Name: "private"}
+
+	monitor, err := service.CreateMonitor(
+		context.Background(),
+		application.CreateMonitorCommand{
+			Name: "cluster dns", LocationID: "l1", RequiredLocation: true,
+			Interval: time.Minute, Timeout: 5 * time.Second,
+			FailureThreshold: 3, RecoveryThreshold: 2,
+			Probe: domain.ProbeDefinition{
+				Kind: domain.MonitorKindDNS,
+				DNS: domain.DNSProbe{
+					Resolver: "10.43.0.10:53", Name: "kubernetes.default.svc",
+					RecordType: "A", ExpectedValues: []string{"10.43.0.1"},
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if monitor.Kind != domain.MonitorKindDNS ||
+		monitor.DNS.Resolver != "10.43.0.10:53" ||
+		monitor.DNS.Name != "kubernetes.default.svc" {
+		t.Fatalf("monitor = %#v", monitor)
+	}
+}
+
+func TestCreateMonitorRejectsProbeVariantMismatch(t *testing.T) {
+	store := newConfigurationStore()
+	service := application.NewConfigurationService(store, time.Now, func() string { return "m1" })
+	store.locations["l1"] = domain.Location{ID: "l1", Name: "private"}
+
+	_, err := service.CreateMonitor(context.Background(), application.CreateMonitorCommand{
+		Name: "bad", LocationID: "l1", Interval: time.Minute, Timeout: time.Second,
+		FailureThreshold: 1, RecoveryThreshold: 1,
+		Probe: domain.ProbeDefinition{
+			Kind: domain.MonitorKindTCP,
+			HTTP: domain.HTTPProbe{Method: "GET", URL: "https://example.com"},
+		},
+	})
+	var validation *application.ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(store.monitors) != 0 {
+		t.Fatalf("monitors = %#v", store.monitors)
+	}
+}
+
+func TestCreateMonitorReturnsNotFoundForMissingLocation(t *testing.T) {
 	store := newConfigurationStore()
 	service := application.NewConfigurationService(
 		store,
@@ -65,16 +160,19 @@ func TestCreateHTTPMonitorReturnsNotFoundForMissingLocation(t *testing.T) {
 		func() string { return "m1" },
 	)
 
-	_, err := service.CreateHTTPMonitor(
+	_, err := service.CreateMonitor(
 		context.Background(),
-		application.CreateHTTPMonitorCommand{
+		application.CreateMonitorCommand{
 			Name:              "website",
 			LocationID:        "missing",
 			Interval:          time.Minute,
 			Timeout:           time.Second,
 			FailureThreshold:  1,
 			RecoveryThreshold: 1,
-			HTTP:              domain.HTTPProbe{URL: "https://example.com"},
+			Probe: domain.ProbeDefinition{
+				Kind: domain.MonitorKindHTTP,
+				HTTP: domain.HTTPProbe{URL: "https://example.com"},
+			},
 		},
 	)
 	if !errors.Is(err, application.ErrNotFound) {
