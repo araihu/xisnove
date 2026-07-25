@@ -513,27 +513,27 @@ git commit -m "feat(notification): define transport boundary"
 - Create: `internal/adapters/alertmanager/transport.go`
 - Create: `internal/adapters/alertmanager/transport_test.go`
 
-- [ ] **Step 1: Write Shoutrrr contract tests**
+- [x] **Step 1: Write Shoutrrr contract tests**
 
 Use `CreateSenderWithOptions`/`SenderOptions` with an injected HTTP client and
 timeout. Prove allowed schemes, context deadline behavior, provider error
 classification, secret scrubbing, template payload preservation, and bounded
 parallel calls against local test servers.
 
-- [ ] **Step 2: Implement the reviewed Shoutrrr subset**
+- [x] **Step 2: Implement the reviewed Shoutrrr subset**
 
 Xisnove owns retries and never enables an independent provider retry loop.
 Configuration URLs exist only in decrypted call-local memory and are never put
 into snapshots or diagnostics.
 
-- [ ] **Step 3: Write and implement Alertmanager semantics**
+- [x] **Step 3: Write and implement Alertmanager semantics**
 
 POST `/api/v2/alerts` using firing/resolved alerts, stable fingerprints, RFC3339
 start/end times, Xisnove labels/annotations, injected client, authorization
 reference, and egress policy. Treat 2xx as success, retry 408/425/429/5xx and
 transport failures, and classify other 4xx as permanent.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 go test -race ./internal/adapters/shoutrrr ./internal/adapters/alertmanager
@@ -758,7 +758,11 @@ retention batches, migration, close/reopen, and rollback injection.
 
 Use local HTTP receivers to prove Shoutrrr and Alertmanager payloads, timeout,
 retry classes, resolution semantics, and no secret leakage. These tests use the
-public SDK for setup and queries rather than direct handler calls.
+public SDK for setup and queries rather than direct handler calls. Use
+Testcontainers for OCI-backed server components and auxiliary dependencies so
+the suite self-scaffolds and tears down its environment. Preserve explicit
+external-service overrides for debugging and CI environments that provide their
+own dependencies.
 
 - [ ] **Step 3: Wire CI gates**
 
@@ -769,6 +773,8 @@ group and uploads JUnit. Release gate requires all four profiles.
 Local PostgreSQL integration and E2E tests self-provision PostgreSQL 18 through
 Testcontainers when a healthy container runtime is available; the explicit
 `XISNOVE_TEST_POSTGRES_URL` override remains supported for CI and debugging.
+Managed Turso remains a distinct protected profile provisioned and torn down
+through the real Turso Platform API rather than emulated in a container.
 
 - [ ] **Step 4: Document exact operations**
 

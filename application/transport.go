@@ -29,6 +29,7 @@ type TransportDelivery struct {
 	Configuration []byte
 	Title         string
 	Message       string
+	Snapshot      domain.RenderSnapshot
 }
 
 // TransportResult describes a provider attempt without exposing provider
