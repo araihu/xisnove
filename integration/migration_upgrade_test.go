@@ -49,10 +49,15 @@ func TestMigrationUpgradeAcrossLocalProfiles(t *testing.T) {
 				t.Fatal(err)
 			}
 			seedVersionOneMonitor(t, handle, false)
+			if _, err := provider.UpTo(ctx, 3); err != nil {
+				t.Fatal(err)
+			}
+			seedVersionThreeIncident(t, handle)
 			if err := handle.Migrate(ctx); err != nil {
 				t.Fatal(err)
 			}
 			assertUpgradedMonitor(t, handle)
+			assertUpgradedIncident(t, handle)
 		})
 	}
 }
@@ -103,10 +108,43 @@ func TestMigrationUpgradePostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedVersionOneMonitor(t, handle, true)
+	if _, err := provider.UpTo(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	seedVersionThreeIncident(t, handle)
 	if err := handle.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
 	assertUpgradedMonitor(t, handle)
+	assertUpgradedIncident(t, handle)
+}
+
+func seedVersionThreeIncident(t *testing.T, handle *database.Handle) {
+	t.Helper()
+	_, err := handle.DB.ExecContext(context.Background(), `
+		INSERT INTO incidents (
+			id, monitor_id, state, severity, opened_at, last_transition_at
+		) VALUES (
+			'00000000-0000-4000-8000-000000000103',
+			'00000000-0000-4000-8000-000000000102',
+			'down', 'critical', '2026-07-25T12:01:00Z', '2026-07-25T12:01:00Z'
+		)
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = handle.DB.ExecContext(context.Background(), `
+		INSERT INTO incident_events (
+			id, incident_id, previous_state, state, severity, created_at
+		) VALUES (
+			'00000000-0000-4000-8000-000000000104',
+			'00000000-0000-4000-8000-000000000103',
+			NULL, 'down', 'critical', '2026-07-25T12:01:00Z'
+		)
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func seedVersionOneMonitor(t *testing.T, handle *database.Handle, postgres bool) {
@@ -138,16 +176,41 @@ func assertUpgradedMonitor(t *testing.T, handle *database.Handle) {
 	if err := handle.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	var kind string
-	var probe []byte
+	var kind, description string
+	var probe, labels []byte
+	var displayOrder int32
+	var public bool
 	if err := handle.DB.QueryRowContext(
 		context.Background(),
-		"SELECT kind, probe_json FROM monitors WHERE name = 'upgrade-monitor'",
-	).Scan(&kind, &probe); err != nil {
+		`SELECT kind, probe_json, description, labels_json, display_order, public
+		 FROM monitors WHERE name = 'upgrade-monitor'`,
+	).Scan(&kind, &probe, &description, &labels, &displayOrder, &public); err != nil {
 		t.Fatal(err)
 	}
-	if kind != "http" || len(probe) == 0 {
-		t.Fatalf("upgraded monitor kind=%q probe=%s", kind, probe)
+	if kind != "http" || len(probe) == 0 || description != "" ||
+		string(labels) != "{}" || displayOrder != 0 || public {
+		t.Fatalf(
+			"upgraded monitor kind=%q probe=%s description=%q labels=%s order=%d public=%v",
+			kind, probe, description, labels, displayOrder, public,
+		)
+	}
+}
+
+func assertUpgradedIncident(t *testing.T, handle *database.Handle) {
+	t.Helper()
+	var action, state string
+	var recoveredAt any
+	if err := handle.DB.QueryRowContext(
+		context.Background(),
+		`SELECT e.action, i.state, i.recovered_at
+		 FROM incident_events e
+		 JOIN incidents i ON i.id = e.incident_id
+		 WHERE e.id = '00000000-0000-4000-8000-000000000104'`,
+	).Scan(&action, &state, &recoveredAt); err != nil {
+		t.Fatal(err)
+	}
+	if action != "open" || state != "down" || recoveredAt != nil {
+		t.Fatalf("upgraded incident action=%q state=%q recovered=%v", action, state, recoveredAt)
 	}
 }
 

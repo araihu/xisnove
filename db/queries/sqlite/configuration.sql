@@ -9,9 +9,10 @@ WHERE id = ?;
 
 -- name: CreateMonitor :exec
 INSERT INTO monitors (
-  id, name, kind, interval_ms, timeout_ms, failure_threshold,
+  id, name, description, labels_json, display_order, public,
+  kind, interval_ms, timeout_ms, failure_threshold,
   recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetMonitor :one
 SELECT *
@@ -35,6 +36,10 @@ LIMIT 1;
 SELECT
   m.id,
   m.name,
+  m.description,
+  m.labels_json,
+  m.display_order,
+  m.public,
   m.kind,
   m.interval_ms,
   m.timeout_ms,

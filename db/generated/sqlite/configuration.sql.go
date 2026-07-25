@@ -67,14 +67,19 @@ func (q *Queries) CreateLocation(ctx context.Context, arg CreateLocationParams) 
 
 const createMonitor = `-- name: CreateMonitor :exec
 INSERT INTO monitors (
-  id, name, kind, interval_ms, timeout_ms, failure_threshold,
+  id, name, description, labels_json, display_order, public,
+  kind, interval_ms, timeout_ms, failure_threshold,
   recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateMonitorParams struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
+	Description       string `json:"description"`
+	LabelsJson        []byte `json:"labels_json"`
+	DisplayOrder      int64  `json:"display_order"`
+	Public            int64  `json:"public"`
 	Kind              string `json:"kind"`
 	IntervalMs        int64  `json:"interval_ms"`
 	TimeoutMs         int64  `json:"timeout_ms"`
@@ -91,6 +96,10 @@ func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) er
 	_, err := q.db.ExecContext(ctx, createMonitor,
 		arg.ID,
 		arg.Name,
+		arg.Description,
+		arg.LabelsJson,
+		arg.DisplayOrder,
+		arg.Public,
 		arg.Kind,
 		arg.IntervalMs,
 		arg.TimeoutMs,
@@ -119,7 +128,7 @@ func (q *Queries) GetLocation(ctx context.Context, id string) (Location, error) 
 }
 
 const getMonitor = `-- name: GetMonitor :one
-SELECT id, name, kind, interval_ms, timeout_ms, failure_threshold, recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at
+SELECT id, name, kind, interval_ms, timeout_ms, failure_threshold, recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at, description, labels_json, display_order, public
 FROM monitors
 WHERE id = ?
 `
@@ -140,6 +149,10 @@ func (q *Queries) GetMonitor(ctx context.Context, id string) (Monitor, error) {
 		&i.NextRunAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
+		&i.LabelsJson,
+		&i.DisplayOrder,
+		&i.Public,
 	)
 	return i, err
 }
@@ -163,6 +176,10 @@ const listDueMonitorLocations = `-- name: ListDueMonitorLocations :many
 SELECT
   m.id,
   m.name,
+  m.description,
+  m.labels_json,
+  m.display_order,
+  m.public,
   m.kind,
   m.interval_ms,
   m.timeout_ms,
@@ -191,6 +208,10 @@ type ListDueMonitorLocationsParams struct {
 type ListDueMonitorLocationsRow struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
+	Description       string `json:"description"`
+	LabelsJson        []byte `json:"labels_json"`
+	DisplayOrder      int64  `json:"display_order"`
+	Public            int64  `json:"public"`
 	Kind              string `json:"kind"`
 	IntervalMs        int64  `json:"interval_ms"`
 	TimeoutMs         int64  `json:"timeout_ms"`
@@ -217,6 +238,10 @@ func (q *Queries) ListDueMonitorLocations(ctx context.Context, arg ListDueMonito
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.Description,
+			&i.LabelsJson,
+			&i.DisplayOrder,
+			&i.Public,
 			&i.Kind,
 			&i.IntervalMs,
 			&i.TimeoutMs,

@@ -1,19 +1,16 @@
-package postgres_test
+package migrations_test
 
 import (
 	"io/fs"
 	"strings"
 	"testing"
 
-	migrations "github.com/araihu/xisnove/db/migrations/postgres"
+	migrations "github.com/araihu/xisnove/db/migrations/sqlite"
 )
 
-func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
+func TestMigrationFamilyContainsNotificationOperationsSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 4 {
-		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
-	}
 	var schema strings.Builder
 	err := fs.WalkDir(migrations.Files, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -33,13 +30,6 @@ func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"id UUID PRIMARY KEY",
-		"TIMESTAMPTZ",
-		"JSONB",
-		"one_active_incident_per_monitor",
-		"monitor_schedule",
-		"due_location_health",
-		"probe_kind",
 		"notification_channels",
 		"notification_routes",
 		"notification_outbox",
@@ -52,7 +42,8 @@ func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 		"due_notification_outbox",
 		"due_maintenance_end",
 		"probe_results_received_at",
-		"labels_json JSONB NOT NULL DEFAULT '{}'::jsonb",
+		"description TEXT NOT NULL DEFAULT ''",
+		"labels_json BLOB NOT NULL DEFAULT X'7B7D';",
 		"action TEXT NOT NULL DEFAULT 'change'",
 	} {
 		if !strings.Contains(schema.String(), expected) {

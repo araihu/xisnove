@@ -37,6 +37,16 @@ type AgentEnrollmentToken struct {
 	CreatedAt  string         `json:"created_at"`
 }
 
+type AuditEvent struct {
+	ID          string         `json:"id"`
+	Kind        string         `json:"kind"`
+	SubjectKind string         `json:"subject_kind"`
+	SubjectID   string         `json:"subject_id"`
+	IncidentID  sql.NullString `json:"incident_id"`
+	PayloadJson []byte         `json:"payload_json"`
+	CreatedAt   string         `json:"created_at"`
+}
+
 type CheckRun struct {
 	ID             string         `json:"id"`
 	MonitorID      string         `json:"monitor_id"`
@@ -51,6 +61,16 @@ type CheckRun struct {
 	LeaseExpiresAt sql.NullString `json:"lease_expires_at"`
 	ResolvedAt     sql.NullString `json:"resolved_at"`
 	ProbeKind      string         `json:"probe_kind"`
+}
+
+type DailyUptime struct {
+	MonitorID    string `json:"monitor_id"`
+	Day          string `json:"day"`
+	PassingCount int64  `json:"passing_count"`
+	FailingCount int64  `json:"failing_count"`
+	UnknownCount int64  `json:"unknown_count"`
+	ObservedMs   int64  `json:"observed_ms"`
+	UpdatedAt    string `json:"updated_at"`
 }
 
 type Incident struct {
@@ -70,6 +90,7 @@ type IncidentEvent struct {
 	State         string         `json:"state"`
 	Severity      string         `json:"severity"`
 	CreatedAt     string         `json:"created_at"`
+	Action        string         `json:"action"`
 }
 
 type Location struct {
@@ -89,6 +110,20 @@ type LocationHealth struct {
 	StaleAt              sql.NullString `json:"stale_at"`
 }
 
+type MaintenanceInterval struct {
+	ID                      string         `json:"id"`
+	MonitorID               string         `json:"monitor_id"`
+	StartsAt                string         `json:"starts_at"`
+	EndsAt                  sql.NullString `json:"ends_at"`
+	Reason                  string         `json:"reason"`
+	EndClaimOwner           sql.NullString `json:"end_claim_owner"`
+	EndClaimTokenHash       []byte         `json:"end_claim_token_hash"`
+	EndClaimExpiresAt       sql.NullString `json:"end_claim_expires_at"`
+	EndedNotificationSentAt sql.NullString `json:"ended_notification_sent_at"`
+	CreatedAt               string         `json:"created_at"`
+	UpdatedAt               string         `json:"updated_at"`
+}
+
 type Monitor struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
@@ -102,6 +137,10 @@ type Monitor struct {
 	NextRunAt         string `json:"next_run_at"`
 	CreatedAt         string `json:"created_at"`
 	UpdatedAt         string `json:"updated_at"`
+	Description       string `json:"description"`
+	LabelsJson        []byte `json:"labels_json"`
+	DisplayOrder      int64  `json:"display_order"`
+	Public            int64  `json:"public"`
 }
 
 type MonitorHealth struct {
@@ -114,6 +153,74 @@ type MonitorLocation struct {
 	MonitorID  string `json:"monitor_id"`
 	LocationID string `json:"location_id"`
 	Required   int64  `json:"required"`
+}
+
+type NotificationChannel struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Kind            string `json:"kind"`
+	EncryptedConfig []byte `json:"encrypted_config"`
+	KeyVersion      int64  `json:"key_version"`
+	Enabled         int64  `json:"enabled"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+}
+
+type NotificationDeliveryAttempt struct {
+	ID              string         `json:"id"`
+	OutboxID        string         `json:"outbox_id"`
+	Ordinal         int64          `json:"ordinal"`
+	StartedAt       string         `json:"started_at"`
+	FinishedAt      string         `json:"finished_at"`
+	Outcome         string         `json:"outcome"`
+	ErrorClass      sql.NullString `json:"error_class"`
+	Diagnostic      sql.NullString `json:"diagnostic"`
+	ProviderReceipt sql.NullString `json:"provider_receipt"`
+}
+
+type NotificationOutbox struct {
+	ID                 string         `json:"id"`
+	IncidentEventID    string         `json:"incident_event_id"`
+	RouteID            string         `json:"route_id"`
+	ChannelID          string         `json:"channel_id"`
+	DedupeKey          string         `json:"dedupe_key"`
+	RenderSnapshotJson []byte         `json:"render_snapshot_json"`
+	State              string         `json:"state"`
+	AvailableAt        string         `json:"available_at"`
+	ClaimOwner         sql.NullString `json:"claim_owner"`
+	ClaimTokenHash     []byte         `json:"claim_token_hash"`
+	ClaimExpiresAt     sql.NullString `json:"claim_expires_at"`
+	AttemptCount       int64          `json:"attempt_count"`
+	LastErrorClass     sql.NullString `json:"last_error_class"`
+	LastDiagnostic     sql.NullString `json:"last_diagnostic"`
+	DeliveredAt        sql.NullString `json:"delivered_at"`
+	SuppressedAt       sql.NullString `json:"suppressed_at"`
+	CreatedAt          string         `json:"created_at"`
+	UpdatedAt          string         `json:"updated_at"`
+}
+
+type NotificationRoute struct {
+	ID                string         `json:"id"`
+	Name              string         `json:"name"`
+	ChannelID         string         `json:"channel_id"`
+	MonitorID         sql.NullString `json:"monitor_id"`
+	LabelMatchersJson []byte         `json:"label_matchers_json"`
+	ActionsJson       []byte         `json:"actions_json"`
+	SeveritiesJson    []byte         `json:"severities_json"`
+	Template          string         `json:"template"`
+	Enabled           int64          `json:"enabled"`
+	Precedence        int64          `json:"precedence"`
+	CreatedAt         string         `json:"created_at"`
+	UpdatedAt         string         `json:"updated_at"`
+}
+
+type OperationLease struct {
+	LeaseKey   string `json:"lease_key"`
+	Owner      string `json:"owner"`
+	TokenHash  []byte `json:"token_hash"`
+	ExpiresAt  string `json:"expires_at"`
+	CursorJson []byte `json:"cursor_json"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 type ProbeResult struct {

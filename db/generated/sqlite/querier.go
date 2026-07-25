@@ -6,12 +6,17 @@ package dbsqlite
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
 	AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) (int64, error)
+	AppendNotificationDeliveryAttempt(ctx context.Context, arg AppendNotificationDeliveryAttemptParams) error
 	AssignMonitorLocation(ctx context.Context, arg AssignMonitorLocationParams) error
 	ChangeIncident(ctx context.Context, arg ChangeIncidentParams) (int64, error)
+	ClaimDueNotificationOutbox(ctx context.Context, arg ClaimDueNotificationOutboxParams) (NotificationOutbox, error)
+	ClaimEndedMaintenanceInterval(ctx context.Context, arg ClaimEndedMaintenanceIntervalParams) (MaintenanceInterval, error)
+	ClaimOperationLease(ctx context.Context, arg ClaimOperationLeaseParams) (OperationLease, error)
 	ClaimProbeRun(ctx context.Context, arg ClaimProbeRunParams) (CheckRun, error)
 	ClaimStaleLocationHealth(ctx context.Context, arg ClaimStaleLocationHealthParams) (int64, error)
 	ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error)
@@ -19,10 +24,19 @@ type Querier interface {
 	CreateAdmin(ctx context.Context, arg CreateAdminParams) error
 	CreateAgent(ctx context.Context, arg CreateAgentParams) error
 	CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgentEnrollmentTokenParams) error
+	CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) error
 	CreateLocation(ctx context.Context, arg CreateLocationParams) error
+	CreateMaintenanceInterval(ctx context.Context, arg CreateMaintenanceIntervalParams) error
 	CreateMonitor(ctx context.Context, arg CreateMonitorParams) error
+	CreateNotificationChannel(ctx context.Context, arg CreateNotificationChannelParams) error
+	CreateNotificationOutbox(ctx context.Context, arg CreateNotificationOutboxParams) (int64, error)
+	CreateNotificationRoute(ctx context.Context, arg CreateNotificationRouteParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	DatabaseNow(ctx context.Context) (string, error)
+	DeleteExpiredDailyUptime(ctx context.Context, arg DeleteExpiredDailyUptimeParams) (int64, error)
+	DeleteExpiredProbeResults(ctx context.Context, arg DeleteExpiredProbeResultsParams) (int64, error)
+	DeleteFutureMaintenanceInterval(ctx context.Context, arg DeleteFutureMaintenanceIntervalParams) (int64, error)
+	EndMaintenanceInterval(ctx context.Context, arg EndMaintenanceIntervalParams) (int64, error)
 	FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error)
 	FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error)
 	FindAdminByEmail(ctx context.Context, email string) (Admin, error)
@@ -31,22 +45,51 @@ type Querier interface {
 	GetCheckRun(ctx context.Context, id string) (CheckRun, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetLocationHealth(ctx context.Context, arg GetLocationHealthParams) (LocationHealth, error)
+	GetMaintenanceInterval(ctx context.Context, id string) (MaintenanceInterval, error)
 	GetMonitor(ctx context.Context, id string) (Monitor, error)
 	GetMonitorHealth(ctx context.Context, monitorID string) (MonitorHealth, error)
 	GetMonitorLocation(ctx context.Context, monitorID string) (MonitorLocation, error)
+	GetNotificationChannel(ctx context.Context, id string) (NotificationChannel, error)
+	GetNotificationOutbox(ctx context.Context, id string) (NotificationOutbox, error)
+	GetNotificationRoute(ctx context.Context, id string) (NotificationRoute, error)
 	GetProbeResultByID(ctx context.Context, id string) (ProbeResult, error)
 	GetProbeResultByRun(ctx context.Context, runID string) (ProbeResult, error)
 	InsertIncidentEvent(ctx context.Context, arg InsertIncidentEventParams) error
 	InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error)
 	InsertScheduledRun(ctx context.Context, arg InsertScheduledRunParams) (int64, error)
+	ListActiveMaintenanceIntervals(ctx context.Context, arg ListActiveMaintenanceIntervalsParams) ([]MaintenanceInterval, error)
+	ListAuditEventsByIncident(ctx context.Context, incidentID sql.NullString) ([]AuditEvent, error)
+	ListDailyUptime(ctx context.Context, arg ListDailyUptimeParams) ([]DailyUptime, error)
 	ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error)
+	ListEnabledNotificationRoutes(ctx context.Context) ([]NotificationRoute, error)
 	ListLocationHealth(ctx context.Context, monitorID string) ([]ListLocationHealthRow, error)
+	ListMaintenanceIntervals(ctx context.Context, arg ListMaintenanceIntervalsParams) ([]MaintenanceInterval, error)
+	ListNotificationChannelKeyVersions(ctx context.Context) ([]int64, error)
+	ListNotificationChannels(ctx context.Context, arg ListNotificationChannelsParams) ([]NotificationChannel, error)
+	ListNotificationDeliveryAttempts(ctx context.Context, outboxID string) ([]NotificationDeliveryAttempt, error)
+	ListNotificationOutbox(ctx context.Context, arg ListNotificationOutboxParams) ([]NotificationOutbox, error)
+	ListNotificationRoutes(ctx context.Context, arg ListNotificationRoutesParams) ([]NotificationRoute, error)
+	ListProbeResultsForDailyAggregation(ctx context.Context, arg ListProbeResultsForDailyAggregationParams) ([]ListProbeResultsForDailyAggregationRow, error)
 	ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error)
 	ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error)
+	MarkEndedMaintenanceProcessed(ctx context.Context, arg MarkEndedMaintenanceProcessedParams) (int64, error)
+	MarkNotificationDelivered(ctx context.Context, arg MarkNotificationDeliveredParams) (int64, error)
+	MarkNotificationPermanentFailure(ctx context.Context, arg MarkNotificationPermanentFailureParams) (int64, error)
+	MarkNotificationRetrying(ctx context.Context, arg MarkNotificationRetryingParams) (int64, error)
 	OpenIncident(ctx context.Context, arg OpenIncidentParams) error
 	RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error)
+	ReleaseEndedMaintenanceClaim(ctx context.Context, arg ReleaseEndedMaintenanceClaimParams) (int64, error)
+	ReleaseNotificationClaim(ctx context.Context, arg ReleaseNotificationClaimParams) (int64, error)
+	ReleaseOperationLease(ctx context.Context, arg ReleaseOperationLeaseParams) (int64, error)
+	ReplayNotificationOutbox(ctx context.Context, arg ReplayNotificationOutboxParams) (int64, error)
 	ResolveCheckRun(ctx context.Context, arg ResolveCheckRunParams) (int64, error)
+	SetNotificationChannelEnabled(ctx context.Context, arg SetNotificationChannelEnabledParams) (int64, error)
+	SetNotificationRouteEnabled(ctx context.Context, arg SetNotificationRouteEnabledParams) (int64, error)
 	UpdateAgentHeartbeat(ctx context.Context, arg UpdateAgentHeartbeatParams) (int64, error)
+	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
+	UpdateNotificationRoute(ctx context.Context, arg UpdateNotificationRouteParams) (int64, error)
+	UpdateOperationLeaseCursor(ctx context.Context, arg UpdateOperationLeaseCursorParams) (int64, error)
+	UpsertDailyUptime(ctx context.Context, arg UpsertDailyUptimeParams) error
 	UpsertLocationHealth(ctx context.Context, arg UpsertLocationHealthParams) error
 	UpsertMonitorHealth(ctx context.Context, arg UpsertMonitorHealthParams) error
 }

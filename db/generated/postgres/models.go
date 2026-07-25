@@ -41,6 +41,16 @@ type AgentEnrollmentToken struct {
 	CreatedAt  time.Time    `json:"created_at"`
 }
 
+type AuditEvent struct {
+	ID          string          `json:"id"`
+	Kind        string          `json:"kind"`
+	SubjectKind string          `json:"subject_kind"`
+	SubjectID   string          `json:"subject_id"`
+	IncidentID  sql.NullString  `json:"incident_id"`
+	PayloadJson json.RawMessage `json:"payload_json"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
 type CheckRun struct {
 	ID             string          `json:"id"`
 	MonitorID      string          `json:"monitor_id"`
@@ -55,6 +65,16 @@ type CheckRun struct {
 	LeaseExpiresAt sql.NullTime    `json:"lease_expires_at"`
 	ResolvedAt     sql.NullTime    `json:"resolved_at"`
 	ProbeKind      string          `json:"probe_kind"`
+}
+
+type DailyUptime struct {
+	MonitorID    string    `json:"monitor_id"`
+	Day          time.Time `json:"day"`
+	PassingCount int64     `json:"passing_count"`
+	FailingCount int64     `json:"failing_count"`
+	UnknownCount int64     `json:"unknown_count"`
+	ObservedMs   int64     `json:"observed_ms"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type Incident struct {
@@ -74,6 +94,7 @@ type IncidentEvent struct {
 	State         string         `json:"state"`
 	Severity      string         `json:"severity"`
 	CreatedAt     time.Time      `json:"created_at"`
+	Action        string         `json:"action"`
 }
 
 type Location struct {
@@ -93,6 +114,20 @@ type LocationHealth struct {
 	StaleAt              sql.NullTime `json:"stale_at"`
 }
 
+type MaintenanceInterval struct {
+	ID                      string         `json:"id"`
+	MonitorID               string         `json:"monitor_id"`
+	StartsAt                time.Time      `json:"starts_at"`
+	EndsAt                  sql.NullTime   `json:"ends_at"`
+	Reason                  string         `json:"reason"`
+	EndClaimOwner           sql.NullString `json:"end_claim_owner"`
+	EndClaimTokenHash       []byte         `json:"end_claim_token_hash"`
+	EndClaimExpiresAt       sql.NullTime   `json:"end_claim_expires_at"`
+	EndedNotificationSentAt sql.NullTime   `json:"ended_notification_sent_at"`
+	CreatedAt               time.Time      `json:"created_at"`
+	UpdatedAt               time.Time      `json:"updated_at"`
+}
+
 type Monitor struct {
 	ID                string          `json:"id"`
 	Name              string          `json:"name"`
@@ -106,6 +141,10 @@ type Monitor struct {
 	NextRunAt         time.Time       `json:"next_run_at"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
+	Description       string          `json:"description"`
+	LabelsJson        json.RawMessage `json:"labels_json"`
+	DisplayOrder      int32           `json:"display_order"`
+	Public            bool            `json:"public"`
 }
 
 type MonitorHealth struct {
@@ -118,6 +157,74 @@ type MonitorLocation struct {
 	MonitorID  string `json:"monitor_id"`
 	LocationID string `json:"location_id"`
 	Required   bool   `json:"required"`
+}
+
+type NotificationChannel struct {
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Kind            string    `json:"kind"`
+	EncryptedConfig []byte    `json:"encrypted_config"`
+	KeyVersion      int32     `json:"key_version"`
+	Enabled         bool      `json:"enabled"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type NotificationDeliveryAttempt struct {
+	ID              string         `json:"id"`
+	OutboxID        string         `json:"outbox_id"`
+	Ordinal         int32          `json:"ordinal"`
+	StartedAt       time.Time      `json:"started_at"`
+	FinishedAt      time.Time      `json:"finished_at"`
+	Outcome         string         `json:"outcome"`
+	ErrorClass      sql.NullString `json:"error_class"`
+	Diagnostic      sql.NullString `json:"diagnostic"`
+	ProviderReceipt sql.NullString `json:"provider_receipt"`
+}
+
+type NotificationOutbox struct {
+	ID                 string          `json:"id"`
+	IncidentEventID    string          `json:"incident_event_id"`
+	RouteID            string          `json:"route_id"`
+	ChannelID          string          `json:"channel_id"`
+	DedupeKey          string          `json:"dedupe_key"`
+	RenderSnapshotJson json.RawMessage `json:"render_snapshot_json"`
+	State              string          `json:"state"`
+	AvailableAt        time.Time       `json:"available_at"`
+	ClaimOwner         sql.NullString  `json:"claim_owner"`
+	ClaimTokenHash     []byte          `json:"claim_token_hash"`
+	ClaimExpiresAt     sql.NullTime    `json:"claim_expires_at"`
+	AttemptCount       int32           `json:"attempt_count"`
+	LastErrorClass     sql.NullString  `json:"last_error_class"`
+	LastDiagnostic     sql.NullString  `json:"last_diagnostic"`
+	DeliveredAt        sql.NullTime    `json:"delivered_at"`
+	SuppressedAt       sql.NullTime    `json:"suppressed_at"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+}
+
+type NotificationRoute struct {
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	ChannelID         string          `json:"channel_id"`
+	MonitorID         sql.NullString  `json:"monitor_id"`
+	LabelMatchersJson json.RawMessage `json:"label_matchers_json"`
+	ActionsJson       json.RawMessage `json:"actions_json"`
+	SeveritiesJson    json.RawMessage `json:"severities_json"`
+	Template          string          `json:"template"`
+	Enabled           bool            `json:"enabled"`
+	Precedence        int32           `json:"precedence"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+type OperationLease struct {
+	LeaseKey   string          `json:"lease_key"`
+	Owner      string          `json:"owner"`
+	TokenHash  []byte          `json:"token_hash"`
+	ExpiresAt  time.Time       `json:"expires_at"`
+	CursorJson json.RawMessage `json:"cursor_json"`
+	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
 type ProbeResult struct {

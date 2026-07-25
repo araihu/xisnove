@@ -9,10 +9,12 @@ WHERE id = sqlc.arg(id);
 
 -- name: CreateMonitor :exec
 INSERT INTO monitors (
-  id, name, kind, interval_ms, timeout_ms, failure_threshold,
+  id, name, description, labels_json, display_order, public,
+  kind, interval_ms, timeout_ms, failure_threshold,
   recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at
 ) VALUES (
-  sqlc.arg(id), sqlc.arg(name), sqlc.arg(kind), sqlc.arg(interval_ms),
+  sqlc.arg(id), sqlc.arg(name), sqlc.arg(description), sqlc.arg(labels_json),
+  sqlc.arg(display_order), sqlc.arg(public), sqlc.arg(kind), sqlc.arg(interval_ms),
   sqlc.arg(timeout_ms), sqlc.arg(failure_threshold), sqlc.arg(recovery_threshold),
   sqlc.arg(probe_json), sqlc.arg(enabled), sqlc.arg(next_run_at),
   sqlc.arg(created_at), sqlc.arg(updated_at)
@@ -40,6 +42,10 @@ LIMIT 1;
 SELECT
   m.id,
   m.name,
+  m.description,
+  m.labels_json,
+  m.display_order,
+  m.public,
   m.kind,
   m.interval_ms,
   m.timeout_ms,

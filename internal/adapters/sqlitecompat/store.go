@@ -212,9 +212,21 @@ func (r *monitorRepository) Create(ctx context.Context, monitor domain.Monitor) 
 	if err != nil {
 		return fmt.Errorf("encode probe definition: %w", err)
 	}
+	labels := monitor.MetadataLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labelsJSON, err := json.Marshal(labels)
+	if err != nil {
+		return fmt.Errorf("encode monitor labels: %w", err)
+	}
 	err = r.queries.CreateMonitor(ctx, dbsqlite.CreateMonitorParams{
 		ID:                string(monitor.ID),
 		Name:              monitor.Name,
+		Description:       monitor.Description,
+		LabelsJson:        labelsJSON,
+		DisplayOrder:      int64(monitor.DisplayOrder),
+		Public:            boolInt(monitor.Public),
 		Kind:              string(monitor.Kind),
 		IntervalMs:        monitor.Interval.Milliseconds(),
 		TimeoutMs:         monitor.Timeout.Milliseconds(),
@@ -292,6 +304,10 @@ func (r *monitorRepository) ListDue(
 		monitor, err := mapMonitor(dbsqlite.Monitor{
 			ID:                record.ID,
 			Name:              record.Name,
+			Description:       record.Description,
+			LabelsJson:        record.LabelsJson,
+			DisplayOrder:      record.DisplayOrder,
+			Public:            record.Public,
 			Kind:              record.Kind,
 			IntervalMs:        record.IntervalMs,
 			TimeoutMs:         record.TimeoutMs,
@@ -878,8 +894,13 @@ func (r *healthRepository) UpsertMonitor(
 
 func mapMonitor(record dbsqlite.Monitor) (domain.Monitor, error) {
 	if record.FailureThreshold > math.MaxUint16 ||
-		record.RecoveryThreshold > math.MaxUint16 {
+		record.RecoveryThreshold > math.MaxUint16 ||
+		record.DisplayOrder > math.MaxInt32 {
 		return domain.Monitor{}, errors.New("map monitor: threshold exceeds uint16")
+	}
+	var labels map[string]string
+	if err := json.Unmarshal(record.LabelsJson, &labels); err != nil {
+		return domain.Monitor{}, fmt.Errorf("map monitor labels: %w", err)
 	}
 	probe, err := decodeProbe(domain.MonitorKind(record.Kind), record.ProbeJson)
 	if err != nil {
@@ -889,7 +910,7 @@ func mapMonitor(record dbsqlite.Monitor) (domain.Monitor, error) {
 	if err != nil {
 		return domain.Monitor{}, fmt.Errorf("map monitor creation: %w", err)
 	}
-	monitor, err := monitorFromProbe(record, probe, createdAt)
+	monitor, err := monitorFromProbe(record, probe, createdAt, labels)
 	if err != nil {
 		return domain.Monitor{}, fmt.Errorf("map monitor: %w", err)
 	}
@@ -1086,6 +1107,7 @@ func monitorFromProbe(
 	record dbsqlite.Monitor,
 	probe domain.ProbeDefinition,
 	createdAt time.Time,
+	labels map[string]string,
 ) (domain.Monitor, error) {
 	commonID := domain.MonitorID(record.ID)
 	interval := time.Duration(record.IntervalMs) * time.Millisecond
@@ -1095,19 +1117,25 @@ func monitorFromProbe(
 	switch probe.Kind {
 	case domain.MonitorKindHTTP:
 		return domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
-			ID: commonID, Name: record.Name, Interval: interval, Timeout: timeout,
+			ID: commonID, Name: record.Name, Description: record.Description,
+			Labels: labels, DisplayOrder: int32(record.DisplayOrder), Public: record.Public == 1,
+			Interval: interval, Timeout: timeout,
 			FailureThreshold: failures, RecoveryThreshold: recoveries,
 			HTTP: probe.HTTP, CreatedAt: createdAt,
 		})
 	case domain.MonitorKindTCP:
 		return domain.NewTCPMonitor(domain.NewTCPMonitorParams{
-			ID: commonID, Name: record.Name, Interval: interval, Timeout: timeout,
+			ID: commonID, Name: record.Name, Description: record.Description,
+			Labels: labels, DisplayOrder: int32(record.DisplayOrder), Public: record.Public == 1,
+			Interval: interval, Timeout: timeout,
 			FailureThreshold: failures, RecoveryThreshold: recoveries,
 			TCP: probe.TCP, CreatedAt: createdAt,
 		})
 	case domain.MonitorKindDNS:
 		return domain.NewDNSMonitor(domain.NewDNSMonitorParams{
-			ID: commonID, Name: record.Name, Interval: interval, Timeout: timeout,
+			ID: commonID, Name: record.Name, Description: record.Description,
+			Labels: labels, DisplayOrder: int32(record.DisplayOrder), Public: record.Public == 1,
+			Interval: interval, Timeout: timeout,
 			FailureThreshold: failures, RecoveryThreshold: recoveries,
 			DNS: probe.DNS, CreatedAt: createdAt,
 		})
