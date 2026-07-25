@@ -1,0 +1,482 @@
+openapi: 3.1.2
+info:
+  title: Xisnove API
+  version: 0.1.0
+  description: API for the Xisnove monitoring control plane and outbound agents.
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+servers:
+  - url: /
+tags:
+  - name: auth
+  - name: management
+  - name: agent
+paths:
+  /v1/sessions:
+    post:
+      operationId: createSession
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateSessionRequest'}
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/locations:
+    post:
+      operationId: createLocation
+      tags: [management]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateLocationRequest'}
+      responses:
+        '201':
+          description: Location created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Location'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/monitors:
+    post:
+      operationId: createMonitor
+      tags: [management]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateMonitorRequest'}
+      responses:
+        '201':
+          description: Monitor created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Monitor'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/monitors/{monitorId}:
+    parameters:
+      - {$ref: '#/components/parameters/MonitorID'}
+    get:
+      operationId: getMonitor
+      tags: [management]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Monitor
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Monitor'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agent-enrollment-tokens:
+    post:
+      operationId: createAgentEnrollmentToken
+      tags: [management]
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAgentEnrollmentTokenRequest'}
+      responses:
+        '201':
+          description: One-time token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentEnrollmentToken'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agent-enrollments:
+    post:
+      operationId: enrollAgent
+      tags: [agent]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EnrollAgentRequest'}
+      responses:
+        '201':
+          description: Agent credential
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EnrolledAgent'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agent/heartbeat:
+    post:
+      operationId: heartbeatAgent
+      tags: [agent]
+      security: [{agentBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AgentHeartbeat'}
+      responses:
+        '204': {description: Heartbeat accepted}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agent/work:lease:
+    post:
+      operationId: leaseAgentWork
+      tags: [agent]
+      security: [{agentBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LeaseWorkRequest'}
+      responses:
+        '200':
+          description: Leased HTTP work
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HTTPWork'}
+        '204': {description: No compatible work before timeout}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agent/results:batch:
+    post:
+      operationId: uploadProbeResults
+      tags: [agent]
+      security: [{agentBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProbeResultBatch'}
+      responses:
+        '200':
+          description: Per-result acknowledgements
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProbeResultBatchAcknowledgement'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/monitors/{monitorId}/health:
+    parameters:
+      - {$ref: '#/components/parameters/MonitorID'}
+    get:
+      operationId: getMonitorHealth
+      tags: [management]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Monitor health
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MonitorHealth'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/monitors/{monitorId}/active-incident:
+    parameters:
+      - {$ref: '#/components/parameters/MonitorID'}
+    get:
+      operationId: getActiveMonitorIncident
+      tags: [management]
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Active Incident
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Incident'}
+        '204': {description: No active Incident}
+        default: {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    adminBearer: {type: http, scheme: bearer, bearerFormat: opaque}
+    agentBearer: {type: http, scheme: bearer, bearerFormat: opaque}
+  parameters:
+    MonitorID:
+      name: monitorId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Problem:
+      description: Problem details
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    CreateSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 8, maxLength: 1024, writeOnly: true}
+    Session:
+      type: object
+      additionalProperties: false
+      required: [token, expiresAt]
+      properties:
+        token: {type: string, minLength: 32}
+        expiresAt: {type: string, format: date-time}
+    CreateLocationRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+    Location:
+      type: object
+      additionalProperties: false
+      required: [id, name, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 120}
+        createdAt: {type: string, format: date-time}
+    CreateMonitorRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - intervalSeconds
+        - timeoutMillis
+        - failureThreshold
+        - recoveryThreshold
+        - locationId
+        - requiredLocation
+        - http
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
+        failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        recoveryThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        locationId: {type: string, format: uuid}
+        requiredLocation: {type: boolean}
+        http: {$ref: '#/components/schemas/HTTPProbe'}
+    HTTPProbe:
+      type: object
+      additionalProperties: false
+      required: [method, url, expectedStatus, bodyContains, followRedirects]
+      properties:
+        method:
+          type: string
+          enum: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS]
+        url: {type: string, format: uri, maxLength: 4096}
+        expectedStatus: {type: integer, format: int32, minimum: 100, maximum: 599}
+        bodyContains: {type: string, maxLength: 4096}
+        followRedirects: {type: boolean}
+    Monitor:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - name
+        - intervalSeconds
+        - timeoutMillis
+        - failureThreshold
+        - recoveryThreshold
+        - locationId
+        - requiredLocation
+        - http
+        - createdAt
+        - updatedAt
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [http]}
+        name: {type: string, minLength: 1, maxLength: 200}
+        intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
+        failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        recoveryThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        locationId: {type: string, format: uuid}
+        requiredLocation: {type: boolean}
+        http: {$ref: '#/components/schemas/HTTPProbe'}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    CreateAgentEnrollmentTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [locationId, expiresInSeconds]
+      properties:
+        locationId: {type: string, format: uuid}
+        expiresInSeconds: {type: integer, format: int32, minimum: 60, maximum: 86400}
+    AgentEnrollmentToken:
+      type: object
+      additionalProperties: false
+      required: [token, expiresAt]
+      properties:
+        token: {type: string, minLength: 32}
+        expiresAt: {type: string, format: date-time}
+    EnrollAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [token, name, capabilities]
+      properties:
+        token: {type: string, minLength: 32, writeOnly: true}
+        name: {type: string, minLength: 1, maxLength: 120}
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/AgentCapability'}
+    EnrolledAgent:
+      type: object
+      additionalProperties: false
+      required: [agentId, credential, credentialGeneration]
+      properties:
+        agentId: {type: string, format: uuid}
+        credential: {type: string, minLength: 32}
+        credentialGeneration: {type: integer, format: int64, minimum: 1}
+    AgentHeartbeat:
+      type: object
+      additionalProperties: false
+      required: [version, credentialGeneration, capabilities]
+      properties:
+        version: {type: string, minLength: 1, maxLength: 64}
+        credentialGeneration: {type: integer, format: int64, minimum: 1}
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/AgentCapability'}
+    LeaseWorkRequest:
+      type: object
+      additionalProperties: false
+      required: [waitSeconds, capabilities]
+      properties:
+        waitSeconds: {type: integer, format: int32, minimum: 0, maximum: 30}
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/AgentCapability'}
+    HTTPWork:
+      type: object
+      additionalProperties: false
+      required: [runId, leaseToken, monitorId, scheduledFor, timeoutMillis, http]
+      properties:
+        runId: {type: string, format: uuid}
+        leaseToken: {type: string, minLength: 32}
+        monitorId: {type: string, format: uuid}
+        scheduledFor: {type: string, format: date-time}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
+        http: {$ref: '#/components/schemas/HTTPProbe'}
+    ProbeResultBatch:
+      type: object
+      additionalProperties: false
+      required: [results]
+      properties:
+        results:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {$ref: '#/components/schemas/ProbeResultInput'}
+    ProbeResultInput:
+      type: object
+      additionalProperties: false
+      required:
+        - resultId
+        - runId
+        - leaseToken
+        - startedAt
+        - finishedAt
+        - outcome
+        - latencyMillis
+        - observedStatus
+        - bodyAssertionPassed
+        - errorCode
+        - diagnosticSample
+      properties:
+        resultId: {type: string, format: uuid}
+        runId: {type: string, format: uuid}
+        leaseToken: {type: string, minLength: 32}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time}
+        outcome: {type: string, enum: [passed, failed]}
+        latencyMillis: {type: integer, format: int64, minimum: 0}
+        observedStatus: {type: integer, format: int32, minimum: 0, maximum: 599}
+        bodyAssertionPassed: {type: boolean}
+        errorCode:
+          type: string
+          enum: ['', timeout, dns, connect, tls, protocol, status, body]
+        diagnosticSample: {type: string, maxLength: 512}
+    ProbeResultBatchAcknowledgement:
+      type: object
+      additionalProperties: false
+      required: [acknowledgements]
+      properties:
+        acknowledgements:
+          type: array
+          items: {$ref: '#/components/schemas/ProbeResultAcknowledgement'}
+    ProbeResultAcknowledgement:
+      type: object
+      additionalProperties: false
+      required: [resultId, status]
+      properties:
+        resultId: {type: string, format: uuid}
+        status: {type: string, enum: [accepted, duplicate]}
+    AgentCapability:
+      type: string
+      enum: [http, kubernetes-discovery, kubernetes-watch]
+    MonitorHealth:
+      type: object
+      additionalProperties: false
+      required: [monitorId, state, lastTransitionAt, locations]
+      properties:
+        monitorId: {type: string, format: uuid}
+        state: {$ref: '#/components/schemas/HealthState'}
+        lastTransitionAt: {type: string, format: date-time}
+        locations:
+          type: array
+          items: {$ref: '#/components/schemas/LocationHealth'}
+    LocationHealth:
+      type: object
+      additionalProperties: false
+      required:
+        - locationId
+        - state
+        - consecutiveFailures
+        - consecutiveSuccesses
+        - lastObservedAt
+      properties:
+        locationId: {type: string, format: uuid}
+        state: {$ref: '#/components/schemas/HealthState'}
+        consecutiveFailures: {type: integer, format: int32, minimum: 0}
+        consecutiveSuccesses: {type: integer, format: int32, minimum: 0}
+        lastObservedAt: {type: string, format: date-time}
+    HealthState:
+      type: string
+      enum: [pending, up, down, degraded, unknown]
+    Incident:
+      type: object
+      additionalProperties: false
+      required: [id, monitorId, state, severity, openedAt, lastTransitionAt]
+      properties:
+        id: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        state: {type: string, enum: [open, resolved]}
+        severity: {type: string, enum: [critical]}
+        openedAt: {type: string, format: date-time}
+        lastTransitionAt: {type: string, format: date-time}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, correlationId]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string, minLength: 1}
+        status: {type: integer, format: int32, minimum: 400, maximum: 599}
+        code: {type: string, minLength: 1}
+        correlationId: {type: string, minLength: 1}
+        detail: {type: string}
+        fieldErrors:
+          type: array
+          items: {$ref: '#/components/schemas/FieldError'}
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [field, message]
+      properties:
+        field: {type: string, minLength: 1}
+        message: {type: string, minLength: 1}
