@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/application"
+	"github.com/araihu/xisnove/domain"
 	"github.com/araihu/xisnove/internal/adapters/database"
-	"github.com/araihu/xisnove/internal/application"
-	"github.com/araihu/xisnove/internal/domain"
 )
 
 const storageMatrixPassword = "correct horse battery staple"

@@ -3,8 +3,8 @@ package sqlite
 import (
 	"database/sql"
 
+	application "github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/internal/adapters/sqlitecompat"
-	"github.com/araihu/xisnove/internal/application"
 )
 
 func NewStore(db *sql.DB) application.Store {

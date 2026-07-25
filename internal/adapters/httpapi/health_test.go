@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/araihu/xisnove/application"
 	"github.com/araihu/xisnove/internal/adapters/httpapi"
 	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
-	"github.com/araihu/xisnove/internal/application"
 )
 
 func TestGetActiveMonitorIncidentReturnsNoContentWhenAbsent(t *testing.T) {

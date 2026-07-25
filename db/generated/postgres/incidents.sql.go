@@ -64,16 +64,17 @@ func (q *Queries) GetActiveIncidentByMonitor(ctx context.Context, monitorID stri
 
 const insertIncidentEvent = `-- name: InsertIncidentEvent :exec
 INSERT INTO incident_events (
-  id, incident_id, previous_state, state, severity, created_at
+  id, incident_id, action, previous_state, state, severity, created_at
 ) VALUES (
-  $1, $2, $3,
-  $4, $5, $6
+  $1, $2, $3, $4,
+  $5, $6, $7
 )
 `
 
 type InsertIncidentEventParams struct {
 	ID            string         `json:"id"`
 	IncidentID    string         `json:"incident_id"`
+	Action        string         `json:"action"`
 	PreviousState sql.NullString `json:"previous_state"`
 	State         string         `json:"state"`
 	Severity      string         `json:"severity"`
@@ -84,6 +85,7 @@ func (q *Queries) InsertIncidentEvent(ctx context.Context, arg InsertIncidentEve
 	_, err := q.db.ExecContext(ctx, insertIncidentEvent,
 		arg.ID,
 		arg.IncidentID,
+		arg.Action,
 		arg.PreviousState,
 		arg.State,
 		arg.Severity,

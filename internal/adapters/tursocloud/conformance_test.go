@@ -6,9 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/araihu/xisnove/internal/adapters/conformance"
+	"github.com/araihu/xisnove/application"
+	conformance "github.com/araihu/xisnove/contracttest"
 	"github.com/araihu/xisnove/internal/adapters/tursocloud"
-	"github.com/araihu/xisnove/internal/application"
 	tursotest "github.com/araihu/xisnove/internal/testsupport/tursocloud"
 )
 

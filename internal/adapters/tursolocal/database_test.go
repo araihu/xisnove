@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/domain"
 	xisdatabase "github.com/araihu/xisnove/internal/adapters/database"
-	"github.com/araihu/xisnove/internal/domain"
 )
 
 func TestOpenMigrateAndReopenLocalTurso(t *testing.T) {

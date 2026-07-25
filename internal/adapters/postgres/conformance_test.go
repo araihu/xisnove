@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/araihu/xisnove/internal/adapters/conformance"
+	"github.com/araihu/xisnove/application"
+	conformance "github.com/araihu/xisnove/contracttest"
 	"github.com/araihu/xisnove/internal/adapters/postgres"
-	"github.com/araihu/xisnove/internal/application"
 	"github.com/google/uuid"
 )
 

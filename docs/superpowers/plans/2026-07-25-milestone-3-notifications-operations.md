@@ -226,21 +226,21 @@ git commit -m "feat(notification): add relational outbox schema"
 
 **Acceptance:**
 
-- [ ] The canonical module path remains `github.com/araihu/xisnove`.
-- [ ] Domain, application services, infrastructure ports, and adapter contract
+- [x] The canonical module path remains `github.com/araihu/xisnove`.
+- [x] Domain, application services, infrastructure ports, and adapter contract
   suites are importable by another module without access to `internal`.
-- [ ] The coarse public UnitOfWork preserves atomic `View`/`Transact`
+- [x] The coarse public UnitOfWork preserves atomic `View`/`Transact`
   boundaries and supplies the caller context to callbacks.
-- [ ] No application service replaces an incoming context with
+- [x] No application service replaces an incoming context with
   `context.Background()`.
-- [ ] An architecture test enforces dependency direction and keeps operational
+- [x] An architecture test enforces dependency direction and keeps operational
   persistence separate from future analytical ports.
-- [ ] An external-module fixture passes with `GOWORK=off`, imports all four
+- [x] An external-module fixture passes with `GOWORK=off`, imports all four
   public package roots, supplies a fake adapter, and constructs a service.
-- [ ] Public-package and OpenAPI compatibility follow semantic versioning; the
+- [x] Public-package and OpenAPI compatibility follow semantic versioning; the
   release process cannot claim Apache 2.0 until `LICENSE` and required notices
   are present.
-- [ ] The core remains a complete single-tenant self-hosted product and gains
+- [x] The core remains a complete single-tenant self-hosted product and gains
   no SaaS tenant, billing, subscription, or entitlement concepts.
 
 Implement and verify this gate using the dedicated plan before resuming Task 3.

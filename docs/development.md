@@ -3,6 +3,20 @@
 Xisnove requires Go 1.26.1. Generated OpenAPI and sqlc code is committed and
 must remain reproducible.
 
+Public-core changes must preserve the dependency and context rules in the
+[Open Core extension guide](architecture/open-core.md). The external-module
+fixture is deliberately tested outside the workspace:
+
+```bash
+cd integration/testdata/external-module
+GOWORK=off go test ./...
+```
+
+Application services depend on `application/port.UnitOfWork`; persistence
+adapters must propagate the supplied context into both `View` and `Transact`
+callbacks. Add or extend suites in `contracttest` when introducing an adapter
+behavior that all supported relational profiles must share.
+
 ```bash
 make generate
 make test

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/araihu/xisnove/internal/application"
+	"github.com/araihu/xisnove/application"
 )
 
 type BearerAuthenticator func(

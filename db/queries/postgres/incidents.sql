@@ -30,8 +30,8 @@ WHERE id = sqlc.arg(id)
 
 -- name: InsertIncidentEvent :exec
 INSERT INTO incident_events (
-  id, incident_id, previous_state, state, severity, created_at
+  id, incident_id, action, previous_state, state, severity, created_at
 ) VALUES (
-  sqlc.arg(id), sqlc.arg(incident_id), sqlc.narg(previous_state),
+  sqlc.arg(id), sqlc.arg(incident_id), sqlc.arg(action), sqlc.narg(previous_state),
   sqlc.arg(state), sqlc.arg(severity), sqlc.arg(created_at)
 );

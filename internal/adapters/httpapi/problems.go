@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/araihu/xisnove/internal/application"
+	"github.com/araihu/xisnove/application"
 )
 
 func ToProblem(err error, correlationID string) Problem {

@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/araihu/xisnove/application"
 	"github.com/araihu/xisnove/internal/adapters/httpapi"
-	"github.com/araihu/xisnove/internal/application"
 )
 
 func TestBearerAuthAddsAuthenticatedPrincipalToContext(t *testing.T) {

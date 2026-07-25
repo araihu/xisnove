@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/araihu/xisnove/internal/application"
+	"github.com/araihu/xisnove/application"
 )
 
 type TokenIssuer struct {

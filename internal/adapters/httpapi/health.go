@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/araihu/xisnove/internal/domain"
+	"github.com/araihu/xisnove/domain"
 )
 
 func (s *Server) GetMonitorHealth(

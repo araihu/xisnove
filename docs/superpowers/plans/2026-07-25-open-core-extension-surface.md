@@ -41,12 +41,12 @@ SQLite/PostgreSQL/Turso adapters, and the repository's `make check` pipeline.
 - Create: `internal/architecture/dependencies_test.go`
 - Create: `internal/architecture/context_test.go`
 
-- [ ] Assert `go list -deps` for `domain` contains no application or internal
+- [x] Assert `go list -deps` for `domain` contains no application or internal
   adapter package.
-- [ ] Assert `application` depends on `domain` and `application/port`, never
+- [x] Assert `application` depends on `domain` and `application/port`, never
   `internal/adapters`, generated API types, sqlc types, or database drivers.
 - [ ] Assert operational and analytical interfaces are distinct declarations.
-- [ ] Parse non-test application source and reject replacing an incoming
+- [x] Parse non-test application source and reject replacing an incoming
   context with `context.Background()` or `context.TODO()`.
 - [ ] Run the tests red while packages still have internal paths.
 
@@ -58,10 +58,10 @@ SQLite/PostgreSQL/Turso adapters, and the repository's `make check` pipeline.
 - Move: `internal/domain/*.go` to `domain/*.go`
 - Modify: imports throughout the root module
 
-- [ ] Move production and test files without changing domain behavior.
-- [ ] Rewrite imports to `github.com/araihu/xisnove/domain`.
-- [ ] Confirm `domain` imports only standard-library packages.
-- [ ] Run `go test -race ./domain` and relevant adapter tests.
+- [x] Move production and test files without changing domain behavior.
+- [x] Rewrite imports to `github.com/araihu/xisnove/domain`.
+- [x] Confirm `domain` imports only standard-library packages.
+- [x] Run `go test -race ./domain` and relevant adapter tests.
 
 ---
 
@@ -74,9 +74,9 @@ SQLite/PostgreSQL/Turso adapters, and the repository's `make check` pipeline.
 - Modify: `internal/application/store.go`
 - Modify: `internal/application/notification_store.go`
 
-- [ ] Move repository interfaces, records, `ErrNotFound`, and the repository set
+- [x] Move repository interfaces, records, `ErrNotFound`, and the repository set
   to package `port`; records may depend on public `domain` only.
-- [ ] Introduce the coarse public contract:
+- [x] Introduce the coarse public contract:
 
 ```go
 type UnitOfWork interface {
@@ -85,9 +85,9 @@ type UnitOfWork interface {
 }
 ```
 
-- [ ] Add contract tests proving callbacks receive the caller's exact context,
+- [x] Add contract tests proving callbacks receive the caller's exact context,
   reads use `View`, and failed transactions roll back atomically.
-- [ ] Do not expose database/sql, pgx, libSQL, or sqlc-generated types.
+- [x] Do not expose database/sql, pgx, libSQL, or sqlc-generated types.
 
 ---
 
@@ -98,14 +98,14 @@ type UnitOfWork interface {
 - Modify: every service constructor and method
 - Modify: self-hosted composition roots and HTTP adapters
 
-- [ ] Update services to consume `port.UnitOfWork` and `port` records.
-- [ ] Replace `Repositories()` access with `View(ctx, callback)` and
+- [x] Update services to consume `port.UnitOfWork` and `port` records.
+- [x] Replace `Repositories()` access with `View(ctx, callback)` and
   `WithinTx` with `Transact(ctx, callback)`.
-- [ ] Thread the callback context into every repository call; never close over
+- [x] Thread the callback context into every repository call; never close over
   and substitute another context.
 - [ ] Preserve constructor behavior and public errors deliberately; document
   exported identifiers needed by external consumers.
-- [ ] Run `go test -race ./application ./internal/adapters/...`.
+- [x] Run `go test -race ./application ./internal/adapters/...`.
 
 ---
 
@@ -116,10 +116,10 @@ type UnitOfWork interface {
 - Modify: `internal/adapters/postgres/store.go`
 - Modify: SQLite, local Turso, managed Turso, and database composition adapters
 
-- [ ] Implement `View` and `Transact` with the supplied context.
-- [ ] Ensure transaction-scoped repositories cannot escape or use a closed
+- [x] Implement `View` and `Transact` with the supplied context.
+- [x] Ensure transaction-scoped repositories cannot escape or use a closed
   transaction.
-- [ ] Preserve SQLite-compatible write serialization and PostgreSQL native
+- [x] Preserve SQLite-compatible write serialization and PostgreSQL native
   transactions.
 - [ ] Run the shared storage matrix for SQLite, local Turso, PostgreSQL, and the
   opt-in disposable managed-Turso profile.
@@ -133,7 +133,7 @@ type UnitOfWork interface {
 - Modify: all adapter conformance test imports
 
 - [ ] Make suites accept public `port.UnitOfWork` factories only.
-- [ ] Keep environment provisioning, credentials, and self-hosted adapter
+- [x] Keep environment provisioning, credentials, and self-hosted adapter
   construction out of the public package.
 - [ ] Export only stable suite entry points and option types.
 - [ ] Prove the same CRUD, transaction, lease, idempotency, and notification
@@ -148,13 +148,13 @@ type UnitOfWork interface {
 - Create: `integration/testdata/external-module/external_test.go`
 - Create: `integration/external_module_test.go`
 
-- [ ] Give the fixture an unrelated module path and a local `replace` used only
+- [x] Give the fixture an unrelated module path and a local `replace` used only
   by the fixture.
-- [ ] Import `domain`, `application`, `application/port`, and `contracttest`.
-- [ ] Implement an in-memory UnitOfWork/fake adapter and construct at least one
+- [x] Import `domain`, `application`, `application/port`, and `contracttest`.
+- [x] Implement an in-memory UnitOfWork/fake adapter and construct at least one
   application service.
-- [ ] From the harness, run `GOWORK=off go test ./...` in the fixture directory.
-- [ ] Reject accidental imports of Xisnove `internal` packages by relying on
+- [x] From the harness, run `GOWORK=off go test ./...` in the fixture directory.
+- [x] Reject accidental imports of Xisnove `internal` packages by relying on
   normal Go visibility rules.
 
 ---
@@ -167,12 +167,12 @@ type UnitOfWork interface {
 - Modify: `docs/development.md`
 - Modify: release/check scripts as needed
 
-- [ ] Document the supported extension surface, dependency direction,
+- [x] Document the supported extension surface, dependency direction,
   UnitOfWork atomicity, context rules, and self-hosted composition root.
-- [ ] State that the public core is single-tenant and SaaS-blind.
-- [ ] Document separate future analytics ports and the non-goal of replacing
+- [x] State that the public core is single-tenant and SaaS-blind.
+- [x] Document separate future analytics ports and the non-goal of replacing
   operational persistence with ClickHouse.
-- [ ] Add compatibility guidance: exported package/API changes follow semantic
+- [x] Add compatibility guidance: exported package/API changes follow semantic
   versioning and `api/openapi.yaml` remains the HTTP source of truth.
 - [ ] Add the canonical Apache 2.0 `LICENSE` and required notice material before
   any release metadata describes the project as Apache licensed.
@@ -181,12 +181,12 @@ type UnitOfWork interface {
 
 ### Task 9: Final verification and checkpoint
 
-- [ ] Run `gofmt` on changed Go files.
-- [ ] Run `go test -race ./domain ./application ./application/port ./contracttest`.
-- [ ] Run architecture and external-module tests with `GOWORK=off`.
-- [ ] Run `make check` and `git diff --check`.
-- [ ] Confirm `rg 'github.com/araihu/xisnove/internal/(domain|application|adapters/conformance)'`
+- [x] Run `gofmt` on changed Go files.
+- [x] Run `go test -race ./domain ./application ./application/port ./contracttest`.
+- [x] Run architecture and external-module tests with `GOWORK=off`.
+- [x] Run `make check` and `git diff --check`.
+- [x] Confirm `rg 'github.com/araihu/xisnove/internal/(domain|application|adapters/conformance)'`
   returns no Go imports.
-- [ ] Confirm the public domain contains no SaaS-specific concepts.
+- [x] Confirm the public domain contains no SaaS-specific concepts.
 - [ ] Commit and push the verified Open Core gate before resuming Milestone 3
   Task 3.

@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	application "github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/internal/adapters/sqlitecompat"
-	"github.com/araihu/xisnove/internal/application"
 )
 
 func Open(ctx context.Context, path string) (*sql.DB, error) {

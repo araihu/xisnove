@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	application "github.com/araihu/xisnove/application/port"
 	dbsqlite "github.com/araihu/xisnove/db/generated/sqlite"
-	"github.com/araihu/xisnove/internal/application"
-	"github.com/araihu/xisnove/internal/domain"
+	"github.com/araihu/xisnove/domain"
 	modernsqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 	turso "turso.tech/database/tursogo"
@@ -30,7 +30,30 @@ func (s *store) Repositories() application.Repositories {
 	return newRepositories(dbsqlite.New(s.db))
 }
 
+func (s *store) View(
+	ctx context.Context,
+	fn func(context.Context, application.Repositories) error,
+) error {
+	return fn(ctx, s.Repositories())
+}
+
+func (s *store) Transact(
+	ctx context.Context,
+	fn func(context.Context, application.Repositories) error,
+) error {
+	return s.transact(ctx, func(repositories application.Repositories) error {
+		return fn(ctx, repositories)
+	})
+}
+
 func (s *store) WithinTx(
+	ctx context.Context,
+	fn func(application.Repositories) error,
+) error {
+	return s.transact(ctx, fn)
+}
+
+func (s *store) transact(
 	ctx context.Context,
 	fn func(application.Repositories) error,
 ) error {
@@ -57,15 +80,21 @@ func (s *store) WithinTx(
 
 func newRepositories(queries *dbsqlite.Queries) application.Repositories {
 	return application.Repositories{
-		Admins:    &adminRepository{queries: queries},
-		Sessions:  &sessionRepository{queries: queries},
-		Locations: &locationRepository{queries: queries},
-		Monitors:  &monitorRepository{queries: queries},
-		Health:    &healthRepository{queries: queries},
-		Agents:    &agentRepository{queries: queries},
-		Runs:      &runRepository{queries: queries},
-		Results:   &resultRepository{queries: queries},
-		Incidents: &incidentRepository{queries: queries},
+		Admins:               &adminRepository{queries: queries},
+		Sessions:             &sessionRepository{queries: queries},
+		Locations:            &locationRepository{queries: queries},
+		Monitors:             &monitorRepository{queries: queries},
+		Health:               &healthRepository{queries: queries},
+		Agents:               &agentRepository{queries: queries},
+		Runs:                 &runRepository{queries: queries},
+		Results:              &resultRepository{queries: queries},
+		Incidents:            &incidentRepository{queries: queries},
+		NotificationChannels: &notificationChannelRepository{queries: queries},
+		NotificationRoutes:   &notificationRouteRepository{queries: queries},
+		NotificationOutbox:   &notificationOutboxRepository{queries: queries},
+		Maintenance:          &maintenanceRepository{queries: queries},
+		Audit:                &auditRepository{queries: queries},
+		Retention:            &retentionRepository{queries: queries},
 	}
 }
 
@@ -598,6 +627,7 @@ func (r *incidentRepository) AppendEvent(
 	err := r.queries.InsertIncidentEvent(ctx, dbsqlite.InsertIncidentEventParams{
 		ID:            event.ID,
 		IncidentID:    string(event.IncidentID),
+		Action:        string(event.Action),
 		PreviousState: nullableString(string(event.PreviousState)),
 		State:         string(event.State),
 		Severity:      string(event.Severity),
@@ -1236,6 +1266,9 @@ func mapIncident(record dbsqlite.Incident) (domain.Incident, error) {
 }
 
 func repositoryError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, application.ErrNotFound)
 	}

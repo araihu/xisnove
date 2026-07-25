@@ -9,9 +9,9 @@ import (
 	"math"
 	"time"
 
+	application "github.com/araihu/xisnove/application/port"
 	dbpostgres "github.com/araihu/xisnove/db/generated/postgres"
-	"github.com/araihu/xisnove/internal/application"
-	"github.com/araihu/xisnove/internal/domain"
+	"github.com/araihu/xisnove/domain"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sqlc-dev/pqtype"
 )
@@ -28,7 +28,30 @@ func (s *store) Repositories() application.Repositories {
 	return newRepositories(dbpostgres.New(s.db))
 }
 
+func (s *store) View(
+	ctx context.Context,
+	fn func(context.Context, application.Repositories) error,
+) error {
+	return fn(ctx, s.Repositories())
+}
+
+func (s *store) Transact(
+	ctx context.Context,
+	fn func(context.Context, application.Repositories) error,
+) error {
+	return s.transact(ctx, func(repositories application.Repositories) error {
+		return fn(ctx, repositories)
+	})
+}
+
 func (s *store) WithinTx(
+	ctx context.Context,
+	fn func(application.Repositories) error,
+) error {
+	return s.transact(ctx, fn)
+}
+
+func (s *store) transact(
 	ctx context.Context,
 	fn func(application.Repositories) error,
 ) error {
@@ -596,6 +619,7 @@ func (r *incidentRepository) AppendEvent(
 	err := r.queries.InsertIncidentEvent(ctx, dbpostgres.InsertIncidentEventParams{
 		ID:            event.ID,
 		IncidentID:    string(event.IncidentID),
+		Action:        string(event.Action),
 		PreviousState: nullableString(string(event.PreviousState)),
 		State:         string(event.State),
 		Severity:      string(event.Severity),
@@ -1233,6 +1257,9 @@ func mapIncident(record dbpostgres.Incident) (domain.Incident, error) {
 }
 
 func repositoryError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, application.ErrNotFound)
 	}

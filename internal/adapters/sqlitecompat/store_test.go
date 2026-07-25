@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/araihu/xisnove/internal/application"
+	"github.com/araihu/xisnove/application"
 )
 
 func TestRepositoryErrorMapsManagedLibSQLConstraint(t *testing.T) {

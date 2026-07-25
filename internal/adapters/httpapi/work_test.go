@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/application"
+	"github.com/araihu/xisnove/domain"
 	xiscrypto "github.com/araihu/xisnove/internal/adapters/crypto"
 	"github.com/araihu/xisnove/internal/adapters/httpapi"
 	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
-	"github.com/araihu/xisnove/internal/application"
-	"github.com/araihu/xisnove/internal/domain"
 )
 
 func TestLeaseAgentWorkReturnsCompatibleProbeThenNoContent(t *testing.T) {

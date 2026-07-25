@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araihu/xisnove/application"
 	xiscrypto "github.com/araihu/xisnove/internal/adapters/crypto"
 	"github.com/araihu/xisnove/internal/adapters/database"
 	"github.com/araihu/xisnove/internal/adapters/ids"
-	"github.com/araihu/xisnove/internal/application"
 )
 
 func bootstrapCommand(ctx context.Context, args []string) error {

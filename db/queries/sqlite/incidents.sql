@@ -27,5 +27,5 @@ WHERE id = sqlc.arg(id)
 
 -- name: InsertIncidentEvent :exec
 INSERT INTO incident_events (
-  id, incident_id, previous_state, state, severity, created_at
-) VALUES (?, ?, ?, ?, ?, ?);
+  id, incident_id, action, previous_state, state, severity, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?);

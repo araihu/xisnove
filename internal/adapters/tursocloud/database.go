@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
+	application "github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/internal/adapters/sqlitecompat"
-	"github.com/araihu/xisnove/internal/application"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 

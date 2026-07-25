@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 
+	application "github.com/araihu/xisnove/application/port"
 	postgresstore "github.com/araihu/xisnove/internal/adapters/postgres"
 	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
 	"github.com/araihu/xisnove/internal/adapters/tursocloud"
 	"github.com/araihu/xisnove/internal/adapters/tursolocal"
-	"github.com/araihu/xisnove/internal/application"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "turso.tech/database/tursogo"

@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
-	"github.com/araihu/xisnove/internal/application"
+	"github.com/araihu/xisnove/application"
 )
 
 var _ StrictServerInterface = (*Server)(nil)
