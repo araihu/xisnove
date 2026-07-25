@@ -60,6 +60,7 @@ func newRepositories(queries *dbsqlite.Queries) application.Repositories {
 		Locations: &locationRepository{queries: queries},
 		Monitors:  &monitorRepository{queries: queries},
 		Health:    &healthRepository{queries: queries},
+		Agents:    &agentRepository{queries: queries},
 	}
 }
 
@@ -271,6 +272,133 @@ type healthRepository struct {
 	queries *dbsqlite.Queries
 }
 
+type agentRepository struct {
+	queries *dbsqlite.Queries
+}
+
+func (r *agentRepository) CreateEnrollmentToken(
+	ctx context.Context,
+	record application.EnrollmentTokenRecord,
+) error {
+	err := r.queries.CreateAgentEnrollmentToken(
+		ctx,
+		dbsqlite.CreateAgentEnrollmentTokenParams{
+			ID:         record.ID,
+			LocationID: string(record.LocationID),
+			TokenHash:  record.TokenHash,
+			ExpiresAt:  formatTime(record.ExpiresAt),
+			CreatedAt:  formatTime(record.CreatedAt),
+		},
+	)
+	if err != nil {
+		return repositoryError("create agent enrollment token", err)
+	}
+	return nil
+}
+
+func (r *agentRepository) ConsumeEnrollmentToken(
+	ctx context.Context,
+	tokenHash []byte,
+	now time.Time,
+	consumedAt time.Time,
+) (application.EnrollmentTokenRecord, bool, error) {
+	record, err := r.queries.ConsumeAgentEnrollmentToken(
+		ctx,
+		dbsqlite.ConsumeAgentEnrollmentTokenParams{
+			ConsumedAt: nullableTimeValue(consumedAt),
+			TokenHash:  tokenHash,
+			Now:        formatTime(now),
+		},
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return application.EnrollmentTokenRecord{}, false, nil
+	}
+	if err != nil {
+		return application.EnrollmentTokenRecord{}, false, repositoryError(
+			"consume agent enrollment token",
+			err,
+		)
+	}
+	mapped, err := mapEnrollmentToken(record)
+	if err != nil {
+		return application.EnrollmentTokenRecord{}, false, err
+	}
+	return mapped, true, nil
+}
+
+func (r *agentRepository) Create(ctx context.Context, record application.AgentRecord) error {
+	capabilitiesJSON, err := json.Marshal(record.Agent.Capabilities)
+	if err != nil {
+		return fmt.Errorf("encode agent capabilities: %w", err)
+	}
+	err = r.queries.CreateAgent(ctx, dbsqlite.CreateAgentParams{
+		ID:                   string(record.Agent.ID),
+		LocationID:           string(record.Agent.LocationID),
+		Name:                 record.Agent.Name,
+		CredentialHash:       record.CredentialHash,
+		CredentialGeneration: int64(record.Agent.CredentialGeneration),
+		CapabilitiesJson:     capabilitiesJSON,
+		Version:              nullableString(record.Agent.Version),
+		LastSeenAt:           nullableTimeValue(record.Agent.LastSeenAt),
+		RevokedAt:            nullableTime(record.Agent.RevokedAt),
+		CreatedAt:            formatTime(record.Agent.CreatedAt),
+	})
+	if err != nil {
+		return repositoryError("create agent", err)
+	}
+	return nil
+}
+
+func (r *agentRepository) Get(
+	ctx context.Context,
+	agentID domain.AgentID,
+) (application.AgentRecord, error) {
+	record, err := r.queries.GetAgent(ctx, string(agentID))
+	if err != nil {
+		return application.AgentRecord{}, repositoryError("get agent", err)
+	}
+	return mapAgent(record)
+}
+
+func (r *agentRepository) FindActiveByCredentialHash(
+	ctx context.Context,
+	credentialHash []byte,
+) (application.AgentRecord, error) {
+	record, err := r.queries.FindActiveAgentByCredentialHash(ctx, credentialHash)
+	if err != nil {
+		return application.AgentRecord{}, repositoryError("find active agent", err)
+	}
+	return mapAgent(record)
+}
+
+func (r *agentRepository) UpdateHeartbeat(
+	ctx context.Context,
+	agentID domain.AgentID,
+	credentialGeneration uint64,
+	version string,
+	capabilities []domain.AgentCapability,
+	lastSeenAt time.Time,
+) (bool, error) {
+	capabilitiesJSON, err := json.Marshal(capabilities)
+	if err != nil {
+		return false, fmt.Errorf("encode heartbeat capabilities: %w", err)
+	}
+	affected, err := r.queries.UpdateAgentHeartbeat(
+		ctx,
+		dbsqlite.UpdateAgentHeartbeatParams{
+			Version:              nullableString(version),
+			CredentialGeneration: int64(credentialGeneration),
+			CapabilitiesJson:     capabilitiesJSON,
+			LastSeenAt:           nullableTimeValue(lastSeenAt),
+			ID:                   string(agentID),
+		},
+	)
+	if err != nil {
+		return false, repositoryError("update agent heartbeat", err)
+	}
+	return affected == 1, nil
+}
+
 func (r *healthRepository) GetLocation(
 	ctx context.Context,
 	monitorID domain.MonitorID,
@@ -452,6 +580,82 @@ func mapLocationHealth(
 	return health, nil
 }
 
+func mapEnrollmentToken(
+	record dbsqlite.AgentEnrollmentToken,
+) (application.EnrollmentTokenRecord, error) {
+	expiresAt, err := parseTime(record.ExpiresAt)
+	if err != nil {
+		return application.EnrollmentTokenRecord{}, fmt.Errorf(
+			"map enrollment token expiry: %w",
+			err,
+		)
+	}
+	consumedAt, err := parseNullableTime(record.ConsumedAt)
+	if err != nil {
+		return application.EnrollmentTokenRecord{}, fmt.Errorf(
+			"map enrollment token consumption: %w",
+			err,
+		)
+	}
+	createdAt, err := parseTime(record.CreatedAt)
+	if err != nil {
+		return application.EnrollmentTokenRecord{}, fmt.Errorf(
+			"map enrollment token creation: %w",
+			err,
+		)
+	}
+	return application.EnrollmentTokenRecord{
+		ID:         record.ID,
+		LocationID: domain.LocationID(record.LocationID),
+		TokenHash:  record.TokenHash,
+		ExpiresAt:  expiresAt,
+		ConsumedAt: consumedAt,
+		CreatedAt:  createdAt,
+	}, nil
+}
+
+func mapAgent(record dbsqlite.Agent) (application.AgentRecord, error) {
+	if record.CredentialGeneration <= 0 {
+		return application.AgentRecord{}, errors.New("map agent: invalid credential generation")
+	}
+	var capabilities []domain.AgentCapability
+	if err := json.Unmarshal(record.CapabilitiesJson, &capabilities); err != nil {
+		return application.AgentRecord{}, fmt.Errorf("decode agent capabilities: %w", err)
+	}
+	createdAt, err := parseTime(record.CreatedAt)
+	if err != nil {
+		return application.AgentRecord{}, fmt.Errorf("map agent creation: %w", err)
+	}
+	agent, err := domain.NewAgent(domain.NewAgentParams{
+		ID:                   domain.AgentID(record.ID),
+		LocationID:           domain.LocationID(record.LocationID),
+		Name:                 record.Name,
+		Capabilities:         capabilities,
+		CredentialGeneration: uint64(record.CredentialGeneration),
+		CreatedAt:            createdAt,
+	})
+	if err != nil {
+		return application.AgentRecord{}, fmt.Errorf("map agent: %w", err)
+	}
+	if record.Version.Valid {
+		agent.Version = record.Version.String
+	}
+	lastSeenAt, err := parseNullableTime(record.LastSeenAt)
+	if err != nil {
+		return application.AgentRecord{}, fmt.Errorf("map agent heartbeat: %w", err)
+	}
+	if lastSeenAt != nil {
+		agent.LastSeenAt = *lastSeenAt
+	}
+	agent.RevokedAt, err = parseNullableTime(record.RevokedAt)
+	if err != nil {
+		return application.AgentRecord{}, fmt.Errorf("map agent revocation: %w", err)
+	}
+	return application.AgentRecord{
+		Agent: agent, CredentialHash: record.CredentialHash,
+	}, nil
+}
+
 func repositoryError(operation string, err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, application.ErrNotFound)
@@ -488,6 +692,13 @@ func nullableTimeValue(value time.Time) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: formatTime(value), Valid: true}
+}
+
+func nullableString(value string) sql.NullString {
+	if value == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: value, Valid: true}
 }
 
 func parseNullableTime(value sql.NullString) (*time.Time, error) {

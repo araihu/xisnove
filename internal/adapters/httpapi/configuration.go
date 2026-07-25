@@ -16,14 +16,16 @@ import (
 
 type ServerConfig struct {
 	Configuration *application.ConfigurationService
+	Agents        *application.AgentService
 }
 
 type Server struct {
 	configuration *application.ConfigurationService
+	agents        *application.AgentService
 }
 
 func NewServer(config ServerConfig) *Server {
-	return &Server{configuration: config.Configuration}
+	return &Server{configuration: config.Configuration, agents: config.Agents}
 }
 
 func (s *Server) CreateLocation(
@@ -253,6 +255,16 @@ func problemFromError(err error) (Problem, int, bool) {
 			Code:          "conflict",
 			CorrelationId: "unknown",
 		}, 409, true
+	}
+	if errors.Is(err, application.ErrInvalidCredentials) ||
+		errors.Is(err, application.ErrInvalidEnrollmentToken) {
+		return Problem{
+			Type:          "https://xisnove.dev/problems/unauthorized",
+			Title:         "Authentication required",
+			Status:        401,
+			Code:          "unauthorized",
+			CorrelationId: "unknown",
+		}, 401, true
 	}
 	return Problem{}, 0, false
 }

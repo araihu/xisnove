@@ -21,6 +21,7 @@ type Repositories struct {
 	Locations LocationRepository
 	Monitors  MonitorRepository
 	Health    HealthRepository
+	Agents    AgentRepository
 }
 
 type AdminRecord struct {
@@ -42,6 +43,20 @@ type MonitorLocation struct {
 	MonitorID  domain.MonitorID
 	LocationID domain.LocationID
 	Required   bool
+}
+
+type EnrollmentTokenRecord struct {
+	ID         string
+	LocationID domain.LocationID
+	TokenHash  []byte
+	ExpiresAt  time.Time
+	ConsumedAt *time.Time
+	CreatedAt  time.Time
+}
+
+type AgentRecord struct {
+	Agent          domain.Agent
+	CredentialHash []byte
 }
 
 type AdminRepository interface {
@@ -77,4 +92,25 @@ type HealthRepository interface {
 	ListRequiredLocations(context.Context, domain.MonitorID) ([]domain.LocationHealth, error)
 	GetMonitor(context.Context, domain.MonitorID) (domain.MonitorHealth, error)
 	UpsertMonitor(context.Context, domain.MonitorHealth) error
+}
+
+type AgentRepository interface {
+	CreateEnrollmentToken(context.Context, EnrollmentTokenRecord) error
+	ConsumeEnrollmentToken(
+		context.Context,
+		[]byte,
+		time.Time,
+		time.Time,
+	) (EnrollmentTokenRecord, bool, error)
+	Create(context.Context, AgentRecord) error
+	Get(context.Context, domain.AgentID) (AgentRecord, error)
+	FindActiveByCredentialHash(context.Context, []byte) (AgentRecord, error)
+	UpdateHeartbeat(
+		context.Context,
+		domain.AgentID,
+		uint64,
+		string,
+		[]domain.AgentCapability,
+		time.Time,
+	) (bool, error)
 }

@@ -15,17 +15,18 @@ UPDATE agent_enrollment_tokens
 SET consumed_at = ?1
 WHERE token_hash = ?2
   AND consumed_at IS NULL
-  AND expires_at > ?1
+  AND expires_at > ?3
 RETURNING id, location_id, token_hash, expires_at, consumed_at, created_at
 `
 
 type ConsumeAgentEnrollmentTokenParams struct {
 	ConsumedAt sql.NullString `json:"consumed_at"`
 	TokenHash  []byte         `json:"token_hash"`
+	Now        string         `json:"now"`
 }
 
 func (q *Queries) ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error) {
-	row := q.db.QueryRowContext(ctx, consumeAgentEnrollmentToken, arg.ConsumedAt, arg.TokenHash)
+	row := q.db.QueryRowContext(ctx, consumeAgentEnrollmentToken, arg.ConsumedAt, arg.TokenHash, arg.Now)
 	var i AgentEnrollmentToken
 	err := row.Scan(
 		&i.ID,
@@ -108,6 +109,30 @@ WHERE credential_hash = ?
 
 func (q *Queries) FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error) {
 	row := q.db.QueryRowContext(ctx, findActiveAgentByCredentialHash, credentialHash)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.LocationID,
+		&i.Name,
+		&i.CredentialHash,
+		&i.CredentialGeneration,
+		&i.CapabilitiesJson,
+		&i.Version,
+		&i.LastSeenAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getAgent = `-- name: GetAgent :one
+SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at
+FROM agents
+WHERE id = ?
+`
+
+func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
+	row := q.db.QueryRowContext(ctx, getAgent, id)
 	var i Agent
 	err := row.Scan(
 		&i.ID,

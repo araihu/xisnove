@@ -40,6 +40,13 @@ func PrincipalFromContext(ctx context.Context) (application.Principal, bool) {
 	return principal, ok
 }
 
+func ContextWithPrincipal(
+	ctx context.Context,
+	principal application.Principal,
+) context.Context {
+	return context.WithValue(ctx, principalContextKey{}, principal)
+}
+
 func bearerToken(header string) (string, bool) {
 	fields := strings.Fields(header)
 	if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") || fields[1] == "" {

@@ -8,7 +8,7 @@ UPDATE agent_enrollment_tokens
 SET consumed_at = sqlc.arg(consumed_at)
 WHERE token_hash = sqlc.arg(token_hash)
   AND consumed_at IS NULL
-  AND expires_at > sqlc.arg(consumed_at)
+  AND expires_at > sqlc.arg(now)
 RETURNING id, location_id, token_hash, expires_at, consumed_at, created_at;
 
 -- name: CreateAgent :exec
@@ -22,6 +22,11 @@ SELECT *
 FROM agents
 WHERE credential_hash = ?
   AND revoked_at IS NULL;
+
+-- name: GetAgent :one
+SELECT *
+FROM agents
+WHERE id = ?;
 
 -- name: UpdateAgentHeartbeat :execrows
 UPDATE agents

@@ -26,6 +26,7 @@ type Querier interface {
 	FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error)
 	FindAdminByEmail(ctx context.Context, email string) (Admin, error)
 	GetActiveIncidentByMonitor(ctx context.Context, monitorID string) (Incident, error)
+	GetAgent(ctx context.Context, id string) (Agent, error)
 	GetCheckRun(ctx context.Context, id string) (CheckRun, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetLocationHealth(ctx context.Context, arg GetLocationHealthParams) (LocationHealth, error)
