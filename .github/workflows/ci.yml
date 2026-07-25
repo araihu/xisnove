@@ -40,6 +40,17 @@ jobs:
       - run: go test -race ./...
         env:
           XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
+      - name: PostgreSQL backup and restore smoke
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: xisnove
+          POSTGRES_DATABASE: xisnove
+          POSTGRES_RESTORE_DATABASE: xisnove_restore_smoke
+          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
+          XISNOVE_TEST_POSTGRES_RESTORE_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove_restore_smoke?sslmode=disable
+        run: bash scripts/postgres-backup-smoke.sh
       - name: Check OpenAPI compatibility
         if: github.event_name == 'pull_request'
         env:
