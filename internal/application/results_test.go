@@ -104,7 +104,7 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 		scheduled := now.Add(time.Duration(i) * time.Second)
 		if _, err := repositories.Runs.Insert(ctx, application.NewRunRecord{
 			ID: runID, MonitorID: monitor.ID, LocationID: location.ID,
-			ScheduledFor: scheduled, Probe: monitor.HTTP, Timeout: monitor.Timeout,
+			ScheduledFor: scheduled, Probe: monitor.Probe(), Timeout: monitor.Timeout,
 		}); err != nil {
 			t.Fatal(err)
 		}

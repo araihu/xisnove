@@ -12,7 +12,7 @@ import (
 
 var migrationMu sync.Mutex
 
-const LatestMigrationVersion = 1
+const LatestMigrationVersion = 2
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	migrationMu.Lock()

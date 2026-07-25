@@ -11,7 +11,7 @@ import (
 )
 
 const getProbeResultByID = `-- name: GetProbeResultByID :one
-SELECT id, run_id, agent_id, started_at, finished_at, received_at, outcome, latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample
+SELECT id, run_id, agent_id, started_at, finished_at, received_at, outcome, latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample, observed_values_json, tls_not_after, protocol_timings_json
 FROM probe_results
 WHERE id = ?
 `
@@ -32,12 +32,15 @@ func (q *Queries) GetProbeResultByID(ctx context.Context, id string) (ProbeResul
 		&i.BodyAssertionPassed,
 		&i.ErrorCode,
 		&i.DiagnosticSample,
+		&i.ObservedValuesJson,
+		&i.TlsNotAfter,
+		&i.ProtocolTimingsJson,
 	)
 	return i, err
 }
 
 const getProbeResultByRun = `-- name: GetProbeResultByRun :one
-SELECT id, run_id, agent_id, started_at, finished_at, received_at, outcome, latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample
+SELECT id, run_id, agent_id, started_at, finished_at, received_at, outcome, latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample, observed_values_json, tls_not_after, protocol_timings_json
 FROM probe_results
 WHERE run_id = ?
 `
@@ -58,6 +61,9 @@ func (q *Queries) GetProbeResultByRun(ctx context.Context, runID string) (ProbeR
 		&i.BodyAssertionPassed,
 		&i.ErrorCode,
 		&i.DiagnosticSample,
+		&i.ObservedValuesJson,
+		&i.TlsNotAfter,
+		&i.ProtocolTimingsJson,
 	)
 	return i, err
 }
@@ -65,8 +71,9 @@ func (q *Queries) GetProbeResultByRun(ctx context.Context, runID string) (ProbeR
 const insertProbeResult = `-- name: InsertProbeResult :execrows
 INSERT INTO probe_results (
   id, run_id, agent_id, started_at, finished_at, received_at, outcome,
-  latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample,
+  observed_values_json, tls_not_after, protocol_timings_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT DO NOTHING
 `
 
@@ -83,6 +90,9 @@ type InsertProbeResultParams struct {
 	BodyAssertionPassed sql.NullInt64  `json:"body_assertion_passed"`
 	ErrorCode           sql.NullString `json:"error_code"`
 	DiagnosticSample    sql.NullString `json:"diagnostic_sample"`
+	ObservedValuesJson  []byte         `json:"observed_values_json"`
+	TlsNotAfter         sql.NullString `json:"tls_not_after"`
+	ProtocolTimingsJson []byte         `json:"protocol_timings_json"`
 }
 
 func (q *Queries) InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error) {
@@ -99,6 +109,9 @@ func (q *Queries) InsertProbeResult(ctx context.Context, arg InsertProbeResultPa
 		arg.BodyAssertionPassed,
 		arg.ErrorCode,
 		arg.DiagnosticSample,
+		arg.ObservedValuesJson,
+		arg.TlsNotAfter,
+		arg.ProtocolTimingsJson,
 	)
 	if err != nil {
 		return 0, err

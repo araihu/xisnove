@@ -45,7 +45,7 @@ func (s *Scheduler) EnqueueDue(ctx context.Context, limit int) (int, error) {
 			MonitorID:    item.Monitor.ID,
 			LocationID:   item.LocationID,
 			ScheduledFor: item.NextRunAt,
-			Probe:        item.Monitor.HTTP,
+			Probe:        item.Monitor.Probe(),
 			Timeout:      item.Monitor.Timeout,
 		}
 		created := false

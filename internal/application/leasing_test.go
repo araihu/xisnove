@@ -22,9 +22,12 @@ func TestExpiredLeaseCanBeReclaimedByCompatibleAgent(t *testing.T) {
 		MonitorID:    "monitor-1",
 		LocationID:   "location-1",
 		ScheduledFor: now,
-		Probe:        domain.HTTPProbe{Method: "GET", URL: "https://example.com/health"},
-		Timeout:      5 * time.Second,
-		Status:       "available",
+		Probe: domain.ProbeDefinition{
+			Kind: domain.MonitorKindHTTP,
+			HTTP: domain.HTTPProbe{Method: "GET", URL: "https://example.com/health"},
+		},
+		Timeout: 5 * time.Second,
+		Status:  "available",
 	}
 	service := application.NewLeaseService(application.LeaseServiceConfig{
 		Store:         store,

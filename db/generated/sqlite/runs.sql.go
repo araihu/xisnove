@@ -29,7 +29,7 @@ WHERE id = (
   ORDER BY r.scheduled_for, r.id
   LIMIT 1
 )
-RETURNING id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status, lease_agent_id, lease_token_hash, lease_attempt, lease_expires_at, resolved_at
+RETURNING id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status, lease_agent_id, lease_token_hash, lease_attempt, lease_expires_at, resolved_at, probe_kind
 `
 
 type ClaimHTTPRunParams struct {
@@ -60,6 +60,7 @@ func (q *Queries) ClaimHTTPRun(ctx context.Context, arg ClaimHTTPRunParams) (Che
 		&i.LeaseAttempt,
 		&i.LeaseExpiresAt,
 		&i.ResolvedAt,
+		&i.ProbeKind,
 	)
 	return i, err
 }
@@ -76,7 +77,7 @@ func (q *Queries) DatabaseNow(ctx context.Context) (string, error) {
 }
 
 const getCheckRun = `-- name: GetCheckRun :one
-SELECT id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status, lease_agent_id, lease_token_hash, lease_attempt, lease_expires_at, resolved_at
+SELECT id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status, lease_agent_id, lease_token_hash, lease_attempt, lease_expires_at, resolved_at, probe_kind
 FROM check_runs
 WHERE id = ?
 `
@@ -97,14 +98,15 @@ func (q *Queries) GetCheckRun(ctx context.Context, id string) (CheckRun, error) 
 		&i.LeaseAttempt,
 		&i.LeaseExpiresAt,
 		&i.ResolvedAt,
+		&i.ProbeKind,
 	)
 	return i, err
 }
 
 const insertScheduledRun = `-- name: InsertScheduledRun :execrows
 INSERT INTO check_runs (
-  id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status
-) VALUES (?, ?, ?, ?, ?, ?, 'available')
+  id, monitor_id, location_id, scheduled_for, probe_json, probe_kind, timeout_ms, status
+) VALUES (?, ?, ?, ?, ?, ?, ?, 'available')
 ON CONFLICT (monitor_id, location_id, scheduled_for) DO NOTHING
 `
 
@@ -114,6 +116,7 @@ type InsertScheduledRunParams struct {
 	LocationID   string `json:"location_id"`
 	ScheduledFor string `json:"scheduled_for"`
 	ProbeJson    []byte `json:"probe_json"`
+	ProbeKind    string `json:"probe_kind"`
 	TimeoutMs    int64  `json:"timeout_ms"`
 }
 
@@ -124,6 +127,7 @@ func (q *Queries) InsertScheduledRun(ctx context.Context, arg InsertScheduledRun
 		arg.LocationID,
 		arg.ScheduledFor,
 		arg.ProbeJson,
+		arg.ProbeKind,
 		arg.TimeoutMs,
 	)
 	if err != nil {

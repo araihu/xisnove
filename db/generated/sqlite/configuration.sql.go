@@ -68,7 +68,7 @@ func (q *Queries) CreateLocation(ctx context.Context, arg CreateLocationParams) 
 const createMonitor = `-- name: CreateMonitor :exec
 INSERT INTO monitors (
   id, name, kind, interval_ms, timeout_ms, failure_threshold,
-  recovery_threshold, http_json, enabled, next_run_at, created_at, updated_at
+  recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
@@ -80,7 +80,7 @@ type CreateMonitorParams struct {
 	TimeoutMs         int64  `json:"timeout_ms"`
 	FailureThreshold  int64  `json:"failure_threshold"`
 	RecoveryThreshold int64  `json:"recovery_threshold"`
-	HttpJson          []byte `json:"http_json"`
+	ProbeJson         []byte `json:"probe_json"`
 	Enabled           int64  `json:"enabled"`
 	NextRunAt         string `json:"next_run_at"`
 	CreatedAt         string `json:"created_at"`
@@ -96,7 +96,7 @@ func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) er
 		arg.TimeoutMs,
 		arg.FailureThreshold,
 		arg.RecoveryThreshold,
-		arg.HttpJson,
+		arg.ProbeJson,
 		arg.Enabled,
 		arg.NextRunAt,
 		arg.CreatedAt,
@@ -119,7 +119,7 @@ func (q *Queries) GetLocation(ctx context.Context, id string) (Location, error) 
 }
 
 const getMonitor = `-- name: GetMonitor :one
-SELECT id, name, kind, interval_ms, timeout_ms, failure_threshold, recovery_threshold, http_json, enabled, next_run_at, created_at, updated_at
+SELECT id, name, kind, interval_ms, timeout_ms, failure_threshold, recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at
 FROM monitors
 WHERE id = ?
 `
@@ -135,7 +135,7 @@ func (q *Queries) GetMonitor(ctx context.Context, id string) (Monitor, error) {
 		&i.TimeoutMs,
 		&i.FailureThreshold,
 		&i.RecoveryThreshold,
-		&i.HttpJson,
+		&i.ProbeJson,
 		&i.Enabled,
 		&i.NextRunAt,
 		&i.CreatedAt,
@@ -168,7 +168,7 @@ SELECT
   m.timeout_ms,
   m.failure_threshold,
   m.recovery_threshold,
-  m.http_json,
+  m.probe_json,
   m.enabled,
   m.next_run_at,
   m.created_at,
@@ -196,7 +196,7 @@ type ListDueMonitorLocationsRow struct {
 	TimeoutMs         int64  `json:"timeout_ms"`
 	FailureThreshold  int64  `json:"failure_threshold"`
 	RecoveryThreshold int64  `json:"recovery_threshold"`
-	HttpJson          []byte `json:"http_json"`
+	ProbeJson         []byte `json:"probe_json"`
 	Enabled           int64  `json:"enabled"`
 	NextRunAt         string `json:"next_run_at"`
 	CreatedAt         string `json:"created_at"`
@@ -222,7 +222,7 @@ func (q *Queries) ListDueMonitorLocations(ctx context.Context, arg ListDueMonito
 			&i.TimeoutMs,
 			&i.FailureThreshold,
 			&i.RecoveryThreshold,
-			&i.HttpJson,
+			&i.ProbeJson,
 			&i.Enabled,
 			&i.NextRunAt,
 			&i.CreatedAt,

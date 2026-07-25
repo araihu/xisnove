@@ -10,7 +10,7 @@ WHERE id = ?;
 -- name: CreateMonitor :exec
 INSERT INTO monitors (
   id, name, kind, interval_ms, timeout_ms, failure_threshold,
-  recovery_threshold, http_json, enabled, next_run_at, created_at, updated_at
+  recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetMonitor :one
@@ -40,7 +40,7 @@ SELECT
   m.timeout_ms,
   m.failure_threshold,
   m.recovery_threshold,
-  m.http_json,
+  m.probe_json,
   m.enabled,
   m.next_run_at,
   m.created_at,

@@ -62,7 +62,7 @@ func TestCompetingAgentsHaveSingleLeaseWinnerAndExpiredLeaseIsReclaimed(t *testi
 		MonitorID:    monitor.ID,
 		LocationID:   location.ID,
 		ScheduledFor: now,
-		Probe:        monitor.HTTP,
+		Probe:        monitor.Probe(),
 		Timeout:      monitor.Timeout,
 	}); err != nil {
 		t.Fatal(err)

@@ -3,8 +3,8 @@ SELECT CAST(strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AS TEXT) AS database_now;
 
 -- name: InsertScheduledRun :execrows
 INSERT INTO check_runs (
-  id, monitor_id, location_id, scheduled_for, probe_json, timeout_ms, status
-) VALUES (?, ?, ?, ?, ?, ?, 'available')
+  id, monitor_id, location_id, scheduled_for, probe_json, probe_kind, timeout_ms, status
+) VALUES (?, ?, ?, ?, ?, ?, ?, 'available')
 ON CONFLICT (monitor_id, location_id, scheduled_for) DO NOTHING;
 
 -- name: ClaimHTTPRun :one

@@ -131,7 +131,7 @@ func (s *LeaseService) tryLeaseHTTP(
 		ScheduledFor: run.ScheduledFor,
 		LeaseToken:   token.Raw,
 		Timeout:      run.Timeout,
-		Probe:        run.Probe,
+		Probe:        run.Probe.HTTP,
 	}, nil
 }
 

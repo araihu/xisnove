@@ -50,6 +50,7 @@ type CheckRun struct {
 	LeaseAttempt   int64          `json:"lease_attempt"`
 	LeaseExpiresAt sql.NullString `json:"lease_expires_at"`
 	ResolvedAt     sql.NullString `json:"resolved_at"`
+	ProbeKind      string         `json:"probe_kind"`
 }
 
 type Incident struct {
@@ -95,7 +96,7 @@ type Monitor struct {
 	TimeoutMs         int64  `json:"timeout_ms"`
 	FailureThreshold  int64  `json:"failure_threshold"`
 	RecoveryThreshold int64  `json:"recovery_threshold"`
-	HttpJson          []byte `json:"http_json"`
+	ProbeJson         []byte `json:"probe_json"`
 	Enabled           int64  `json:"enabled"`
 	NextRunAt         string `json:"next_run_at"`
 	CreatedAt         string `json:"created_at"`
@@ -127,6 +128,9 @@ type ProbeResult struct {
 	BodyAssertionPassed sql.NullInt64  `json:"body_assertion_passed"`
 	ErrorCode           sql.NullString `json:"error_code"`
 	DiagnosticSample    sql.NullString `json:"diagnostic_sample"`
+	ObservedValuesJson  []byte         `json:"observed_values_json"`
+	TlsNotAfter         sql.NullString `json:"tls_not_after"`
+	ProtocolTimingsJson []byte         `json:"protocol_timings_json"`
 }
 
 type Session struct {

@@ -206,9 +206,9 @@ type monitorRepository struct {
 }
 
 func (r *monitorRepository) Create(ctx context.Context, monitor domain.Monitor) error {
-	httpJSON, err := json.Marshal(monitor.HTTP)
+	probeJSON, err := json.Marshal(monitor.Probe())
 	if err != nil {
-		return fmt.Errorf("encode HTTP probe: %w", err)
+		return fmt.Errorf("encode probe definition: %w", err)
 	}
 	err = r.queries.CreateMonitor(ctx, dbsqlite.CreateMonitorParams{
 		ID:                string(monitor.ID),
@@ -218,7 +218,7 @@ func (r *monitorRepository) Create(ctx context.Context, monitor domain.Monitor) 
 		TimeoutMs:         monitor.Timeout.Milliseconds(),
 		FailureThreshold:  int64(monitor.FailureThreshold),
 		RecoveryThreshold: int64(monitor.RecoveryThreshold),
-		HttpJson:          httpJSON,
+		ProbeJson:         probeJSON,
 		Enabled:           boolInt(monitor.Enabled),
 		NextRunAt:         formatTime(monitor.NextRunAt),
 		CreatedAt:         formatTime(monitor.CreatedAt),
@@ -295,7 +295,7 @@ func (r *monitorRepository) ListDue(
 			TimeoutMs:         record.TimeoutMs,
 			FailureThreshold:  record.FailureThreshold,
 			RecoveryThreshold: record.RecoveryThreshold,
-			HttpJson:          record.HttpJson,
+			ProbeJson:         record.ProbeJson,
 			Enabled:           record.Enabled,
 			NextRunAt:         record.NextRunAt,
 			CreatedAt:         record.CreatedAt,
@@ -386,6 +386,7 @@ func (r *runRepository) Insert(
 			LocationID:   string(record.LocationID),
 			ScheduledFor: formatTime(record.ScheduledFor),
 			ProbeJson:    probeJSON,
+			ProbeKind:    string(record.Probe.Kind),
 			TimeoutMs:    record.Timeout.Milliseconds(),
 		},
 	)
@@ -467,6 +468,19 @@ func (r *resultRepository) Insert(
 	ctx context.Context,
 	record application.ProbeResultRecord,
 ) (bool, error) {
+	observedValuesJSON, err := json.Marshal(record.ObservedValues)
+	if err != nil {
+		return false, fmt.Errorf("encode observed values: %w", err)
+	}
+	timingsJSON, err := json.Marshal(protocolTimingsJSON{
+		DNSMillis:       record.ProtocolTimings.DNS.Milliseconds(),
+		ConnectMillis:   record.ProtocolTimings.Connect.Milliseconds(),
+		TLSMillis:       record.ProtocolTimings.TLS.Milliseconds(),
+		FirstByteMillis: record.ProtocolTimings.FirstByte.Milliseconds(),
+	})
+	if err != nil {
+		return false, fmt.Errorf("encode protocol timings: %w", err)
+	}
 	affected, err := r.queries.InsertProbeResult(ctx, dbsqlite.InsertProbeResultParams{
 		ID:                  record.ID,
 		RunID:               string(record.RunID),
@@ -480,6 +494,9 @@ func (r *resultRepository) Insert(
 		BodyAssertionPassed: nullableBool(record.BodyAssertionPassed),
 		ErrorCode:           nullableString(record.ErrorCode),
 		DiagnosticSample:    nullableString(record.DiagnosticSample),
+		ObservedValuesJson:  observedValuesJSON,
+		TlsNotAfter:         nullableTime(record.TLSNotAfter),
+		ProtocolTimingsJson: timingsJSON,
 	})
 	if err != nil {
 		return false, repositoryError("insert probe result", err)
@@ -804,24 +821,15 @@ func mapMonitor(record dbsqlite.Monitor) (domain.Monitor, error) {
 		record.RecoveryThreshold > math.MaxUint16 {
 		return domain.Monitor{}, errors.New("map monitor: threshold exceeds uint16")
 	}
-	var probe domain.HTTPProbe
-	if err := json.Unmarshal(record.HttpJson, &probe); err != nil {
-		return domain.Monitor{}, fmt.Errorf("decode HTTP probe: %w", err)
+	probe, err := decodeProbe(domain.MonitorKind(record.Kind), record.ProbeJson)
+	if err != nil {
+		return domain.Monitor{}, err
 	}
 	createdAt, err := parseTime(record.CreatedAt)
 	if err != nil {
 		return domain.Monitor{}, fmt.Errorf("map monitor creation: %w", err)
 	}
-	monitor, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
-		ID:                domain.MonitorID(record.ID),
-		Name:              record.Name,
-		Interval:          time.Duration(record.IntervalMs) * time.Millisecond,
-		Timeout:           time.Duration(record.TimeoutMs) * time.Millisecond,
-		FailureThreshold:  uint16(record.FailureThreshold),
-		RecoveryThreshold: uint16(record.RecoveryThreshold),
-		HTTP:              probe,
-		CreatedAt:         createdAt,
-	})
+	monitor, err := monitorFromProbe(record, probe, createdAt)
 	if err != nil {
 		return domain.Monitor{}, fmt.Errorf("map monitor: %w", err)
 	}
@@ -953,8 +961,8 @@ func mapRun(record dbsqlite.CheckRun) (application.RunRecord, error) {
 	if record.LeaseAttempt < 0 || record.LeaseAttempt > math.MaxUint32 {
 		return application.RunRecord{}, errors.New("map run: lease attempt exceeds uint32")
 	}
-	var probe domain.HTTPProbe
-	if err := json.Unmarshal(record.ProbeJson, &probe); err != nil {
+	probe, err := decodeProbe(domain.MonitorKind(record.ProbeKind), record.ProbeJson)
+	if err != nil {
 		return application.RunRecord{}, fmt.Errorf("decode run probe: %w", err)
 	}
 	scheduledFor, err := parseTime(record.ScheduledFor)
@@ -988,6 +996,58 @@ func mapRun(record dbsqlite.CheckRun) (application.RunRecord, error) {
 	return run, nil
 }
 
+func decodeProbe(kind domain.MonitorKind, data []byte) (domain.ProbeDefinition, error) {
+	var probe domain.ProbeDefinition
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return domain.ProbeDefinition{}, fmt.Errorf("decode probe definition: %w", err)
+	}
+	if probe.Kind == "" && kind == domain.MonitorKindHTTP {
+		var legacy domain.HTTPProbe
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return domain.ProbeDefinition{}, fmt.Errorf("decode legacy HTTP probe: %w", err)
+		}
+		probe = domain.ProbeDefinition{Kind: domain.MonitorKindHTTP, HTTP: legacy}
+	}
+	if probe.Kind != kind {
+		return domain.ProbeDefinition{}, errors.New("decode probe definition: kind mismatch")
+	}
+	return probe, nil
+}
+
+func monitorFromProbe(
+	record dbsqlite.Monitor,
+	probe domain.ProbeDefinition,
+	createdAt time.Time,
+) (domain.Monitor, error) {
+	commonID := domain.MonitorID(record.ID)
+	interval := time.Duration(record.IntervalMs) * time.Millisecond
+	timeout := time.Duration(record.TimeoutMs) * time.Millisecond
+	failures := uint16(record.FailureThreshold)
+	recoveries := uint16(record.RecoveryThreshold)
+	switch probe.Kind {
+	case domain.MonitorKindHTTP:
+		return domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
+			ID: commonID, Name: record.Name, Interval: interval, Timeout: timeout,
+			FailureThreshold: failures, RecoveryThreshold: recoveries,
+			HTTP: probe.HTTP, CreatedAt: createdAt,
+		})
+	case domain.MonitorKindTCP:
+		return domain.NewTCPMonitor(domain.NewTCPMonitorParams{
+			ID: commonID, Name: record.Name, Interval: interval, Timeout: timeout,
+			FailureThreshold: failures, RecoveryThreshold: recoveries,
+			TCP: probe.TCP, CreatedAt: createdAt,
+		})
+	case domain.MonitorKindDNS:
+		return domain.NewDNSMonitor(domain.NewDNSMonitorParams{
+			ID: commonID, Name: record.Name, Interval: interval, Timeout: timeout,
+			FailureThreshold: failures, RecoveryThreshold: recoveries,
+			DNS: probe.DNS, CreatedAt: createdAt,
+		})
+	default:
+		return domain.Monitor{}, errors.New("map monitor: unsupported probe kind")
+	}
+}
+
 func mapProbeResult(record dbsqlite.ProbeResult) (application.ProbeResultRecord, error) {
 	startedAt, err := parseTime(record.StartedAt)
 	if err != nil {
@@ -1001,6 +1061,22 @@ func mapProbeResult(record dbsqlite.ProbeResult) (application.ProbeResultRecord,
 	if err != nil {
 		return application.ProbeResultRecord{}, fmt.Errorf("map result receipt: %w", err)
 	}
+	var observedValues []string
+	if len(record.ObservedValuesJson) != 0 {
+		if err := json.Unmarshal(record.ObservedValuesJson, &observedValues); err != nil {
+			return application.ProbeResultRecord{}, fmt.Errorf("map result values: %w", err)
+		}
+	}
+	tlsNotAfter, err := parseNullableTime(record.TlsNotAfter)
+	if err != nil {
+		return application.ProbeResultRecord{}, fmt.Errorf("map result TLS expiry: %w", err)
+	}
+	var timings protocolTimingsJSON
+	if len(record.ProtocolTimingsJson) != 0 {
+		if err := json.Unmarshal(record.ProtocolTimingsJson, &timings); err != nil {
+			return application.ProbeResultRecord{}, fmt.Errorf("map result timings: %w", err)
+		}
+	}
 	result := application.ProbeResultRecord{
 		ID:               record.ID,
 		RunID:            domain.CheckRunID(record.RunID),
@@ -1012,6 +1088,14 @@ func mapProbeResult(record dbsqlite.ProbeResult) (application.ProbeResultRecord,
 		Latency:          time.Duration(record.LatencyMs) * time.Millisecond,
 		ErrorCode:        record.ErrorCode.String,
 		DiagnosticSample: record.DiagnosticSample.String,
+		ObservedValues:   observedValues,
+		TLSNotAfter:      tlsNotAfter,
+		ProtocolTimings: application.ProtocolTimings{
+			DNS:       time.Duration(timings.DNSMillis) * time.Millisecond,
+			Connect:   time.Duration(timings.ConnectMillis) * time.Millisecond,
+			TLS:       time.Duration(timings.TLSMillis) * time.Millisecond,
+			FirstByte: time.Duration(timings.FirstByteMillis) * time.Millisecond,
+		},
 	}
 	if record.ObservedStatus.Valid {
 		status := int(record.ObservedStatus.Int64)
@@ -1022,6 +1106,13 @@ func mapProbeResult(record dbsqlite.ProbeResult) (application.ProbeResultRecord,
 		result.BodyAssertionPassed = &passed
 	}
 	return result, nil
+}
+
+type protocolTimingsJSON struct {
+	DNSMillis       int64 `json:"dnsMillis,omitempty"`
+	ConnectMillis   int64 `json:"connectMillis,omitempty"`
+	TLSMillis       int64 `json:"tlsMillis,omitempty"`
+	FirstByteMillis int64 `json:"firstByteMillis,omitempty"`
 }
 
 func mapIncident(record dbsqlite.Incident) (domain.Incident, error) {

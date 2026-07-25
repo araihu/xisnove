@@ -74,7 +74,7 @@ type NewRunRecord struct {
 	MonitorID    domain.MonitorID
 	LocationID   domain.LocationID
 	ScheduledFor time.Time
-	Probe        domain.HTTPProbe
+	Probe        domain.ProbeDefinition
 	Timeout      time.Duration
 }
 
@@ -90,7 +90,7 @@ type RunRecord struct {
 	MonitorID      domain.MonitorID
 	LocationID     domain.LocationID
 	ScheduledFor   time.Time
-	Probe          domain.HTTPProbe
+	Probe          domain.ProbeDefinition
 	Timeout        time.Duration
 	Status         string
 	LeaseAgentID   domain.AgentID
@@ -113,6 +113,16 @@ type ProbeResultRecord struct {
 	BodyAssertionPassed *bool
 	ErrorCode           string
 	DiagnosticSample    string
+	ObservedValues      []string
+	TLSNotAfter         *time.Time
+	ProtocolTimings     ProtocolTimings
+}
+
+type ProtocolTimings struct {
+	DNS       time.Duration
+	Connect   time.Duration
+	TLS       time.Duration
+	FirstByte time.Duration
 }
 
 type AdminRepository interface {
