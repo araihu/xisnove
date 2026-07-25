@@ -23,6 +23,8 @@ type Repositories struct {
 	Health    HealthRepository
 	Agents    AgentRepository
 	Runs      RunRepository
+	Results   ResultRepository
+	Incidents IncidentRepository
 }
 
 type AdminRecord struct {
@@ -96,6 +98,21 @@ type RunRecord struct {
 	LeaseAttempt   uint32
 	LeaseExpiresAt *time.Time
 	ResolvedAt     *time.Time
+}
+
+type ProbeResultRecord struct {
+	ID                  string
+	RunID               domain.CheckRunID
+	AgentID             domain.AgentID
+	StartedAt           time.Time
+	FinishedAt          time.Time
+	ReceivedAt          time.Time
+	Passed              bool
+	Latency             time.Duration
+	ObservedStatus      *int
+	BodyAssertionPassed *bool
+	ErrorCode           string
+	DiagnosticSample    string
 }
 
 type AdminRepository interface {
@@ -173,4 +190,17 @@ type RunRepository interface {
 		[]byte,
 		time.Time,
 	) (bool, error)
+}
+
+type ResultRepository interface {
+	GetByID(context.Context, string) (ProbeResultRecord, error)
+	GetByRun(context.Context, domain.CheckRunID) (ProbeResultRecord, error)
+	Insert(context.Context, ProbeResultRecord) (bool, error)
+}
+
+type IncidentRepository interface {
+	GetActive(context.Context, domain.MonitorID) (*domain.Incident, error)
+	Open(context.Context, domain.Incident) error
+	Update(context.Context, domain.Incident) error
+	AppendEvent(context.Context, domain.IncidentEvent) error
 }

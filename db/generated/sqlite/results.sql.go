@@ -36,6 +36,32 @@ func (q *Queries) GetProbeResultByID(ctx context.Context, id string) (ProbeResul
 	return i, err
 }
 
+const getProbeResultByRun = `-- name: GetProbeResultByRun :one
+SELECT id, run_id, agent_id, started_at, finished_at, received_at, outcome, latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample
+FROM probe_results
+WHERE run_id = ?
+`
+
+func (q *Queries) GetProbeResultByRun(ctx context.Context, runID string) (ProbeResult, error) {
+	row := q.db.QueryRowContext(ctx, getProbeResultByRun, runID)
+	var i ProbeResult
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.AgentID,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.ReceivedAt,
+		&i.Outcome,
+		&i.LatencyMs,
+		&i.ObservedStatus,
+		&i.BodyAssertionPassed,
+		&i.ErrorCode,
+		&i.DiagnosticSample,
+	)
+	return i, err
+}
+
 const insertProbeResult = `-- name: InsertProbeResult :execrows
 INSERT INTO probe_results (
   id, run_id, agent_id, started_at, finished_at, received_at, outcome,

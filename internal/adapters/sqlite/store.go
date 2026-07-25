@@ -62,6 +62,8 @@ func newRepositories(queries *dbsqlite.Queries) application.Repositories {
 		Health:    &healthRepository{queries: queries},
 		Agents:    &agentRepository{queries: queries},
 		Runs:      &runRepository{queries: queries},
+		Results:   &resultRepository{queries: queries},
+		Incidents: &incidentRepository{queries: queries},
 	}
 }
 
@@ -348,6 +350,14 @@ type runRepository struct {
 	queries *dbsqlite.Queries
 }
 
+type resultRepository struct {
+	queries *dbsqlite.Queries
+}
+
+type incidentRepository struct {
+	queries *dbsqlite.Queries
+}
+
 func (r *runRepository) DatabaseNow(ctx context.Context) (time.Time, error) {
 	value, err := r.queries.DatabaseNow(ctx)
 	if err != nil {
@@ -429,6 +439,134 @@ func (r *runRepository) Resolve(
 		return false, repositoryError("resolve check run", err)
 	}
 	return affected == 1, nil
+}
+
+func (r *resultRepository) GetByID(
+	ctx context.Context,
+	id string,
+) (application.ProbeResultRecord, error) {
+	record, err := r.queries.GetProbeResultByID(ctx, id)
+	if err != nil {
+		return application.ProbeResultRecord{}, repositoryError("get probe result", err)
+	}
+	return mapProbeResult(record)
+}
+
+func (r *resultRepository) GetByRun(
+	ctx context.Context,
+	runID domain.CheckRunID,
+) (application.ProbeResultRecord, error) {
+	record, err := r.queries.GetProbeResultByRun(ctx, string(runID))
+	if err != nil {
+		return application.ProbeResultRecord{}, repositoryError("get probe result by run", err)
+	}
+	return mapProbeResult(record)
+}
+
+func (r *resultRepository) Insert(
+	ctx context.Context,
+	record application.ProbeResultRecord,
+) (bool, error) {
+	affected, err := r.queries.InsertProbeResult(ctx, dbsqlite.InsertProbeResultParams{
+		ID:                  record.ID,
+		RunID:               string(record.RunID),
+		AgentID:             string(record.AgentID),
+		StartedAt:           formatTime(record.StartedAt),
+		FinishedAt:          formatTime(record.FinishedAt),
+		ReceivedAt:          formatTime(record.ReceivedAt),
+		Outcome:             map[bool]string{true: "passed", false: "failed"}[record.Passed],
+		LatencyMs:           record.Latency.Milliseconds(),
+		ObservedStatus:      nullableInt(record.ObservedStatus),
+		BodyAssertionPassed: nullableBool(record.BodyAssertionPassed),
+		ErrorCode:           nullableString(record.ErrorCode),
+		DiagnosticSample:    nullableString(record.DiagnosticSample),
+	})
+	if err != nil {
+		return false, repositoryError("insert probe result", err)
+	}
+	return affected == 1, nil
+}
+
+func (r *incidentRepository) GetActive(
+	ctx context.Context,
+	monitorID domain.MonitorID,
+) (*domain.Incident, error) {
+	record, err := r.queries.GetActiveIncidentByMonitor(ctx, string(monitorID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, repositoryError("get active incident", err)
+	}
+	incident, err := mapIncident(record)
+	if err != nil {
+		return nil, err
+	}
+	return &incident, nil
+}
+
+func (r *incidentRepository) Open(ctx context.Context, incident domain.Incident) error {
+	err := r.queries.OpenIncident(ctx, dbsqlite.OpenIncidentParams{
+		ID:               string(incident.ID),
+		MonitorID:        string(incident.MonitorID),
+		State:            string(incident.State),
+		Severity:         string(incident.Severity),
+		OpenedAt:         formatTime(incident.OpenedAt),
+		LastTransitionAt: formatTime(incident.LastTransitionAt),
+	})
+	if err != nil {
+		return repositoryError("open incident", err)
+	}
+	return nil
+}
+
+func (r *incidentRepository) Update(ctx context.Context, incident domain.Incident) error {
+	if incident.RecoveredAt != nil {
+		affected, err := r.queries.RecoverIncident(ctx, dbsqlite.RecoverIncidentParams{
+			State:            string(incident.State),
+			LastTransitionAt: formatTime(incident.LastTransitionAt),
+			RecoveredAt:      nullableTime(incident.RecoveredAt),
+			ID:               string(incident.ID),
+		})
+		if err != nil {
+			return repositoryError("recover incident", err)
+		}
+		if affected != 1 {
+			return application.ErrConflict
+		}
+		return nil
+	}
+	affected, err := r.queries.ChangeIncident(ctx, dbsqlite.ChangeIncidentParams{
+		State:            string(incident.State),
+		Severity:         string(incident.Severity),
+		LastTransitionAt: formatTime(incident.LastTransitionAt),
+		ID:               string(incident.ID),
+	})
+	if err != nil {
+		return repositoryError("change incident", err)
+	}
+	if affected != 1 {
+		return application.ErrConflict
+	}
+	return nil
+}
+
+func (r *incidentRepository) AppendEvent(
+	ctx context.Context,
+	event domain.IncidentEvent,
+) error {
+	err := r.queries.InsertIncidentEvent(ctx, dbsqlite.InsertIncidentEventParams{
+		ID:            event.ID,
+		IncidentID:    string(event.IncidentID),
+		PreviousState: nullableString(string(event.PreviousState)),
+		State:         string(event.State),
+		Severity:      string(event.Severity),
+		CreatedAt:     formatTime(event.CreatedAt),
+	})
+	if err != nil {
+		return repositoryError("append incident event", err)
+	}
+	return nil
 }
 
 func (r *agentRepository) CreateEnrollmentToken(
@@ -850,6 +988,66 @@ func mapRun(record dbsqlite.CheckRun) (application.RunRecord, error) {
 	return run, nil
 }
 
+func mapProbeResult(record dbsqlite.ProbeResult) (application.ProbeResultRecord, error) {
+	startedAt, err := parseTime(record.StartedAt)
+	if err != nil {
+		return application.ProbeResultRecord{}, fmt.Errorf("map result start: %w", err)
+	}
+	finishedAt, err := parseTime(record.FinishedAt)
+	if err != nil {
+		return application.ProbeResultRecord{}, fmt.Errorf("map result finish: %w", err)
+	}
+	receivedAt, err := parseTime(record.ReceivedAt)
+	if err != nil {
+		return application.ProbeResultRecord{}, fmt.Errorf("map result receipt: %w", err)
+	}
+	result := application.ProbeResultRecord{
+		ID:               record.ID,
+		RunID:            domain.CheckRunID(record.RunID),
+		AgentID:          domain.AgentID(record.AgentID),
+		StartedAt:        startedAt,
+		FinishedAt:       finishedAt,
+		ReceivedAt:       receivedAt,
+		Passed:           record.Outcome == "passed",
+		Latency:          time.Duration(record.LatencyMs) * time.Millisecond,
+		ErrorCode:        record.ErrorCode.String,
+		DiagnosticSample: record.DiagnosticSample.String,
+	}
+	if record.ObservedStatus.Valid {
+		status := int(record.ObservedStatus.Int64)
+		result.ObservedStatus = &status
+	}
+	if record.BodyAssertionPassed.Valid {
+		passed := record.BodyAssertionPassed.Int64 == 1
+		result.BodyAssertionPassed = &passed
+	}
+	return result, nil
+}
+
+func mapIncident(record dbsqlite.Incident) (domain.Incident, error) {
+	openedAt, err := parseTime(record.OpenedAt)
+	if err != nil {
+		return domain.Incident{}, fmt.Errorf("map incident opening: %w", err)
+	}
+	transitionAt, err := parseTime(record.LastTransitionAt)
+	if err != nil {
+		return domain.Incident{}, fmt.Errorf("map incident transition: %w", err)
+	}
+	recoveredAt, err := parseNullableTime(record.RecoveredAt)
+	if err != nil {
+		return domain.Incident{}, fmt.Errorf("map incident recovery: %w", err)
+	}
+	return domain.Incident{
+		ID:               domain.IncidentID(record.ID),
+		MonitorID:        domain.MonitorID(record.MonitorID),
+		State:            domain.HealthState(record.State),
+		Severity:         domain.IncidentSeverity(record.Severity),
+		OpenedAt:         openedAt,
+		LastTransitionAt: transitionAt,
+		RecoveredAt:      recoveredAt,
+	}, nil
+}
+
 func repositoryError(operation string, err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, application.ErrNotFound)
@@ -893,6 +1091,20 @@ func nullableString(value string) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: value, Valid: true}
+}
+
+func nullableInt(value *int) sql.NullInt64 {
+	if value == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*value), Valid: true}
+}
+
+func nullableBool(value *bool) sql.NullInt64 {
+	if value == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: boolInt(*value), Valid: true}
 }
 
 func parseNullableTime(value sql.NullString) (*time.Time, error) {

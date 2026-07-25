@@ -33,6 +33,22 @@ WHERE ml.monitor_id = ?
   AND ml.required = 1
 ORDER BY ml.location_id;
 
+-- name: ListLocationHealth :many
+SELECT
+  ml.monitor_id,
+  ml.location_id,
+  COALESCE(lh.state, 'pending') AS state,
+  COALESCE(lh.consecutive_failures, 0) AS consecutive_failures,
+  COALESCE(lh.consecutive_successes, 0) AS consecutive_successes,
+  lh.last_observed_at,
+  lh.last_transition_at
+FROM monitor_locations ml
+LEFT JOIN location_health lh
+  ON lh.monitor_id = ml.monitor_id
+  AND lh.location_id = ml.location_id
+WHERE ml.monitor_id = ?
+ORDER BY ml.location_id;
+
 -- name: GetMonitorHealth :one
 SELECT *
 FROM monitor_health

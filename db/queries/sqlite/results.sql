@@ -9,3 +9,8 @@ ON CONFLICT DO NOTHING;
 SELECT *
 FROM probe_results
 WHERE id = ?;
+
+-- name: GetProbeResultByRun :one
+SELECT *
+FROM probe_results
+WHERE run_id = ?;

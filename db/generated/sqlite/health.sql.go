@@ -50,6 +50,64 @@ func (q *Queries) GetMonitorHealth(ctx context.Context, monitorID string) (Monit
 	return i, err
 }
 
+const listLocationHealth = `-- name: ListLocationHealth :many
+SELECT
+  ml.monitor_id,
+  ml.location_id,
+  COALESCE(lh.state, 'pending') AS state,
+  COALESCE(lh.consecutive_failures, 0) AS consecutive_failures,
+  COALESCE(lh.consecutive_successes, 0) AS consecutive_successes,
+  lh.last_observed_at,
+  lh.last_transition_at
+FROM monitor_locations ml
+LEFT JOIN location_health lh
+  ON lh.monitor_id = ml.monitor_id
+  AND lh.location_id = ml.location_id
+WHERE ml.monitor_id = ?
+ORDER BY ml.location_id
+`
+
+type ListLocationHealthRow struct {
+	MonitorID            string         `json:"monitor_id"`
+	LocationID           string         `json:"location_id"`
+	State                string         `json:"state"`
+	ConsecutiveFailures  int64          `json:"consecutive_failures"`
+	ConsecutiveSuccesses int64          `json:"consecutive_successes"`
+	LastObservedAt       sql.NullString `json:"last_observed_at"`
+	LastTransitionAt     sql.NullString `json:"last_transition_at"`
+}
+
+func (q *Queries) ListLocationHealth(ctx context.Context, monitorID string) ([]ListLocationHealthRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLocationHealth, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLocationHealthRow{}
+	for rows.Next() {
+		var i ListLocationHealthRow
+		if err := rows.Scan(
+			&i.MonitorID,
+			&i.LocationID,
+			&i.State,
+			&i.ConsecutiveFailures,
+			&i.ConsecutiveSuccesses,
+			&i.LastObservedAt,
+			&i.LastTransitionAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRequiredLocationHealth = `-- name: ListRequiredLocationHealth :many
 SELECT
   ml.monitor_id,

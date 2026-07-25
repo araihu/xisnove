@@ -18,12 +18,16 @@ type ServerConfig struct {
 	Configuration *application.ConfigurationService
 	Agents        *application.AgentService
 	Lease         *application.LeaseService
+	Results       *application.ResultService
+	Health        *application.HealthService
 }
 
 type Server struct {
 	configuration *application.ConfigurationService
 	agents        *application.AgentService
 	lease         *application.LeaseService
+	results       *application.ResultService
+	health        *application.HealthService
 }
 
 func NewServer(config ServerConfig) *Server {
@@ -31,6 +35,8 @@ func NewServer(config ServerConfig) *Server {
 		configuration: config.Configuration,
 		agents:        config.Agents,
 		lease:         config.Lease,
+		results:       config.Results,
+		health:        config.Health,
 	}
 }
 
