@@ -42,6 +42,13 @@ Generated artifacts are:
 artifact in temporary files and compares it byte-for-byte with the committed
 output.
 
+The module-local `agent/oapi-codegen.yaml` remains owned by the Agent/edge
+track and still lists the pre-discovery four-operation subset. Until that track
+adds `upsertDiscoveryCandidatesBatch`, do not run
+`cd agent && GOWORK=off go generate ./...`: it would overwrite the committed
+five-operation Agent client. The API-owned generator above is authoritative,
+and the byte-for-byte test detects this drift immediately.
+
 The control-plane generator temporarily lists already implemented operation IDs
 in `api/oapi-codegen-server.yaml`. This keeps the existing real handler package
 buildable without adding placeholder behavior on this parallel track. When the
