@@ -444,8 +444,10 @@ real token.
 
 Import `_ "github.com/tursodatabase/libsql-client-go/libsql"` and construct a
 libSQL DSN using structured URL operations. Use the shared SQLite-compatible
-queries. Retry only transient remote lock/serialization failures with bounded
-jitter and context cancellation.
+queries. Because the managed HTTP transport cannot reuse Goose's pinned
+connection after a request, apply each shared embedded migration as one atomic
+libSQL batch together with its version record. Retry only transient remote
+lock/serialization failures with bounded jitter and context cancellation.
 
 - [ ] **Step 3: Add opt-in live conformance**
 
@@ -622,7 +624,11 @@ only through `TURSO_API_KEY` or the protected CI secret. It:
 
 - lists accessible organizations and requires an explicit organization when
   more than one is available;
-- creates a unique `xisnove-ci-<timestamp>-<random>` database in an existing
+- requires a dedicated configured CI group whose delete protection is disabled,
+  and fails before database creation if the group is protected;
+- never changes delete protection or creates a database in a shared production
+  or application group;
+- creates a unique `xisnove-ci-<timestamp>-<random>` database in that dedicated
   configured group;
 - records the returned database name, ID, and hostname before any test runs;
 - mints a short-lived database-scoped full-access JWT;
