@@ -44,6 +44,64 @@ func TestNewHTTPMonitorAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestNewHTTPMonitorNormalizesAndClonesMetadata(t *testing.T) {
+	labels := map[string]string{
+		"environment":         "homelab",
+		"xisnove.io/exposure": "public",
+	}
+	monitor, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
+		ID: "monitor-1", Name: " edge router ", Description: "  WAN gateway  ",
+		Labels: labels, DisplayOrder: 7, Public: true,
+		Interval: time.Minute, Timeout: 5 * time.Second,
+		FailureThreshold: 3, RecoveryThreshold: 2,
+		HTTP:      domain.HTTPProbe{URL: "https://router.example/health"},
+		CreatedAt: time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels["environment"] = "mutated"
+	if monitor.Description != "WAN gateway" ||
+		monitor.Labels["environment"] != "homelab" ||
+		monitor.DisplayOrder != 7 || !monitor.Public {
+		t.Fatalf("metadata = %#v", monitor)
+	}
+	cloned := monitor.MetadataLabels()
+	cloned["environment"] = "also-mutated"
+	if monitor.Labels["environment"] != "homelab" {
+		t.Fatal("MetadataLabels exposed the monitor label map")
+	}
+}
+
+func TestNewHTTPMonitorRejectsInvalidMetadata(t *testing.T) {
+	tests := map[string]struct {
+		description  string
+		labels       map[string]string
+		displayOrder int32
+	}{
+		"negative display order": {displayOrder: -1},
+		"invalid label key":      {labels: map[string]string{"bad key": "value"}},
+		"invalid label prefix":   {labels: map[string]string{"_bad/key": "value"}},
+		"invalid label value":    {labels: map[string]string{"key": "contains space"}},
+		"description too long":   {description: string(make([]byte, 2049))},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
+				ID: "monitor-1", Name: "router", Description: tc.description,
+				Labels: tc.labels, DisplayOrder: tc.displayOrder,
+				Interval: time.Minute, Timeout: 5 * time.Second,
+				FailureThreshold: 3, RecoveryThreshold: 2,
+				HTTP:      domain.HTTPProbe{URL: "https://router.example/health"},
+				CreatedAt: time.Now(),
+			})
+			if !errors.Is(err, domain.ErrInvalidMonitor) {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestNewHTTPMonitorRejectsTimeoutAtOrAboveInterval(t *testing.T) {
 	_, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
 		ID:                "m1",

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -20,8 +21,15 @@ const (
 )
 
 const (
-	maxProbePayloadBytes = 4 << 10
-	maxDNSExpectedValues = 20
+	maxProbePayloadBytes       = 4 << 10
+	maxDNSExpectedValues       = 20
+	maxMonitorDescriptionBytes = 2 << 10
+	maxMonitorLabels           = 64
+)
+
+var (
+	labelNamePattern       = regexp.MustCompile(`^[A-Za-z0-9](?:[-_.A-Za-z0-9]{0,61}[A-Za-z0-9])?$`)
+	labelPrefixPartPattern = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`)
 )
 
 type StatusRange struct {
@@ -70,6 +78,10 @@ type ProbeDefinition struct {
 type NewHTTPMonitorParams struct {
 	ID                MonitorID
 	Name              string
+	Description       string
+	Labels            map[string]string
+	DisplayOrder      int32
+	Public            bool
 	Interval          time.Duration
 	Timeout           time.Duration
 	FailureThreshold  uint16
@@ -81,6 +93,10 @@ type NewHTTPMonitorParams struct {
 type NewTCPMonitorParams struct {
 	ID                MonitorID
 	Name              string
+	Description       string
+	Labels            map[string]string
+	DisplayOrder      int32
+	Public            bool
 	Interval          time.Duration
 	Timeout           time.Duration
 	FailureThreshold  uint16
@@ -92,6 +108,10 @@ type NewTCPMonitorParams struct {
 type NewDNSMonitorParams struct {
 	ID                MonitorID
 	Name              string
+	Description       string
+	Labels            map[string]string
+	DisplayOrder      int32
+	Public            bool
 	Interval          time.Duration
 	Timeout           time.Duration
 	FailureThreshold  uint16
@@ -103,6 +123,10 @@ type NewDNSMonitorParams struct {
 type Monitor struct {
 	ID                MonitorID
 	Name              string
+	Description       string
+	Labels            map[string]string
+	DisplayOrder      int32
+	Public            bool
 	Kind              MonitorKind
 	Interval          time.Duration
 	Timeout           time.Duration
@@ -125,6 +149,9 @@ func NewHTTPMonitor(p NewHTTPMonitorParams) (Monitor, error) {
 		!validMonitorFields(
 			p.ID,
 			p.Name,
+			p.Description,
+			p.Labels,
+			p.DisplayOrder,
 			p.Interval,
 			p.Timeout,
 			p.FailureThreshold,
@@ -150,6 +177,10 @@ func NewHTTPMonitor(p NewHTTPMonitorParams) (Monitor, error) {
 	monitor := newMonitor(
 		p.ID,
 		p.Name,
+		p.Description,
+		p.Labels,
+		p.DisplayOrder,
+		p.Public,
 		MonitorKindHTTP,
 		p.Interval,
 		p.Timeout,
@@ -166,6 +197,9 @@ func NewTCPMonitor(p NewTCPMonitorParams) (Monitor, error) {
 	if !validMonitorFields(
 		p.ID,
 		p.Name,
+		p.Description,
+		p.Labels,
+		p.DisplayOrder,
 		p.Interval,
 		p.Timeout,
 		p.FailureThreshold,
@@ -181,6 +215,10 @@ func NewTCPMonitor(p NewTCPMonitorParams) (Monitor, error) {
 	monitor := newMonitor(
 		p.ID,
 		p.Name,
+		p.Description,
+		p.Labels,
+		p.DisplayOrder,
+		p.Public,
 		MonitorKindTCP,
 		p.Interval,
 		p.Timeout,
@@ -199,6 +237,9 @@ func NewDNSMonitor(p NewDNSMonitorParams) (Monitor, error) {
 	if !validMonitorFields(
 		p.ID,
 		p.Name,
+		p.Description,
+		p.Labels,
+		p.DisplayOrder,
 		p.Interval,
 		p.Timeout,
 		p.FailureThreshold,
@@ -218,6 +259,10 @@ func NewDNSMonitor(p NewDNSMonitorParams) (Monitor, error) {
 	monitor := newMonitor(
 		p.ID,
 		p.Name,
+		p.Description,
+		p.Labels,
+		p.DisplayOrder,
+		p.Public,
 		MonitorKindDNS,
 		p.Interval,
 		p.Timeout,
@@ -238,9 +283,17 @@ func (m Monitor) Probe() ProbeDefinition {
 	}
 }
 
+func (m Monitor) MetadataLabels() map[string]string {
+	return cloneStringMap(m.Labels)
+}
+
 func newMonitor(
 	id MonitorID,
 	name string,
+	description string,
+	labels map[string]string,
+	displayOrder int32,
+	public bool,
 	kind MonitorKind,
 	interval time.Duration,
 	timeout time.Duration,
@@ -252,6 +305,10 @@ func newMonitor(
 	return Monitor{
 		ID:                id,
 		Name:              strings.TrimSpace(name),
+		Description:       strings.TrimSpace(description),
+		Labels:            cloneStringMap(labels),
+		DisplayOrder:      displayOrder,
+		Public:            public,
 		Kind:              kind,
 		Interval:          interval,
 		Timeout:           timeout,
@@ -267,6 +324,9 @@ func newMonitor(
 func validMonitorFields(
 	id MonitorID,
 	name string,
+	description string,
+	labels map[string]string,
+	displayOrder int32,
 	interval time.Duration,
 	timeout time.Duration,
 	failureThreshold uint16,
@@ -274,11 +334,42 @@ func validMonitorFields(
 ) bool {
 	return id != "" &&
 		strings.TrimSpace(name) != "" &&
+		len(strings.TrimSpace(description)) <= maxMonitorDescriptionBytes &&
+		displayOrder >= 0 &&
+		validMonitorLabels(labels) &&
 		interval > 0 &&
 		timeout > 0 &&
 		timeout < interval &&
 		failureThreshold > 0 &&
 		recoveryThreshold > 0
+}
+
+func validMonitorLabels(labels map[string]string) bool {
+	if len(labels) > maxMonitorLabels {
+		return false
+	}
+	for key, value := range labels {
+		if !validLabelKey(key) || (value != "" && !labelNamePattern.MatchString(value)) {
+			return false
+		}
+	}
+	return true
+}
+
+func validLabelKey(key string) bool {
+	prefix, name, hasPrefix := strings.Cut(key, "/")
+	if !hasPrefix {
+		return labelNamePattern.MatchString(key)
+	}
+	if prefix == "" || name == "" || len(prefix) > 253 || !labelNamePattern.MatchString(name) {
+		return false
+	}
+	for _, part := range strings.Split(prefix, ".") {
+		if !labelPrefixPartPattern.MatchString(part) {
+			return false
+		}
+	}
+	return true
 }
 
 func validTLSExpectation(expectation *TLSExpectation) bool {
