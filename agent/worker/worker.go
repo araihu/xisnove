@@ -21,6 +21,7 @@ type Worker struct {
 	Client               *controlplane.ClientWithResponses
 	Credential           func() (string, error)
 	Executor             Executor
+	Capabilities         []controlplane.AgentCapability
 	Version              string
 	CredentialGeneration int64
 
@@ -29,6 +30,10 @@ type Worker struct {
 }
 
 func (w *Worker) RunOnce(ctx context.Context) error {
+	w.resultsOnce.Do(func() {
+		w.results = make(chan controlplane.ProbeResultInput, 100)
+	})
+	capabilities := w.enabledCapabilities()
 	generation := w.CredentialGeneration
 	if generation <= 0 {
 		generation = 1
@@ -42,9 +47,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 		controlplane.AgentHeartbeat{
 			Version:              w.Version,
 			CredentialGeneration: generation,
-			Capabilities: []controlplane.AgentCapability{
-				controlplane.AgentCapabilityHttp,
-			},
+			Capabilities:         capabilities,
 		},
 		editor,
 	)
@@ -55,56 +58,56 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 		return fmt.Errorf("send heartbeat: HTTP %d", heartbeat.StatusCode())
 	}
 
-	editor, err = w.bearerEditor()
-	if err != nil {
-		return err
-	}
-	lease, err := w.Client.LeaseAgentWorkWithResponse(
-		ctx,
-		controlplane.LeaseWorkRequest{
-			WaitSeconds: 30,
-			Capabilities: []controlplane.AgentCapability{
-				controlplane.AgentCapabilityHttp,
+	for len(w.results) < cap(w.results) {
+		editor, err = w.bearerEditor()
+		if err != nil {
+			return err
+		}
+		waitSeconds := int32(0)
+		if len(w.results) == 0 {
+			waitSeconds = 30
+		}
+		lease, err := w.Client.LeaseAgentWorkWithResponse(
+			ctx,
+			controlplane.LeaseWorkRequest{
+				WaitSeconds: waitSeconds, Capabilities: capabilities,
 			},
-		},
-		editor,
-	)
-	if err != nil {
-		return fmt.Errorf("lease HTTP work: %w", err)
+			editor,
+		)
+		if err != nil {
+			return fmt.Errorf("lease probe work: %w", err)
+		}
+		if lease.StatusCode() == http.StatusNoContent {
+			break
+		}
+		if lease.StatusCode() != http.StatusOK || lease.JSON200 == nil {
+			return fmt.Errorf("lease probe work: HTTP %d", lease.StatusCode())
+		}
+		result := w.Executor.Execute(ctx, *lease.JSON200)
+		if result.ResultId == uuid.Nil {
+			result.ResultId = uuid.New()
+		}
+		result.RunId = lease.JSON200.RunId
+		result.LeaseToken = lease.JSON200.LeaseToken
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case w.results <- result:
+		}
 	}
-	if lease.StatusCode() == http.StatusNoContent {
+	if len(w.results) == 0 {
 		return nil
 	}
-	if lease.StatusCode() != http.StatusOK || lease.JSON200 == nil {
-		return fmt.Errorf("lease HTTP work: HTTP %d", lease.StatusCode())
+	batch := make([]controlplane.ProbeResultInput, 0, min(len(w.results), 100))
+	for len(batch) < cap(batch) {
+		batch = append(batch, <-w.results)
 	}
-
-	result := w.Executor.Execute(ctx, *lease.JSON200)
-	if result.ResultId == uuid.Nil {
-		result.ResultId = uuid.New()
-	}
-	result.RunId = lease.JSON200.RunId
-	result.LeaseToken = lease.JSON200.LeaseToken
-	w.resultsOnce.Do(func() {
-		w.results = make(chan controlplane.ProbeResultInput, 100)
-	})
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case w.results <- result:
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case pending := <-w.results:
-		return w.uploadUntilAcknowledged(ctx, pending)
-	}
+	return w.uploadUntilAcknowledged(ctx, batch)
 }
 
 func (w *Worker) uploadUntilAcknowledged(
 	ctx context.Context,
-	result controlplane.ProbeResultInput,
+	results []controlplane.ProbeResultInput,
 ) error {
 	backoff := 100 * time.Millisecond
 	for {
@@ -115,19 +118,25 @@ func (w *Worker) uploadUntilAcknowledged(
 		response, err := w.Client.UploadProbeResultsWithResponse(
 			ctx,
 			controlplane.ProbeResultBatch{
-				Results: []controlplane.ProbeResultInput{result},
+				Results: results,
 			},
 			editor,
 		)
 		if err == nil && response.StatusCode() == http.StatusOK && response.JSON200 != nil {
-			if acknowledged(response.JSON200.Acknowledgements, result.ResultId) {
+			unacknowledged := unacknowledgedResults(
+				results,
+				response.JSON200.Acknowledgements,
+			)
+			if len(unacknowledged) == 0 {
 				return nil
 			}
+			w.requeue(unacknowledged)
 			return errors.New("upload probe result: acknowledgement missing")
 		}
 		if err == nil &&
 			response.StatusCode() >= http.StatusBadRequest &&
 			response.StatusCode() < http.StatusInternalServerError {
+			w.requeue(results)
 			return fmt.Errorf("upload probe result: HTTP %d", response.StatusCode())
 		}
 
@@ -140,6 +149,7 @@ func (w *Worker) uploadUntilAcknowledged(
 				default:
 				}
 			}
+			w.requeue(results)
 			return ctx.Err()
 		case <-timer.C:
 		}
@@ -147,18 +157,37 @@ func (w *Worker) uploadUntilAcknowledged(
 	}
 }
 
-func acknowledged(
+func unacknowledgedResults(
+	results []controlplane.ProbeResultInput,
 	acknowledgements []controlplane.ProbeResultAcknowledgement,
-	resultID uuid.UUID,
-) bool {
+) []controlplane.ProbeResultInput {
+	acknowledged := make(map[uuid.UUID]struct{}, len(acknowledgements))
 	for _, acknowledgement := range acknowledgements {
-		if acknowledgement.ResultId == resultID &&
-			(acknowledgement.Status == controlplane.Accepted ||
-				acknowledgement.Status == controlplane.Duplicate) {
-			return true
+		if acknowledgement.Status == controlplane.Accepted ||
+			acknowledgement.Status == controlplane.Duplicate {
+			acknowledged[acknowledgement.ResultId] = struct{}{}
 		}
 	}
-	return false
+	pending := make([]controlplane.ProbeResultInput, 0)
+	for _, result := range results {
+		if _, ok := acknowledged[result.ResultId]; !ok {
+			pending = append(pending, result)
+		}
+	}
+	return pending
+}
+
+func (w *Worker) requeue(results []controlplane.ProbeResultInput) {
+	for _, result := range results {
+		w.results <- result
+	}
+}
+
+func (w *Worker) enabledCapabilities() []controlplane.AgentCapability {
+	if len(w.Capabilities) == 0 {
+		return []controlplane.AgentCapability{controlplane.AgentCapabilityHttp}
+	}
+	return append([]controlplane.AgentCapability(nil), w.Capabilities...)
 }
 
 func (w *Worker) bearerEditor() (controlplane.RequestEditorFn, error) {

@@ -1,8 +1,10 @@
 package worker_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,6 +21,7 @@ func TestRunOnceLeasesExecutesAndUploadsResult(t *testing.T) {
 		t.Run(acknowledgement, func(t *testing.T) {
 			work := testHTTPWork()
 			var uploaded controlplane.ProbeResultBatch
+			leaseDelivered := false
 			server := httptest.NewServer(http.HandlerFunc(
 				func(w http.ResponseWriter, r *http.Request) {
 					if r.Header.Get("Authorization") != "Bearer agent-credential" {
@@ -29,6 +32,11 @@ func TestRunOnceLeasesExecutesAndUploadsResult(t *testing.T) {
 					case "/v1/agent/heartbeat":
 						w.WriteHeader(http.StatusNoContent)
 					case "/v1/agent/work:lease":
+						if leaseDelivered {
+							w.WriteHeader(http.StatusNoContent)
+							return
+						}
+						leaseDelivered = true
 						w.Header().Set("Content-Type", "application/json")
 						_ = json.NewEncoder(w).Encode(work)
 					case "/v1/agent/results:batch":
@@ -108,6 +116,80 @@ func TestRunOnceReturnsNilWhenLeaseHasNoWork(t *testing.T) {
 
 	if err := instance.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRunOnceBatchUploadRetriesIdenticalResults(t *testing.T) {
+	works := []controlplane.ProbeWork{testHTTPWork(), testHTTPWork(), testHTTPWork()}
+	for index := range works {
+		works[index].RunId = uuid.New()
+		works[index].LeaseToken = "lease-token-" + string(rune('a'+index))
+	}
+	leaseIndex := 0
+	var uploads [][]byte
+	server := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, request *http.Request) {
+			switch request.URL.Path {
+			case "/v1/agent/heartbeat":
+				w.WriteHeader(http.StatusNoContent)
+			case "/v1/agent/work:lease":
+				if leaseIndex == len(works) {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(works[leaseIndex])
+				leaseIndex++
+			case "/v1/agent/results:batch":
+				body, _ := io.ReadAll(request.Body)
+				uploads = append(uploads, body)
+				if len(uploads) == 1 {
+					http.Error(w, "retry", http.StatusServiceUnavailable)
+					return
+				}
+				var batch controlplane.ProbeResultBatch
+				if err := json.Unmarshal(body, &batch); err != nil {
+					t.Fatal(err)
+				}
+				acknowledgements := make([]map[string]any, len(batch.Results))
+				for index, result := range batch.Results {
+					status := "accepted"
+					if index == 1 {
+						status = "duplicate"
+					}
+					acknowledgements[index] = map[string]any{
+						"resultId": result.ResultId, "status": status,
+					}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"acknowledgements": acknowledgements,
+				})
+			}
+		},
+	))
+	t.Cleanup(server.Close)
+	client, err := controlplane.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := worker.Worker{
+		Client: client, Credential: func() (string, error) { return "credential", nil },
+		Executor: fixedExecutor{}, Version: "test", CredentialGeneration: 1,
+	}
+	if err := instance.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(uploads) != 2 || !bytes.Equal(uploads[0], uploads[1]) {
+		t.Fatalf("uploads = %d identical=%v", len(uploads), len(uploads) == 2 &&
+			bytes.Equal(uploads[0], uploads[1]))
+	}
+	var batch controlplane.ProbeResultBatch
+	if err := json.Unmarshal(uploads[1], &batch); err != nil {
+		t.Fatal(err)
+	}
+	if len(batch.Results) != 3 {
+		t.Fatalf("results = %d", len(batch.Results))
 	}
 }
 

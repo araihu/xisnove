@@ -10,9 +10,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -23,7 +25,17 @@ import (
 )
 
 type HTTPExecutor struct {
-	policy Policy
+	policy    Policy
+	tlsConfig *tls.Config
+}
+
+func (e *HTTPExecutor) WithTLSConfig(config *tls.Config) *HTTPExecutor {
+	if config == nil {
+		e.tlsConfig = nil
+		return e
+	}
+	e.tlsConfig = config.Clone()
+	return e
 }
 
 func NewHTTPExecutor(policy Policy) *HTTPExecutor {
@@ -44,6 +56,8 @@ func (e *HTTPExecutor) Execute(
 		ErrorCode:      controlplane.ProtocolError,
 		ObservedStatus: 0,
 	}
+	timings := controlplane.ProtocolTimings{}
+	result.ProtocolTimings = &timings
 	finish := func() controlplane.ProbeResultInput {
 		result.FinishedAt = time.Now().UTC()
 		result.LatencyMillis = max(0, result.FinishedAt.Sub(startedAt).Milliseconds())
@@ -76,8 +90,54 @@ func (e *HTTPExecutor) Execute(
 		time.Duration(work.TimeoutMillis)*time.Millisecond,
 	)
 	defer cancel()
+	var traceMu sync.Mutex
+	var dnsStarted time.Time
+	var connectStarted time.Time
+	var tlsStarted time.Time
+	trace := &httptrace.ClientTrace{
+		DNSStart: func(httptrace.DNSStartInfo) {
+			traceMu.Lock()
+			dnsStarted = time.Now()
+			traceMu.Unlock()
+		},
+		DNSDone: func(httptrace.DNSDoneInfo) {
+			traceMu.Lock()
+			value := max(int64(0), time.Since(dnsStarted).Milliseconds())
+			timings.DnsMillis = &value
+			traceMu.Unlock()
+		},
+		ConnectStart: func(_, _ string) {
+			traceMu.Lock()
+			connectStarted = time.Now()
+			traceMu.Unlock()
+		},
+		ConnectDone: func(_, _ string, _ error) {
+			traceMu.Lock()
+			value := max(int64(0), time.Since(connectStarted).Milliseconds())
+			timings.ConnectMillis = &value
+			traceMu.Unlock()
+		},
+		TLSHandshakeStart: func() {
+			traceMu.Lock()
+			tlsStarted = time.Now()
+			traceMu.Unlock()
+		},
+		TLSHandshakeDone: func(tls.ConnectionState, error) {
+			traceMu.Lock()
+			value := max(int64(0), time.Since(tlsStarted).Milliseconds())
+			timings.TlsMillis = &value
+			traceMu.Unlock()
+		},
+		GotFirstResponseByte: func() {
+			traceMu.Lock()
+			value := max(int64(0), time.Since(startedAt).Milliseconds())
+			timings.FirstByteMillis = &value
+			traceMu.Unlock()
+		},
+	}
+	traceContext := httptrace.WithClientTrace(timeoutCtx, trace)
 	request, err := http.NewRequestWithContext(
-		timeoutCtx,
+		traceContext,
 		string(probe.Method),
 		target.String(),
 		bytes.NewReader(probe.Body),
@@ -119,6 +179,18 @@ func (e *HTTPExecutor) Execute(
 	}
 	defer response.Body.Close()
 	result.ObservedStatus = int32(response.StatusCode)
+	if response.TLS != nil && len(response.TLS.PeerCertificates) != 0 {
+		notAfter := response.TLS.PeerCertificates[0].NotAfter.UTC()
+		result.TlsNotAfter = &notAfter
+		if probe.TlsMinimumRemainingSeconds != nil {
+			minimumRemaining := time.Duration(*probe.TlsMinimumRemainingSeconds) * time.Second
+			if time.Until(notAfter) < minimumRemaining {
+				result.ErrorCode = controlplane.TlsExpiring
+				result.DiagnosticSample = "peer certificate expires too soon"
+				return finish()
+			}
+		}
+	}
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, e.policy.MaxResponseBytes+1))
 	if err != nil {
@@ -180,12 +252,24 @@ func (e *HTTPExecutor) transport() *http.Transport {
 		DisableKeepAlives:   true,
 		ForceAttemptHTTP2:   true,
 		TLSHandshakeTimeout: 10 * time.Second,
+		TLSClientConfig:     cloneHTTPClientTLSConfig(e.tlsConfig),
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(address)
 			if err != nil {
 				return nil, fmt.Errorf("%w: invalid dial address", ErrTargetDenied)
 			}
+			trace := httptrace.ContextClientTrace(ctx)
+			if trace != nil && trace.DNSStart != nil {
+				trace.DNSStart(httptrace.DNSStartInfo{Host: host})
+			}
 			addresses, err := e.policy.resolveHost(ctx, host)
+			if trace != nil && trace.DNSDone != nil {
+				info := httptrace.DNSDoneInfo{Err: err}
+				for _, resolved := range addresses {
+					info.Addrs = append(info.Addrs, net.IPAddr{IP: net.IP(resolved.AsSlice())})
+				}
+				trace.DNSDone(info)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -204,6 +288,17 @@ func (e *HTTPExecutor) transport() *http.Transport {
 			return nil, lastErr
 		},
 	}
+}
+
+func cloneHTTPClientTLSConfig(config *tls.Config) *tls.Config {
+	if config == nil {
+		return &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	cloned := config.Clone()
+	if cloned.MinVersion == 0 {
+		cloned.MinVersion = tls.VersionTLS12
+	}
+	return cloned
 }
 
 func classifyNetworkError(err error) controlplane.ProbeResultInputErrorCode {

@@ -3,6 +3,8 @@ package main
 import (
 	"net/netip"
 	"testing"
+
+	"github.com/araihu/xisnove/agent/internal/controlplane"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -21,6 +23,19 @@ func TestLoadConfig(t *testing.T) {
 	}
 	if config.credentialFile != "/run/secrets/agent" {
 		t.Fatalf("credential file = %q", config.credentialFile)
+	}
+	wantCapabilities := []controlplane.AgentCapability{
+		controlplane.AgentCapabilityHttp,
+		controlplane.AgentCapabilityTcp,
+		controlplane.AgentCapabilityDns,
+	}
+	if len(config.capabilities) != len(wantCapabilities) {
+		t.Fatalf("capabilities = %#v", config.capabilities)
+	}
+	for index := range wantCapabilities {
+		if config.capabilities[index] != wantCapabilities[index] {
+			t.Fatalf("capabilities[%d] = %s", index, config.capabilities[index])
+		}
 	}
 	want := []netip.Prefix{
 		netip.MustParsePrefix("10.0.0.0/8"),
@@ -52,6 +67,11 @@ func TestLoadConfigRejectsMissingOrUnsafeValues(t *testing.T) {
 			"XISNOVE_URL":                         "https://monitor.example.com",
 			"XISNOVE_AGENT_CREDENTIAL_FILE":       "/run/secrets/agent",
 			"XISNOVE_AGENT_ALLOWED_PRIVATE_CIDRS": "not-a-cidr",
+		},
+		"invalid capability": {
+			"XISNOVE_URL":                   "https://monitor.example.com",
+			"XISNOVE_AGENT_CREDENTIAL_FILE": "/run/secrets/agent",
+			"XISNOVE_AGENT_CAPABILITIES":    "http,exec",
 		},
 	}
 

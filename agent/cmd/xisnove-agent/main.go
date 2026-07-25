@@ -24,6 +24,7 @@ type config struct {
 	controlPlaneURL string
 	credentialFile  string
 	allowedPrivate  []netip.Prefix
+	capabilities    []controlplane.AgentCapability
 }
 
 func main() {
@@ -45,6 +46,19 @@ func run() error {
 
 	policy := probe.DefaultPolicy()
 	policy.AllowedPrivate = config.allowedPrivate
+	var httpExecutor probe.Executor
+	var tcpExecutor probe.Executor
+	var dnsExecutor probe.Executor
+	for _, capability := range config.capabilities {
+		switch capability {
+		case controlplane.AgentCapabilityHttp:
+			httpExecutor = probe.NewHTTPExecutor(policy)
+		case controlplane.AgentCapabilityTcp:
+			tcpExecutor = probe.NewTCPExecutor(policy)
+		case controlplane.AgentCapabilityDns:
+			dnsExecutor = probe.NewDNSExecutor(policy)
+		}
+	}
 	probeWorker := &worker.Worker{
 		Client: client,
 		Credential: func() (string, error) {
@@ -54,7 +68,8 @@ func run() error {
 			}
 			return strings.TrimSpace(string(contents)), nil
 		},
-		Executor:             probe.NewHTTPExecutor(policy),
+		Executor:             probe.NewDispatcher(httpExecutor, tcpExecutor, dnsExecutor),
+		Capabilities:         config.capabilities,
 		Version:              version,
 		CredentialGeneration: 1,
 	}
@@ -107,10 +122,39 @@ func loadConfig(getenv func(string) string) (config, error) {
 		}
 		allowedPrivate = append(allowedPrivate, prefix.Masked())
 	}
+	capabilities, err := parseCapabilities(getenv("XISNOVE_AGENT_CAPABILITIES"))
+	if err != nil {
+		return config{}, err
+	}
 
 	return config{
 		controlPlaneURL: strings.TrimRight(controlPlaneURL.String(), "/"),
 		credentialFile:  credentialFile,
 		allowedPrivate:  allowedPrivate,
+		capabilities:    capabilities,
 	}, nil
+}
+
+func parseCapabilities(raw string) ([]controlplane.AgentCapability, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		raw = "http,tcp,dns"
+	}
+	capabilities := make([]controlplane.AgentCapability, 0, 3)
+	seen := make(map[controlplane.AgentCapability]struct{}, 3)
+	for _, value := range strings.Split(raw, ",") {
+		capability := controlplane.AgentCapability(strings.ToLower(strings.TrimSpace(value)))
+		if !capability.Valid() {
+			return nil, fmt.Errorf("XISNOVE_AGENT_CAPABILITIES contains invalid value %q", value)
+		}
+		if _, duplicate := seen[capability]; duplicate {
+			continue
+		}
+		seen[capability] = struct{}{}
+		capabilities = append(capabilities, capability)
+	}
+	if len(capabilities) == 0 {
+		return nil, errors.New("XISNOVE_AGENT_CAPABILITIES must not be empty")
+	}
+	return capabilities, nil
 }
