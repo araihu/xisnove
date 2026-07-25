@@ -166,11 +166,7 @@ func (c *client) organizationSlug(ctx context.Context) (string, error) {
 	if c.organization != "" {
 		return c.organization, nil
 	}
-	var response struct {
-		Organizations []struct {
-			Slug string `json:"slug"`
-		} `json:"organizations"`
-	}
+	var response organizationsResponse
 	status, err := c.request(ctx, http.MethodGet, "/v1/organizations", nil, &response)
 	if err != nil {
 		return "", fmt.Errorf("list Turso organizations: %w", err)
@@ -178,10 +174,32 @@ func (c *client) organizationSlug(ctx context.Context) (string, error) {
 	if status != http.StatusOK {
 		return "", fmt.Errorf("list Turso organizations: platform API status %d", status)
 	}
-	if len(response.Organizations) != 1 || response.Organizations[0].Slug == "" {
-		return "", fmt.Errorf("an explicit organization is required when the Platform API exposes %d organizations", len(response.Organizations))
+	if len(response) != 1 || response[0].Slug == "" {
+		return "", fmt.Errorf("an explicit organization is required when the Platform API exposes %d organizations", len(response))
 	}
-	return response.Organizations[0].Slug, nil
+	return response[0].Slug, nil
+}
+
+type organization struct {
+	Slug string `json:"slug"`
+}
+
+type organizationsResponse []organization
+
+func (r *organizationsResponse) UnmarshalJSON(data []byte) error {
+	var direct []organization
+	if err := json.Unmarshal(data, &direct); err == nil {
+		*r = direct
+		return nil
+	}
+	var legacy struct {
+		Organizations []organization `json:"organizations"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	*r = legacy.Organizations
+	return nil
 }
 
 func (c *client) requireDeletionEnabledGroup(ctx context.Context, group string) error {

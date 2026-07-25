@@ -134,6 +134,14 @@ SET state = 'permanent-failure', attempt_count = attempt_count + 1,
 WHERE id = sqlc.arg(id) AND state = 'claimed'
   AND claim_token_hash = sqlc.arg(claim_token_hash);
 
+-- name: MarkNotificationSuppressed :execrows
+UPDATE notification_outbox
+SET state = 'suppressed', suppressed_at = sqlc.arg(suppressed_at),
+    claim_owner = NULL, claim_token_hash = NULL, claim_expires_at = NULL,
+    updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND state = 'claimed'
+  AND claim_token_hash = sqlc.arg(claim_token_hash);
+
 -- name: ReleaseNotificationClaim :execrows
 UPDATE notification_outbox
 SET state = 'retrying', available_at = sqlc.arg(available_at),

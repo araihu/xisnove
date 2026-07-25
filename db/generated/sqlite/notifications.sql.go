@@ -707,6 +707,35 @@ func (q *Queries) MarkNotificationRetrying(ctx context.Context, arg MarkNotifica
 	return result.RowsAffected()
 }
 
+const markNotificationSuppressed = `-- name: MarkNotificationSuppressed :execrows
+UPDATE notification_outbox
+SET state = 'suppressed', suppressed_at = ?1,
+    claim_owner = NULL, claim_token_hash = NULL, claim_expires_at = NULL,
+    updated_at = ?2
+WHERE id = ?3 AND state = 'claimed'
+  AND claim_token_hash = ?4
+`
+
+type MarkNotificationSuppressedParams struct {
+	SuppressedAt   sql.NullString `json:"suppressed_at"`
+	UpdatedAt      string         `json:"updated_at"`
+	ID             string         `json:"id"`
+	ClaimTokenHash []byte         `json:"claim_token_hash"`
+}
+
+func (q *Queries) MarkNotificationSuppressed(ctx context.Context, arg MarkNotificationSuppressedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markNotificationSuppressed,
+		arg.SuppressedAt,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ClaimTokenHash,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const releaseNotificationClaim = `-- name: ReleaseNotificationClaim :execrows
 UPDATE notification_outbox
 SET state = 'retrying', available_at = ?1,

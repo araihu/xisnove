@@ -121,7 +121,7 @@ type UnitOfWork interface {
   transaction.
 - [x] Preserve SQLite-compatible write serialization and PostgreSQL native
   transactions.
-- [ ] Run the shared storage matrix for SQLite, local Turso, PostgreSQL, and the
+- [x] Run the shared storage matrix for SQLite, local Turso, PostgreSQL, and the
   opt-in disposable managed-Turso profile.
 
 ---
@@ -136,7 +136,7 @@ type UnitOfWork interface {
 - [x] Keep environment provisioning, credentials, and self-hosted adapter
   construction out of the public package.
 - [ ] Export only stable suite entry points and option types.
-- [ ] Prove the same CRUD, transaction, lease, idempotency, and notification
+- [x] Prove the same CRUD, transaction, lease, idempotency, and notification
   behavior for every supported relational profile.
 
 ---
@@ -188,5 +188,5 @@ type UnitOfWork interface {
 - [x] Confirm `rg 'github.com/araihu/xisnove/internal/(domain|application|adapters/conformance)'`
   returns no Go imports.
 - [x] Confirm the public domain contains no SaaS-specific concepts.
-- [ ] Commit and push the verified Open Core gate before resuming Milestone 3
+- [x] Commit and push the verified Open Core gate before resuming Milestone 3
   Task 3.

@@ -1,4 +1,4 @@
-package sqlitecompat
+package postgres
 
 import (
 	"context"
@@ -10,18 +10,18 @@ import (
 	"time"
 
 	application "github.com/araihu/xisnove/application/port"
-	dbsqlite "github.com/araihu/xisnove/db/generated/sqlite"
+	dbpostgres "github.com/araihu/xisnove/db/generated/postgres"
 	"github.com/araihu/xisnove/domain"
 )
 
-type notificationChannelRepository struct{ queries *dbsqlite.Queries }
+type notificationChannelRepository struct{ queries *dbpostgres.Queries }
 
 func (r *notificationChannelRepository) Create(ctx context.Context, record application.NotificationChannelRecord) error {
-	err := r.queries.CreateNotificationChannel(ctx, dbsqlite.CreateNotificationChannelParams{
+	err := r.queries.CreateNotificationChannel(ctx, dbpostgres.CreateNotificationChannelParams{
 		ID: string(record.Channel.ID), Name: record.Channel.Name,
 		Kind: string(record.Channel.Kind), EncryptedConfig: record.EncryptedConfig,
-		KeyVersion: int64(record.KeyVersion), Enabled: boolInt(record.Channel.Enabled),
-		CreatedAt: formatTime(record.Channel.CreatedAt), UpdatedAt: formatTime(record.Channel.UpdatedAt),
+		KeyVersion: int32(record.KeyVersion), Enabled: record.Channel.Enabled,
+		CreatedAt: record.Channel.CreatedAt.UTC(), UpdatedAt: record.Channel.UpdatedAt.UTC(),
 	})
 	return repositoryError("create notification channel", err)
 }
@@ -35,7 +35,7 @@ func (r *notificationChannelRepository) Get(ctx context.Context, id domain.Notif
 }
 
 func (r *notificationChannelRepository) List(ctx context.Context, limit, offset int) ([]application.NotificationChannelRecord, error) {
-	records, err := r.queries.ListNotificationChannels(ctx, dbsqlite.ListNotificationChannelsParams{Limit: int64(limit), Offset: int64(offset)})
+	records, err := r.queries.ListNotificationChannels(ctx, dbpostgres.ListNotificationChannelsParams{RowOffset: int32(offset), RowLimit: int32(limit)})
 	if err != nil {
 		return nil, repositoryError("list notification channels", err)
 	}
@@ -51,18 +51,18 @@ func (r *notificationChannelRepository) List(ctx context.Context, limit, offset 
 }
 
 func (r *notificationChannelRepository) Update(ctx context.Context, record application.NotificationChannelRecord) (bool, error) {
-	affected, err := r.queries.UpdateNotificationChannel(ctx, dbsqlite.UpdateNotificationChannelParams{
+	affected, err := r.queries.UpdateNotificationChannel(ctx, dbpostgres.UpdateNotificationChannelParams{
 		Name: record.Channel.Name, Kind: string(record.Channel.Kind),
-		EncryptedConfig: record.EncryptedConfig, KeyVersion: int64(record.KeyVersion),
-		Enabled: boolInt(record.Channel.Enabled), UpdatedAt: formatTime(record.Channel.UpdatedAt),
+		EncryptedConfig: record.EncryptedConfig, KeyVersion: int32(record.KeyVersion),
+		Enabled: record.Channel.Enabled, UpdatedAt: record.Channel.UpdatedAt.UTC(),
 		ID: string(record.Channel.ID),
 	})
 	return affected == 1, repositoryError("update notification channel", err)
 }
 
 func (r *notificationChannelRepository) SetEnabled(ctx context.Context, id domain.NotificationChannelID, enabled bool, at time.Time) (bool, error) {
-	affected, err := r.queries.SetNotificationChannelEnabled(ctx, dbsqlite.SetNotificationChannelEnabledParams{
-		Enabled: boolInt(enabled), UpdatedAt: formatTime(at), ID: string(id),
+	affected, err := r.queries.SetNotificationChannelEnabled(ctx, dbpostgres.SetNotificationChannelEnabledParams{
+		Enabled: enabled, UpdatedAt: at.UTC(), ID: string(id),
 	})
 	return affected == 1, repositoryError("set notification channel enabled", err)
 }
@@ -74,7 +74,7 @@ func (r *notificationChannelRepository) ListKeyVersions(ctx context.Context) ([]
 	}
 	result := make([]uint32, 0, len(versions))
 	for _, version := range versions {
-		if version <= 0 || version > math.MaxUint32 {
+		if version <= 0 {
 			return nil, errors.New("map notification channel key version: out of range")
 		}
 		result = append(result, uint32(version))
@@ -82,10 +82,10 @@ func (r *notificationChannelRepository) ListKeyVersions(ctx context.Context) ([]
 	return result, nil
 }
 
-type notificationRouteRepository struct{ queries *dbsqlite.Queries }
+type notificationRouteRepository struct{ queries *dbpostgres.Queries }
 
 func (r *notificationRouteRepository) Create(ctx context.Context, route domain.NotificationRoute) error {
-	params, err := sqliteRouteCreateParams(route)
+	params, err := postgresRouteCreateParams(route)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (r *notificationRouteRepository) Get(ctx context.Context, id domain.Notific
 }
 
 func (r *notificationRouteRepository) List(ctx context.Context, limit, offset int) ([]domain.NotificationRoute, error) {
-	records, err := r.queries.ListNotificationRoutes(ctx, dbsqlite.ListNotificationRoutesParams{Limit: int64(limit), Offset: int64(offset)})
+	records, err := r.queries.ListNotificationRoutes(ctx, dbpostgres.ListNotificationRoutesParams{RowOffset: int32(offset), RowLimit: int32(limit)})
 	if err != nil {
 		return nil, repositoryError("list notification routes", err)
 	}
@@ -121,35 +121,35 @@ func (r *notificationRouteRepository) Update(ctx context.Context, route domain.N
 	if err != nil {
 		return false, err
 	}
-	affected, err := r.queries.UpdateNotificationRoute(ctx, dbsqlite.UpdateNotificationRouteParams{
-		Name: route.Name, ChannelID: string(route.ChannelID), MonitorID: nullableMonitorID(route.MonitorID),
+	affected, err := r.queries.UpdateNotificationRoute(ctx, dbpostgres.UpdateNotificationRouteParams{
+		RouteName: route.Name, ChannelID: string(route.ChannelID), MonitorID: nullableMonitorID(route.MonitorID),
 		LabelMatchersJson: encoded.labels, ActionsJson: encoded.actions, SeveritiesJson: encoded.severities,
-		Template: route.Template, Enabled: boolInt(route.Enabled), Precedence: int64(route.Precedence),
-		UpdatedAt: formatTime(route.UpdatedAt), ID: string(route.ID),
+		Template: route.Template, Enabled: route.Enabled, Precedence: int32(route.Precedence),
+		UpdatedAt: route.UpdatedAt.UTC(), ID: string(route.ID),
 	})
 	return affected == 1, repositoryError("update notification route", err)
 }
 
 func (r *notificationRouteRepository) SetEnabled(ctx context.Context, id domain.NotificationRouteID, enabled bool, at time.Time) (bool, error) {
-	affected, err := r.queries.SetNotificationRouteEnabled(ctx, dbsqlite.SetNotificationRouteEnabledParams{
-		Enabled: boolInt(enabled), UpdatedAt: formatTime(at), ID: string(id),
+	affected, err := r.queries.SetNotificationRouteEnabled(ctx, dbpostgres.SetNotificationRouteEnabledParams{
+		Enabled: enabled, UpdatedAt: at.UTC(), ID: string(id),
 	})
 	return affected == 1, repositoryError("set notification route enabled", err)
 }
 
-type notificationOutboxRepository struct{ queries *dbsqlite.Queries }
+type notificationOutboxRepository struct{ queries *dbpostgres.Queries }
 
 func (r *notificationOutboxRepository) Insert(ctx context.Context, record application.NotificationOutboxRecord) (bool, error) {
 	snapshot, err := json.Marshal(record.RenderSnapshot.Clone())
 	if err != nil {
 		return false, fmt.Errorf("encode notification snapshot: %w", err)
 	}
-	affected, err := r.queries.CreateNotificationOutbox(ctx, dbsqlite.CreateNotificationOutboxParams{
+	affected, err := r.queries.CreateNotificationOutbox(ctx, dbpostgres.CreateNotificationOutboxParams{
 		ID: string(record.ID), IncidentEventID: record.IncidentEventID,
 		RouteID: string(record.RouteID), ChannelID: string(record.ChannelID), DedupeKey: record.DedupeKey,
-		RenderSnapshotJson: snapshot, State: string(record.State), AvailableAt: formatTime(record.AvailableAt),
-		AttemptCount: int64(record.AttemptCount), SuppressedAt: nullableTime(record.SuppressedAt),
-		CreatedAt: formatTime(record.CreatedAt), UpdatedAt: formatTime(record.UpdatedAt),
+		RenderSnapshotJson: snapshot, State: string(record.State), AvailableAt: record.AvailableAt.UTC(),
+		AttemptCount: int32(record.AttemptCount), SuppressedAt: nullablePGTimePtr(record.SuppressedAt),
+		CreatedAt: record.CreatedAt.UTC(), UpdatedAt: record.UpdatedAt.UTC(),
 	})
 	return affected == 1, repositoryError("create notification outbox", err)
 }
@@ -163,7 +163,7 @@ func (r *notificationOutboxRepository) Get(ctx context.Context, id domain.Notifi
 }
 
 func (r *notificationOutboxRepository) List(ctx context.Context, limit, offset int) ([]application.NotificationOutboxRecord, error) {
-	records, err := r.queries.ListNotificationOutbox(ctx, dbsqlite.ListNotificationOutboxParams{Limit: int64(limit), Offset: int64(offset)})
+	records, err := r.queries.ListNotificationOutbox(ctx, dbpostgres.ListNotificationOutboxParams{RowOffset: int32(offset), RowLimit: int32(limit)})
 	if err != nil {
 		return nil, repositoryError("list notification outbox", err)
 	}
@@ -179,9 +179,9 @@ func (r *notificationOutboxRepository) List(ctx context.Context, limit, offset i
 }
 
 func (r *notificationOutboxRepository) ClaimDue(ctx context.Context, params application.ClaimNotificationParams) (application.NotificationOutboxRecord, error) {
-	record, err := r.queries.ClaimDueNotificationOutbox(ctx, dbsqlite.ClaimDueNotificationOutboxParams{
+	record, err := r.queries.ClaimDueNotificationOutbox(ctx, dbpostgres.ClaimDueNotificationOutboxParams{
 		ClaimOwner: nullableString(params.Owner), ClaimTokenHash: params.ClaimTokenHash,
-		ClaimExpiresAt: nullableTimeValue(params.ClaimExpiresAt), Now: formatTime(params.Now),
+		ClaimExpiresAt: nullablePGTime(params.ClaimExpiresAt), Now: params.Now.UTC(),
 	})
 	if err != nil {
 		return application.NotificationOutboxRecord{}, repositoryError("claim notification outbox", err)
@@ -190,9 +190,9 @@ func (r *notificationOutboxRepository) ClaimDue(ctx context.Context, params appl
 }
 
 func (r *notificationOutboxRepository) AppendAttempt(ctx context.Context, attempt application.NotificationDeliveryAttemptRecord) error {
-	err := r.queries.AppendNotificationDeliveryAttempt(ctx, dbsqlite.AppendNotificationDeliveryAttemptParams{
-		ID: attempt.ID, OutboxID: string(attempt.OutboxID), Ordinal: int64(attempt.Ordinal),
-		StartedAt: formatTime(attempt.StartedAt), FinishedAt: formatTime(attempt.FinishedAt),
+	err := r.queries.AppendNotificationDeliveryAttempt(ctx, dbpostgres.AppendNotificationDeliveryAttemptParams{
+		ID: attempt.ID, OutboxID: string(attempt.OutboxID), Ordinal: int32(attempt.Ordinal),
+		StartedAt: attempt.StartedAt.UTC(), FinishedAt: attempt.FinishedAt.UTC(),
 		Outcome: string(attempt.Outcome), ErrorClass: nullableString(attempt.ErrorClass),
 		Diagnostic: nullableString(attempt.Diagnostic), ProviderReceipt: nullableString(attempt.ProviderReceipt),
 	})
@@ -216,61 +216,61 @@ func (r *notificationOutboxRepository) ListAttempts(ctx context.Context, id doma
 }
 
 func (r *notificationOutboxRepository) MarkDelivered(ctx context.Context, params application.FinalizeNotificationParams) (bool, error) {
-	affected, err := r.queries.MarkNotificationDelivered(ctx, dbsqlite.MarkNotificationDeliveredParams{
-		DeliveredAt: nullableTimeValue(params.At), UpdatedAt: formatTime(params.At),
+	affected, err := r.queries.MarkNotificationDelivered(ctx, dbpostgres.MarkNotificationDeliveredParams{
+		DeliveredAt: nullablePGTime(params.At), UpdatedAt: params.At.UTC(),
 		ID: string(params.ID), ClaimTokenHash: params.ClaimTokenHash,
 	})
 	return affected == 1, repositoryError("mark notification delivered", err)
 }
 
 func (r *notificationOutboxRepository) MarkRetrying(ctx context.Context, params application.FinalizeNotificationParams) (bool, error) {
-	affected, err := r.queries.MarkNotificationRetrying(ctx, dbsqlite.MarkNotificationRetryingParams{
-		AvailableAt: formatTime(params.AvailableAt), ErrorClass: nullableString(params.ErrorClass),
-		Diagnostic: nullableString(params.Diagnostic), UpdatedAt: formatTime(params.At),
+	affected, err := r.queries.MarkNotificationRetrying(ctx, dbpostgres.MarkNotificationRetryingParams{
+		AvailableAt: params.AvailableAt.UTC(), ErrorClass: nullableString(params.ErrorClass),
+		Diagnostic: nullableString(params.Diagnostic), UpdatedAt: params.At.UTC(),
 		ID: string(params.ID), ClaimTokenHash: params.ClaimTokenHash,
 	})
 	return affected == 1, repositoryError("mark notification retrying", err)
 }
 
 func (r *notificationOutboxRepository) MarkPermanentFailure(ctx context.Context, params application.FinalizeNotificationParams) (bool, error) {
-	affected, err := r.queries.MarkNotificationPermanentFailure(ctx, dbsqlite.MarkNotificationPermanentFailureParams{
+	affected, err := r.queries.MarkNotificationPermanentFailure(ctx, dbpostgres.MarkNotificationPermanentFailureParams{
 		ErrorClass: nullableString(params.ErrorClass), Diagnostic: nullableString(params.Diagnostic),
-		UpdatedAt: formatTime(params.At), ID: string(params.ID), ClaimTokenHash: params.ClaimTokenHash,
+		UpdatedAt: params.At.UTC(), ID: string(params.ID), ClaimTokenHash: params.ClaimTokenHash,
 	})
 	return affected == 1, repositoryError("mark notification permanent failure", err)
 }
 
 func (r *notificationOutboxRepository) MarkSuppressed(ctx context.Context, params application.FinalizeNotificationParams) (bool, error) {
-	affected, err := r.queries.MarkNotificationSuppressed(ctx, dbsqlite.MarkNotificationSuppressedParams{
-		SuppressedAt: nullableTimeValue(params.At), UpdatedAt: formatTime(params.At),
+	affected, err := r.queries.MarkNotificationSuppressed(ctx, dbpostgres.MarkNotificationSuppressedParams{
+		SuppressedAt: nullablePGTime(params.At), UpdatedAt: params.At.UTC(),
 		ID: string(params.ID), ClaimTokenHash: params.ClaimTokenHash,
 	})
 	return affected == 1, repositoryError("mark notification suppressed", err)
 }
 
 func (r *notificationOutboxRepository) ReleaseClaim(ctx context.Context, params application.FinalizeNotificationParams) (bool, error) {
-	affected, err := r.queries.ReleaseNotificationClaim(ctx, dbsqlite.ReleaseNotificationClaimParams{
-		AvailableAt: formatTime(params.AvailableAt), UpdatedAt: formatTime(params.At),
+	affected, err := r.queries.ReleaseNotificationClaim(ctx, dbpostgres.ReleaseNotificationClaimParams{
+		AvailableAt: params.AvailableAt.UTC(), UpdatedAt: params.At.UTC(),
 		ID: string(params.ID), ClaimTokenHash: params.ClaimTokenHash,
 	})
 	return affected == 1, repositoryError("release notification claim", err)
 }
 
 func (r *notificationOutboxRepository) Replay(ctx context.Context, id domain.NotificationDeliveryID, at time.Time) (bool, error) {
-	affected, err := r.queries.ReplayNotificationOutbox(ctx, dbsqlite.ReplayNotificationOutboxParams{
-		AvailableAt: formatTime(at), UpdatedAt: formatTime(at), ID: string(id),
+	affected, err := r.queries.ReplayNotificationOutbox(ctx, dbpostgres.ReplayNotificationOutboxParams{
+		AvailableAt: at.UTC(), UpdatedAt: at.UTC(), ID: string(id),
 	})
 	return affected == 1, repositoryError("replay notification outbox", err)
 }
 
-type maintenanceRepository struct{ queries *dbsqlite.Queries }
+type maintenanceRepository struct{ queries *dbpostgres.Queries }
 
 func (r *maintenanceRepository) Create(ctx context.Context, record application.MaintenanceRecord) error {
-	err := r.queries.CreateMaintenanceInterval(ctx, dbsqlite.CreateMaintenanceIntervalParams{
+	err := r.queries.CreateMaintenanceInterval(ctx, dbpostgres.CreateMaintenanceIntervalParams{
 		ID: string(record.Interval.ID), MonitorID: string(record.Interval.MonitorID),
-		StartsAt: formatTime(record.Interval.StartsAt), EndsAt: nullableTime(record.Interval.EndsAt),
-		Reason: record.Interval.Reason, CreatedAt: formatTime(record.Interval.CreatedAt),
-		UpdatedAt: formatTime(record.UpdatedAt),
+		StartsAt: record.Interval.StartsAt.UTC(), EndsAt: nullablePGTimePtr(record.Interval.EndsAt),
+		Reason: record.Interval.Reason, CreatedAt: record.Interval.CreatedAt.UTC(),
+		UpdatedAt: record.UpdatedAt.UTC(),
 	})
 	return repositoryError("create maintenance interval", err)
 }
@@ -284,7 +284,7 @@ func (r *maintenanceRepository) Get(ctx context.Context, id domain.MaintenanceID
 }
 
 func (r *maintenanceRepository) List(ctx context.Context, limit, offset int) ([]application.MaintenanceRecord, error) {
-	records, err := r.queries.ListMaintenanceIntervals(ctx, dbsqlite.ListMaintenanceIntervalsParams{Limit: int64(limit), Offset: int64(offset)})
+	records, err := r.queries.ListMaintenanceIntervals(ctx, dbpostgres.ListMaintenanceIntervalsParams{RowOffset: int32(offset), RowLimit: int32(limit)})
 	if err != nil {
 		return nil, repositoryError("list maintenance intervals", err)
 	}
@@ -292,8 +292,8 @@ func (r *maintenanceRepository) List(ctx context.Context, limit, offset int) ([]
 }
 
 func (r *maintenanceRepository) ListActive(ctx context.Context, monitorID domain.MonitorID, at time.Time) ([]application.MaintenanceRecord, error) {
-	records, err := r.queries.ListActiveMaintenanceIntervals(ctx, dbsqlite.ListActiveMaintenanceIntervalsParams{
-		MonitorID: string(monitorID), Now: formatTime(at),
+	records, err := r.queries.ListActiveMaintenanceIntervals(ctx, dbpostgres.ListActiveMaintenanceIntervalsParams{
+		MonitorID: string(monitorID), Now: at.UTC(),
 	})
 	if err != nil {
 		return nil, repositoryError("list active maintenance intervals", err)
@@ -302,21 +302,21 @@ func (r *maintenanceRepository) ListActive(ctx context.Context, monitorID domain
 }
 
 func (r *maintenanceRepository) End(ctx context.Context, id domain.MaintenanceID, at time.Time) (bool, error) {
-	affected, err := r.queries.EndMaintenanceInterval(ctx, dbsqlite.EndMaintenanceIntervalParams{
-		EndsAt: nullableTimeValue(at), UpdatedAt: formatTime(at), ID: string(id),
+	affected, err := r.queries.EndMaintenanceInterval(ctx, dbpostgres.EndMaintenanceIntervalParams{
+		EndsAt: nullablePGTime(at), UpdatedAt: at.UTC(), ID: string(id),
 	})
 	return affected == 1, repositoryError("end maintenance interval", err)
 }
 
 func (r *maintenanceRepository) DeleteFuture(ctx context.Context, id domain.MaintenanceID, at time.Time) (bool, error) {
-	affected, err := r.queries.DeleteFutureMaintenanceInterval(ctx, dbsqlite.DeleteFutureMaintenanceIntervalParams{ID: string(id), Now: formatTime(at)})
+	affected, err := r.queries.DeleteFutureMaintenanceInterval(ctx, dbpostgres.DeleteFutureMaintenanceIntervalParams{ID: string(id), Now: at.UTC()})
 	return affected == 1, repositoryError("delete future maintenance interval", err)
 }
 
 func (r *maintenanceRepository) ClaimEnded(ctx context.Context, params application.ClaimMaintenanceParams) (application.MaintenanceRecord, error) {
-	record, err := r.queries.ClaimEndedMaintenanceInterval(ctx, dbsqlite.ClaimEndedMaintenanceIntervalParams{
+	record, err := r.queries.ClaimEndedMaintenanceInterval(ctx, dbpostgres.ClaimEndedMaintenanceIntervalParams{
 		ClaimOwner: nullableString(params.Owner), ClaimTokenHash: params.ClaimTokenHash,
-		ClaimExpiresAt: nullableTimeValue(params.ClaimExpiresAt), Now: formatTime(params.Now),
+		ClaimExpiresAt: nullablePGTime(params.ClaimExpiresAt), Now: params.Now.UTC(),
 	})
 	if err != nil {
 		return application.MaintenanceRecord{}, repositoryError("claim ended maintenance interval", err)
@@ -325,26 +325,26 @@ func (r *maintenanceRepository) ClaimEnded(ctx context.Context, params applicati
 }
 
 func (r *maintenanceRepository) MarkEndedProcessed(ctx context.Context, id domain.MaintenanceID, token []byte, at time.Time) (bool, error) {
-	affected, err := r.queries.MarkEndedMaintenanceProcessed(ctx, dbsqlite.MarkEndedMaintenanceProcessedParams{
-		ProcessedAt: nullableTimeValue(at), ID: string(id), ClaimTokenHash: token,
+	affected, err := r.queries.MarkEndedMaintenanceProcessed(ctx, dbpostgres.MarkEndedMaintenanceProcessedParams{
+		ProcessedAt: nullablePGTime(at), ID: string(id), ClaimTokenHash: token,
 	})
 	return affected == 1, repositoryError("mark ended maintenance processed", err)
 }
 
 func (r *maintenanceRepository) ReleaseEndedClaim(ctx context.Context, id domain.MaintenanceID, token []byte, at time.Time) (bool, error) {
-	affected, err := r.queries.ReleaseEndedMaintenanceClaim(ctx, dbsqlite.ReleaseEndedMaintenanceClaimParams{
-		UpdatedAt: formatTime(at), ID: string(id), ClaimTokenHash: token,
+	affected, err := r.queries.ReleaseEndedMaintenanceClaim(ctx, dbpostgres.ReleaseEndedMaintenanceClaimParams{
+		UpdatedAt: at.UTC(), ID: string(id), ClaimTokenHash: token,
 	})
 	return affected == 1, repositoryError("release ended maintenance claim", err)
 }
 
-type auditRepository struct{ queries *dbsqlite.Queries }
+type auditRepository struct{ queries *dbpostgres.Queries }
 
 func (r *auditRepository) Append(ctx context.Context, event application.AuditEventRecord) error {
-	err := r.queries.CreateAuditEvent(ctx, dbsqlite.CreateAuditEventParams{
+	err := r.queries.CreateAuditEvent(ctx, dbpostgres.CreateAuditEventParams{
 		ID: event.ID, Kind: event.Kind, SubjectKind: event.SubjectKind, SubjectID: event.SubjectID,
 		IncidentID: nullableIncidentID(event.IncidentID), PayloadJson: event.Payload,
-		CreatedAt: formatTime(event.CreatedAt),
+		CreatedAt: event.CreatedAt.UTC(),
 	})
 	return repositoryError("append audit event", err)
 }
@@ -356,7 +356,7 @@ func (r *auditRepository) ListByIncident(ctx context.Context, id domain.Incident
 	}
 	result := make([]application.AuditEventRecord, 0, len(records))
 	for _, record := range records {
-		createdAt, err := parseTime(record.CreatedAt)
+		createdAt, err := postgresTime(record.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("map audit event: %w", err)
 		}
@@ -373,12 +373,12 @@ func (r *auditRepository) ListByIncident(ctx context.Context, id domain.Incident
 	return result, nil
 }
 
-type retentionRepository struct{ queries *dbsqlite.Queries }
+type retentionRepository struct{ queries *dbpostgres.Queries }
 
 func (r *retentionRepository) ClaimLease(ctx context.Context, lease application.OperationLeaseRecord, now time.Time) (application.OperationLeaseRecord, error) {
-	record, err := r.queries.ClaimOperationLease(ctx, dbsqlite.ClaimOperationLeaseParams{
+	record, err := r.queries.ClaimOperationLease(ctx, dbpostgres.ClaimOperationLeaseParams{
 		LeaseKey: lease.Key, Owner: lease.Owner, TokenHash: lease.TokenHash,
-		ExpiresAt: formatTime(lease.ExpiresAt), CursorJson: lease.Cursor, UpdatedAt: formatTime(now),
+		ExpiresAt: lease.ExpiresAt.UTC(), CursorJson: lease.Cursor, UpdatedAt: now.UTC(),
 	})
 	if err != nil {
 		return application.OperationLeaseRecord{}, repositoryError("claim operation lease", err)
@@ -387,28 +387,28 @@ func (r *retentionRepository) ClaimLease(ctx context.Context, lease application.
 }
 
 func (r *retentionRepository) UpdateLease(ctx context.Context, lease application.OperationLeaseRecord) (bool, error) {
-	affected, err := r.queries.UpdateOperationLeaseCursor(ctx, dbsqlite.UpdateOperationLeaseCursorParams{
-		CursorJson: lease.Cursor, ExpiresAt: formatTime(lease.ExpiresAt), UpdatedAt: formatTime(lease.UpdatedAt),
+	affected, err := r.queries.UpdateOperationLeaseCursor(ctx, dbpostgres.UpdateOperationLeaseCursorParams{
+		CursorJson: lease.Cursor, ExpiresAt: lease.ExpiresAt.UTC(), UpdatedAt: lease.UpdatedAt.UTC(),
 		LeaseKey: lease.Key, TokenHash: lease.TokenHash,
 	})
 	return affected == 1, repositoryError("update operation lease", err)
 }
 
 func (r *retentionRepository) ReleaseLease(ctx context.Context, key string, token []byte) (bool, error) {
-	affected, err := r.queries.ReleaseOperationLease(ctx, dbsqlite.ReleaseOperationLeaseParams{LeaseKey: key, TokenHash: token})
+	affected, err := r.queries.ReleaseOperationLease(ctx, dbpostgres.ReleaseOperationLeaseParams{LeaseKey: key, TokenHash: token})
 	return affected == 1, repositoryError("release operation lease", err)
 }
 
 func (r *retentionRepository) ListAggregationResults(ctx context.Context, start, end time.Time, limit int) ([]application.AggregationResultRecord, error) {
-	records, err := r.queries.ListProbeResultsForDailyAggregation(ctx, dbsqlite.ListProbeResultsForDailyAggregationParams{
-		StartsAt: formatTime(start), EndsAt: formatTime(end), RowLimit: int64(limit),
+	records, err := r.queries.ListProbeResultsForDailyAggregation(ctx, dbpostgres.ListProbeResultsForDailyAggregationParams{
+		StartsAt: start.UTC(), EndsAt: end.UTC(), RowLimit: int32(limit),
 	})
 	if err != nil {
 		return nil, repositoryError("list aggregation results", err)
 	}
 	result := make([]application.AggregationResultRecord, 0, len(records))
 	for _, record := range records {
-		receivedAt, err := parseTime(record.ReceivedAt)
+		receivedAt, err := postgresTime(record.ReceivedAt)
 		if err != nil {
 			return nil, fmt.Errorf("map aggregation result: %w", err)
 		}
@@ -424,18 +424,18 @@ func (r *retentionRepository) UpsertDailyUptime(ctx context.Context, record appl
 	if record.Passing > math.MaxInt64 || record.Failing > math.MaxInt64 || record.Unknown > math.MaxInt64 || record.Observed.Milliseconds() < 0 {
 		return errors.New("upsert daily uptime: value out of range")
 	}
-	err := r.queries.UpsertDailyUptime(ctx, dbsqlite.UpsertDailyUptimeParams{
-		MonitorID: string(record.MonitorID), Day: record.Day.UTC().Format(time.DateOnly),
+	err := r.queries.UpsertDailyUptime(ctx, dbpostgres.UpsertDailyUptimeParams{
+		MonitorID: string(record.MonitorID), Day: record.Day.UTC(),
 		PassingCount: int64(record.Passing), FailingCount: int64(record.Failing),
 		UnknownCount: int64(record.Unknown), ObservedMs: record.Observed.Milliseconds(),
-		UpdatedAt: formatTime(record.UpdatedAt),
+		UpdatedAt: record.UpdatedAt.UTC(),
 	})
 	return repositoryError("upsert daily uptime", err)
 }
 
 func (r *retentionRepository) ListDailyUptime(ctx context.Context, monitorID domain.MonitorID, start, end time.Time) ([]application.DailyUptimeRecord, error) {
-	records, err := r.queries.ListDailyUptime(ctx, dbsqlite.ListDailyUptimeParams{
-		MonitorID: string(monitorID), StartsOn: start.UTC().Format(time.DateOnly), EndsOn: end.UTC().Format(time.DateOnly),
+	records, err := r.queries.ListDailyUptime(ctx, dbpostgres.ListDailyUptimeParams{
+		MonitorID: string(monitorID), StartsOn: start.UTC(), EndsOn: end.UTC(),
 	})
 	if err != nil {
 		return nil, repositoryError("list daily uptime", err)
@@ -452,28 +452,28 @@ func (r *retentionRepository) ListDailyUptime(ctx context.Context, monitorID dom
 }
 
 func (r *retentionRepository) DeleteExpiredResults(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
-	count, err := r.queries.DeleteExpiredProbeResults(ctx, dbsqlite.DeleteExpiredProbeResultsParams{Cutoff: formatTime(cutoff), RowLimit: int64(limit)})
+	count, err := r.queries.DeleteExpiredProbeResults(ctx, dbpostgres.DeleteExpiredProbeResultsParams{Cutoff: cutoff.UTC(), RowLimit: int32(limit)})
 	return count, repositoryError("delete expired probe results", err)
 }
 
 func (r *retentionRepository) DeleteExpiredDailyUptime(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
-	count, err := r.queries.DeleteExpiredDailyUptime(ctx, dbsqlite.DeleteExpiredDailyUptimeParams{CutoffDay: cutoff.UTC().Format(time.DateOnly), RowLimit: int64(limit)})
+	count, err := r.queries.DeleteExpiredDailyUptime(ctx, dbpostgres.DeleteExpiredDailyUptimeParams{CutoffDay: cutoff.UTC(), RowLimit: int32(limit)})
 	return count, repositoryError("delete expired daily uptime", err)
 }
 
-func mapNotificationChannel(record dbsqlite.NotificationChannel) (application.NotificationChannelRecord, error) {
-	if record.KeyVersion <= 0 || record.KeyVersion > math.MaxUint32 {
+func mapNotificationChannel(record dbpostgres.NotificationChannel) (application.NotificationChannelRecord, error) {
+	if record.KeyVersion <= 0 {
 		return application.NotificationChannelRecord{}, errors.New("map notification channel: key version out of range")
 	}
-	createdAt, err := parseTime(record.CreatedAt)
+	createdAt, err := postgresTime(record.CreatedAt)
 	if err != nil {
 		return application.NotificationChannelRecord{}, fmt.Errorf("map notification channel creation: %w", err)
 	}
-	channel, err := domain.NewNotificationChannel(domain.NotificationChannelID(record.ID), record.Name, domain.NotificationChannelKind(record.Kind), record.Enabled == 1, createdAt)
+	channel, err := domain.NewNotificationChannel(domain.NotificationChannelID(record.ID), record.Name, domain.NotificationChannelKind(record.Kind), record.Enabled, createdAt)
 	if err != nil {
 		return application.NotificationChannelRecord{}, fmt.Errorf("map notification channel: %w", err)
 	}
-	channel.UpdatedAt, err = parseTime(record.UpdatedAt)
+	channel.UpdatedAt, err = postgresTime(record.UpdatedAt)
 	if err != nil {
 		return application.NotificationChannelRecord{}, fmt.Errorf("map notification channel update: %w", err)
 	}
@@ -498,23 +498,20 @@ func encodeRoute(route domain.NotificationRoute) (encodedRoute, error) {
 	return encodedRoute{labels, actions, severities}, nil
 }
 
-func sqliteRouteCreateParams(route domain.NotificationRoute) (dbsqlite.CreateNotificationRouteParams, error) {
+func postgresRouteCreateParams(route domain.NotificationRoute) (dbpostgres.CreateNotificationRouteParams, error) {
 	encoded, err := encodeRoute(route)
 	if err != nil {
-		return dbsqlite.CreateNotificationRouteParams{}, err
+		return dbpostgres.CreateNotificationRouteParams{}, err
 	}
-	return dbsqlite.CreateNotificationRouteParams{
-		ID: string(route.ID), Name: route.Name, ChannelID: string(route.ChannelID), MonitorID: nullableMonitorID(route.MonitorID),
+	return dbpostgres.CreateNotificationRouteParams{
+		ID: string(route.ID), RouteName: route.Name, ChannelID: string(route.ChannelID), MonitorID: nullableMonitorID(route.MonitorID),
 		LabelMatchersJson: encoded.labels, ActionsJson: encoded.actions, SeveritiesJson: encoded.severities,
-		Template: route.Template, Enabled: boolInt(route.Enabled), Precedence: int64(route.Precedence),
-		CreatedAt: formatTime(route.CreatedAt), UpdatedAt: formatTime(route.UpdatedAt),
+		Template: route.Template, Enabled: route.Enabled, Precedence: int32(route.Precedence),
+		CreatedAt: route.CreatedAt.UTC(), UpdatedAt: route.UpdatedAt.UTC(),
 	}, nil
 }
 
-func mapNotificationRoute(record dbsqlite.NotificationRoute) (domain.NotificationRoute, error) {
-	if record.Precedence > math.MaxInt32 {
-		return domain.NotificationRoute{}, errors.New("map notification route: precedence out of range")
-	}
+func mapNotificationRoute(record dbpostgres.NotificationRoute) (domain.NotificationRoute, error) {
 	var labels map[string]string
 	var actions []domain.NotificationAction
 	var severities []domain.IncidentSeverity
@@ -527,11 +524,11 @@ func mapNotificationRoute(record dbsqlite.NotificationRoute) (domain.Notificatio
 	if err := json.Unmarshal(record.SeveritiesJson, &severities); err != nil {
 		return domain.NotificationRoute{}, fmt.Errorf("map route severities: %w", err)
 	}
-	createdAt, err := parseTime(record.CreatedAt)
+	createdAt, err := postgresTime(record.CreatedAt)
 	if err != nil {
 		return domain.NotificationRoute{}, err
 	}
-	updatedAt, err := parseTime(record.UpdatedAt)
+	updatedAt, err := postgresTime(record.UpdatedAt)
 	if err != nil {
 		return domain.NotificationRoute{}, err
 	}
@@ -539,7 +536,7 @@ func mapNotificationRoute(record dbsqlite.NotificationRoute) (domain.Notificatio
 		ID: domain.NotificationRouteID(record.ID), Name: record.Name,
 		ChannelID: domain.NotificationChannelID(record.ChannelID), LabelMatchers: labels,
 		Actions: actions, Severities: severities, Template: record.Template,
-		Enabled: record.Enabled == 1, Precedence: int32(record.Precedence), CreatedAt: createdAt, UpdatedAt: updatedAt,
+		Enabled: record.Enabled, Precedence: int32(record.Precedence), CreatedAt: createdAt, UpdatedAt: updatedAt,
 	}
 	if record.MonitorID.Valid {
 		monitorID := domain.MonitorID(record.MonitorID.String)
@@ -548,7 +545,7 @@ func mapNotificationRoute(record dbsqlite.NotificationRoute) (domain.Notificatio
 	return domain.NewNotificationRoute(route)
 }
 
-func mapNotificationRoutes(records []dbsqlite.NotificationRoute) ([]domain.NotificationRoute, error) {
+func mapNotificationRoutes(records []dbpostgres.NotificationRoute) ([]domain.NotificationRoute, error) {
 	result := make([]domain.NotificationRoute, 0, len(records))
 	for _, record := range records {
 		mapped, err := mapNotificationRoute(record)
@@ -560,35 +557,35 @@ func mapNotificationRoutes(records []dbsqlite.NotificationRoute) ([]domain.Notif
 	return result, nil
 }
 
-func mapNotificationOutbox(record dbsqlite.NotificationOutbox) (application.NotificationOutboxRecord, error) {
-	if record.AttemptCount < 0 || record.AttemptCount > math.MaxUint32 {
+func mapNotificationOutbox(record dbpostgres.NotificationOutbox) (application.NotificationOutboxRecord, error) {
+	if record.AttemptCount < 0 {
 		return application.NotificationOutboxRecord{}, errors.New("map notification outbox: attempt count out of range")
 	}
 	var snapshot domain.RenderSnapshot
 	if err := json.Unmarshal(record.RenderSnapshotJson, &snapshot); err != nil {
 		return application.NotificationOutboxRecord{}, fmt.Errorf("map notification snapshot: %w", err)
 	}
-	availableAt, err := parseTime(record.AvailableAt)
+	availableAt, err := postgresTime(record.AvailableAt)
 	if err != nil {
 		return application.NotificationOutboxRecord{}, err
 	}
-	createdAt, err := parseTime(record.CreatedAt)
+	createdAt, err := postgresTime(record.CreatedAt)
 	if err != nil {
 		return application.NotificationOutboxRecord{}, err
 	}
-	updatedAt, err := parseTime(record.UpdatedAt)
+	updatedAt, err := postgresTime(record.UpdatedAt)
 	if err != nil {
 		return application.NotificationOutboxRecord{}, err
 	}
-	claimExpiresAt, err := parseNullableTime(record.ClaimExpiresAt)
+	claimExpiresAt, err := postgresNullableTime(record.ClaimExpiresAt)
 	if err != nil {
 		return application.NotificationOutboxRecord{}, err
 	}
-	deliveredAt, err := parseNullableTime(record.DeliveredAt)
+	deliveredAt, err := postgresNullableTime(record.DeliveredAt)
 	if err != nil {
 		return application.NotificationOutboxRecord{}, err
 	}
-	suppressedAt, err := parseNullableTime(record.SuppressedAt)
+	suppressedAt, err := postgresNullableTime(record.SuppressedAt)
 	if err != nil {
 		return application.NotificationOutboxRecord{}, err
 	}
@@ -604,15 +601,15 @@ func mapNotificationOutbox(record dbsqlite.NotificationOutbox) (application.Noti
 	}, nil
 }
 
-func mapNotificationAttempt(record dbsqlite.NotificationDeliveryAttempt) (application.NotificationDeliveryAttemptRecord, error) {
-	if record.Ordinal <= 0 || record.Ordinal > math.MaxUint32 {
+func mapNotificationAttempt(record dbpostgres.NotificationDeliveryAttempt) (application.NotificationDeliveryAttemptRecord, error) {
+	if record.Ordinal <= 0 {
 		return application.NotificationDeliveryAttemptRecord{}, errors.New("map notification attempt: ordinal out of range")
 	}
-	startedAt, err := parseTime(record.StartedAt)
+	startedAt, err := postgresTime(record.StartedAt)
 	if err != nil {
 		return application.NotificationDeliveryAttemptRecord{}, err
 	}
-	finishedAt, err := parseTime(record.FinishedAt)
+	finishedAt, err := postgresTime(record.FinishedAt)
 	if err != nil {
 		return application.NotificationDeliveryAttemptRecord{}, err
 	}
@@ -623,12 +620,12 @@ func mapNotificationAttempt(record dbsqlite.NotificationDeliveryAttempt) (applic
 	}, nil
 }
 
-func mapMaintenance(record dbsqlite.MaintenanceInterval) (application.MaintenanceRecord, error) {
-	startsAt, err := parseTime(record.StartsAt)
+func mapMaintenance(record dbpostgres.MaintenanceInterval) (application.MaintenanceRecord, error) {
+	startsAt, err := postgresTime(record.StartsAt)
 	if err != nil {
 		return application.MaintenanceRecord{}, err
 	}
-	endsAt, err := parseNullableTime(record.EndsAt)
+	endsAt, err := postgresNullableTime(record.EndsAt)
 	if err != nil {
 		return application.MaintenanceRecord{}, err
 	}
@@ -636,19 +633,19 @@ func mapMaintenance(record dbsqlite.MaintenanceInterval) (application.Maintenanc
 	if err != nil {
 		return application.MaintenanceRecord{}, err
 	}
-	interval.CreatedAt, err = parseTime(record.CreatedAt)
+	interval.CreatedAt, err = postgresTime(record.CreatedAt)
 	if err != nil {
 		return application.MaintenanceRecord{}, err
 	}
-	claimExpiresAt, err := parseNullableTime(record.EndClaimExpiresAt)
+	claimExpiresAt, err := postgresNullableTime(record.EndClaimExpiresAt)
 	if err != nil {
 		return application.MaintenanceRecord{}, err
 	}
-	processedAt, err := parseNullableTime(record.EndedNotificationSentAt)
+	processedAt, err := postgresNullableTime(record.EndedNotificationSentAt)
 	if err != nil {
 		return application.MaintenanceRecord{}, err
 	}
-	updatedAt, err := parseTime(record.UpdatedAt)
+	updatedAt, err := postgresTime(record.UpdatedAt)
 	if err != nil {
 		return application.MaintenanceRecord{}, err
 	}
@@ -660,7 +657,7 @@ func mapMaintenance(record dbsqlite.MaintenanceInterval) (application.Maintenanc
 	}, nil
 }
 
-func mapMaintenances(records []dbsqlite.MaintenanceInterval) ([]application.MaintenanceRecord, error) {
+func mapMaintenances(records []dbpostgres.MaintenanceInterval) ([]application.MaintenanceRecord, error) {
 	result := make([]application.MaintenanceRecord, 0, len(records))
 	for _, record := range records {
 		mapped, err := mapMaintenance(record)
@@ -672,12 +669,12 @@ func mapMaintenances(records []dbsqlite.MaintenanceInterval) ([]application.Main
 	return result, nil
 }
 
-func mapOperationLease(record dbsqlite.OperationLease) (application.OperationLeaseRecord, error) {
-	expiresAt, err := parseTime(record.ExpiresAt)
+func mapOperationLease(record dbpostgres.OperationLease) (application.OperationLeaseRecord, error) {
+	expiresAt, err := postgresTime(record.ExpiresAt)
 	if err != nil {
 		return application.OperationLeaseRecord{}, err
 	}
-	updatedAt, err := parseTime(record.UpdatedAt)
+	updatedAt, err := postgresTime(record.UpdatedAt)
 	if err != nil {
 		return application.OperationLeaseRecord{}, err
 	}
@@ -687,15 +684,15 @@ func mapOperationLease(record dbsqlite.OperationLease) (application.OperationLea
 	}, nil
 }
 
-func mapDailyUptime(record dbsqlite.DailyUptime) (application.DailyUptimeRecord, error) {
+func mapDailyUptime(record dbpostgres.DailyUptime) (application.DailyUptimeRecord, error) {
 	if record.PassingCount < 0 || record.FailingCount < 0 || record.UnknownCount < 0 || record.ObservedMs < 0 {
 		return application.DailyUptimeRecord{}, errors.New("map daily uptime: negative value")
 	}
-	day, err := time.Parse(time.DateOnly, record.Day)
+	day, err := postgresTime(record.Day)
 	if err != nil {
 		return application.DailyUptimeRecord{}, fmt.Errorf("map daily uptime day: %w", err)
 	}
-	updatedAt, err := parseTime(record.UpdatedAt)
+	updatedAt, err := postgresTime(record.UpdatedAt)
 	if err != nil {
 		return application.DailyUptimeRecord{}, err
 	}
@@ -718,4 +715,27 @@ func nullableIncidentID(id *domain.IncidentID) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: string(*id), Valid: true}
+}
+
+func nullablePGTime(value time.Time) sql.NullTime {
+	return sql.NullTime{Time: value.UTC(), Valid: true}
+}
+
+func nullablePGTimePtr(value *time.Time) sql.NullTime {
+	if value == nil {
+		return sql.NullTime{}
+	}
+	return nullablePGTime(*value)
+}
+
+func postgresTime(value time.Time) (time.Time, error) {
+	return value.UTC(), nil
+}
+
+func postgresNullableTime(value sql.NullTime) (*time.Time, error) {
+	if !value.Valid {
+		return nil, nil
+	}
+	result := value.Time.UTC()
+	return &result, nil
 }

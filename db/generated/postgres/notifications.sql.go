@@ -241,7 +241,7 @@ INSERT INTO notification_routes (
 
 type CreateNotificationRouteParams struct {
 	ID                string          `json:"id"`
-	Name              string          `json:"name"`
+	RouteName         string          `json:"route_name"`
 	ChannelID         string          `json:"channel_id"`
 	MonitorID         sql.NullString  `json:"monitor_id"`
 	LabelMatchersJson json.RawMessage `json:"label_matchers_json"`
@@ -257,7 +257,7 @@ type CreateNotificationRouteParams struct {
 func (q *Queries) CreateNotificationRoute(ctx context.Context, arg CreateNotificationRouteParams) error {
 	_, err := q.db.ExecContext(ctx, createNotificationRoute,
 		arg.ID,
-		arg.Name,
+		arg.RouteName,
 		arg.ChannelID,
 		arg.MonitorID,
 		arg.LabelMatchersJson,
@@ -323,7 +323,9 @@ func (q *Queries) GetNotificationOutbox(ctx context.Context, id string) (Notific
 }
 
 const getNotificationRoute = `-- name: GetNotificationRoute :one
-SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json, severities_json, template, enabled, precedence, created_at, updated_at FROM notification_routes WHERE id = $1
+SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json,
+       severities_json, template, enabled, precedence, created_at, updated_at
+FROM notification_routes WHERE id = $1
 `
 
 func (q *Queries) GetNotificationRoute(ctx context.Context, id string) (NotificationRoute, error) {
@@ -384,7 +386,9 @@ func (q *Queries) ListAuditEventsByIncident(ctx context.Context, incidentID sql.
 }
 
 const listEnabledNotificationRoutes = `-- name: ListEnabledNotificationRoutes :many
-SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json, severities_json, template, enabled, precedence, created_at, updated_at FROM notification_routes
+SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json,
+       severities_json, template, enabled, precedence, created_at, updated_at
+FROM notification_routes
 WHERE enabled
 ORDER BY precedence, id
 `
@@ -587,7 +591,9 @@ func (q *Queries) ListNotificationOutbox(ctx context.Context, arg ListNotificati
 }
 
 const listNotificationRoutes = `-- name: ListNotificationRoutes :many
-SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json, severities_json, template, enabled, precedence, created_at, updated_at FROM notification_routes ORDER BY precedence, id
+SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json,
+       severities_json, template, enabled, precedence, created_at, updated_at
+FROM notification_routes ORDER BY precedence, id
 LIMIT $2 OFFSET $1
 `
 
@@ -718,6 +724,35 @@ func (q *Queries) MarkNotificationRetrying(ctx context.Context, arg MarkNotifica
 		arg.AvailableAt,
 		arg.ErrorClass,
 		arg.Diagnostic,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.ClaimTokenHash,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const markNotificationSuppressed = `-- name: MarkNotificationSuppressed :execrows
+UPDATE notification_outbox
+SET state = 'suppressed', suppressed_at = $1,
+    claim_owner = NULL, claim_token_hash = NULL, claim_expires_at = NULL,
+    updated_at = $2
+WHERE id = $3 AND state = 'claimed'
+  AND claim_token_hash = $4
+`
+
+type MarkNotificationSuppressedParams struct {
+	SuppressedAt   sql.NullTime `json:"suppressed_at"`
+	UpdatedAt      time.Time    `json:"updated_at"`
+	ID             string       `json:"id"`
+	ClaimTokenHash []byte       `json:"claim_token_hash"`
+}
+
+func (q *Queries) MarkNotificationSuppressed(ctx context.Context, arg MarkNotificationSuppressedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markNotificationSuppressed,
+		arg.SuppressedAt,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.ClaimTokenHash,
@@ -865,7 +900,7 @@ WHERE id = $11
 `
 
 type UpdateNotificationRouteParams struct {
-	Name              string          `json:"name"`
+	RouteName         string          `json:"route_name"`
 	ChannelID         string          `json:"channel_id"`
 	MonitorID         sql.NullString  `json:"monitor_id"`
 	LabelMatchersJson json.RawMessage `json:"label_matchers_json"`
@@ -880,7 +915,7 @@ type UpdateNotificationRouteParams struct {
 
 func (q *Queries) UpdateNotificationRoute(ctx context.Context, arg UpdateNotificationRouteParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, updateNotificationRoute,
-		arg.Name,
+		arg.RouteName,
 		arg.ChannelID,
 		arg.MonitorID,
 		arg.LabelMatchersJson,

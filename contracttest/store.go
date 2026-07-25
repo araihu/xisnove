@@ -44,8 +44,14 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("notification persistence", func(t *testing.T) {
 		testNotificationPersistence(t, factory(t))
 	})
+	t.Run("notification ordering and competing claims", func(t *testing.T) {
+		testNotificationOrderingAndCompetingClaims(t, factory(t))
+	})
 	t.Run("maintenance and operation leases", func(t *testing.T) {
 		testMaintenanceAndOperationLeases(t, factory(t))
+	})
+	t.Run("audit and bounded daily retention", func(t *testing.T) {
+		testAuditAndBoundedDailyRetention(t, factory(t))
 	})
 }
 

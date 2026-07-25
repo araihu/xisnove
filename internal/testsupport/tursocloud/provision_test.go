@@ -23,7 +23,7 @@ func TestProvisionAndDeleteExactDisposableDatabase(t *testing.T) {
 		}
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/organizations":
-			writeJSON(t, w, map[string]any{"organizations": []any{map[string]any{"slug": "test-org"}}})
+			writeJSON(t, w, []any{map[string]any{"slug": "test-org"}})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/organizations/test-org/groups":
 			writeJSON(t, w, map[string]any{"groups": []any{map[string]any{"name": "xisnove-ci", "delete_protection": false}}})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/organizations/test-org/databases":
@@ -129,9 +129,9 @@ func TestProvisionRequiresExplicitOrganizationWhenAmbiguous(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, map[string]any{"organizations": []any{
+		writeJSON(t, w, []any{
 			map[string]any{"slug": "first"}, map[string]any{"slug": "second"},
-		}})
+		})
 	}))
 	t.Cleanup(server.Close)
 

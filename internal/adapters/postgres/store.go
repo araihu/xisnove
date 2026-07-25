@@ -78,15 +78,21 @@ func (s *store) transact(
 
 func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 	return application.Repositories{
-		Admins:    &adminRepository{queries: queries},
-		Sessions:  &sessionRepository{queries: queries},
-		Locations: &locationRepository{queries: queries},
-		Monitors:  &monitorRepository{queries: queries},
-		Health:    &healthRepository{queries: queries},
-		Agents:    &agentRepository{queries: queries},
-		Runs:      &runRepository{queries: queries},
-		Results:   &resultRepository{queries: queries},
-		Incidents: &incidentRepository{queries: queries},
+		Admins:               &adminRepository{queries: queries},
+		Sessions:             &sessionRepository{queries: queries},
+		Locations:            &locationRepository{queries: queries},
+		Monitors:             &monitorRepository{queries: queries},
+		Health:               &healthRepository{queries: queries},
+		Agents:               &agentRepository{queries: queries},
+		Runs:                 &runRepository{queries: queries},
+		Results:              &resultRepository{queries: queries},
+		Incidents:            &incidentRepository{queries: queries},
+		NotificationChannels: &notificationChannelRepository{queries: queries},
+		NotificationRoutes:   &notificationRouteRepository{queries: queries},
+		NotificationOutbox:   &notificationOutboxRepository{queries: queries},
+		Maintenance:          &maintenanceRepository{queries: queries},
+		Audit:                &auditRepository{queries: queries},
+		Retention:            &retentionRepository{queries: queries},
 	}
 }
 

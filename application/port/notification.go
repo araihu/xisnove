@@ -152,6 +152,7 @@ type NotificationOutboxRepository interface {
 	MarkDelivered(context.Context, FinalizeNotificationParams) (bool, error)
 	MarkRetrying(context.Context, FinalizeNotificationParams) (bool, error)
 	MarkPermanentFailure(context.Context, FinalizeNotificationParams) (bool, error)
+	MarkSuppressed(context.Context, FinalizeNotificationParams) (bool, error)
 	ReleaseClaim(context.Context, FinalizeNotificationParams) (bool, error)
 	Replay(context.Context, domain.NotificationDeliveryID, time.Time) (bool, error)
 }

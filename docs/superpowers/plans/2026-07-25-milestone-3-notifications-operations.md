@@ -265,7 +265,7 @@ Implement and verify this gate using the dedicated plan before resuming Task 3.
 - Produces: `AuditRepository`, `RetentionRepository`
 - Extends: `Repositories` so transaction-scoped instances include every port
 
-- [ ] **Step 1: Write the shared failing conformance journey**
+- [x] **Step 1: Write the shared failing conformance journey**
 
 The same assertions cover channel/route round trips without plaintext secrets,
 route ordering, duplicate outbox prevention, transaction rollback, competing
@@ -273,25 +273,25 @@ claims, database-time lease expiry, immutable snapshot reads, attempt ordinals,
 retry/permanent/delivered/suppressed transitions, replay, maintenance claims,
 daily aggregate upsert, and bounded cleanup.
 
-- [ ] **Step 2: Implement SQLite-compatible mapping**
+- [x] **Step 2: Implement SQLite-compatible mapping**
 
 Map generated types at the boundary, preserve UTC/JSON normalization, hash
 claim tokens, and classify semantic conflicts. No generated or driver type may
 enter application/domain packages.
 
-- [ ] **Step 3: Implement PostgreSQL mapping**
+- [x] **Step 3: Implement PostgreSQL mapping**
 
 Match the same application behavior with pgx/sqlc types and native claims.
 Prove two independent handles cannot claim one delivery or ended interval.
 
-- [ ] **Step 4: Run the local matrix repeatedly**
+- [x] **Step 4: Run the local matrix repeatedly**
 
 ```bash
 go test -race ./internal/adapters/sqlite ./internal/adapters/tursolocal \
   ./internal/adapters/postgres -run 'NotificationConformance' -count=20
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add application/port contracttest internal/adapters

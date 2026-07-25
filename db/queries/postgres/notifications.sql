@@ -33,27 +33,33 @@ INSERT INTO notification_routes (
   id, name, channel_id, monitor_id, label_matchers_json, actions_json,
   severities_json, template, enabled, precedence, created_at, updated_at
 ) VALUES (
-  sqlc.arg(id), sqlc.arg(name), sqlc.arg(channel_id), sqlc.narg(monitor_id),
+  sqlc.arg(id), sqlc.arg(route_name), sqlc.arg(channel_id), sqlc.narg(monitor_id),
   sqlc.arg(label_matchers_json), sqlc.arg(actions_json), sqlc.arg(severities_json),
   sqlc.arg(template), sqlc.arg(enabled), sqlc.arg(precedence),
   sqlc.arg(created_at), sqlc.arg(updated_at)
 );
 
 -- name: GetNotificationRoute :one
-SELECT * FROM notification_routes WHERE id = sqlc.arg(id);
+SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json,
+       severities_json, template, enabled, precedence, created_at, updated_at
+FROM notification_routes WHERE id = sqlc.arg(id);
 
 -- name: ListNotificationRoutes :many
-SELECT * FROM notification_routes ORDER BY precedence, id
+SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json,
+       severities_json, template, enabled, precedence, created_at, updated_at
+FROM notification_routes ORDER BY precedence, id
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
 -- name: ListEnabledNotificationRoutes :many
-SELECT * FROM notification_routes
+SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json,
+       severities_json, template, enabled, precedence, created_at, updated_at
+FROM notification_routes
 WHERE enabled
 ORDER BY precedence, id;
 
 -- name: UpdateNotificationRoute :execrows
 UPDATE notification_routes
-SET name = sqlc.arg(name), channel_id = sqlc.arg(channel_id),
+SET name = sqlc.arg(route_name), channel_id = sqlc.arg(channel_id),
     monitor_id = sqlc.narg(monitor_id), label_matchers_json = sqlc.arg(label_matchers_json),
     actions_json = sqlc.arg(actions_json), severities_json = sqlc.arg(severities_json),
     template = sqlc.arg(template), enabled = sqlc.arg(enabled),
@@ -145,6 +151,14 @@ WHERE id = sqlc.arg(id) AND state = 'claimed'
 UPDATE notification_outbox
 SET state = 'permanent-failure', attempt_count = attempt_count + 1,
     last_error_class = sqlc.arg(error_class), last_diagnostic = sqlc.arg(diagnostic),
+    claim_owner = NULL, claim_token_hash = NULL, claim_expires_at = NULL,
+    updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND state = 'claimed'
+  AND claim_token_hash = sqlc.arg(claim_token_hash);
+
+-- name: MarkNotificationSuppressed :execrows
+UPDATE notification_outbox
+SET state = 'suppressed', suppressed_at = sqlc.arg(suppressed_at),
     claim_owner = NULL, claim_token_hash = NULL, claim_expires_at = NULL,
     updated_at = sqlc.arg(updated_at)
 WHERE id = sqlc.arg(id) AND state = 'claimed'

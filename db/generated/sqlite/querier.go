@@ -76,6 +76,7 @@ type Querier interface {
 	MarkNotificationDelivered(ctx context.Context, arg MarkNotificationDeliveredParams) (int64, error)
 	MarkNotificationPermanentFailure(ctx context.Context, arg MarkNotificationPermanentFailureParams) (int64, error)
 	MarkNotificationRetrying(ctx context.Context, arg MarkNotificationRetryingParams) (int64, error)
+	MarkNotificationSuppressed(ctx context.Context, arg MarkNotificationSuppressedParams) (int64, error)
 	OpenIncident(ctx context.Context, arg OpenIncidentParams) error
 	RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error)
 	ReleaseEndedMaintenanceClaim(ctx context.Context, arg ReleaseEndedMaintenanceClaimParams) (int64, error)
