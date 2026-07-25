@@ -551,27 +551,27 @@ git commit -m "feat(notification): add delivery transports"
 - Modify: `cmd/xisnove-server/serve.go`
 - Modify: `cmd/xisnove-server/serve_test.go`
 
-- [ ] **Step 1: Write failure-first worker tests**
+- [x] **Step 1: Write failure-first worker tests**
 
 Cover due claiming, bounded concurrency, network outside transactions, success,
 transient retry with cap/jitter, permanent failure, deadline, panic containment,
 lease loss, crash after claim, crash after provider response, duplicate-provider
 risk visibility, clean stop, and manual replay producing a new attempt ordinal.
 
-- [ ] **Step 2: Implement claims and dispatch**
+- [x] **Step 2: Implement claims and dispatch**
 
 Each loop reads database time, claims a bounded batch, decrypts/resolves
 configuration just in time, chooses transport by channel kind, sends under a
 deadline, then records the attempt and CAS state. A stale worker cannot finalize
 a row after its claim token/lease is lost.
 
-- [ ] **Step 3: Wire lifecycle/configuration**
+- [x] **Step 3: Wire lifecycle/configuration**
 
 Expose bounded batch, concurrency, lease, poll, send-timeout, max-attempt, and
 backoff cap configuration with safe defaults and validation. Every eligible
 replica may run the worker.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 go test -race ./application ./cmd/xisnove-server \
