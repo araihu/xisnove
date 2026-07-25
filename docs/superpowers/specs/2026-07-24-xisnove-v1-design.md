@@ -864,6 +864,8 @@ existing agents, monitors, or notification workers.
 
 The `xisnove-ui` module is a separate server-rendered BFF:
 
+- its initial dependency baseline is exactly
+  `github.com/araihu/goshtoso v0.0.12`;
 - templ and HTMX render pages and fragments;
 - all control-plane access uses the public SDK;
 - no database driver or sqlc package is present;
@@ -878,6 +880,15 @@ If Xisnove needs a genuinely generic UI primitive that Goshtoso lacks, that
 primitive is designed and tested upstream in `araihu/goshtoso`, released, and
 then consumed at a pinned version. Application-specific composites do not
 expand Goshtoso's public surface.
+
+Before creating or upgrading the module, read the pinned release changelog,
+`docs/MIGRATING_COMPONENT_API.md`, and `docs/COMPONENT_MODEL.md` in full. Treat
+Goshtoso alpha upgrades as consumer migrations rather than dependency-only
+bumps: inventory every component, eliminate legitimate legacy API usage,
+regenerate templ and CSS through project commands, and smoke-test full-page and
+HTMX behavior, browser interactions, disabled/loading/error states, console
+errors, and every supported theme. Do not recreate removed internal Goshtoso
+helpers in Xisnove.
 
 ## CLI
 
