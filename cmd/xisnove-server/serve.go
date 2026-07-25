@@ -25,6 +25,7 @@ func serveCommand(parent context.Context, args []string) error {
 	databaseFlags := addDatabaseFlags(flags)
 	keyFlags := addNotificationKeyFlags(flags, os.Getenv)
 	notificationWorkerFlags := addNotificationWorkerFlags(flags)
+	retentionWorkerFlags := addRetentionWorkerFlags(flags)
 	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	replicas := flags.Int("replicas", 1, "expected number of server replicas")
 	if err := flags.Parse(args); err != nil {
@@ -71,6 +72,10 @@ func serveCommand(parent context.Context, args []string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("configure maintenance worker: %w", err)
+	}
+	retentionWorker, err := retentionWorkerFlags.build(store, tokens, ids.NewUUID, ids.NewUUID())
+	if err != nil {
+		return fmt.Errorf("configure retention worker: %w", err)
 	}
 	auth := application.NewAuthService(application.AuthServiceConfig{
 		Store: store, Passwords: xiscrypto.NewProductionPasswordHasher(),
@@ -130,6 +135,11 @@ func serveCommand(parent context.Context, args []string) error {
 	go func() {
 		defer loops.Done()
 		_ = maintenanceWorker.Run(ctx)
+	}()
+	loops.Add(1)
+	go func() {
+		defer loops.Done()
+		_ = retentionWorker.Run(ctx)
 	}()
 	defer func() {
 		stop()

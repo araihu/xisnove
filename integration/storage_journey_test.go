@@ -329,6 +329,33 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	}
 	assertTableCount(t, primary, "incident_events", 3)
 
+	retentionWorker, err := application.NewRetentionWorker(application.RetentionWorkerConfig{
+		Store: secondary.Store, Tokens: tokens, NewID: ids.New,
+		Owner: "matrix-retention-worker", BatchSize: 2,
+		LeaseDuration: time.Minute, PollInterval: time.Minute,
+		RawRetention: 24 * time.Hour, DailyRetentionMonths: 13,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first page completes yesterday's empty bucket; the next two pages
+	// resume and publish today's three immutable results.
+	for page := 0; page < 3; page++ {
+		if claimed, err := retentionWorker.AggregateOnce(ctx); err != nil || !claimed {
+			t.Fatalf("daily uptime page %d: claimed=%t error=%v", page+1, claimed, err)
+		}
+	}
+	uptimeDay := time.Date(databaseNow.UTC().Year(), databaseNow.UTC().Month(), databaseNow.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	for kind, monitor := range monitors {
+		daily, err := primary.Store.Repositories().Retention.ListDailyUptime(
+			ctx, monitor.ID, uptimeDay, uptimeDay.AddDate(0, 0, 1),
+		)
+		if err != nil || len(daily) != 1 || daily[0].Passing+daily[0].Failing != 1 {
+			t.Fatalf("%s daily uptime = %#v, error=%v", kind, daily, err)
+		}
+	}
+	assertTableCount(t, primary, "daily_uptime", 3)
+
 	rollbackID := domain.LocationID(ids.New())
 	rollbackLocation, err := domain.NewLocation(rollbackID, "must roll back", databaseNow)
 	if err != nil {
@@ -361,6 +388,7 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	assertTableCount(t, reopened, "incident_events", 3)
 	assertTableCount(t, reopened, "maintenance_intervals", 1)
 	assertTableCount(t, reopened, "notification_outbox", 1)
+	assertTableCount(t, reopened, "daily_uptime", 3)
 	for _, monitor := range monitors {
 		configured, err := application.NewConfigurationService(
 			reopened.Store, func() time.Time { return storageMatrixNow }, ids.New,

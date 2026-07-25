@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -551,5 +552,55 @@ func testAuditAndBoundedDailyRetention(t *testing.T, store application.Store) {
 	)
 	if err != nil || len(daily) != 1 {
 		t.Fatalf("daily uptime after bounded delete = %#v, %v", daily, err)
+	}
+}
+
+func testAggregationCursorAndBoundedRawRetention(t *testing.T, store application.Store) {
+	t.Helper()
+	ctx := context.Background()
+	fixture := seedWithoutRun(t, store, 1)
+	cutoff := fixture.now
+	resultIDs := make([]string, 0, 3)
+	for index, receivedAt := range []time.Time{cutoff.Add(-time.Second), cutoff, cutoff.Add(time.Second)} {
+		runID := domain.CheckRunID(fmt.Sprintf("00000000-0000-4000-8002-%012d", index+1))
+		inserted, err := store.Repositories().Runs.Insert(ctx, application.NewRunRecord{
+			ID: runID, MonitorID: fixture.monitor.ID, LocationID: fixture.location.ID,
+			ScheduledFor: receivedAt.Add(-time.Second), Probe: fixture.monitor.Probe(), Timeout: fixture.monitor.Timeout,
+		})
+		if err != nil || !inserted {
+			t.Fatalf("aggregation run %d = %v, %v", index, inserted, err)
+		}
+		resultID := fmt.Sprintf("00000000-0000-4000-8003-%012d", index+1)
+		resultIDs = append(resultIDs, resultID)
+		inserted, err = store.Repositories().Results.Insert(ctx, application.ProbeResultRecord{
+			ID: resultID, RunID: runID, AgentID: fixture.agentIDs[0],
+			StartedAt: receivedAt.Add(-time.Millisecond), FinishedAt: receivedAt,
+			ReceivedAt: receivedAt, Passed: index != 0, Latency: time.Millisecond,
+		})
+		if err != nil || !inserted {
+			t.Fatalf("aggregation result %d = %v, %v", index, inserted, err)
+		}
+	}
+	page, err := store.Repositories().Retention.ListAggregationResults(
+		ctx, cutoff.Add(-time.Minute), cutoff.Add(time.Minute), cutoff.Add(-time.Minute), "", 2,
+	)
+	if err != nil || len(page) != 2 || page[0].ID != resultIDs[0] || page[1].ID != resultIDs[1] {
+		t.Fatalf("first aggregation page = %#v, %v", page, err)
+	}
+	page, err = store.Repositories().Retention.ListAggregationResults(
+		ctx, cutoff.Add(-time.Minute), cutoff.Add(time.Minute), page[1].ReceivedAt, page[1].ID, 2,
+	)
+	if err != nil || len(page) != 1 || page[0].ID != resultIDs[2] {
+		t.Fatalf("resumed aggregation page = %#v, %v", page, err)
+	}
+	deleted, err := store.Repositories().Retention.DeleteExpiredResults(ctx, cutoff, 1)
+	if err != nil || deleted != 1 {
+		t.Fatalf("bounded DeleteExpiredResults() = %d, %v", deleted, err)
+	}
+	if _, err := store.Repositories().Results.GetByID(ctx, resultIDs[0]); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("expired result lookup = %v", err)
+	}
+	if _, err := store.Repositories().Results.GetByID(ctx, resultIDs[1]); err != nil {
+		t.Fatalf("result at exact cutoff was removed: %v", err)
 	}
 }

@@ -179,7 +179,7 @@ type RetentionRepository interface {
 	ClaimLease(context.Context, OperationLeaseRecord, time.Time) (OperationLeaseRecord, error)
 	UpdateLease(context.Context, OperationLeaseRecord) (bool, error)
 	ReleaseLease(context.Context, string, []byte) (bool, error)
-	ListAggregationResults(context.Context, time.Time, time.Time, int) ([]AggregationResultRecord, error)
+	ListAggregationResults(context.Context, time.Time, time.Time, time.Time, string, int) ([]AggregationResultRecord, error)
 	UpsertDailyUptime(context.Context, DailyUptimeRecord) error
 	ListDailyUptime(context.Context, domain.MonitorID, time.Time, time.Time) ([]DailyUptimeRecord, error)
 	DeleteExpiredResults(context.Context, time.Time, int) (int64, error)

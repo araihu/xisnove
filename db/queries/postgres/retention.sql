@@ -3,6 +3,10 @@ SELECT pr.id, cr.monitor_id, pr.received_at, pr.outcome, pr.latency_ms
 FROM probe_results pr
 JOIN check_runs cr ON cr.id = pr.run_id
 WHERE pr.received_at >= sqlc.arg(starts_at) AND pr.received_at < sqlc.arg(ends_at)
+  AND (
+    pr.received_at > sqlc.arg(after_at)
+    OR (pr.received_at = sqlc.arg(after_at) AND pr.id > sqlc.arg(after_id))
+  )
 ORDER BY pr.received_at, pr.id
 LIMIT sqlc.arg(row_limit);
 

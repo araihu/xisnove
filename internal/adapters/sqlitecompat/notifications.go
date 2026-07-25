@@ -424,9 +424,10 @@ func (r *retentionRepository) ReleaseLease(ctx context.Context, key string, toke
 	return affected == 1, repositoryError("release operation lease", err)
 }
 
-func (r *retentionRepository) ListAggregationResults(ctx context.Context, start, end time.Time, limit int) ([]application.AggregationResultRecord, error) {
+func (r *retentionRepository) ListAggregationResults(ctx context.Context, start, end, after time.Time, afterID string, limit int) ([]application.AggregationResultRecord, error) {
 	records, err := r.queries.ListProbeResultsForDailyAggregation(ctx, dbsqlite.ListProbeResultsForDailyAggregationParams{
-		StartsAt: formatTime(start), EndsAt: formatTime(end), RowLimit: int64(limit),
+		StartsAt: formatTime(start), EndsAt: formatTime(end), AfterAt: formatTime(after),
+		AfterID: afterID, RowLimit: int64(limit),
 	})
 	if err != nil {
 		return nil, repositoryError("list aggregation results", err)

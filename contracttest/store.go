@@ -53,6 +53,9 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("audit and bounded daily retention", func(t *testing.T) {
 		testAuditAndBoundedDailyRetention(t, factory(t))
 	})
+	t.Run("aggregation cursor and bounded raw retention", func(t *testing.T) {
+		testAggregationCursorAndBoundedRawRetention(t, factory(t))
+	})
 }
 
 func testTransactionRollback(t *testing.T, store application.Store) {

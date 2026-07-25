@@ -427,9 +427,10 @@ func (r *retentionRepository) ReleaseLease(ctx context.Context, key string, toke
 	return affected == 1, repositoryError("release operation lease", err)
 }
 
-func (r *retentionRepository) ListAggregationResults(ctx context.Context, start, end time.Time, limit int) ([]application.AggregationResultRecord, error) {
+func (r *retentionRepository) ListAggregationResults(ctx context.Context, start, end, after time.Time, afterID string, limit int) ([]application.AggregationResultRecord, error) {
 	records, err := r.queries.ListProbeResultsForDailyAggregation(ctx, dbpostgres.ListProbeResultsForDailyAggregationParams{
-		StartsAt: start.UTC(), EndsAt: end.UTC(), RowLimit: int32(limit),
+		StartsAt: start.UTC(), EndsAt: end.UTC(), AfterAt: after.UTC(),
+		AfterID: afterID, RowLimit: int32(limit),
 	})
 	if err != nil {
 		return nil, repositoryError("list aggregation results", err)

@@ -157,13 +157,19 @@ SELECT pr.id, cr.monitor_id, pr.received_at, pr.outcome, pr.latency_ms
 FROM probe_results pr
 JOIN check_runs cr ON cr.id = pr.run_id
 WHERE pr.received_at >= $1 AND pr.received_at < $2
+  AND (
+    pr.received_at > $3
+    OR (pr.received_at = $3 AND pr.id > $4)
+  )
 ORDER BY pr.received_at, pr.id
-LIMIT $3
+LIMIT $5
 `
 
 type ListProbeResultsForDailyAggregationParams struct {
 	StartsAt time.Time `json:"starts_at"`
 	EndsAt   time.Time `json:"ends_at"`
+	AfterAt  time.Time `json:"after_at"`
+	AfterID  string    `json:"after_id"`
 	RowLimit int32     `json:"row_limit"`
 }
 
@@ -176,7 +182,13 @@ type ListProbeResultsForDailyAggregationRow struct {
 }
 
 func (q *Queries) ListProbeResultsForDailyAggregation(ctx context.Context, arg ListProbeResultsForDailyAggregationParams) ([]ListProbeResultsForDailyAggregationRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProbeResultsForDailyAggregation, arg.StartsAt, arg.EndsAt, arg.RowLimit)
+	rows, err := q.db.QueryContext(ctx, listProbeResultsForDailyAggregation,
+		arg.StartsAt,
+		arg.EndsAt,
+		arg.AfterAt,
+		arg.AfterID,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

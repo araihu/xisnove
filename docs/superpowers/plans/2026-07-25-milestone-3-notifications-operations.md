@@ -626,24 +626,24 @@ git commit -m "feat(maintenance): preserve unhealthy transitions"
 - Modify: `cmd/xisnove-server/serve.go`
 - Create: `integration/retention_test.go`
 
-- [ ] **Step 1: Write aggregation truth tests**
+- [x] **Step 1: Write aggregation truth tests**
 
 Aggregate immutable results into UTC daily buckets, make reruns idempotent, and
 handle late results without double counting. Preserve enough state to resume a
 partially completed day safely.
 
-- [ ] **Step 2: Write cleanup boundary tests**
+- [x] **Step 2: Write cleanup boundary tests**
 
 Defaults are raw results 30 days and daily uptime 13 months. Exact cutoff rows
 are retained consistently. Each transaction deletes at most configured batch
 size. Incident/Event/attempt/audit history remains untouched by default.
 
-- [ ] **Step 3: Implement lease-safe jobs**
+- [x] **Step 3: Implement lease-safe jobs**
 
 Only one replica owns a bucket/batch at a time; expired claims recover. Record
 job audit/metrics without placing per-row payloads in logs.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 go test -race ./application ./integration -run 'Retention|Uptime'

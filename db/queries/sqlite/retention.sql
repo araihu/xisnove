@@ -4,6 +4,10 @@ FROM probe_results pr
 JOIN check_runs cr ON cr.id = pr.run_id
 WHERE julianday(pr.received_at) >= julianday(sqlc.arg(starts_at))
   AND julianday(pr.received_at) < julianday(sqlc.arg(ends_at))
+  AND (
+    julianday(pr.received_at) > julianday(sqlc.arg(after_at))
+    OR (pr.received_at = sqlc.arg(after_at) AND pr.id > sqlc.arg(after_id))
+  )
 ORDER BY julianday(pr.received_at), pr.id
 LIMIT sqlc.arg(row_limit);
 
