@@ -1,0 +1,6 @@
+count: 2
+labels:
+    team: platform
+    zone: south
+name: edge-api
+state: degraded

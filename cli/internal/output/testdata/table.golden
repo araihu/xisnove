@@ -1,0 +1,4 @@
+NAME      STATE
+database  down
+edge-api  degraded
+worker    up
