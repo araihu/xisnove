@@ -167,6 +167,9 @@ func TestNotificationAdminJourneySealsSecretsAndManagesResources(t *testing.T) {
 	if err != nil || rolledBack.Delivery.State != domain.DeliveryPermanent {
 		t.Fatalf("replay rollback = %#v, %v", rolledBack, err)
 	}
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER fail_replay_audit`); err != nil {
+		t.Fatal(err)
+	}
 	if err := service.DisableRoute(ctx, route.ID); err != nil {
 		t.Fatal(err)
 	}

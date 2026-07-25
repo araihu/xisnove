@@ -37,14 +37,16 @@ func TestMaintenanceIntervalRejectsInvalidIdentityAndRange(t *testing.T) {
 	for name, values := range map[string]struct {
 		id, monitor string
 		end         *time.Time
+		reason      string
 	}{
-		"empty ID":      {monitor: "monitor-1"},
-		"empty monitor": {id: "maintenance-1"},
-		"end at start":  {id: "maintenance-1", monitor: "monitor-1", end: &start},
-		"end before":    {id: "maintenance-1", monitor: "monitor-1", end: &before},
+		"empty ID":      {monitor: "monitor-1", reason: "reason"},
+		"empty monitor": {id: "maintenance-1", reason: "reason"},
+		"empty reason":  {id: "maintenance-1", monitor: "monitor-1"},
+		"end at start":  {id: "maintenance-1", monitor: "monitor-1", end: &start, reason: "reason"},
+		"end before":    {id: "maintenance-1", monitor: "monitor-1", end: &before, reason: "reason"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := domain.NewMaintenanceInterval(domain.MaintenanceID(values.id), domain.MonitorID(values.monitor), start, values.end, "reason")
+			_, err := domain.NewMaintenanceInterval(domain.MaintenanceID(values.id), domain.MonitorID(values.monitor), start, values.end, values.reason)
 			if !errors.Is(err, domain.ErrInvalidMaintenance) {
 				t.Fatalf("error = %v", err)
 			}

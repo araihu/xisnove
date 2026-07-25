@@ -590,25 +590,25 @@ git commit -m "feat(notification): deliver durable outbox work"
 - Modify: `cmd/xisnove-server/serve.go`
 - Modify: `integration/storage_journey_test.go`
 
-- [ ] **Step 1: Test create/end/delete invariants**
+- [x] **Step 1: Test create/end/delete invariants**
 
 Reject recurring fields, end-before-start, edits that rewrite elapsed history,
 and unauthorized deletion. Ending/deleting an active interval is idempotent and
 audited.
 
-- [ ] **Step 2: Test the maintenance-end projector**
+- [x] **Step 2: Test the maintenance-end projector**
 
 Claim ended intervals durably. If monitor health remains degraded/down/unknown,
 append exactly one synthetic `maintenance-ended` IncidentEvent plus matching
 audit/outbox in a transaction. If recovered, emit nothing. Competing replicas
 cannot duplicate the transition.
 
-- [ ] **Step 3: Implement and wire the worker**
+- [x] **Step 3: Implement and wire the worker**
 
 Use database time and bounded claims. Starting or stopping the server must not
 lose the post-maintenance transition.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 go test -race ./application ./integration -run 'Maintenance'

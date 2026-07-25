@@ -63,6 +63,15 @@ func serveCommand(parent context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("configure notification worker: %w", err)
 	}
+	maintenanceWorker, err := application.NewMaintenanceWorker(application.MaintenanceWorkerConfig{
+		Store: store, Tokens: tokens, NewID: ids.NewUUID, Owner: ids.NewUUID(),
+		OnError: func(err error) {
+			slog.Error("maintenance projection cycle failed", "error_class", "maintenance_cycle", "error", err)
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("configure maintenance worker: %w", err)
+	}
 	auth := application.NewAuthService(application.AuthServiceConfig{
 		Store: store, Passwords: xiscrypto.NewProductionPasswordHasher(),
 		Tokens: tokens, SessionDuration: 24 * time.Hour,
@@ -117,6 +126,11 @@ func serveCommand(parent context.Context, args []string) error {
 			_ = notificationWorker.Run(ctx)
 		}()
 	}
+	loops.Add(1)
+	go func() {
+		defer loops.Done()
+		_ = maintenanceWorker.Run(ctx)
+	}()
 	defer func() {
 		stop()
 		loops.Wait()

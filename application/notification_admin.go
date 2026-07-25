@@ -383,7 +383,10 @@ func (s *NotificationAdminService) CreateMaintenance(ctx context.Context, comman
 		if _, err := repositories.Monitors.Get(ctx, command.MonitorID); err != nil {
 			return err
 		}
-		return repositories.Maintenance.Create(ctx, record)
+		if err := repositories.Maintenance.Create(ctx, record); err != nil {
+			return err
+		}
+		return appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.created", record, now)
 	})
 	return record, err
 }
@@ -410,39 +413,86 @@ func (s *NotificationAdminService) ListMaintenance(ctx context.Context, limit, o
 }
 
 func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain.MaintenanceID) (port.MaintenanceRecord, error) {
+	if s.newID == nil {
+		return port.MaintenanceRecord{}, errors.New("end maintenance: identifier generator is required")
+	}
 	now := s.now().UTC()
 	var record port.MaintenanceRecord
 	err := s.store.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+		existing, err := repositories.Maintenance.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		if now.Before(existing.Interval.StartsAt) {
+			return notificationValidation("maintenance.startsAt", "cannot end maintenance before it starts")
+		}
+		if existing.Interval.EndsAt != nil && !existing.Interval.EndsAt.After(now) {
+			record = existing
+			return nil
+		}
 		changed, err := repositories.Maintenance.End(ctx, id, now)
 		if err != nil {
 			return err
 		}
 		if !changed {
-			if _, getErr := repositories.Maintenance.Get(ctx, id); getErr != nil {
-				return getErr
-			}
 			return port.ErrConflict
 		}
 		record, err = repositories.Maintenance.Get(ctx, id)
-		return err
+		if err != nil {
+			return err
+		}
+		return appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.ended", record, now)
 	})
 	return record, err
 }
 
 func (s *NotificationAdminService) DeleteMaintenance(ctx context.Context, id domain.MaintenanceID) error {
+	if s.newID == nil {
+		return errors.New("delete maintenance: identifier generator is required")
+	}
 	now := s.now().UTC()
 	return s.store.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+		record, err := repositories.Maintenance.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !now.Before(record.Interval.StartsAt) {
+			return port.ErrConflict
+		}
 		changed, err := repositories.Maintenance.DeleteFuture(ctx, id, now)
 		if err != nil {
 			return err
 		}
 		if !changed {
-			if _, getErr := repositories.Maintenance.Get(ctx, id); getErr != nil {
-				return getErr
-			}
 			return port.ErrConflict
 		}
-		return nil
+		return appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.deleted", record, now)
+	})
+}
+
+func appendMaintenanceAudit(
+	ctx context.Context,
+	repository port.AuditRepository,
+	id string,
+	kind string,
+	record port.MaintenanceRecord,
+	at time.Time,
+) error {
+	payload, err := json.Marshal(struct {
+		MonitorID domain.MonitorID `json:"monitorId"`
+		StartsAt  time.Time        `json:"startsAt"`
+		EndsAt    *time.Time       `json:"endsAt,omitempty"`
+		Reason    string           `json:"reason,omitempty"`
+	}{
+		MonitorID: record.Interval.MonitorID, StartsAt: record.Interval.StartsAt,
+		EndsAt: record.Interval.EndsAt, Reason: record.Interval.Reason,
+	})
+	if err != nil {
+		return fmt.Errorf("encode maintenance audit: %w", err)
+	}
+	return repository.Append(ctx, port.AuditEventRecord{
+		ID: id, Kind: kind, SubjectKind: "maintenance",
+		SubjectID: string(record.Interval.ID), Payload: payload, CreatedAt: at,
 	})
 }
 

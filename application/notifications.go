@@ -46,6 +46,34 @@ func RecordIncidentTransition(
 	if err != nil {
 		return fmt.Errorf("load monitor for incident transition: %w", err)
 	}
+	event := domain.IncidentEvent{
+		ID: newID(), IncidentID: decision.Incident.ID,
+		Action: action, PreviousState: decision.PreviousState,
+		State: decision.Incident.State, Severity: decision.Incident.Severity,
+		CreatedAt: at,
+	}
+	switch decision.Action {
+	case domain.IncidentOpen:
+		if err := repositories.Incidents.Open(ctx, decision.Incident); err != nil {
+			return fmt.Errorf("open incident: %w", err)
+		}
+	case domain.IncidentChange, domain.IncidentRecover:
+		if err := repositories.Incidents.Update(ctx, decision.Incident); err != nil {
+			return fmt.Errorf("update incident: %w", err)
+		}
+	}
+	return recordIncidentEvent(ctx, repositories, decision.Incident, monitor, event, at, newID)
+}
+
+func recordIncidentEvent(
+	ctx context.Context,
+	repositories Repositories,
+	incident domain.Incident,
+	monitor domain.Monitor,
+	event domain.IncidentEvent,
+	at time.Time,
+	newID func() string,
+) error {
 	routes, err := repositories.NotificationRoutes.ListEnabled(ctx)
 	if err != nil {
 		return fmt.Errorf("list notification routes: %w", err)
@@ -58,14 +86,8 @@ func RecordIncidentTransition(
 	for _, record := range channels {
 		byID[record.Channel.ID] = record.Channel
 	}
-	event := domain.IncidentEvent{
-		ID: newID(), IncidentID: decision.Incident.ID,
-		Action: action, PreviousState: decision.PreviousState,
-		State: decision.Incident.State, Severity: decision.Incident.Severity,
-		CreatedAt: at,
-	}
 	selected := domain.SelectNotificationRoutes(routes, byID, domain.NotificationEvent{
-		Action: action, Event: event, MonitorID: monitor.ID,
+		Action: event.Action, Event: event, MonitorID: monitor.ID,
 		Labels: monitor.MetadataLabels(),
 	})
 	maintenance, err := repositories.Maintenance.ListActive(ctx, monitor.ID, at)
@@ -73,17 +95,6 @@ func RecordIncidentTransition(
 		return fmt.Errorf("list active maintenance: %w", err)
 	}
 	suppressed := len(maintenance) != 0
-
-	switch decision.Action {
-	case domain.IncidentOpen:
-		if err := repositories.Incidents.Open(ctx, decision.Incident); err != nil {
-			return fmt.Errorf("open incident: %w", err)
-		}
-	case domain.IncidentChange, domain.IncidentRecover:
-		if err := repositories.Incidents.Update(ctx, decision.Incident); err != nil {
-			return fmt.Errorf("update incident: %w", err)
-		}
-	}
 	if err := repositories.Incidents.AppendEvent(ctx, event); err != nil {
 		return fmt.Errorf("append incident event: %w", err)
 	}
@@ -103,11 +114,11 @@ func RecordIncidentTransition(
 			ID: domain.NotificationDeliveryID(newID()), IncidentEventID: event.ID,
 			RouteID: route.ID, ChannelID: route.ChannelID, DedupeKey: identity,
 			RenderSnapshot: domain.RenderSnapshot{
-				EventID: event.ID, Action: action, IncidentID: decision.Incident.ID,
+				EventID: event.ID, Action: event.Action, IncidentID: incident.ID,
 				MonitorID: monitor.ID, MonitorName: monitor.Name,
 				MonitorDescription: monitor.Description, MonitorLabels: monitor.MetadataLabels(),
-				PreviousState: decision.PreviousState, State: decision.Incident.State,
-				Severity: decision.Incident.Severity, OccurredAt: at,
+				PreviousState: event.PreviousState, State: event.State,
+				Severity: event.Severity, OccurredAt: at,
 				RouteID: route.ID, ChannelID: route.ChannelID,
 				ChannelKind: byID[route.ChannelID].Kind,
 				Template:    route.Template, RouteUpdatedAt: route.UpdatedAt,
@@ -123,16 +134,16 @@ func RecordIncidentTransition(
 		}
 	}
 	payload, err := json.Marshal(incidentTransitionAuditPayload{
-		EventID: event.ID, Action: action, PreviousState: decision.PreviousState,
-		State: decision.Incident.State, Severity: decision.Incident.Severity,
+		EventID: event.ID, Action: event.Action, PreviousState: event.PreviousState,
+		State: event.State, Severity: event.Severity,
 		NotificationCount: len(selected), Suppressed: suppressed,
 	})
 	if err != nil {
 		return fmt.Errorf("encode incident transition audit: %w", err)
 	}
-	incidentID := decision.Incident.ID
+	incidentID := incident.ID
 	if err := repositories.Audit.Append(ctx, AuditEventRecord{
-		ID: newID(), Kind: "incident." + string(action), SubjectKind: "monitor",
+		ID: newID(), Kind: "incident." + string(event.Action), SubjectKind: "monitor",
 		SubjectID: string(monitor.ID), IncidentID: &incidentID,
 		Payload: payload, CreatedAt: at,
 	}); err != nil {

@@ -28,7 +28,7 @@ func NewMaintenanceInterval(
 	reason string,
 ) (MaintenanceInterval, error) {
 	reason = strings.TrimSpace(reason)
-	if id == "" || monitorID == "" || startsAt.IsZero() || len(reason) > maxMaintenanceReasonBytes {
+	if id == "" || monitorID == "" || startsAt.IsZero() || reason == "" || len(reason) > maxMaintenanceReasonBytes {
 		return MaintenanceInterval{}, ErrInvalidMaintenance
 	}
 	startsAt = startsAt.UTC()

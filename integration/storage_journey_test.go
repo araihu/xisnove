@@ -273,6 +273,62 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	assertHealthAndIncident(t, ctx, health, dnsMonitorID, domain.HealthUnknown, domain.IncidentWarning)
 	assertTableCount(t, primary, "incident_events", 2)
 
+	channel, err := domain.NewNotificationChannel(
+		domain.NotificationChannelID(ids.New()), "matrix channel",
+		domain.NotificationChannelShoutrrr, true, databaseNow,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Store.Repositories().NotificationChannels.Create(ctx, application.NotificationChannelRecord{
+		Channel: channel, EncryptedConfig: []byte("matrix-ciphertext"), KeyVersion: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	route, err := domain.NewNotificationRoute(domain.NotificationRoute{
+		ID: domain.NotificationRouteID(ids.New()), Name: "maintenance ended",
+		ChannelID: channel.ID, Actions: []domain.NotificationAction{domain.NotificationMaintenanceEnded},
+		Enabled: true, CreatedAt: databaseNow, UpdatedAt: databaseNow,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Store.Repositories().NotificationRoutes.Create(ctx, route); err != nil {
+		t.Fatal(err)
+	}
+	maintenanceEnd := databaseNow.Add(-time.Minute)
+	maintenance, err := domain.NewMaintenanceInterval(
+		domain.MaintenanceID(ids.New()), dnsMonitorID,
+		databaseNow.Add(-2*time.Minute), &maintenanceEnd, "matrix maintenance",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maintenance.CreatedAt = databaseNow.Add(-2 * time.Minute)
+	if err := primary.Store.Repositories().Maintenance.Create(ctx, application.MaintenanceRecord{
+		Interval: maintenance, UpdatedAt: databaseNow,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	maintenanceWorker, err := application.NewMaintenanceWorker(application.MaintenanceWorkerConfig{
+		Store: secondary.Store, Tokens: tokens, NewID: ids.New,
+		Owner: "matrix-maintenance-worker", BatchSize: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if processed, err := maintenanceWorker.RunOnce(ctx); err != nil || processed != 1 {
+		t.Fatalf("post-maintenance projection: processed=%d error=%v", processed, err)
+	}
+	if processed, err := maintenanceWorker.RunOnce(ctx); err != nil || processed != 0 {
+		t.Fatalf("idempotent post-maintenance projection: processed=%d error=%v", processed, err)
+	}
+	deliveries, err := primary.Store.Repositories().NotificationOutbox.List(ctx, 10, 0)
+	if err != nil || len(deliveries) != 1 || deliveries[0].RenderSnapshot.Action != domain.NotificationMaintenanceEnded {
+		t.Fatalf("post-maintenance deliveries = %#v, error=%v", deliveries, err)
+	}
+	assertTableCount(t, primary, "incident_events", 3)
+
 	rollbackID := domain.LocationID(ids.New())
 	rollbackLocation, err := domain.NewLocation(rollbackID, "must roll back", databaseNow)
 	if err != nil {
@@ -302,7 +358,9 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	assertTableCount(t, reopened, "check_runs", 4)
 	assertTableCount(t, reopened, "probe_results", 3)
 	assertTableCount(t, reopened, "incidents", 2)
-	assertTableCount(t, reopened, "incident_events", 2)
+	assertTableCount(t, reopened, "incident_events", 3)
+	assertTableCount(t, reopened, "maintenance_intervals", 1)
+	assertTableCount(t, reopened, "notification_outbox", 1)
 	for _, monitor := range monitors {
 		configured, err := application.NewConfigurationService(
 			reopened.Store, func() time.Time { return storageMatrixNow }, ids.New,
