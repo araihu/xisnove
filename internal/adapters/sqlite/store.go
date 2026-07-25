@@ -12,6 +12,8 @@ import (
 	dbsqlite "github.com/araihu/xisnove/db/generated/sqlite"
 	"github.com/araihu/xisnove/internal/application"
 	"github.com/araihu/xisnove/internal/domain"
+	modernsqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 type store struct {
@@ -81,7 +83,7 @@ func (r *adminRepository) Create(ctx context.Context, admin application.AdminRec
 		CreatedAt:    formatTime(admin.CreatedAt),
 	})
 	if err != nil {
-		return fmt.Errorf("create admin: %w", err)
+		return repositoryError("create admin", err)
 	}
 	return nil
 }
@@ -122,7 +124,7 @@ func (r *sessionRepository) Create(
 		RevokedAt: nullableTime(session.RevokedAt),
 	})
 	if err != nil {
-		return fmt.Errorf("create session: %w", err)
+		return repositoryError("create session", err)
 	}
 	return nil
 }
@@ -171,7 +173,7 @@ func (r *locationRepository) Create(ctx context.Context, location domain.Locatio
 		CreatedAt: formatTime(location.CreatedAt),
 	})
 	if err != nil {
-		return fmt.Errorf("create location: %w", err)
+		return repositoryError("create location", err)
 	}
 	return nil
 }
@@ -219,7 +221,7 @@ func (r *monitorRepository) Create(ctx context.Context, monitor domain.Monitor) 
 		UpdatedAt:         formatTime(monitor.UpdatedAt),
 	})
 	if err != nil {
-		return fmt.Errorf("create monitor: %w", err)
+		return repositoryError("create monitor", err)
 	}
 	return nil
 }
@@ -245,9 +247,24 @@ func (r *monitorRepository) AssignLocation(
 		Required:   boolInt(assignment.Required),
 	})
 	if err != nil {
-		return fmt.Errorf("assign monitor location: %w", err)
+		return repositoryError("assign monitor location", err)
 	}
 	return nil
+}
+
+func (r *monitorRepository) GetAssignment(
+	ctx context.Context,
+	monitorID domain.MonitorID,
+) (application.MonitorLocation, error) {
+	record, err := r.queries.GetMonitorLocation(ctx, string(monitorID))
+	if err != nil {
+		return application.MonitorLocation{}, repositoryError("get monitor assignment", err)
+	}
+	return application.MonitorLocation{
+		MonitorID:  domain.MonitorID(record.MonitorID),
+		LocationID: domain.LocationID(record.LocationID),
+		Required:   record.Required == 1,
+	}, nil
 }
 
 type healthRepository struct {
@@ -438,6 +455,11 @@ func mapLocationHealth(
 func repositoryError(operation string, err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, application.ErrNotFound)
+	}
+	var sqliteErr *modernsqlite.Error
+	if errors.As(err, &sqliteErr) &&
+		sqliteErr.Code()&0xff == sqlite3.SQLITE_CONSTRAINT {
+		return fmt.Errorf("%s: %w", operation, application.ErrConflict)
 	}
 	return fmt.Errorf("%s: %w", operation, err)
 }

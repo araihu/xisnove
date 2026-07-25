@@ -24,6 +24,13 @@ VALUES (?, ?, ?)
 ON CONFLICT (monitor_id, location_id)
 DO UPDATE SET required = excluded.required;
 
+-- name: GetMonitorLocation :one
+SELECT monitor_id, location_id, required
+FROM monitor_locations
+WHERE monitor_id = ?
+ORDER BY location_id
+LIMIT 1;
+
 -- name: ListDueMonitorLocations :many
 SELECT
   m.id AS monitor_id,

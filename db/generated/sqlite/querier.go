@@ -31,6 +31,7 @@ type Querier interface {
 	GetLocationHealth(ctx context.Context, arg GetLocationHealthParams) (LocationHealth, error)
 	GetMonitor(ctx context.Context, id string) (Monitor, error)
 	GetMonitorHealth(ctx context.Context, monitorID string) (MonitorHealth, error)
+	GetMonitorLocation(ctx context.Context, monitorID string) (MonitorLocation, error)
 	GetProbeResultByID(ctx context.Context, id string) (ProbeResult, error)
 	InsertIncidentEvent(ctx context.Context, arg InsertIncidentEventParams) error
 	InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error)

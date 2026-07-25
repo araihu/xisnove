@@ -64,6 +64,7 @@ type MonitorRepository interface {
 	Create(context.Context, domain.Monitor) error
 	Get(context.Context, domain.MonitorID) (domain.Monitor, error)
 	AssignLocation(context.Context, MonitorLocation) error
+	GetAssignment(context.Context, domain.MonitorID) (MonitorLocation, error)
 }
 
 type HealthRepository interface {

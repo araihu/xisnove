@@ -139,6 +139,21 @@ func (q *Queries) GetMonitor(ctx context.Context, id string) (Monitor, error) {
 	return i, err
 }
 
+const getMonitorLocation = `-- name: GetMonitorLocation :one
+SELECT monitor_id, location_id, required
+FROM monitor_locations
+WHERE monitor_id = ?
+ORDER BY location_id
+LIMIT 1
+`
+
+func (q *Queries) GetMonitorLocation(ctx context.Context, monitorID string) (MonitorLocation, error) {
+	row := q.db.QueryRowContext(ctx, getMonitorLocation, monitorID)
+	var i MonitorLocation
+	err := row.Scan(&i.MonitorID, &i.LocationID, &i.Required)
+	return i, err
+}
+
 const listDueMonitorLocations = `-- name: ListDueMonitorLocations :many
 SELECT
   m.id AS monitor_id,
