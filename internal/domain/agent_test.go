@@ -55,3 +55,37 @@ func TestNewAgentRejectsUnknownCapability(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestAgentAcceptsEachProbeCapabilityExactlyOnce(t *testing.T) {
+	capabilities := []domain.AgentCapability{
+		domain.CapabilityHTTP,
+		domain.CapabilityTCP,
+		domain.CapabilityDNS,
+	}
+	agent, err := domain.NewAgent(domain.NewAgentParams{
+		ID: "agent-1", LocationID: "location-1", Name: "edge",
+		Capabilities: capabilities, CredentialGeneration: 1,
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agent.Capabilities) != 3 {
+		t.Fatalf("capabilities = %#v", agent.Capabilities)
+	}
+}
+
+func TestAgentRejectsDuplicateProbeCapability(t *testing.T) {
+	_, err := domain.NewAgent(domain.NewAgentParams{
+		ID: "agent-1", LocationID: "location-1", Name: "edge",
+		Capabilities: []domain.AgentCapability{
+			domain.CapabilityTCP,
+			domain.CapabilityTCP,
+		},
+		CredentialGeneration: 1,
+		CreatedAt:            time.Now(),
+	})
+	if !errors.Is(err, domain.ErrInvalidAgent) {
+		t.Fatalf("error = %v", err)
+	}
+}

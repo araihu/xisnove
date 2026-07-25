@@ -95,6 +95,103 @@ func TestNewHTTPMonitorRejectsInvalidStatusRange(t *testing.T) {
 	}
 }
 
+func TestNewTCPMonitorNormalizesAndValidatesEndpoint(t *testing.T) {
+	createdAt := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	monitor, err := domain.NewTCPMonitor(domain.NewTCPMonitorParams{
+		ID:                "monitor-1",
+		Name:              "postgres",
+		Interval:          time.Minute,
+		Timeout:           5 * time.Second,
+		FailureThreshold:  3,
+		RecoveryThreshold: 2,
+		TCP: domain.TCPProbe{
+			Host:   " db.internal. ",
+			Port:   5432,
+			Send:   []byte("PING\r\n"),
+			Expect: []byte("PONG"),
+		},
+		CreatedAt: createdAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if monitor.Kind != domain.MonitorKindTCP ||
+		monitor.TCP.Host != "db.internal" ||
+		monitor.TCP.Port != 5432 {
+		t.Fatalf("monitor = %#v", monitor)
+	}
+	probe := monitor.Probe()
+	if probe.Kind != domain.MonitorKindTCP ||
+		probe.TCP.Host != "db.internal" ||
+		string(probe.TCP.Send) != "PING\r\n" {
+		t.Fatalf("probe = %#v", probe)
+	}
+}
+
+func TestNewTCPMonitorRejectsZeroPortAndOversizedPayload(t *testing.T) {
+	tests := map[string]domain.TCPProbe{
+		"zero port": {Host: "db.internal"},
+		"oversized send": {
+			Host: "db.internal",
+			Port: 5432,
+			Send: make([]byte, 4<<10+1),
+		},
+	}
+	for name, probe := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := domain.NewTCPMonitor(domain.NewTCPMonitorParams{
+				ID: "monitor-1", Name: "postgres",
+				Interval: time.Minute, Timeout: 5 * time.Second,
+				FailureThreshold: 3, RecoveryThreshold: 2,
+				TCP: probe, CreatedAt: time.Now(),
+			})
+			if !errors.Is(err, domain.ErrInvalidMonitor) {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func TestNewDNSMonitorNormalizesExpectedValues(t *testing.T) {
+	monitor, err := domain.NewDNSMonitor(domain.NewDNSMonitorParams{
+		ID: "monitor-1", Name: "private dns",
+		Interval: time.Minute, Timeout: 5 * time.Second,
+		FailureThreshold: 3, RecoveryThreshold: 2,
+		DNS: domain.DNSProbe{
+			Resolver:       "10.0.0.53:53",
+			Name:           " service.internal. ",
+			RecordType:     "A",
+			ExpectedValues: []string{"10.0.0.2", "10.0.0.1"},
+		},
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if monitor.Kind != domain.MonitorKindDNS ||
+		monitor.DNS.Name != "service.internal" ||
+		monitor.DNS.RecordType != "A" {
+		t.Fatalf("monitor = %#v", monitor)
+	}
+	if got := monitor.Probe(); got.Kind != domain.MonitorKindDNS ||
+		len(got.DNS.ExpectedValues) != 2 {
+		t.Fatalf("probe = %#v", got)
+	}
+}
+
+func TestNewDNSMonitorRejectsUnsupportedRecordType(t *testing.T) {
+	_, err := domain.NewDNSMonitor(domain.NewDNSMonitorParams{
+		ID: "monitor-1", Name: "dns",
+		Interval: time.Minute, Timeout: 5 * time.Second,
+		FailureThreshold: 3, RecoveryThreshold: 2,
+		DNS:       domain.DNSProbe{Name: "example.com", RecordType: "CAA"},
+		CreatedAt: time.Now(),
+	})
+	if !errors.Is(err, domain.ErrInvalidMonitor) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestNewLocationNormalizesNameAndTimestamp(t *testing.T) {
 	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.FixedZone("test", 2*60*60))
 	location, err := domain.NewLocation("location-1", " home ", now)

@@ -10,7 +10,11 @@ var ErrInvalidAgent = errors.New("invalid agent")
 
 type AgentCapability string
 
-const CapabilityHTTP AgentCapability = "http"
+const (
+	CapabilityHTTP AgentCapability = "http"
+	CapabilityTCP  AgentCapability = "tcp"
+	CapabilityDNS  AgentCapability = "dns"
+)
 
 type Agent struct {
 	ID                   AgentID
@@ -58,7 +62,9 @@ func ValidateAgentCapabilities(capabilities []AgentCapability) error {
 	}
 	seen := make(map[AgentCapability]struct{}, len(capabilities))
 	for _, capability := range capabilities {
-		if capability != CapabilityHTTP {
+		if capability != CapabilityHTTP &&
+			capability != CapabilityTCP &&
+			capability != CapabilityDNS {
 			return ErrInvalidAgent
 		}
 		if _, exists := seen[capability]; exists {
