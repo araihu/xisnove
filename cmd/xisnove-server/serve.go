@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -18,14 +19,16 @@ import (
 	"github.com/araihu/xisnove/internal/adapters/database"
 	"github.com/araihu/xisnove/internal/adapters/httpapi"
 	"github.com/araihu/xisnove/internal/adapters/ids"
+	"github.com/araihu/xisnove/internal/adapters/observability"
 )
 
-func serveCommand(parent context.Context, args []string) error {
+func serveCommand(parent context.Context, args []string) (returnErr error) {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	databaseFlags := addDatabaseFlags(flags)
 	keyFlags := addNotificationKeyFlags(flags, os.Getenv)
 	notificationWorkerFlags := addNotificationWorkerFlags(flags)
 	retentionWorkerFlags := addRetentionWorkerFlags(flags)
+	observabilityFlags := addObservabilityFlags(flags)
 	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	replicas := flags.Int("replicas", 1, "expected number of server replicas")
 	if err := flags.Parse(args); err != nil {
@@ -38,15 +41,35 @@ func serveCommand(parent context.Context, args []string) error {
 	if err := validateReplicaCount(config.Profile, *replicas); err != nil {
 		return err
 	}
+	slog.SetDefault(observability.NewJSONLogger(os.Stdout, observability.LogConfig{
+		SensitiveValues: []string{config.URL, config.AuthToken},
+	}))
+	tracing, err := observabilityFlags.tracing(parent)
+	if err != nil {
+		return fmt.Errorf("configure tracing: %w", err)
+	}
+	traceClosed := false
+	databaseClosed := false
+	var handle *database.Handle
+	defer func() {
+		if !traceClosed {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			returnErr = errors.Join(returnErr, tracing.Shutdown(ctx))
+			cancel()
+		}
+		if handle != nil && !databaseClosed {
+			returnErr = errors.Join(returnErr, handle.Close())
+		}
+	}()
+	tracing.InstallGlobal()
 	sealer, err := keyFlags.load()
 	if err != nil {
 		return err
 	}
-	handle, err := database.Open(parent, config)
+	handle, err = database.Open(parent, config)
 	if err != nil {
 		return err
 	}
-	defer handle.Close()
 	if err := handle.Ready(parent); err != nil {
 		return fmt.Errorf("database is not ready; run db migrate: %w", err)
 	}
@@ -56,10 +79,18 @@ func serveCommand(parent context.Context, args []string) error {
 	logNotificationKeyring(sealer)
 
 	store := handle.Store
+	metrics := observability.NewMetrics()
+	var schemaVersion int64
+	if err := handle.DB.QueryRowContext(parent, "SELECT COALESCE(MAX(version_id), 0) FROM schema_migrations WHERE is_applied").Scan(&schemaVersion); err == nil {
+		metrics.SetSchemaVersion(schemaVersion)
+	} else {
+		slog.Warn("schema version metric unavailable", "error_class", "schema_version_query", "error", err)
+	}
+	lifecycle := newServerLifecycle()
 	const leaseDuration = 45 * time.Second
 	tokens := xiscrypto.NewProductionTokenIssuer()
 	notificationWorker, err := notificationWorkerFlags.build(
-		store, sealer, tokens, ids.NewUUID, ids.NewUUID(),
+		store, sealer, tokens, ids.NewUUID, ids.NewUUID(), deliveryObserver(metrics),
 	)
 	if err != nil {
 		return fmt.Errorf("configure notification worker: %w", err)
@@ -94,10 +125,13 @@ func serveCommand(parent context.Context, args []string) error {
 			Agents: agents,
 			Lease: application.NewLeaseService(application.LeaseServiceConfig{
 				Store: store, Tokens: tokens, LeaseDuration: leaseDuration,
+				ObserveLease: leaseObserver(metrics),
 			}),
 			Results: application.NewResultService(application.ResultServiceConfig{
 				Store: store, Tokens: tokens, Now: xisclock.Now, NewID: ids.NewUUID,
-				LeaseDuration: leaseDuration,
+				LeaseDuration:            leaseDuration,
+				ObserveResult:            resultObserver(metrics),
+				ObserveMonitorTransition: transitionObserver(metrics),
 			}),
 			Health: application.NewHealthService(store),
 			Notifications: application.NewNotificationAdminService(
@@ -106,44 +140,68 @@ func serveCommand(parent context.Context, args []string) error {
 				},
 			),
 		}),
-		Ready: func(ctx context.Context) error { return handle.Ready(ctx) },
+		Ready:   func(ctx context.Context) error { return lifecycle.Ready(ctx, handle.Ready) },
+		Metrics: metrics.Handler(), AdmitWork: lifecycle.AdmitClaim,
 	})
 	if err != nil {
 		return err
 	}
+	handler = tracing.HTTPMiddleware(handler)
 	scheduler := application.NewScheduler(store, ids.NewUUID)
-	staleness := application.NewStalenessService(store, ids.NewUUID)
-	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	staleness := application.NewStalenessServiceWithObserver(store, ids.NewUUID, transitionObserver(metrics))
+	claims := lifecycle.ClaimContext()
 	var loops sync.WaitGroup
-	loops.Add(2)
+	loops.Add(3)
 	go func() {
 		defer loops.Done()
-		runScheduler(ctx, scheduler)
+		runLifecycleLoop(claims, lifecycle, tracing, time.Second, "scheduler.cycle", func(ctx context.Context) error {
+			_, err := scheduler.EnqueueDue(ctx, 100)
+			return err
+		}, func(ctx context.Context, err error) {
+			outcome := observability.CycleSuccess
+			if err != nil {
+				outcome = observability.CycleFailure
+			}
+			metrics.ObserveSchedulerCycle(outcome)
+			logCycleResult("scheduler tick failed", "enqueue_due")(ctx, err)
+		})
 	}()
 	go func() {
 		defer loops.Done()
-		runStaleness(ctx, staleness)
+		runLifecycleLoop(claims, lifecycle, tracing, time.Second, "staleness.cycle", func(ctx context.Context) error {
+			_, err := staleness.MarkDue(ctx, 100)
+			return err
+		}, logCycleResult("staleness tick failed", "mark_due"))
+	}()
+	go func() {
+		defer loops.Done()
+		runDatabaseMetrics(claims, handle.DB, metrics)
 	}()
 	if notificationWorker != nil {
 		loops.Add(1)
 		go func() {
 			defer loops.Done()
-			_ = notificationWorker.Run(ctx)
+			runLifecycleLoop(claims, lifecycle, tracing, notificationWorkerFlags.pollInterval, "notification.delivery", func(ctx context.Context) error {
+				_, err := notificationWorker.RunOnce(ctx)
+				return err
+			}, logCycleResult("notification delivery cycle failed", "delivery_cycle"))
 		}()
 	}
 	loops.Add(1)
 	go func() {
 		defer loops.Done()
-		_ = maintenanceWorker.Run(ctx)
+		runLifecycleLoop(claims, lifecycle, tracing, time.Second, "maintenance.projection", func(ctx context.Context) error {
+			_, err := maintenanceWorker.RunOnce(ctx)
+			return err
+		}, logCycleResult("maintenance projection cycle failed", "maintenance_cycle"))
 	}()
 	loops.Add(1)
 	go func() {
 		defer loops.Done()
-		_ = retentionWorker.Run(ctx)
-	}()
-	defer func() {
-		stop()
-		loops.Wait()
+		runLifecycleLoop(claims, lifecycle, tracing, retentionWorkerFlags.pollInterval, "retention.cycle", func(ctx context.Context) error {
+			_, err := retentionWorker.RunOnce(ctx)
+			return err
+		}, logCycleResult("retention cycle failed", "retention_cycle"))
 	}()
 
 	server := &http.Server{
@@ -153,47 +211,43 @@ func serveCommand(parent context.Context, args []string) error {
 		WriteTimeout:      40 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
 	errs := make(chan error, 1)
 	go func() { errs <- server.ListenAndServe() }()
+	var serveErr error
 	select {
-	case <-ctx.Done():
+	case <-parent.Done():
+		serveErr = parent.Err()
+	case <-signals:
 	case err := <-errs:
 		if err != nil && err != http.ErrServerClosed {
-			return err
+			serveErr = err
 		}
-		return nil
 	}
+	forcedWatchDone := make(chan struct{})
+	go func() {
+		select {
+		case <-signals:
+			lifecycle.Force()
+			_ = server.Close()
+		case <-forcedWatchDone:
+		}
+	}()
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return server.Shutdown(shutdown)
-}
-
-func runStaleness(ctx context.Context, staleness *application.StalenessService) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		if _, err := staleness.MarkDue(ctx, 100); err != nil && ctx.Err() == nil {
-			slog.ErrorContext(ctx, "staleness tick failed", "error_class", "mark_due")
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
-func runScheduler(ctx context.Context, scheduler *application.Scheduler) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		if _, err := scheduler.EnqueueDue(ctx, 100); err != nil && ctx.Err() == nil {
-			slog.ErrorContext(ctx, "scheduler tick failed", "error_class", "enqueue_due")
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
+	shutdownErr := lifecycle.Shutdown(shutdown, func(ctx context.Context) error {
+		httpErr := server.Shutdown(ctx)
+		loops.Wait()
+		return httpErr
+	})
+	close(forcedWatchDone)
+	traceContext, cancelTrace := context.WithTimeout(context.Background(), 10*time.Second)
+	traceErr := tracing.Shutdown(traceContext)
+	cancelTrace()
+	traceClosed = true
+	databaseErr := handle.Close()
+	databaseClosed = true
+	return errors.Join(serveErr, shutdownErr, traceErr, databaseErr)
 }

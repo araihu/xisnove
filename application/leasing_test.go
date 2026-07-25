@@ -29,10 +29,14 @@ func TestExpiredLeaseCanBeReclaimedByCompatibleAgent(t *testing.T) {
 		Timeout: 5 * time.Second,
 		Status:  "available",
 	}
+	var observations []application.LeaseObservation
 	service := application.NewLeaseService(application.LeaseServiceConfig{
 		Store:         store,
 		Tokens:        &leaseTokenIssuer{},
 		LeaseDuration: 30 * time.Second,
+		ObserveLease: func(observation application.LeaseObservation) {
+			observations = append(observations, observation)
+		},
 	})
 
 	first, err := service.LeaseProbe(
@@ -55,6 +59,38 @@ func TestExpiredLeaseCanBeReclaimedByCompatibleAgent(t *testing.T) {
 	}
 	if store.runs["run-1"].LeaseAttempt != 2 {
 		t.Fatalf("LeaseAttempt = %d", store.runs["run-1"].LeaseAttempt)
+	}
+	want := []application.LeaseObservation{
+		{Outcome: application.LeaseClaimed},
+		{Outcome: application.LeaseExpired},
+	}
+	if fmt.Sprint(observations) != fmt.Sprint(want) {
+		t.Fatalf("lease observations = %#v, want %#v", observations, want)
+	}
+}
+
+func TestLeaseProbeObservesNoWorkOnceAfterPollingEnds(t *testing.T) {
+	store := newWorkStore(time.Now())
+	store.agents["a1"] = activeHTTPAgent("a1", "location-1")
+	var observations []application.LeaseObservation
+	service := application.NewLeaseService(application.LeaseServiceConfig{
+		Store: store, Tokens: &leaseTokenIssuer{}, LeaseDuration: 30 * time.Second,
+		PollInterval: time.Millisecond,
+		ObserveLease: func(observation application.LeaseObservation) {
+			observations = append(observations, observation)
+		},
+	})
+
+	_, err := service.LeaseProbe(
+		context.Background(), "a1",
+		[]domain.AgentCapability{domain.CapabilityHTTP}, 3*time.Millisecond,
+	)
+	if !errors.Is(err, application.ErrNoWork) {
+		t.Fatalf("error = %v", err)
+	}
+	want := []application.LeaseObservation{{Outcome: application.LeaseNoWork}}
+	if fmt.Sprint(observations) != fmt.Sprint(want) {
+		t.Fatalf("lease observations = %#v, want %#v", observations, want)
 	}
 }
 

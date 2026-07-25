@@ -65,20 +65,26 @@ func Provision(ctx context.Context, cfg Config) (*Database, error) {
 	if err != nil {
 		return nil, fmt.Errorf("generate disposable Turso database name: %w", err)
 	}
-	created, err := configured.createDatabase(ctx, name, cfg.Group)
-	if err != nil {
-		return nil, err
-	}
 	database := &Database{
-		Name:          created.Name,
-		ID:            created.ID,
-		Hostname:      created.Hostname,
-		URL:           "libsql://" + created.Hostname,
+		Name:          name,
 		Organization:  organization,
 		client:        configured,
 		deleteTimeout: cfg.DeleteTimeout,
 		pollInterval:  cfg.PollInterval,
 	}
+	created, err := configured.createDatabase(ctx, name, cfg.Group)
+	if err != nil {
+		cleanupCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx),
+			database.effectiveDeleteTimeout(),
+		)
+		defer cancel()
+		return nil, errors.Join(err, database.Delete(cleanupCtx))
+	}
+	database.Name = created.Name
+	database.ID = created.ID
+	database.Hostname = created.Hostname
+	database.URL = "libsql://" + created.Hostname
 
 	token, err := configured.createDatabaseToken(ctx, database.Name)
 	if err != nil {

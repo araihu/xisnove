@@ -49,6 +49,7 @@ func (v *notificationWorkerFlagValues) build(
 	tokens application.TokenIssuer,
 	newID func() string,
 	owner string,
+	observe func(application.DeliveryObservation),
 ) (*application.DeliveryWorker, error) {
 	if err := v.validate(); err != nil {
 		return nil, err
@@ -86,6 +87,7 @@ func (v *notificationWorkerFlagValues) build(
 		LeaseDuration: v.leaseDuration, PollInterval: v.pollInterval,
 		SendTimeout: v.sendTimeout, MaxAttempts: uint32(v.maxAttempts),
 		BackoffBase: v.backoffBase, BackoffCap: v.backoffCap,
+		ObserveDelivery: observe,
 		OnError: func(err error) {
 			slog.Error("notification delivery cycle failed", "error_class", "delivery_cycle", "error", err)
 		},

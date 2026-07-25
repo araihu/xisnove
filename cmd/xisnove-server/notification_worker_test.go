@@ -44,7 +44,7 @@ func TestNotificationWorkerBuildSkipsWithoutKeyringAndRejectsUnsafeBounds(t *tes
 		pollInterval: time.Second, sendTimeout: 15 * time.Second,
 		maxAttempts: 8, backoffBase: 5 * time.Second, backoffCap: 15 * time.Minute,
 	}
-	worker, err := values.build(nil, nil, nil, nil, "")
+	worker, err := values.build(nil, nil, nil, nil, "", nil)
 	if err != nil || worker != nil {
 		t.Fatalf("build without keyring = %#v, %v", worker, err)
 	}
@@ -53,7 +53,7 @@ func TestNotificationWorkerBuildSkipsWithoutKeyringAndRejectsUnsafeBounds(t *tes
 		pollInterval: time.Second, sendTimeout: 2 * time.Second,
 		maxAttempts: 1, backoffBase: time.Second, backoffCap: time.Second,
 	}
-	_, err = values.build(stubUnitOfWork{}, plainCommandSealer{}, stubTokenIssuer{}, func() string { return "id" }, "owner")
+	_, err = values.build(stubUnitOfWork{}, plainCommandSealer{}, stubTokenIssuer{}, func() string { return "id" }, "owner", nil)
 	if err == nil || !strings.Contains(err.Error(), "operational bounds") {
 		t.Fatalf("unsafe bounds error = %v", err)
 	}

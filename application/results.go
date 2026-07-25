@@ -47,19 +47,23 @@ type ResultAcknowledgement struct {
 }
 
 type ResultServiceConfig struct {
-	Store         UnitOfWork
-	Tokens        TokenIssuer
-	Now           func() time.Time
-	NewID         func() string
-	LeaseDuration time.Duration
+	Store                    UnitOfWork
+	Tokens                   TokenIssuer
+	Now                      func() time.Time
+	NewID                    func() string
+	LeaseDuration            time.Duration
+	ObserveResult            func(ResultObservation)
+	ObserveMonitorTransition func(MonitorTransitionObservation)
 }
 
 type ResultService struct {
-	store         UnitOfWork
-	tokens        TokenIssuer
-	now           func() time.Time
-	newID         func() string
-	leaseDuration time.Duration
+	store                    UnitOfWork
+	tokens                   TokenIssuer
+	now                      func() time.Time
+	newID                    func() string
+	leaseDuration            time.Duration
+	observeResult            func(ResultObservation)
+	observeMonitorTransition func(MonitorTransitionObservation)
 }
 
 func NewResultService(config ResultServiceConfig) *ResultService {
@@ -69,7 +73,9 @@ func NewResultService(config ResultServiceConfig) *ResultService {
 	}
 	return &ResultService{
 		store: config.Store, tokens: config.Tokens, now: config.Now, newID: config.NewID,
-		leaseDuration: leaseDuration,
+		leaseDuration:            leaseDuration,
+		observeResult:            config.ObserveResult,
+		observeMonitorTransition: config.ObserveMonitorTransition,
 	}
 }
 
@@ -87,6 +93,8 @@ func (s *ResultService) UploadBatch(
 	acknowledgements := make([]ResultAcknowledgement, 0, len(commands))
 	for _, command := range commands {
 		status := ResultAccepted
+		var transition MonitorTransitionObservation
+		transitioned := false
 		err := s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
 			duplicate, err := resultExists(ctx, repositories.Results, command)
 			if err != nil {
@@ -96,7 +104,9 @@ func (s *ResultService) UploadBatch(
 				status = ResultDuplicate
 				return nil
 			}
-			return s.ingest(ctx, repositories, agentID, command)
+			var ingestErr error
+			transition, transitioned, ingestErr = s.ingest(ctx, repositories, agentID, command)
+			return ingestErr
 		})
 		if err != nil {
 			return nil, fmt.Errorf("ingest result %s: %w", command.ID, err)
@@ -104,6 +114,18 @@ func (s *ResultService) UploadBatch(
 		acknowledgements = append(acknowledgements, ResultAcknowledgement{
 			ResultID: command.ID, Status: status,
 		})
+		if s.observeResult != nil {
+			observation := ResultObservation{Status: status}
+			if status == ResultAccepted {
+				observation.Outcome = command.Outcome
+				observation.Latency = command.Latency
+				observation.TimedOut = command.ErrorCode == "timeout"
+			}
+			s.observeResult(observation)
+		}
+		if transitioned && s.observeMonitorTransition != nil {
+			s.observeMonitorTransition(transition)
+		}
 	}
 	return acknowledgements, nil
 }
@@ -131,18 +153,18 @@ func (s *ResultService) ingest(
 	repositories Repositories,
 	agentID domain.AgentID,
 	command ProbeResultCommand,
-) error {
+) (MonitorTransitionObservation, bool, error) {
 	run, err := repositories.Runs.Get(ctx, command.RunID)
 	if err != nil {
-		return err
+		return MonitorTransitionObservation{}, false, err
 	}
 	receivedAt := s.now().UTC()
 	if err := validateResult(command, run, agentID, receivedAt); err != nil {
-		return err
+		return MonitorTransitionObservation{}, false, err
 	}
 	expectedHash := s.tokens.Hash(command.LeaseToken)
 	if subtle.ConstantTimeCompare(expectedHash, run.LeaseTokenHash) != 1 {
-		return &ValidationError{Fields: map[string]string{"leaseToken": "is invalid"}}
+		return MonitorTransitionObservation{}, false, &ValidationError{Fields: map[string]string{"leaseToken": "is invalid"}}
 	}
 
 	inserted, err := repositories.Results.Insert(ctx, ProbeResultRecord{
@@ -163,30 +185,30 @@ func (s *ResultService) ingest(
 		ProtocolTimings:     command.ProtocolTimings,
 	})
 	if err != nil {
-		return err
+		return MonitorTransitionObservation{}, false, err
 	}
 	if !inserted {
-		return ErrConflict
+		return MonitorTransitionObservation{}, false, ErrConflict
 	}
 	resolved, err := repositories.Runs.Resolve(
 		ctx, run.ID, agentID, expectedHash, receivedAt,
 	)
 	if err != nil {
-		return err
+		return MonitorTransitionObservation{}, false, err
 	}
 	if !resolved {
-		return &ValidationError{Fields: map[string]string{"runId": "lease is no longer active"}}
+		return MonitorTransitionObservation{}, false, &ValidationError{Fields: map[string]string{"runId": "lease is no longer active"}}
 	}
 
 	monitor, err := repositories.Monitors.Get(ctx, run.MonitorID)
 	if err != nil {
-		return err
+		return MonitorTransitionObservation{}, false, err
 	}
 	locationHealth, err := repositories.Health.GetLocation(
 		ctx, run.MonitorID, run.LocationID,
 	)
 	if err != nil {
-		return err
+		return MonitorTransitionObservation{}, false, err
 	}
 	locationHealth = domain.ApplyProbe(
 		locationHealth,
@@ -202,9 +224,9 @@ func (s *ResultService) ingest(
 		2*monitor.Interval + monitor.Timeout + s.leaseDuration,
 	)
 	if err := repositories.Health.UpsertLocation(ctx, locationHealth); err != nil {
-		return err
+		return MonitorTransitionObservation{}, false, err
 	}
-	return projectAggregateAndIncident(
+	return projectAggregateAndIncidentObserved(
 		ctx, repositories, run.MonitorID, command.FinishedAt, s.newID, false,
 	)
 }

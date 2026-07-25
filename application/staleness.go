@@ -9,12 +9,24 @@ import (
 )
 
 type StalenessService struct {
-	store UnitOfWork
-	newID func() string
+	store                    UnitOfWork
+	newID                    func() string
+	observeMonitorTransition func(MonitorTransitionObservation)
 }
 
 func NewStalenessService(store UnitOfWork, newID func() string) *StalenessService {
-	return &StalenessService{store: store, newID: newID}
+	return NewStalenessServiceWithObserver(store, newID, nil)
+
+}
+
+// NewStalenessServiceWithObserver preserves the original constructor while
+// allowing the composition root to observe committed aggregate transitions.
+func NewStalenessServiceWithObserver(
+	store UnitOfWork,
+	newID func() string,
+	observe func(MonitorTransitionObservation),
+) *StalenessService {
+	return &StalenessService{store: store, newID: newID, observeMonitorTransition: observe}
 }
 
 func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) {
@@ -41,6 +53,8 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 	marked := 0
 	for _, candidate := range due {
 		changed := false
+		transitioned := false
+		var transition MonitorTransitionObservation
 		err := s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
 			changed, err = repositories.Health.ClaimStale(
 				ctx,
@@ -52,7 +66,7 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 			if err != nil || !changed {
 				return err
 			}
-			return projectAggregateAndIncident(
+			transition, transitioned, err = projectAggregateAndIncidentObserved(
 				ctx,
 				repositories,
 				candidate.MonitorID,
@@ -60,6 +74,7 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 				s.newID,
 				true,
 			)
+			return err
 		})
 		if err != nil {
 			return marked, fmt.Errorf(
@@ -71,6 +86,9 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 		}
 		if changed {
 			marked++
+		}
+		if transitioned && s.observeMonitorTransition != nil {
+			s.observeMonitorTransition(transition)
 		}
 	}
 	return marked, nil

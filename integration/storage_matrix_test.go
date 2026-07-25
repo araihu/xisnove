@@ -77,6 +77,21 @@ func newPostgresStorageHarness(t *testing.T) *storageHarness {
 
 func newTursoCloudStorageHarness(t *testing.T) *storageHarness {
 	t.Helper()
+	rawURL := os.Getenv("XISNOVE_TEST_TURSO_URL")
+	authToken := os.Getenv("XISNOVE_TEST_TURSO_TOKEN")
+	if rawURL != "" || authToken != "" {
+		if rawURL == "" || authToken == "" {
+			t.Fatal("XISNOVE_TEST_TURSO_URL and XISNOVE_TEST_TURSO_TOKEN must be set together")
+		}
+		if os.Getenv("XISNOVE_TEST_TURSO_ALLOW_RESET") != "1" {
+			t.Fatal("XISNOVE_TEST_TURSO_ALLOW_RESET=1 is required because the managed integration journey deletes all Xisnove rows")
+		}
+		harness := openStorageHarness(t, database.Config{
+			Profile: database.ProfileTursoCloud, URL: rawURL, AuthToken: authToken,
+		})
+		resetIntegrationStorage(t, harness.primary)
+		return harness
+	}
 	apiKey := os.Getenv("TURSO_API_KEY")
 	if apiKey == "" {
 		t.Skip("TURSO_API_KEY is not set")
@@ -106,6 +121,21 @@ func newTursoCloudStorageHarness(t *testing.T) *storageHarness {
 		URL:       disposable.URL,
 		AuthToken: disposable.AuthToken,
 	})
+}
+
+func resetIntegrationStorage(t *testing.T, handle *database.Handle) {
+	t.Helper()
+	for _, table := range []string{
+		"notification_delivery_attempts", "notification_outbox", "notification_routes",
+		"notification_channels", "maintenance_intervals", "audit_events", "daily_uptime",
+		"operation_leases", "incident_events", "incidents", "monitor_health", "location_health",
+		"probe_results", "check_runs", "agent_enrollment_tokens", "agents", "monitor_locations",
+		"monitors", "locations", "sessions", "admins",
+	} {
+		if _, err := handle.DB.ExecContext(context.Background(), "DELETE FROM "+table); err != nil {
+			t.Fatalf("reset integration table %s: %v", table, err)
+		}
+	}
 }
 
 func openStorageHarness(t *testing.T, config database.Config) *storageHarness {

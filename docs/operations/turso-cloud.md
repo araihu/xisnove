@@ -35,9 +35,12 @@ after the migration job succeeds.
 
 ## Protected conformance workflow
 
-The `managed Turso conformance` workflow runs weekly, manually, and for release
-events. It runs both repository conformance and the same full storage journey
-used for SQLite, local Turso, and PostgreSQL, then retains a JUnit report.
+The `managed Turso conformance` workflow runs weekly, manually, and as a
+reusable `workflow_call` gate that a release workflow must complete before it
+publishes. It runs both repository conformance and the same full storage
+journey used for SQLite, local Turso, and PostgreSQL, then retains a JUnit
+report. Its cleanup is a separate bounded job, so a test-job timeout still
+attempts deletion and verifies absence.
 Configure:
 
 - repository secret `TURSO_API_KEY`, scoped to the test organization;
@@ -63,5 +66,8 @@ go test -race ./integration -run 'TestStorageMatrix/TursoCloud' -count=1
 ```
 
 Alternatively, `XISNOVE_TEST_TURSO_URL` and `XISNOVE_TEST_TURSO_TOKEN` may be
-set together to run against a database whose lifecycle is managed externally.
-That mode never deletes the supplied database.
+set together to run against a dedicated scratch database whose lifecycle is
+managed externally. Because both suites delete all Xisnove rows between
+journeys, this mode also requires `XISNOVE_TEST_TURSO_ALLOW_RESET=1`. It never
+deletes the supplied database itself, but it is destructive to its Xisnove
+table contents.

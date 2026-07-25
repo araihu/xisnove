@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -43,6 +44,53 @@ func TestDeliveryWorkerDeliversOutsideTransactionAndClearsConfiguration(t *testi
 	attempts := fixture.attempts(t, ctx)
 	if record.State != domain.DeliveryDelivered || record.AttemptCount != 1 || len(attempts) != 1 || attempts[0].ProviderReceipt != "receipt-1" {
 		t.Fatalf("record = %#v, attempts = %#v", record, attempts)
+	}
+}
+
+func TestDeliveryWorkerObservesCommittedBoundedOutcomeWithoutDiagnosticPayload(t *testing.T) {
+	ctx := context.Background()
+	fixture := newWorkerFixture(t, ctx)
+	observed := make(chan DeliveryObservation, 1)
+	worker := fixture.worker(t, transportFunc(func(context.Context, TransportDelivery) TransportResult {
+		return NewTransportResult(
+			TransportTransientFailure,
+			"provider_retryable",
+			"secret provider diagnostic",
+			"secret provider receipt",
+		)
+	}), func(config *DeliveryWorkerConfig) {
+		config.ObserveDelivery = func(observation DeliveryObservation) {
+			if fixture.store.inTransaction.Load() != 0 {
+				t.Error("delivery observed before transaction committed")
+			}
+			observed <- observation
+		}
+	})
+
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("RunOnce() = %d, %v", count, err)
+	}
+	want := DeliveryObservation{
+		AttemptOutcome:  DeliveryAttemptTransientFailure,
+		FinalOutcome:    DeliveryFinalRetry,
+		DiagnosticClass: DeliveryDiagnosticProvider,
+	}
+	select {
+	case got := <-observed:
+		if got != want {
+			t.Fatalf("delivery observation = %#v, want %#v", got, want)
+		}
+		serialized := fmt.Sprint(got)
+		if strings.Contains(serialized, "secret provider diagnostic") || strings.Contains(serialized, "secret provider receipt") {
+			t.Fatalf("delivery observation leaked provider payload: %q", serialized)
+		}
+	default:
+		t.Fatal("delivery outcome was not observed")
+	}
+	select {
+	case extra := <-observed:
+		t.Fatalf("extra delivery observation = %#v", extra)
+	default:
 	}
 }
 

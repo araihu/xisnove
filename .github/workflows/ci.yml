@@ -8,6 +8,8 @@ on:
 jobs:
   root:
     runs-on: ubuntu-latest
+    env:
+      XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
     services:
       postgres:
         image: postgres:18.3-alpine3.23
@@ -31,19 +33,16 @@ jobs:
           cache-dependency-path: |
             go.sum
             agent/go.sum
-      - run: go tool vacuum lint -d api/openapi.yaml
-      - run: go generate ./...
-      - run: go tool sqlc generate
-      - run: go tool sqlc diff
-      - run: git diff --exit-code
-      - run: go vet ./...
-      - run: go test -race ./...
-        env:
-          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
-      - name: Verify identical storage journey across local profiles
-        env:
-          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
-        run: go test -race ./integration -run TestStorageMatrix -count=1
+      - name: Verify generated artifacts and API contracts
+        run: make generated-check
+      - name: Verify external-module isolation
+        run: make module-check
+      - name: Verify SQLite, local Turso, and PostgreSQL operations journeys
+        run: make storage-check
+      - name: Verify notification faults, recovery, retention, observability, and lifecycle
+        run: make operations-check
+      - name: Run root race suite
+        run: make race-check
       - name: PostgreSQL backup and restore smoke
         env:
           POSTGRES_HOST: 127.0.0.1
@@ -52,7 +51,6 @@ jobs:
           POSTGRES_PASSWORD: xisnove
           POSTGRES_DATABASE: xisnove
           POSTGRES_RESTORE_DATABASE: xisnove_restore_smoke
-          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
           XISNOVE_TEST_POSTGRES_RESTORE_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove_restore_smoke?sslmode=disable
         run: bash scripts/postgres-backup-smoke.sh
       - name: Check OpenAPI compatibility

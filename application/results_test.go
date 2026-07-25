@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +89,8 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 	}
 
 	ids := 0
+	var resultObservations []application.ResultObservation
+	var transitionObservations []application.MonitorTransitionObservation
 	service := application.NewResultService(application.ResultServiceConfig{
 		Store:  store,
 		Tokens: tokens,
@@ -97,6 +100,12 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 			return fmt.Sprintf("00000000-0000-4000-8000-%012d", ids+10)
 		},
 		LeaseDuration: 45 * time.Second,
+		ObserveResult: func(observation application.ResultObservation) {
+			resultObservations = append(resultObservations, observation)
+		},
+		ObserveMonitorTransition: func(observation application.MonitorTransitionObservation) {
+			transitionObservations = append(transitionObservations, observation)
+		},
 	})
 
 	var last application.ProbeResultCommand
@@ -117,12 +126,18 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+		errorCode := "status_mismatch"
+		diagnostic := "HTTP 503"
+		if i == 3 {
+			errorCode = "timeout"
+			diagnostic = "secret probe diagnostic"
+		}
 		last = application.ProbeResultCommand{
 			ID:    fmt.Sprintf("00000000-0000-4000-8000-%012d", i+200),
 			RunID: runID, LeaseToken: rawLease,
 			StartedAt: now, FinishedAt: now.Add(time.Second),
 			Outcome: application.ProbeFailed, Latency: time.Second,
-			ErrorCode: "status_mismatch", DiagnosticSample: "HTTP 503",
+			ErrorCode: errorCode, DiagnosticSample: diagnostic,
 		}
 		acks, err := service.UploadBatch(ctx, agent.ID, []application.ProbeResultCommand{last})
 		if err != nil {
@@ -162,6 +177,26 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 	}
 	if acks[0].Status != application.ResultDuplicate {
 		t.Fatalf("duplicate ack = %#v", acks[0])
+	}
+	wantResults := []application.ResultObservation{
+		{Status: application.ResultAccepted, Outcome: application.ProbeFailed, Latency: time.Second},
+		{Status: application.ResultAccepted, Outcome: application.ProbeFailed, Latency: time.Second},
+		{Status: application.ResultAccepted, Outcome: application.ProbeFailed, Latency: time.Second, TimedOut: true},
+		{Status: application.ResultDuplicate},
+	}
+	if fmt.Sprint(resultObservations) != fmt.Sprint(wantResults) {
+		t.Fatalf("result observations = %#v, want %#v", resultObservations, wantResults)
+	}
+	if strings.Contains(fmt.Sprint(resultObservations), "secret probe diagnostic") {
+		t.Fatalf("result observation leaked diagnostic payload: %#v", resultObservations)
+	}
+	wantTransitions := []application.MonitorTransitionObservation{{
+		From: domain.HealthPending, To: domain.HealthUnknown,
+	}, {
+		From: domain.HealthUnknown, To: domain.HealthDown,
+	}}
+	if fmt.Sprint(transitionObservations) != fmt.Sprint(wantTransitions) {
+		t.Fatalf("transition observations = %#v, want %#v", transitionObservations, wantTransitions)
 	}
 	var eventCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM incident_events").Scan(&eventCount); err != nil {

@@ -2,10 +2,12 @@ name: managed Turso conformance
 
 on:
   workflow_dispatch:
+  workflow_call:
+    secrets:
+      TURSO_API_KEY:
+        required: true
   schedule:
     - cron: "23 5 * * 1"
-  release:
-    types: [published, prereleased]
 
 permissions:
   contents: read
@@ -16,9 +18,15 @@ concurrency:
 
 jobs:
   conformance:
+    outputs:
+      database_name: ${{ steps.database-name.outputs.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
+      - name: Select deterministic disposable database name
+        id: database-name
+        shell: bash
+        run: printf 'name=xisnove-ci-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >>"$GITHUB_OUTPUT"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -26,24 +34,129 @@ jobs:
           cache-dependency-path: go.sum
       - name: Install pinned test reporter
         run: go install gotest.tools/gotestsum@v1.13.0
-      - name: Run managed Turso repository conformance
+      - name: Provision one disposable managed Turso database
+        id: provision
+        shell: bash
         env:
           TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
           TURSO_ORG: ${{ vars.TURSO_ORG }}
           TURSO_GROUP: ${{ vars.TURSO_GROUP }}
-        run: go test -race ./internal/adapters/tursocloud -run Conformance -count=1
-      - name: Run managed Turso storage journey
-        env:
-          TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
-          TURSO_ORG: ${{ vars.TURSO_ORG }}
-          TURSO_GROUP: ${{ vars.TURSO_GROUP }}
+          DATABASE_NAME: ${{ steps.database-name.outputs.name }}
+        run: |
+          set -euo pipefail
+          test -n "$TURSO_API_KEY"
+          test -n "$TURSO_ORG"
+          test -n "$TURSO_GROUP"
+
+          api="https://api.turso.tech/v1/organizations/${TURSO_ORG}"
+          authorization="Authorization: Bearer ${TURSO_API_KEY}"
+          groups_json="$(curl --silent --show-error --fail-with-body \
+            -H "$authorization" "${api}/groups")"
+          delete_protection="$(jq -er --arg group "$TURSO_GROUP" \
+            '.groups[] | select(.name == $group) | .delete_protection' \
+            <<<"$groups_json")"
+          if [[ "$delete_protection" != "false" ]]; then
+            echo "TURSO_GROUP must be a dedicated group with delete protection disabled" >&2
+            exit 1
+          fi
+
+          cleanup_on_error() {
+            status="$(curl --silent --show-error -o /tmp/turso-provision-cleanup.json \
+              -w '%{http_code}' -X DELETE -H "$authorization" \
+              "${api}/databases/${DATABASE_NAME}")"
+            if [[ "$status" != "200" && "$status" != "204" && "$status" != "404" ]]; then
+              cat /tmp/turso-provision-cleanup.json >&2
+              return 1
+            fi
+            for _ in {1..60}; do
+              status="$(curl --silent --show-error -o /tmp/turso-provision-get.json \
+                -w '%{http_code}' -H "$authorization" \
+                "${api}/databases/${DATABASE_NAME}")"
+              if [[ "$status" == "404" ]]; then
+                return 0
+              fi
+              if [[ "$status" != "200" ]]; then
+                cat /tmp/turso-provision-get.json >&2
+                return 1
+              fi
+              sleep 2
+            done
+            echo "managed Turso database deletion was not observable within 120 seconds" >&2
+            return 1
+          }
+          trap cleanup_on_error EXIT
+
+          request="$(jq -nc --arg name "$DATABASE_NAME" --arg group "$TURSO_GROUP" \
+            '{name: $name, group: $group}')"
+          database_json="$(curl --silent --show-error --fail-with-body -X POST \
+            -H "$authorization" -H 'Content-Type: application/json' \
+            --data "$request" "${api}/databases")"
+          actual_name="$(jq -er '.database.Name | strings | select(length > 0)' <<<"$database_json")"
+          database_id="$(jq -er '.database.DbId | strings | select(length > 0)' <<<"$database_json")"
+          hostname="$(jq -er '.database.Hostname | strings | select(length > 0)' <<<"$database_json")"
+          test "$actual_name" = "$DATABASE_NAME"
+
+          token_json="$(curl --silent --show-error --fail-with-body -X POST \
+            -H "$authorization" \
+            "${api}/databases/${DATABASE_NAME}/auth/tokens?expiration=30m&authorization=full-access")"
+          database_token="$(jq -er '.jwt | strings | select(length > 0)' <<<"$token_json")"
+          echo "::add-mask::$database_token"
+          printf 'XISNOVE_TEST_TURSO_URL=libsql://%s\n' "$hostname" >>"$GITHUB_ENV"
+          printf 'XISNOVE_TEST_TURSO_TOKEN=%s\n' "$database_token" >>"$GITHUB_ENV"
+          printf 'XISNOVE_TEST_TURSO_ALLOW_RESET=1\n' >>"$GITHUB_ENV"
+          trap - EXIT
+      - name: Run managed Turso operations journey
         run: >-
-          gotestsum --junitfile managed-turso-storage-matrix.xml --
-          -race ./integration -run '^TestStorageMatrix/TursoCloud$' -count=1
+          gotestsum --junitfile managed-turso-operations.xml --
+          -race ./integration
+          -run '^(TestStorageMatrix|TestRetentionUptimeStorageMatrix|TestWorkerRecoveryStorageMatrix)/TursoCloud$'
+          -count=1
+      - name: Run managed Turso repository conformance
+        run: >-
+          gotestsum --junitfile managed-turso-conformance.xml --
+          -race ./internal/adapters/tursocloud
+          -run '^TestPersistenceConformance$' -count=1
       - name: Upload managed Turso test report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: managed-turso-storage-matrix
-          path: managed-turso-storage-matrix.xml
+          name: managed-turso-release-gate
+          path: managed-turso-*.xml
           if-no-files-found: error
+
+  cleanup:
+    if: ${{ always() && needs.conformance.outputs.database_name != '' }}
+    needs: conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete disposable managed Turso database and verify absence
+        shell: bash
+        env:
+          TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
+          TURSO_ORG: ${{ vars.TURSO_ORG }}
+          DATABASE_NAME: ${{ needs.conformance.outputs.database_name }}
+        run: |
+          set -euo pipefail
+          endpoint="https://api.turso.tech/v1/organizations/${TURSO_ORG}/databases/${DATABASE_NAME}"
+          authorization="Authorization: Bearer ${TURSO_API_KEY}"
+          status="$(curl --silent --show-error -o /tmp/turso-delete.json \
+            -w '%{http_code}' -X DELETE -H "$authorization" "$endpoint")"
+          if [[ "$status" != "200" && "$status" != "204" && "$status" != "404" ]]; then
+            cat /tmp/turso-delete.json >&2
+            exit 1
+          fi
+          for _ in {1..60}; do
+            status="$(curl --silent --show-error -o /tmp/turso-get.json \
+              -w '%{http_code}' -H "$authorization" "$endpoint")"
+            if [[ "$status" == "404" ]]; then
+              exit 0
+            fi
+            if [[ "$status" != "200" ]]; then
+              cat /tmp/turso-get.json >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "managed Turso database deletion was not observable within 120 seconds" >&2
+          exit 1

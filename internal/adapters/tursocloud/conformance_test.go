@@ -42,6 +42,9 @@ func managedTestDatabase(t *testing.T, ctx context.Context) (string, string) {
 		if rawURL == "" || token == "" {
 			t.Fatal("XISNOVE_TEST_TURSO_URL and XISNOVE_TEST_TURSO_TOKEN must be set together")
 		}
+		if os.Getenv("XISNOVE_TEST_TURSO_ALLOW_RESET") != "1" {
+			t.Fatal("XISNOVE_TEST_TURSO_ALLOW_RESET=1 is required because conformance deletes all Xisnove rows")
+		}
 		return rawURL, token
 	}
 

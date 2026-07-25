@@ -199,6 +199,83 @@ func TestProvisionCleansUpWhenTokenMintFailsAndRedactsSecrets(t *testing.T) {
 	}
 }
 
+func TestProvisionCleansUpWhenCreateResponseIsLost(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	createdName := ""
+	deleted := false
+	polledAfterDelete := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/groups"):
+			writeJSON(t, w, map[string]any{"groups": []any{map[string]any{"name": "xisnove-ci", "delete_protection": false}}})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/databases"):
+			var body struct {
+				Name  string `json:"name"`
+				Group string `json:"group"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Group != "xisnove-ci" || !strings.HasPrefix(body.Name, "xisnove-ci-") {
+				t.Fatalf("create body = %+v", body)
+			}
+			mu.Lock()
+			createdName = body.Name
+			mu.Unlock()
+			connection, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = connection.Close()
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/databases/"):
+			mu.Lock()
+			want := createdName
+			deleted = true
+			mu.Unlock()
+			if !strings.HasSuffix(r.URL.Path, "/"+want) {
+				t.Fatalf("deleted path = %q, want exact database %q", r.URL.Path, want)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/databases/"):
+			mu.Lock()
+			isDeleted := deleted
+			if isDeleted {
+				polledAfterDelete = true
+			}
+			mu.Unlock()
+			if isDeleted {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			writeJSON(t, w, map[string]any{"database": map[string]any{"Name": createdName}})
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.String())
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := Provision(context.Background(), Config{
+		BaseURL: server.URL, Token: "platform-secret", Organization: "test-org", Group: "xisnove-ci",
+		HTTPClient: server.Client(), PollInterval: time.Millisecond,
+	})
+	if err == nil || !strings.Contains(err.Error(), "create disposable Turso database") {
+		t.Fatalf("Provision() error = %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if createdName == "" {
+		t.Fatal("database was not created")
+	}
+	if !deleted {
+		t.Fatal("database was not deleted after its create response was lost")
+	}
+	if !polledAfterDelete {
+		t.Fatal("database deletion was not verified after its create response was lost")
+	}
+}
+
 func writeJSON(t *testing.T, w http.ResponseWriter, value any) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")

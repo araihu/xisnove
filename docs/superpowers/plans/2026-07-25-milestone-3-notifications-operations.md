@@ -666,13 +666,13 @@ git commit -m "feat(retention): aggregate and prune bounded history"
 - Modify: `go.mod`
 - Modify: `go.sum`
 
-- [ ] **Step 1: Pin current stable observability libraries**
+- [x] **Step 1: Pin current stable observability libraries**
 
 Review and pin Prometheus client and OpenTelemetry SDK/exporter versions. Traces
 are disabled unless explicitly configured; metrics remain local and do not
 require an external collector.
 
-- [ ] **Step 2: Write endpoint and cardinality tests**
+- [x] **Step 2: Write endpoint and cardinality tests**
 
 `/livez` reports process health. `/readyz` requires accepting state, database
 ping, and exact schema compatibility. `/metrics` contains monitor-state,
@@ -680,13 +680,13 @@ transition, probe, scheduler, lease, heartbeat-age, duplicate, outbox-age,
 attempt, pool, transaction, and migration measures without monitor names, URLs,
 error strings, tokens, or other unbounded labels.
 
-- [ ] **Step 3: Implement request/log/trace correlation**
+- [x] **Step 3: Implement request/log/trace correlation**
 
 Emit JSON logs with correlation and applicable run/monitor/location/agent/
 incident/delivery IDs. Propagate W3C trace context through HTTP and workers.
 Redact configured sensitive values and provider diagnostics.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 go test -race ./internal/adapters/observability ./internal/adapters/httpapi \
@@ -704,25 +704,26 @@ git commit -m "feat(operations): expose service telemetry"
 - Modify: `cmd/xisnove-server/serve_test.go`
 - Create: `integration/worker_recovery_test.go`
 
-- [ ] **Step 1: Add ordered-shutdown tests**
+- [x] **Step 1: Add ordered-shutdown tests**
 
-Assert readiness fails before claims stop, new long-polls are rejected, bounded
+Assert readiness fails as claims stop, a blocked readiness dependency cannot
+block shutdown, new long-polls are rejected, bounded
 in-flight delivery/projection/retention work drains, safe leases are released,
 expired leases recover, then listeners and DB close. A second signal forces a
 bounded exit.
 
-- [ ] **Step 2: Add process fault tests**
+- [x] **Step 2: Add process fault tests**
 
 Terminate workers between claim/send/finalize boundaries and prove another
 server resumes after lease expiry. Run two server instances against PostgreSQL
 and compatible multi-replica managed Turso where protected credentials exist.
 
-- [ ] **Step 3: Implement a single lifecycle coordinator**
+- [x] **Step 3: Implement a single lifecycle coordinator**
 
 Avoid unrelated goroutine ownership in adapters. The server owns accepting,
 claiming, draining, and close phases and reports them in readiness/logs.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 go test -race ./cmd/xisnove-server ./integration -run 'Shutdown|WorkerRecovery'
@@ -739,14 +740,14 @@ git commit -m "feat(operations): drain workers gracefully"
 - Modify: `integration/storage_matrix_test.go`
 - Create: `integration/notification_journey_test.go`
 - Modify: `.github/workflows/ci.yml`
-- Modify: `.github/workflows/turso-cloud-integration.yml`
+- Modify: `.github/workflows/turso-conformance.yml`
 - Modify: `Makefile`
 - Modify: `README.md`
 - Create: `docs/operations/notifications.md`
 - Create: `docs/operations/maintenance-retention.md`
 - Create: `docs/operations/observability.md`
 
-- [ ] **Step 1: Extend the literal shared storage journey**
+- [x] **Step 1: Extend the literal shared storage journey**
 
 Run identical operations/assertions for SQLite, local Turso, PostgreSQL, and
 managed Turso: metadata round trip, channel encryption, route matching,
@@ -754,7 +755,7 @@ Incident transaction/outbox, duplicate prevention, two-handle claims, failed
 attempt/retry, permanent failure/replay, success, maintenance suppression/end,
 retention batches, migration, close/reopen, and rollback injection.
 
-- [ ] **Step 2: Add transport-level end-to-end tests**
+- [x] **Step 2: Add transport-level end-to-end tests**
 
 Use local HTTP receivers to prove Shoutrrr and Alertmanager payloads, timeout,
 retry classes, resolution semantics, and no secret leakage. These tests use the
@@ -764,7 +765,7 @@ the suite self-scaffolds and tears down its environment. Preserve explicit
 external-service overrides for debugging and CI environments that provide their
 own dependencies.
 
-- [ ] **Step 3: Wire CI gates**
+- [x] **Step 3: Wire CI gates**
 
 Normal CI runs SQLite/local Turso plus ephemeral PostgreSQL, module-isolated
 tests, generated drift, race tests, and notification fault tests. Protected CI
@@ -776,14 +777,14 @@ Testcontainers when a healthy container runtime is available; the explicit
 Managed Turso remains a distinct protected profile provisioned and torn down
 through the real Turso Platform API rather than emulated in a container.
 
-- [ ] **Step 4: Document exact operations**
+- [x] **Step 4: Document exact operations**
 
 Document channel keyring creation/rotation, file secret references, egress
 allow rules, Alertmanager integration, delivery inspection/replay, maintenance,
 retention tuning, dashboards/alerts, readiness, shutdown, backup interaction,
 and external-control-plane placement for the hybrid homelab.
 
-- [ ] **Step 5: Run the milestone gate**
+- [x] **Step 5: Run the milestone gate**
 
 ```bash
 go mod tidy
@@ -799,13 +800,14 @@ Expected: local gates pass and the worktree contains only intentional staged
 generated/documentation changes. Managed Turso reports an explicit credential
 skip locally unless the dedicated deletion-enabled group is configured.
 
-- [ ] **Step 6: Commit and push the milestone**
+- [x] **Step 6: Commit the milestone locally; leave push pending authorization**
 
 ```bash
 git add .github Makefile README.md docs integration
 git commit -m "docs(notification): complete operations runbooks"
-git push
 ```
+
+Do not push, deploy, or release until the user explicitly authorizes it.
 
 ---
 

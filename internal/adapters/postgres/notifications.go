@@ -428,6 +428,12 @@ func (r *retentionRepository) ReleaseLease(ctx context.Context, key string, toke
 }
 
 func (r *retentionRepository) ListAggregationResults(ctx context.Context, start, end, after time.Time, afterID string, limit int) ([]application.AggregationResultRecord, error) {
+	// PostgreSQL compares the UUID cursor directly, so the empty first-page
+	// sentinel used by the storage port must become the smallest valid UUID.
+	// SQLite accepts the empty string and therefore does not need this mapping.
+	if afterID == "" {
+		afterID = "00000000-0000-0000-0000-000000000000"
+	}
 	records, err := r.queries.ListProbeResultsForDailyAggregation(ctx, dbpostgres.ListProbeResultsForDailyAggregationParams{
 		StartsAt: start.UTC(), EndsAt: end.UTC(), AfterAt: after.UTC(),
 		AfterID: afterID, RowLimit: int32(limit),

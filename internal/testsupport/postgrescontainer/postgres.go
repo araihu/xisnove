@@ -4,6 +4,7 @@ package postgrescontainer
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -20,7 +21,9 @@ func URL(t *testing.T, external string) string {
 	if external != "" {
 		return external
 	}
-	testcontainers.SkipIfProviderIsNotHealthy(t)
+	if os.Getenv("XISNOVE_REQUIRE_POSTGRES") != "1" {
+		testcontainers.SkipIfProviderIsNotHealthy(t)
+	}
 	ctx := context.Background()
 	container, err := tcpostgres.Run(
 		ctx,

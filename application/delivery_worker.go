@@ -23,22 +23,23 @@ var ErrNotificationLeaseLost = errors.New("notification delivery lease lost")
 
 // DeliveryWorkerConfig defines durable claim, send, and retry behavior.
 type DeliveryWorkerConfig struct {
-	Store         port.UnitOfWork
-	Sealer        port.ConfigSealer
-	Tokens        TokenIssuer
-	NewID         func() string
-	Owner         string
-	Transports    map[domain.NotificationChannelKind]NotificationTransport
-	BatchSize     int
-	Concurrency   int
-	LeaseDuration time.Duration
-	PollInterval  time.Duration
-	SendTimeout   time.Duration
-	MaxAttempts   uint32
-	BackoffBase   time.Duration
-	BackoffCap    time.Duration
-	Jitter        func() float64
-	OnError       func(error)
+	Store           port.UnitOfWork
+	Sealer          port.ConfigSealer
+	Tokens          TokenIssuer
+	NewID           func() string
+	Owner           string
+	Transports      map[domain.NotificationChannelKind]NotificationTransport
+	BatchSize       int
+	Concurrency     int
+	LeaseDuration   time.Duration
+	PollInterval    time.Duration
+	SendTimeout     time.Duration
+	MaxAttempts     uint32
+	BackoffBase     time.Duration
+	BackoffCap      time.Duration
+	Jitter          func() float64
+	OnError         func(error)
+	ObserveDelivery func(DeliveryObservation)
 }
 
 // DeliveryWorker durably dispatches claimed notification outbox rows.
@@ -173,7 +174,11 @@ func (w *DeliveryWorker) claim(ctx context.Context) (port.NotificationOutboxReco
 
 func (w *DeliveryWorker) deliver(ctx context.Context, record port.NotificationOutboxRecord, tokenHash []byte) error {
 	result := w.prepareAndSend(ctx, record)
-	return w.finalize(ctx, record, tokenHash, result)
+	observation, err := w.finalize(ctx, record, tokenHash, result)
+	if err == nil && w.config.ObserveDelivery != nil {
+		w.config.ObserveDelivery(observation)
+	}
+	return err
 }
 
 func (w *DeliveryWorker) prepareAndSend(ctx context.Context, record port.NotificationOutboxRecord) TransportResult {
@@ -225,8 +230,13 @@ func (w *DeliveryWorker) prepareAndSend(ctx context.Context, record port.Notific
 	)
 }
 
-func (w *DeliveryWorker) finalize(ctx context.Context, record port.NotificationOutboxRecord, tokenHash []byte, result TransportResult) error {
-	return w.config.Store.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+func (w *DeliveryWorker) finalize(ctx context.Context, record port.NotificationOutboxRecord, tokenHash []byte, result TransportResult) (DeliveryObservation, error) {
+	observation := DeliveryObservation{
+		AttemptOutcome:  DeliveryAttemptPermanentFailure,
+		FinalOutcome:    DeliveryFinalPermanent,
+		DiagnosticClass: deliveryDiagnosticClass(result.ErrorClass),
+	}
+	err := w.config.Store.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
 		finishedAt, err := repositories.Runs.DatabaseNow(ctx)
 		if err != nil {
 			return fmt.Errorf("read database time for notification finalize: %w", err)
@@ -236,8 +246,10 @@ func (w *DeliveryWorker) finalize(ctx context.Context, record port.NotificationO
 		switch result.Outcome {
 		case TransportDelivered:
 			attemptOutcome = port.NotificationAttemptDelivered
+			observation.AttemptOutcome = DeliveryAttemptDelivered
 		case TransportTransientFailure:
 			attemptOutcome = port.NotificationAttemptTransientFailure
+			observation.AttemptOutcome = DeliveryAttemptTransientFailure
 		}
 		if err := repositories.NotificationOutbox.AppendAttempt(ctx, port.NotificationDeliveryAttemptRecord{
 			ID: w.config.NewID(), OutboxID: record.ID, Ordinal: ordinal,
@@ -255,11 +267,14 @@ func (w *DeliveryWorker) finalize(ctx context.Context, record port.NotificationO
 		switch result.Outcome {
 		case TransportDelivered:
 			changed, err = repositories.NotificationOutbox.MarkDelivered(ctx, params)
+			observation.FinalOutcome = DeliveryFinalDelivered
 		case TransportTransientFailure:
 			if ordinal >= w.config.MaxAttempts {
 				params.ErrorClass = "attempt_limit_exceeded"
+				observation.DiagnosticClass = DeliveryDiagnosticPolicy
 				changed, err = repositories.NotificationOutbox.MarkPermanentFailure(ctx, params)
 			} else {
+				observation.FinalOutcome = DeliveryFinalRetry
 				params.AvailableAt, err = domain.NextNotificationRetry(
 					finishedAt, ordinal, w.config.BackoffBase, w.config.BackoffCap, w.nextJitter(),
 				)
@@ -278,6 +293,7 @@ func (w *DeliveryWorker) finalize(ctx context.Context, record port.NotificationO
 		}
 		return nil
 	})
+	return observation, err
 }
 
 func (w *DeliveryWorker) nextJitter() float64 {

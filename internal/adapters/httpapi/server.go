@@ -13,13 +13,16 @@ import (
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
 	"github.com/araihu/xisnove/application"
+	"github.com/araihu/xisnove/internal/adapters/observability"
 )
 
 var _ StrictServerInterface = (*Server)(nil)
 
 type HandlerConfig struct {
-	Server *Server
-	Ready  func(context.Context) error
+	Server    *Server
+	Ready     func(context.Context) error
+	Metrics   http.Handler
+	AdmitWork func(context.Context) (context.Context, func(), error)
 }
 
 func NewHandler(config HandlerConfig) (http.Handler, error) {
@@ -42,6 +45,7 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 		},
 	)
 	api := Handler(strict)
+	api = admitAgentWork(config.AdmitWork)(api)
 	api = authenticateOperations(config.Server)(api)
 	api = nethttpmiddleware.OapiRequestValidatorWithOptions(
 		spec,
@@ -71,6 +75,9 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 
 	root := http.NewServeMux()
 	root.Handle("/v1/", api)
+	if config.Metrics != nil {
+		root.Handle("GET /metrics", config.Metrics)
+	}
 	root.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -85,7 +92,34 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	return recoverPanics(logRequests(correlationIDs(root))), nil
+	return correlationIDs(logRequests(recoverPanics(root))), nil
+}
+
+func admitAgentWork(
+	admit func(context.Context) (context.Context, func(), error),
+) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if admit == nil {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/agent/work:lease" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			ctx, release, err := admit(r.Context())
+			if err != nil {
+				writeProblem(w, Problem{
+					Type: "https://xisnove.dev/problems/not-ready", Title: "Not ready",
+					Status: http.StatusServiceUnavailable, Code: "not_ready",
+					CorrelationId: correlationID(r),
+				})
+				return
+			}
+			defer release()
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 func authenticateOperations(server *Server) func(http.Handler) http.Handler {
@@ -116,7 +150,8 @@ func correlationIDs(next http.Handler) http.Handler {
 		}
 		r.Header.Set("X-Request-ID", id)
 		w.Header().Set("X-Request-ID", id)
-		next.ServeHTTP(w, r)
+		ctx := observability.ContextWithIDs(r.Context(), observability.IDs{Correlation: id})
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -128,7 +163,6 @@ func logRequests(next http.Handler) http.Handler {
 			"method", r.Method,
 			"path", r.URL.Path,
 			"duration", time.Since(startedAt),
-			"correlation_id", correlationID(r),
 		)
 	})
 }
@@ -139,7 +173,6 @@ func recoverPanics(next http.Handler) http.Handler {
 			if recovered := recover(); recovered != nil {
 				slog.ErrorContext(r.Context(), "panic serving request",
 					"panic", recovered, "stack", string(debug.Stack()),
-					"correlation_id", correlationID(r),
 				)
 				writeProblem(w, ToProblem(
 					context.Canceled,

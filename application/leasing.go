@@ -25,6 +25,7 @@ type LeaseServiceConfig struct {
 	Tokens        TokenIssuer
 	LeaseDuration time.Duration
 	PollInterval  time.Duration
+	ObserveLease  func(LeaseObservation)
 }
 
 type LeaseService struct {
@@ -32,6 +33,7 @@ type LeaseService struct {
 	tokens        TokenIssuer
 	leaseDuration time.Duration
 	pollInterval  time.Duration
+	observeLease  func(LeaseObservation)
 }
 
 func NewLeaseService(config LeaseServiceConfig) *LeaseService {
@@ -44,6 +46,7 @@ func NewLeaseService(config LeaseServiceConfig) *LeaseService {
 		tokens:        config.Tokens,
 		leaseDuration: config.LeaseDuration,
 		pollInterval:  pollInterval,
+		observeLease:  config.ObserveLease,
 	}
 }
 
@@ -79,8 +82,15 @@ func (s *LeaseService) LeaseProbe(
 
 	deadline := time.Now().Add(wait)
 	for {
-		work, err := s.tryLeaseProbe(ctx, agentID, capabilities)
+		work, reclaimedExpired, err := s.tryLeaseProbe(ctx, agentID, capabilities)
 		if err == nil {
+			if s.observeLease != nil {
+				outcome := LeaseClaimed
+				if reclaimedExpired {
+					outcome = LeaseExpired
+				}
+				s.observeLease(LeaseObservation{Outcome: outcome})
+			}
 			return work, nil
 		}
 		if !errors.Is(err, ErrNoWork) {
@@ -88,6 +98,9 @@ func (s *LeaseService) LeaseProbe(
 		}
 		remaining := time.Until(deadline)
 		if wait == 0 || remaining <= 0 {
+			if s.observeLease != nil {
+				s.observeLease(LeaseObservation{Outcome: LeaseNoWork})
+			}
 			return nil, ErrNoWork
 		}
 		delay := min(s.pollInterval, remaining)
@@ -110,10 +123,10 @@ func (s *LeaseService) tryLeaseProbe(
 	ctx context.Context,
 	agentID domain.AgentID,
 	capabilities []domain.AgentCapability,
-) (*ProbeWork, error) {
+) (*ProbeWork, bool, error) {
 	token, err := s.tokens.New()
 	if err != nil {
-		return nil, fmt.Errorf("issue lease token: %w", err)
+		return nil, false, fmt.Errorf("issue lease token: %w", err)
 	}
 	var run RunRecord
 	err = s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
@@ -133,9 +146,9 @@ func (s *LeaseService) tryLeaseProbe(
 	})
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return nil, ErrNoWork
+			return nil, false, ErrNoWork
 		}
-		return nil, fmt.Errorf("claim probe run: %w", err)
+		return nil, false, fmt.Errorf("claim probe run: %w", err)
 	}
 	return &ProbeWork{
 		RunID:        run.ID,
@@ -144,7 +157,7 @@ func (s *LeaseService) tryLeaseProbe(
 		LeaseToken:   token.Raw,
 		Timeout:      run.Timeout,
 		Probe:        run.Probe,
-	}, nil
+	}, run.LeaseAttempt > 1, nil
 }
 
 func capabilitiesSubset(

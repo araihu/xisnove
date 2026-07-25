@@ -65,9 +65,12 @@ func TestStalenessSweepUsesDurableDeadlineAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	nextID := 0
-	service := application.NewStalenessService(store, func() string {
+	var transitions []application.MonitorTransitionObservation
+	service := application.NewStalenessServiceWithObserver(store, func() string {
 		nextID++
 		return fmt.Sprintf("stale-id-%d", nextID)
+	}, func(observation application.MonitorTransitionObservation) {
+		transitions = append(transitions, observation)
 	})
 	if marked, err := service.MarkDue(ctx, 100); err != nil || marked != 0 {
 		t.Fatalf("before deadline marked=%d error=%v", marked, err)
@@ -114,5 +117,8 @@ func TestStalenessSweepUsesDurableDeadlineAndIsIdempotent(t *testing.T) {
 			"location=%#v monitor=%#v incident=%#v events=%d audits=%d",
 			gotLocation, gotMonitor, incident, events, audits,
 		)
+	}
+	if len(transitions) != 1 || transitions[0].From != domain.HealthUp || transitions[0].To != domain.HealthUnknown {
+		t.Fatalf("staleness transitions = %#v", transitions)
 	}
 }
