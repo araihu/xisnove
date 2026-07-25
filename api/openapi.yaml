@@ -265,6 +265,95 @@ components:
         expectedStatus: {type: integer, format: int32, minimum: 100, maximum: 599}
         bodyContains: {type: string, maxLength: 4096}
         followRedirects: {type: boolean}
+    ProbeDefinition:
+      oneOf:
+        - {$ref: '#/components/schemas/HTTPProbeDefinition'}
+        - {$ref: '#/components/schemas/TCPProbeDefinition'}
+        - {$ref: '#/components/schemas/DNSProbeDefinition'}
+      discriminator:
+        propertyName: kind
+        mapping:
+          http: '#/components/schemas/HTTPProbeDefinition'
+          tcp: '#/components/schemas/TCPProbeDefinition'
+          dns: '#/components/schemas/DNSProbeDefinition'
+    HTTPProbeDefinition:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - method
+        - url
+        - headers
+        - body
+        - expectedStatus
+        - bodyContains
+        - bodyDoesNotContain
+        - followRedirects
+      properties:
+        kind: {type: string, enum: [http]}
+        method:
+          type: string
+          enum: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS]
+        url: {type: string, format: uri, maxLength: 4096}
+        headers:
+          type: object
+          maxProperties: 100
+          additionalProperties: {type: string, maxLength: 4096}
+        body: {type: string, format: byte, maxLength: 5464}
+        expectedStatus:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: {$ref: '#/components/schemas/StatusRange'}
+        bodyContains:
+          type: array
+          maxItems: 20
+          items: {type: string, minLength: 1, maxLength: 4096}
+        bodyDoesNotContain:
+          type: array
+          maxItems: 20
+          items: {type: string, minLength: 1, maxLength: 4096}
+        followRedirects: {type: boolean}
+        tlsMinimumRemainingSeconds:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 31536000
+    TCPProbeDefinition:
+      type: object
+      additionalProperties: false
+      required: [kind, host, port, send, expect]
+      properties:
+        kind: {type: string, enum: [tcp]}
+        host: {type: string, minLength: 1, maxLength: 253}
+        port: {type: integer, format: int32, minimum: 1, maximum: 65535}
+        send: {type: string, format: byte, maxLength: 5464}
+        expect: {type: string, format: byte, maxLength: 5464}
+        tlsMinimumRemainingSeconds:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 31536000
+    DNSProbeDefinition:
+      type: object
+      additionalProperties: false
+      required: [kind, resolver, name, recordType, expectedValues]
+      properties:
+        kind: {type: string, enum: [dns]}
+        resolver: {type: string, maxLength: 261}
+        name: {type: string, minLength: 1, maxLength: 253}
+        recordType: {type: string, enum: [A, AAAA, CNAME, MX, NS, TXT, SRV]}
+        expectedValues:
+          type: array
+          maxItems: 20
+          items: {type: string, minLength: 1, maxLength: 4096}
+    StatusRange:
+      type: object
+      additionalProperties: false
+      required: [minimum, maximum]
+      properties:
+        minimum: {type: integer, format: int32, minimum: 100, maximum: 599}
+        maximum: {type: integer, format: int32, minimum: 100, maximum: 599}
     Monitor:
       type: object
       additionalProperties: false
@@ -362,6 +451,17 @@ components:
         scheduledFor: {type: string, format: date-time}
         timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
         http: {$ref: '#/components/schemas/HTTPProbe'}
+    ProbeWork:
+      type: object
+      additionalProperties: false
+      required: [runId, leaseToken, monitorId, scheduledFor, timeoutMillis, probe]
+      properties:
+        runId: {type: string, format: uuid}
+        leaseToken: {type: string, minLength: 32}
+        monitorId: {type: string, format: uuid}
+        scheduledFor: {type: string, format: date-time}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
+        probe: {$ref: '#/components/schemas/ProbeDefinition'}
     ProbeResultBatch:
       type: object
       additionalProperties: false
@@ -408,9 +508,26 @@ components:
             - protocol_error
             - status_mismatch
             - body_mismatch
+            - dns_mismatch
+            - tcp_expect_mismatch
+            - tls_expiring
             - target_denied
             - response_too_large
         diagnosticSample: {type: string, maxLength: 512}
+        observedValues:
+          type: array
+          maxItems: 20
+          items: {type: string, maxLength: 4096}
+        tlsNotAfter: {type: string, format: date-time}
+        protocolTimings: {$ref: '#/components/schemas/ProtocolTimings'}
+    ProtocolTimings:
+      type: object
+      additionalProperties: false
+      properties:
+        dnsMillis: {type: integer, format: int64, minimum: 0}
+        connectMillis: {type: integer, format: int64, minimum: 0}
+        tlsMillis: {type: integer, format: int64, minimum: 0}
+        firstByteMillis: {type: integer, format: int64, minimum: 0}
     ProbeResultBatchAcknowledgement:
       type: object
       additionalProperties: false
@@ -428,7 +545,7 @@ components:
         status: {type: string, enum: [accepted, duplicate]}
     AgentCapability:
       type: string
-      enum: [http, kubernetes-discovery, kubernetes-watch]
+      enum: [http, tcp, dns, kubernetes-discovery, kubernetes-watch]
     MonitorHealth:
       type: object
       additionalProperties: false

@@ -25,19 +25,25 @@ import (
 
 // Defines values for AgentCapability.
 const (
+	AgentCapabilityDns                 AgentCapability = "dns"
 	AgentCapabilityHttp                AgentCapability = "http"
 	AgentCapabilityKubernetesDiscovery AgentCapability = "kubernetes-discovery"
 	AgentCapabilityKubernetesWatch     AgentCapability = "kubernetes-watch"
+	AgentCapabilityTcp                 AgentCapability = "tcp"
 )
 
 // Valid indicates whether the value is a known member of the AgentCapability enum.
 func (e AgentCapability) Valid() bool {
 	switch e {
+	case AgentCapabilityDns:
+		return true
 	case AgentCapabilityHttp:
 		return true
 	case AgentCapabilityKubernetesDiscovery:
 		return true
 	case AgentCapabilityKubernetesWatch:
+		return true
+	case AgentCapabilityTcp:
 		return true
 	default:
 		return false
@@ -172,16 +178,19 @@ func (e ProbeResultAcknowledgementStatus) Valid() bool {
 
 // Defines values for ProbeResultInputErrorCode.
 const (
-	BodyMismatch     ProbeResultInputErrorCode = "body_mismatch"
-	ConnectError     ProbeResultInputErrorCode = "connect_error"
-	DnsError         ProbeResultInputErrorCode = "dns_error"
-	Empty            ProbeResultInputErrorCode = ""
-	ProtocolError    ProbeResultInputErrorCode = "protocol_error"
-	ResponseTooLarge ProbeResultInputErrorCode = "response_too_large"
-	StatusMismatch   ProbeResultInputErrorCode = "status_mismatch"
-	TargetDenied     ProbeResultInputErrorCode = "target_denied"
-	Timeout          ProbeResultInputErrorCode = "timeout"
-	TlsError         ProbeResultInputErrorCode = "tls_error"
+	BodyMismatch      ProbeResultInputErrorCode = "body_mismatch"
+	ConnectError      ProbeResultInputErrorCode = "connect_error"
+	DnsError          ProbeResultInputErrorCode = "dns_error"
+	DnsMismatch       ProbeResultInputErrorCode = "dns_mismatch"
+	Empty             ProbeResultInputErrorCode = ""
+	ProtocolError     ProbeResultInputErrorCode = "protocol_error"
+	ResponseTooLarge  ProbeResultInputErrorCode = "response_too_large"
+	StatusMismatch    ProbeResultInputErrorCode = "status_mismatch"
+	TargetDenied      ProbeResultInputErrorCode = "target_denied"
+	TcpExpectMismatch ProbeResultInputErrorCode = "tcp_expect_mismatch"
+	Timeout           ProbeResultInputErrorCode = "timeout"
+	TlsError          ProbeResultInputErrorCode = "tls_error"
+	TlsExpiring       ProbeResultInputErrorCode = "tls_expiring"
 )
 
 // Valid indicates whether the value is a known member of the ProbeResultInputErrorCode enum.
@@ -193,6 +202,8 @@ func (e ProbeResultInputErrorCode) Valid() bool {
 		return true
 	case DnsError:
 		return true
+	case DnsMismatch:
+		return true
 	case Empty:
 		return true
 	case ProtocolError:
@@ -203,9 +214,13 @@ func (e ProbeResultInputErrorCode) Valid() bool {
 		return true
 	case TargetDenied:
 		return true
+	case TcpExpectMismatch:
+		return true
 	case Timeout:
 		return true
 	case TlsError:
+		return true
+	case TlsExpiring:
 		return true
 	default:
 		return false
@@ -413,10 +428,13 @@ type ProbeResultInput struct {
 	LatencyMillis       int64                     `json:"latencyMillis"`
 	LeaseToken          string                    `json:"leaseToken"`
 	ObservedStatus      int32                     `json:"observedStatus"`
+	ObservedValues      *[]string                 `json:"observedValues,omitempty"`
 	Outcome             ProbeResultInputOutcome   `json:"outcome"`
+	ProtocolTimings     *ProtocolTimings          `json:"protocolTimings,omitempty"`
 	ResultId            openapi_types.UUID        `json:"resultId"`
 	RunId               openapi_types.UUID        `json:"runId"`
 	StartedAt           time.Time                 `json:"startedAt"`
+	TlsNotAfter         *time.Time                `json:"tlsNotAfter,omitempty"`
 }
 
 // ProbeResultInputErrorCode defines model for ProbeResultInput.ErrorCode.
@@ -434,6 +452,14 @@ type Problem struct {
 	Status        int32         `json:"status"`
 	Title         string        `json:"title"`
 	Type          string        `json:"type"`
+}
+
+// ProtocolTimings defines model for ProtocolTimings.
+type ProtocolTimings struct {
+	ConnectMillis   *int64 `json:"connectMillis,omitempty"`
+	DnsMillis       *int64 `json:"dnsMillis,omitempty"`
+	FirstByteMillis *int64 `json:"firstByteMillis,omitempty"`
+	TlsMillis       *int64 `json:"tlsMillis,omitempty"`
 }
 
 // Session defines model for Session.
@@ -1688,46 +1714,47 @@ func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"//8=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -20,19 +20,25 @@ import (
 
 // Defines values for AgentCapability.
 const (
+	AgentCapabilityDns                 AgentCapability = "dns"
 	AgentCapabilityHttp                AgentCapability = "http"
 	AgentCapabilityKubernetesDiscovery AgentCapability = "kubernetes-discovery"
 	AgentCapabilityKubernetesWatch     AgentCapability = "kubernetes-watch"
+	AgentCapabilityTcp                 AgentCapability = "tcp"
 )
 
 // Valid indicates whether the value is a known member of the AgentCapability enum.
 func (e AgentCapability) Valid() bool {
 	switch e {
+	case AgentCapabilityDns:
+		return true
 	case AgentCapabilityHttp:
 		return true
 	case AgentCapabilityKubernetesDiscovery:
 		return true
 	case AgentCapabilityKubernetesWatch:
+		return true
+	case AgentCapabilityTcp:
 		return true
 	default:
 		return false
@@ -167,16 +173,19 @@ func (e ProbeResultAcknowledgementStatus) Valid() bool {
 
 // Defines values for ProbeResultInputErrorCode.
 const (
-	BodyMismatch     ProbeResultInputErrorCode = "body_mismatch"
-	ConnectError     ProbeResultInputErrorCode = "connect_error"
-	DnsError         ProbeResultInputErrorCode = "dns_error"
-	Empty            ProbeResultInputErrorCode = ""
-	ProtocolError    ProbeResultInputErrorCode = "protocol_error"
-	ResponseTooLarge ProbeResultInputErrorCode = "response_too_large"
-	StatusMismatch   ProbeResultInputErrorCode = "status_mismatch"
-	TargetDenied     ProbeResultInputErrorCode = "target_denied"
-	Timeout          ProbeResultInputErrorCode = "timeout"
-	TlsError         ProbeResultInputErrorCode = "tls_error"
+	BodyMismatch      ProbeResultInputErrorCode = "body_mismatch"
+	ConnectError      ProbeResultInputErrorCode = "connect_error"
+	DnsError          ProbeResultInputErrorCode = "dns_error"
+	DnsMismatch       ProbeResultInputErrorCode = "dns_mismatch"
+	Empty             ProbeResultInputErrorCode = ""
+	ProtocolError     ProbeResultInputErrorCode = "protocol_error"
+	ResponseTooLarge  ProbeResultInputErrorCode = "response_too_large"
+	StatusMismatch    ProbeResultInputErrorCode = "status_mismatch"
+	TargetDenied      ProbeResultInputErrorCode = "target_denied"
+	TcpExpectMismatch ProbeResultInputErrorCode = "tcp_expect_mismatch"
+	Timeout           ProbeResultInputErrorCode = "timeout"
+	TlsError          ProbeResultInputErrorCode = "tls_error"
+	TlsExpiring       ProbeResultInputErrorCode = "tls_expiring"
 )
 
 // Valid indicates whether the value is a known member of the ProbeResultInputErrorCode enum.
@@ -188,6 +197,8 @@ func (e ProbeResultInputErrorCode) Valid() bool {
 		return true
 	case DnsError:
 		return true
+	case DnsMismatch:
+		return true
 	case Empty:
 		return true
 	case ProtocolError:
@@ -198,9 +209,13 @@ func (e ProbeResultInputErrorCode) Valid() bool {
 		return true
 	case TargetDenied:
 		return true
+	case TcpExpectMismatch:
+		return true
 	case Timeout:
 		return true
 	case TlsError:
+		return true
+	case TlsExpiring:
 		return true
 	default:
 		return false
@@ -408,10 +423,13 @@ type ProbeResultInput struct {
 	LatencyMillis       int64                     `json:"latencyMillis"`
 	LeaseToken          string                    `json:"leaseToken"`
 	ObservedStatus      int32                     `json:"observedStatus"`
+	ObservedValues      *[]string                 `json:"observedValues,omitempty"`
 	Outcome             ProbeResultInputOutcome   `json:"outcome"`
+	ProtocolTimings     *ProtocolTimings          `json:"protocolTimings,omitempty"`
 	ResultId            openapi_types.UUID        `json:"resultId"`
 	RunId               openapi_types.UUID        `json:"runId"`
 	StartedAt           time.Time                 `json:"startedAt"`
+	TlsNotAfter         *time.Time                `json:"tlsNotAfter,omitempty"`
 }
 
 // ProbeResultInputErrorCode defines model for ProbeResultInput.ErrorCode.
@@ -429,6 +447,14 @@ type Problem struct {
 	Status        int32         `json:"status"`
 	Title         string        `json:"title"`
 	Type          string        `json:"type"`
+}
+
+// ProtocolTimings defines model for ProtocolTimings.
+type ProtocolTimings struct {
+	ConnectMillis   *int64 `json:"connectMillis,omitempty"`
+	DnsMillis       *int64 `json:"dnsMillis,omitempty"`
+	FirstByteMillis *int64 `json:"firstByteMillis,omitempty"`
+	TlsMillis       *int64 `json:"tlsMillis,omitempty"`
 }
 
 // Session defines model for Session.

@@ -49,3 +49,35 @@ func TestContractIsOpenAPI312AndValid(t *testing.T) {
 		}
 	}
 }
+
+func TestProbeDefinitionHasThreeDiscriminatedVariants(t *testing.T) {
+	data, err := os.ReadFile("openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := openapi3.NewLoader().LoadFromData(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probeRef, ok := doc.Components.Schemas["ProbeDefinition"]
+	if !ok || probeRef.Value == nil {
+		t.Fatal("ProbeDefinition schema is missing")
+	}
+	probe := probeRef.Value
+	if probe.Discriminator == nil || probe.Discriminator.PropertyName != "kind" {
+		t.Fatalf("discriminator = %#v", probe.Discriminator)
+	}
+	if len(probe.OneOf) != 3 {
+		t.Fatalf("variants = %d", len(probe.OneOf))
+	}
+	want := map[string]string{
+		"http": "#/components/schemas/HTTPProbeDefinition",
+		"tcp":  "#/components/schemas/TCPProbeDefinition",
+		"dns":  "#/components/schemas/DNSProbeDefinition",
+	}
+	for kind, reference := range want {
+		if probe.Discriminator.Mapping[kind].Ref != reference {
+			t.Fatalf("mapping[%q] = %q", kind, probe.Discriminator.Mapping[kind].Ref)
+		}
+	}
+}

@@ -204,15 +204,15 @@ Introduce:
 ```yaml
 ProbeDefinition:
   oneOf:
-    - {$ref: '#/components/schemas/HTTPProbe'}
-    - {$ref: '#/components/schemas/TCPProbe'}
-    - {$ref: '#/components/schemas/DNSProbe'}
+    - {$ref: '#/components/schemas/HTTPProbeDefinition'}
+    - {$ref: '#/components/schemas/TCPProbeDefinition'}
+    - {$ref: '#/components/schemas/DNSProbeDefinition'}
   discriminator:
     propertyName: kind
     mapping:
-      http: '#/components/schemas/HTTPProbe'
-      tcp: '#/components/schemas/TCPProbe'
-      dns: '#/components/schemas/DNSProbe'
+      http: '#/components/schemas/HTTPProbeDefinition'
+      tcp: '#/components/schemas/TCPProbeDefinition'
+      dns: '#/components/schemas/DNSProbeDefinition'
 ```
 
 Each variant is a closed object with a required `kind` enum containing one
