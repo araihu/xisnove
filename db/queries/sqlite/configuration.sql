@@ -1,0 +1,44 @@
+-- name: CreateLocation :exec
+INSERT INTO locations (id, name, created_at)
+VALUES (?, ?, ?);
+
+-- name: GetLocation :one
+SELECT id, name, created_at
+FROM locations
+WHERE id = ?;
+
+-- name: CreateMonitor :exec
+INSERT INTO monitors (
+  id, name, kind, interval_ms, timeout_ms, failure_threshold,
+  recovery_threshold, http_json, enabled, next_run_at, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetMonitor :one
+SELECT *
+FROM monitors
+WHERE id = ?;
+
+-- name: AssignMonitorLocation :exec
+INSERT INTO monitor_locations (monitor_id, location_id, required)
+VALUES (?, ?, ?)
+ON CONFLICT (monitor_id, location_id)
+DO UPDATE SET required = excluded.required;
+
+-- name: ListDueMonitorLocations :many
+SELECT
+  m.id AS monitor_id,
+  ml.location_id,
+  m.next_run_at,
+  m.interval_ms,
+  m.timeout_ms,
+  m.http_json
+FROM monitors m
+JOIN monitor_locations ml ON ml.monitor_id = m.id
+WHERE m.enabled = 1
+  AND m.next_run_at <= sqlc.arg(now)
+ORDER BY m.next_run_at, m.id, ml.location_id;
+
+-- name: AdvanceMonitorSchedule :exec
+UPDATE monitors
+SET next_run_at = ?, updated_at = ?
+WHERE id = ?;
