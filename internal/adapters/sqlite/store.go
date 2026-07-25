@@ -61,6 +61,7 @@ func newRepositories(queries *dbsqlite.Queries) application.Repositories {
 		Monitors:  &monitorRepository{queries: queries},
 		Health:    &healthRepository{queries: queries},
 		Agents:    &agentRepository{queries: queries},
+		Runs:      &runRepository{queries: queries},
 	}
 }
 
@@ -268,12 +269,166 @@ func (r *monitorRepository) GetAssignment(
 	}, nil
 }
 
+func (r *monitorRepository) ListDue(
+	ctx context.Context,
+	now time.Time,
+	limit int,
+) ([]application.DueMonitor, error) {
+	records, err := r.queries.ListDueMonitorLocations(
+		ctx,
+		dbsqlite.ListDueMonitorLocationsParams{
+			Now: formatTime(now), RowLimit: int64(limit),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list due monitor locations: %w", err)
+	}
+	due := make([]application.DueMonitor, 0, len(records))
+	for _, record := range records {
+		monitor, err := mapMonitor(dbsqlite.Monitor{
+			ID:                record.ID,
+			Name:              record.Name,
+			Kind:              record.Kind,
+			IntervalMs:        record.IntervalMs,
+			TimeoutMs:         record.TimeoutMs,
+			FailureThreshold:  record.FailureThreshold,
+			RecoveryThreshold: record.RecoveryThreshold,
+			HttpJson:          record.HttpJson,
+			Enabled:           record.Enabled,
+			NextRunAt:         record.NextRunAt,
+			CreatedAt:         record.CreatedAt,
+			UpdatedAt:         record.UpdatedAt,
+		})
+		if err != nil {
+			return nil, err
+		}
+		nextRunAt, err := parseTime(record.NextRunAt)
+		if err != nil {
+			return nil, fmt.Errorf("map due monitor schedule: %w", err)
+		}
+		due = append(due, application.DueMonitor{
+			Monitor:    monitor,
+			LocationID: domain.LocationID(record.LocationID),
+			Required:   record.Required == 1,
+			NextRunAt:  nextRunAt,
+		})
+	}
+	return due, nil
+}
+
+func (r *monitorRepository) AdvanceNextRun(
+	ctx context.Context,
+	monitorID domain.MonitorID,
+	nextRunAt time.Time,
+	updatedAt time.Time,
+) (bool, error) {
+	affected, err := r.queries.AdvanceMonitorSchedule(
+		ctx,
+		dbsqlite.AdvanceMonitorScheduleParams{
+			NextRunAt: formatTime(nextRunAt),
+			UpdatedAt: formatTime(updatedAt),
+			ID:        string(monitorID),
+		},
+	)
+	if err != nil {
+		return false, repositoryError("advance monitor schedule", err)
+	}
+	return affected == 1, nil
+}
+
 type healthRepository struct {
 	queries *dbsqlite.Queries
 }
 
 type agentRepository struct {
 	queries *dbsqlite.Queries
+}
+
+type runRepository struct {
+	queries *dbsqlite.Queries
+}
+
+func (r *runRepository) DatabaseNow(ctx context.Context) (time.Time, error) {
+	value, err := r.queries.DatabaseNow(ctx)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("read database time: %w", err)
+	}
+	now, err := parseTime(value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse database time: %w", err)
+	}
+	return now, nil
+}
+
+func (r *runRepository) Insert(
+	ctx context.Context,
+	record application.NewRunRecord,
+) (bool, error) {
+	probeJSON, err := json.Marshal(record.Probe)
+	if err != nil {
+		return false, fmt.Errorf("encode run probe: %w", err)
+	}
+	affected, err := r.queries.InsertScheduledRun(
+		ctx,
+		dbsqlite.InsertScheduledRunParams{
+			ID:           string(record.ID),
+			MonitorID:    string(record.MonitorID),
+			LocationID:   string(record.LocationID),
+			ScheduledFor: formatTime(record.ScheduledFor),
+			ProbeJson:    probeJSON,
+			TimeoutMs:    record.Timeout.Milliseconds(),
+		},
+	)
+	if err != nil {
+		return false, repositoryError("insert scheduled run", err)
+	}
+	return affected == 1, nil
+}
+
+func (r *runRepository) ClaimHTTP(
+	ctx context.Context,
+	params application.ClaimRunParams,
+) (application.RunRecord, error) {
+	record, err := r.queries.ClaimHTTPRun(ctx, dbsqlite.ClaimHTTPRunParams{
+		AgentID:        nullableString(string(params.AgentID)),
+		LeaseTokenHash: params.LeaseTokenHash,
+		LeaseExpiresAt: nullableTimeValue(params.LeaseExpiresAt),
+		Now:            nullableTimeValue(params.Now),
+	})
+	if err != nil {
+		return application.RunRecord{}, repositoryError("claim HTTP run", err)
+	}
+	return mapRun(record)
+}
+
+func (r *runRepository) Get(
+	ctx context.Context,
+	runID domain.CheckRunID,
+) (application.RunRecord, error) {
+	record, err := r.queries.GetCheckRun(ctx, string(runID))
+	if err != nil {
+		return application.RunRecord{}, repositoryError("get check run", err)
+	}
+	return mapRun(record)
+}
+
+func (r *runRepository) Resolve(
+	ctx context.Context,
+	runID domain.CheckRunID,
+	agentID domain.AgentID,
+	leaseTokenHash []byte,
+	resolvedAt time.Time,
+) (bool, error) {
+	affected, err := r.queries.ResolveCheckRun(ctx, dbsqlite.ResolveCheckRunParams{
+		ResolvedAt:     nullableTimeValue(resolvedAt),
+		ID:             string(runID),
+		AgentID:        nullableString(string(agentID)),
+		LeaseTokenHash: leaseTokenHash,
+	})
+	if err != nil {
+		return false, repositoryError("resolve check run", err)
+	}
+	return affected == 1, nil
 }
 
 func (r *agentRepository) CreateEnrollmentToken(
@@ -654,6 +809,45 @@ func mapAgent(record dbsqlite.Agent) (application.AgentRecord, error) {
 	return application.AgentRecord{
 		Agent: agent, CredentialHash: record.CredentialHash,
 	}, nil
+}
+
+func mapRun(record dbsqlite.CheckRun) (application.RunRecord, error) {
+	if record.LeaseAttempt < 0 || record.LeaseAttempt > math.MaxUint32 {
+		return application.RunRecord{}, errors.New("map run: lease attempt exceeds uint32")
+	}
+	var probe domain.HTTPProbe
+	if err := json.Unmarshal(record.ProbeJson, &probe); err != nil {
+		return application.RunRecord{}, fmt.Errorf("decode run probe: %w", err)
+	}
+	scheduledFor, err := parseTime(record.ScheduledFor)
+	if err != nil {
+		return application.RunRecord{}, fmt.Errorf("map run schedule: %w", err)
+	}
+	leaseExpiresAt, err := parseNullableTime(record.LeaseExpiresAt)
+	if err != nil {
+		return application.RunRecord{}, fmt.Errorf("map run lease expiry: %w", err)
+	}
+	resolvedAt, err := parseNullableTime(record.ResolvedAt)
+	if err != nil {
+		return application.RunRecord{}, fmt.Errorf("map run resolution: %w", err)
+	}
+	run := application.RunRecord{
+		ID:             domain.CheckRunID(record.ID),
+		MonitorID:      domain.MonitorID(record.MonitorID),
+		LocationID:     domain.LocationID(record.LocationID),
+		ScheduledFor:   scheduledFor,
+		Probe:          probe,
+		Timeout:        time.Duration(record.TimeoutMs) * time.Millisecond,
+		Status:         record.Status,
+		LeaseTokenHash: record.LeaseTokenHash,
+		LeaseAttempt:   uint32(record.LeaseAttempt),
+		LeaseExpiresAt: leaseExpiresAt,
+		ResolvedAt:     resolvedAt,
+	}
+	if record.LeaseAgentID.Valid {
+		run.LeaseAgentID = domain.AgentID(record.LeaseAgentID.String)
+	}
+	return run, nil
 }
 
 func repositoryError(operation string, err error) error {

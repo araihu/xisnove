@@ -24,6 +24,7 @@ WHERE id = (
   WHERE r.location_id = a.location_id
     AND r.status IN ('available', 'leased')
     AND (r.status = 'available' OR r.lease_expires_at <= ?4)
+    AND r.scheduled_for <= ?4
     AND a.revoked_at IS NULL
   ORDER BY r.scheduled_for, r.id
   LIMIT 1

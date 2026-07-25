@@ -9,7 +9,7 @@ import (
 )
 
 type Querier interface {
-	AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) error
+	AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) (int64, error)
 	AssignMonitorLocation(ctx context.Context, arg AssignMonitorLocationParams) error
 	ChangeIncident(ctx context.Context, arg ChangeIncidentParams) (int64, error)
 	ClaimHTTPRun(ctx context.Context, arg ClaimHTTPRunParams) (CheckRun, error)
@@ -37,7 +37,7 @@ type Querier interface {
 	InsertIncidentEvent(ctx context.Context, arg InsertIncidentEventParams) error
 	InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error)
 	InsertScheduledRun(ctx context.Context, arg InsertScheduledRunParams) (int64, error)
-	ListDueMonitorLocations(ctx context.Context, now string) ([]ListDueMonitorLocationsRow, error)
+	ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error)
 	ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error)
 	OpenIncident(ctx context.Context, arg OpenIncidentParams) error
 	RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error)

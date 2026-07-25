@@ -33,19 +33,30 @@ LIMIT 1;
 
 -- name: ListDueMonitorLocations :many
 SELECT
-  m.id AS monitor_id,
-  ml.location_id,
-  m.next_run_at,
+  m.id,
+  m.name,
+  m.kind,
   m.interval_ms,
   m.timeout_ms,
-  m.http_json
+  m.failure_threshold,
+  m.recovery_threshold,
+  m.http_json,
+  m.enabled,
+  m.next_run_at,
+  m.created_at,
+  m.updated_at,
+  ml.location_id,
+  ml.required
 FROM monitors m
 JOIN monitor_locations ml ON ml.monitor_id = m.id
 WHERE m.enabled = 1
   AND m.next_run_at <= sqlc.arg(now)
-ORDER BY m.next_run_at, m.id, ml.location_id;
+ORDER BY m.next_run_at, m.id, ml.location_id
+LIMIT sqlc.arg(row_limit);
 
--- name: AdvanceMonitorSchedule :exec
+-- name: AdvanceMonitorSchedule :execrows
 UPDATE monitors
-SET next_run_at = ?, updated_at = ?
-WHERE id = ?;
+SET next_run_at = sqlc.arg(next_run_at),
+    updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id)
+  AND next_run_at < sqlc.arg(next_run_at);

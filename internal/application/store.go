@@ -22,6 +22,7 @@ type Repositories struct {
 	Monitors  MonitorRepository
 	Health    HealthRepository
 	Agents    AgentRepository
+	Runs      RunRepository
 }
 
 type AdminRecord struct {
@@ -59,6 +60,44 @@ type AgentRecord struct {
 	CredentialHash []byte
 }
 
+type DueMonitor struct {
+	Monitor    domain.Monitor
+	LocationID domain.LocationID
+	Required   bool
+	NextRunAt  time.Time
+}
+
+type NewRunRecord struct {
+	ID           domain.CheckRunID
+	MonitorID    domain.MonitorID
+	LocationID   domain.LocationID
+	ScheduledFor time.Time
+	Probe        domain.HTTPProbe
+	Timeout      time.Duration
+}
+
+type ClaimRunParams struct {
+	AgentID        domain.AgentID
+	LeaseTokenHash []byte
+	LeaseExpiresAt time.Time
+	Now            time.Time
+}
+
+type RunRecord struct {
+	ID             domain.CheckRunID
+	MonitorID      domain.MonitorID
+	LocationID     domain.LocationID
+	ScheduledFor   time.Time
+	Probe          domain.HTTPProbe
+	Timeout        time.Duration
+	Status         string
+	LeaseAgentID   domain.AgentID
+	LeaseTokenHash []byte
+	LeaseAttempt   uint32
+	LeaseExpiresAt *time.Time
+	ResolvedAt     *time.Time
+}
+
 type AdminRepository interface {
 	Count(context.Context) (int64, error)
 	Create(context.Context, AdminRecord) error
@@ -80,6 +119,13 @@ type MonitorRepository interface {
 	Get(context.Context, domain.MonitorID) (domain.Monitor, error)
 	AssignLocation(context.Context, MonitorLocation) error
 	GetAssignment(context.Context, domain.MonitorID) (MonitorLocation, error)
+	ListDue(context.Context, time.Time, int) ([]DueMonitor, error)
+	AdvanceNextRun(
+		context.Context,
+		domain.MonitorID,
+		time.Time,
+		time.Time,
+	) (bool, error)
 }
 
 type HealthRepository interface {
@@ -111,6 +157,20 @@ type AgentRepository interface {
 		uint64,
 		string,
 		[]domain.AgentCapability,
+		time.Time,
+	) (bool, error)
+}
+
+type RunRepository interface {
+	DatabaseNow(context.Context) (time.Time, error)
+	Insert(context.Context, NewRunRecord) (bool, error)
+	ClaimHTTP(context.Context, ClaimRunParams) (RunRecord, error)
+	Get(context.Context, domain.CheckRunID) (RunRecord, error)
+	Resolve(
+		context.Context,
+		domain.CheckRunID,
+		domain.AgentID,
+		[]byte,
 		time.Time,
 	) (bool, error)
 }

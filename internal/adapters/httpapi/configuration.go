@@ -17,15 +17,21 @@ import (
 type ServerConfig struct {
 	Configuration *application.ConfigurationService
 	Agents        *application.AgentService
+	Lease         *application.LeaseService
 }
 
 type Server struct {
 	configuration *application.ConfigurationService
 	agents        *application.AgentService
+	lease         *application.LeaseService
 }
 
 func NewServer(config ServerConfig) *Server {
-	return &Server{configuration: config.Configuration, agents: config.Agents}
+	return &Server{
+		configuration: config.Configuration,
+		agents:        config.Agents,
+		lease:         config.Lease,
+	}
 }
 
 func (s *Server) CreateLocation(

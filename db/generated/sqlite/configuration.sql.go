@@ -9,10 +9,12 @@ import (
 	"context"
 )
 
-const advanceMonitorSchedule = `-- name: AdvanceMonitorSchedule :exec
+const advanceMonitorSchedule = `-- name: AdvanceMonitorSchedule :execrows
 UPDATE monitors
-SET next_run_at = ?, updated_at = ?
-WHERE id = ?
+SET next_run_at = ?1,
+    updated_at = ?2
+WHERE id = ?3
+  AND next_run_at < ?1
 `
 
 type AdvanceMonitorScheduleParams struct {
@@ -21,9 +23,12 @@ type AdvanceMonitorScheduleParams struct {
 	ID        string `json:"id"`
 }
 
-func (q *Queries) AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) error {
-	_, err := q.db.ExecContext(ctx, advanceMonitorSchedule, arg.NextRunAt, arg.UpdatedAt, arg.ID)
-	return err
+func (q *Queries) AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, advanceMonitorSchedule, arg.NextRunAt, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const assignMonitorLocation = `-- name: AssignMonitorLocation :exec
@@ -156,30 +161,52 @@ func (q *Queries) GetMonitorLocation(ctx context.Context, monitorID string) (Mon
 
 const listDueMonitorLocations = `-- name: ListDueMonitorLocations :many
 SELECT
-  m.id AS monitor_id,
-  ml.location_id,
-  m.next_run_at,
+  m.id,
+  m.name,
+  m.kind,
   m.interval_ms,
   m.timeout_ms,
-  m.http_json
+  m.failure_threshold,
+  m.recovery_threshold,
+  m.http_json,
+  m.enabled,
+  m.next_run_at,
+  m.created_at,
+  m.updated_at,
+  ml.location_id,
+  ml.required
 FROM monitors m
 JOIN monitor_locations ml ON ml.monitor_id = m.id
 WHERE m.enabled = 1
   AND m.next_run_at <= ?1
 ORDER BY m.next_run_at, m.id, ml.location_id
+LIMIT ?2
 `
 
-type ListDueMonitorLocationsRow struct {
-	MonitorID  string `json:"monitor_id"`
-	LocationID string `json:"location_id"`
-	NextRunAt  string `json:"next_run_at"`
-	IntervalMs int64  `json:"interval_ms"`
-	TimeoutMs  int64  `json:"timeout_ms"`
-	HttpJson   []byte `json:"http_json"`
+type ListDueMonitorLocationsParams struct {
+	Now      string `json:"now"`
+	RowLimit int64  `json:"row_limit"`
 }
 
-func (q *Queries) ListDueMonitorLocations(ctx context.Context, now string) ([]ListDueMonitorLocationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listDueMonitorLocations, now)
+type ListDueMonitorLocationsRow struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Kind              string `json:"kind"`
+	IntervalMs        int64  `json:"interval_ms"`
+	TimeoutMs         int64  `json:"timeout_ms"`
+	FailureThreshold  int64  `json:"failure_threshold"`
+	RecoveryThreshold int64  `json:"recovery_threshold"`
+	HttpJson          []byte `json:"http_json"`
+	Enabled           int64  `json:"enabled"`
+	NextRunAt         string `json:"next_run_at"`
+	CreatedAt         string `json:"created_at"`
+	UpdatedAt         string `json:"updated_at"`
+	LocationID        string `json:"location_id"`
+	Required          int64  `json:"required"`
+}
+
+func (q *Queries) ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDueMonitorLocations, arg.Now, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -188,12 +215,20 @@ func (q *Queries) ListDueMonitorLocations(ctx context.Context, now string) ([]Li
 	for rows.Next() {
 		var i ListDueMonitorLocationsRow
 		if err := rows.Scan(
-			&i.MonitorID,
-			&i.LocationID,
-			&i.NextRunAt,
+			&i.ID,
+			&i.Name,
+			&i.Kind,
 			&i.IntervalMs,
 			&i.TimeoutMs,
+			&i.FailureThreshold,
+			&i.RecoveryThreshold,
 			&i.HttpJson,
+			&i.Enabled,
+			&i.NextRunAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LocationID,
+			&i.Required,
 		); err != nil {
 			return nil, err
 		}

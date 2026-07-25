@@ -219,6 +219,23 @@ func (r *configurationMonitorRepository) GetAssignment(
 	return assignment, nil
 }
 
+func (*configurationMonitorRepository) ListDue(
+	context.Context,
+	time.Time,
+	int,
+) ([]application.DueMonitor, error) {
+	return []application.DueMonitor{}, nil
+}
+
+func (*configurationMonitorRepository) AdvanceNextRun(
+	context.Context,
+	domain.MonitorID,
+	time.Time,
+	time.Time,
+) (bool, error) {
+	return false, nil
+}
+
 type configurationHealthRepository struct {
 	store *configurationStore
 }
