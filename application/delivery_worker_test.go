@@ -132,7 +132,11 @@ func TestDeliveryWorkerRetriesCapsAttemptsAndPreservesReplayOrdinals(t *testing.
 	if got := permanentFixture.delivery(t, ctx); got.State != domain.DeliveryPermanent || got.LastErrorClass != "attempt_limit_exceeded" {
 		t.Fatalf("capped record = %#v", got)
 	}
-	if changed, err := permanentFixture.repositories.NotificationOutbox.Replay(ctx, permanentFixture.deliveryID, time.Now().UTC()); err != nil || !changed {
+	databaseNow, err := permanentFixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := permanentFixture.repositories.NotificationOutbox.Replay(ctx, permanentFixture.deliveryID, databaseNow); err != nil || !changed {
 		t.Fatalf("Replay() = %v, %v", changed, err)
 	}
 	successWorker := permanentFixture.worker(t, transportFunc(func(context.Context, TransportDelivery) TransportResult {
