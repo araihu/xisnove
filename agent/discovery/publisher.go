@@ -105,6 +105,35 @@ func (runner Runner) Run(ctx context.Context, config LoopConfig) error {
 	return nil
 }
 
+// RunUntilSuccess retries one bootstrap/aggregate observation with the same
+// bounded exponential backoff used by the periodic loop. Cancellation stops
+// promptly and is not reported as an operational failure.
+func (runner Runner) RunUntilSuccess(ctx context.Context, config LoopConfig) error {
+	if config.MinBackoff <= 0 || config.MaxBackoff < config.MinBackoff {
+		return errors.New("discovery bootstrap requires bounded backoff")
+	}
+	wait := config.Wait
+	if wait == nil {
+		wait = waitFor
+	}
+	backoff := config.MinBackoff
+	for ctx.Err() == nil {
+		if err := runner.RunOnce(ctx); err == nil {
+			return nil
+		} else if ctx.Err() == nil && config.OnError != nil {
+			config.OnError(err)
+		}
+		if err := wait(ctx, backoff); err != nil {
+			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return fmt.Errorf("wait to retry discovery bootstrap: %w", err)
+		}
+		backoff = min(backoff*2, config.MaxBackoff)
+	}
+	return nil
+}
+
 func waitFor(ctx context.Context, delay time.Duration) error {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()

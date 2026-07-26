@@ -10,6 +10,7 @@ import (
 	"github.com/araihu/xisnove/agent/discovery"
 	kubernetes "github.com/araihu/xisnove/agent/discovery/kubernetes"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -64,10 +65,15 @@ func TestWatcherCoalescesEventsIntoPartialSnapshotsAndStopsOnCancellation(t *tes
 	}
 }
 
-func TestWatcherIgnoresItsInitialListAndPublishesCompleteAfterExpiredResourceVersionRelist(t *testing.T) {
+func TestScopedWatcherRelistCompletesTheFullMultiScopeInventory(t *testing.T) {
 	clientfeaturestesting.SetFeatureDuringTest(t, clientfeatures.WatchListClient, false)
 	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "payments", UID: types.UID("service-uid")}, Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 8080}}}}
-	source := kubernetes.Source{Core: fake.NewSimpleClientset(service).CoreV1(), Namespaces: []string{"payments"}, Resources: []kubernetes.Resource{kubernetes.ResourceServices}, Perspective: "kubernetes:homelab"}
+	ingress := &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID("ingress-uid")}, Spec: networkingv1.IngressSpec{Rules: []networkingv1.IngressRule{{Host: "web.example.test", IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/"}}}}}}}}
+	client := fake.NewSimpleClientset(service, ingress)
+	aggregate := kubernetes.Source{Core: client.CoreV1(), Networking: client.NetworkingV1(), Namespaces: []string{"payments", "default"}, Resources: []kubernetes.Resource{kubernetes.ResourceServices, kubernetes.ResourceIngresses}, Perspective: "kubernetes:homelab"}
+	scoped := aggregate
+	scoped.Namespaces = []string{"payments"}
+	scoped.Resources = []kubernetes.Resource{kubernetes.ResourceServices}
 	firstWatch, secondWatch := watch.NewRaceFreeFake(), watch.NewRaceFreeFake()
 	relists := make(chan struct{}, 1)
 	var lists atomic.Int32
@@ -83,15 +89,19 @@ func TestWatcherIgnoresItsInitialListAndPublishesCompleteAfterExpiredResourceVer
 		return secondWatch, nil
 	}}, &corev1.Service{}, 0, cache.Indexers{})
 	published := make(chan discovery.Batch, 4)
-	initial, err := source.Snapshot(context.Background())
+	initial, err := aggregate.Snapshot(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	published <- initial // The command publishes this before it starts watchers.
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
+	done := make(chan error, 2)
+	relistRequests := make(chan struct{}, 1)
 	go func() {
-		done <- (kubernetes.Watcher{Informer: informer, Source: source, Relists: relists, Publish: publishFunc(func(_ context.Context, batch discovery.Batch) error { published <- batch; return nil })}).Run(ctx)
+		done <- (kubernetes.RelistCoordinator{Source: aggregate, Publish: publishFunc(func(_ context.Context, batch discovery.Batch) error { published <- batch; return nil }), Requests: relistRequests}).Run(ctx)
+	}()
+	go func() {
+		done <- (kubernetes.Watcher{Informer: informer, Source: scoped, Relists: relists, RelistRequests: relistRequests, Publish: publishFunc(func(_ context.Context, batch discovery.Batch) error { published <- batch; return nil })}).Run(ctx)
 	}()
 	if batch := <-published; !batch.Complete {
 		t.Fatalf("initial batch = %#v", batch)
@@ -103,22 +113,39 @@ func TestWatcherIgnoresItsInitialListAndPublishesCompleteAfterExpiredResourceVer
 	default:
 	}
 	firstWatch.Error(&metav1.Status{Reason: metav1.StatusReasonExpired, Code: 410, Message: "expired"})
-	select {
-	case batch := <-published:
-		if !batch.Complete || len(batch.Candidates) != 1 {
-			t.Fatalf("relist batch = %#v", batch)
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case batch := <-published:
+			if batch.Complete {
+				if len(batch.Candidates) != 2 {
+					t.Fatalf("aggregate relist batch = %#v", batch)
+				}
+				seen := map[string]bool{}
+				for _, candidate := range batch.Candidates {
+					seen[candidate.Namespace+"/"+candidate.SourceKind] = true
+				}
+				if !seen["payments/service"] || !seen["default/ingress"] {
+					t.Fatalf("aggregate relist lost a configured scope: %#v", batch.Candidates)
+				}
+				goto complete
+			}
+		case <-deadline:
+			t.Fatalf("successful relist did not publish the complete aggregate snapshot (lists=%d)", lists.Load())
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatalf("successful relist did not publish a complete snapshot (lists=%d)", lists.Load())
 	}
+
+complete:
 	cancel()
-	select {
-	case err := <-done:
-		if err != nil && !errors.Is(err, context.Canceled) {
-			t.Fatal(err)
+	for range 2 {
+		select {
+		case err := <-done:
+			if err != nil && !errors.Is(err, context.Canceled) {
+				t.Fatal(err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("watcher/coordinator did not stop")
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("watcher did not stop")
 	}
 }
 

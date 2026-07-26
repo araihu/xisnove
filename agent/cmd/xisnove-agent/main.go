@@ -226,15 +226,25 @@ func runKubernetesDiscovery(ctx context.Context, config config, client *controlp
 	}}
 	publisher := discovery.APIPublisher{Client: client, Credentials: credentialProvider(config)}
 	runner := discovery.Runner{Producer: source, Publisher: publisher}
-	if err := runner.RunOnce(ctx); err != nil {
+	if err := runner.RunUntilSuccess(ctx, discovery.LoopConfig{MinBackoff: time.Second, MaxBackoff: time.Minute, OnError: func(err error) { slog.Warn("initial Kubernetes discovery failed", "error", err) }}); err != nil {
 		return fmt.Errorf("publish initial Kubernetes discovery snapshot: %w", err)
+	}
+	if ctx.Err() != nil {
+		return nil
 	}
 	if config.kubernetesDiscovery.watch {
 		watchers, err := source.Watchers(publisher)
 		if err != nil {
 			return fmt.Errorf("configure Kubernetes discovery watchers: %w", err)
 		}
+		relistRequests := make(chan struct{}, 1)
+		go func() {
+			if err := (kubernetesdiscovery.RelistCoordinator{Source: source, Publish: publisher, Requests: relistRequests}).Run(ctx); err != nil && ctx.Err() == nil {
+				slog.Warn("Kubernetes relist coordinator stopped", "error", err)
+			}
+		}()
 		for _, watcher := range watchers {
+			watcher.RelistRequests = relistRequests
 			go func(watcher kubernetesdiscovery.Watcher) {
 				if err := watcher.Run(ctx); err != nil && ctx.Err() == nil {
 					slog.Warn("Kubernetes discovery watcher stopped", "error", err)

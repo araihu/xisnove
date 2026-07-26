@@ -147,6 +147,29 @@ func TestRunnerLoopIsSeparatelyEnabledAndUsesBoundedBackoff(t *testing.T) {
 	}
 }
 
+func TestRunnerBootstrapRetriesWithBoundedBackoffAndHonorsCancellation(t *testing.T) {
+	producer := &fakeProducer{batch: testBatch("bootstrap")}
+	publisher := &fakePublisher{errs: []error{errors.New("first"), errors.New("second"), nil}}
+	var waits []time.Duration
+	err := (discovery.Runner{Producer: producer, Publisher: publisher}).RunUntilSuccess(context.Background(), discovery.LoopConfig{
+		MinBackoff: time.Second, MaxBackoff: 2 * time.Second,
+		Wait: func(_ context.Context, delay time.Duration) error { waits = append(waits, delay); return nil },
+	})
+	if err != nil || publisher.calls != 3 || len(waits) != 2 || waits[0] != time.Second || waits[1] != 2*time.Second {
+		t.Fatalf("error=%v calls=%d waits=%v", err, publisher.calls, waits)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	publisher = &fakePublisher{err: errors.New("unavailable")}
+	err = (discovery.Runner{Producer: producer, Publisher: publisher}).RunUntilSuccess(ctx, discovery.LoopConfig{
+		MinBackoff: time.Second, MaxBackoff: 2 * time.Second,
+		Wait: func(_ context.Context, _ time.Duration) error { cancel(); return context.Canceled },
+	})
+	if err != nil || ctx.Err() == nil || publisher.calls != 1 {
+		t.Fatalf("cancellation error=%v context=%v calls=%d", err, ctx.Err(), publisher.calls)
+	}
+}
+
 func TestAPIPublisherFailsClosedOnPartialAcknowledgement(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {

@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/araihu/xisnove/agent/discovery"
 	"k8s.io/client-go/tools/cache"
@@ -16,6 +17,34 @@ type Watcher struct {
 	Source   Source
 	Publish  discovery.Publisher
 	Relists  <-chan struct{}
+	// RelistRequests is shared by every scoped watcher. Only the aggregate
+	// coordinator consuming it may publish a complete observation.
+	RelistRequests chan<- struct{}
+}
+
+// RelistCoordinator coalesces all scoped relist signals and publishes the
+// complete, full namespace/resource inventory from Source.
+type RelistCoordinator struct {
+	Source   Source
+	Publish  discovery.Publisher
+	Requests <-chan struct{}
+}
+
+func (coordinator RelistCoordinator) Run(ctx context.Context) error {
+	if coordinator.Publish == nil || coordinator.Requests == nil {
+		return errors.New("Kubernetes relist coordinator is not configured")
+	}
+	runner := discovery.Runner{Producer: coordinator.Source, Publisher: coordinator.Publish}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-coordinator.Requests:
+			if err := runner.RunUntilSuccess(ctx, discovery.LoopConfig{MinBackoff: time.Second, MaxBackoff: time.Minute}); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func (watcher Watcher) Run(ctx context.Context) error {
@@ -47,25 +76,21 @@ func (watcher Watcher) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-watcher.Relists:
-			if err := watcher.publish(ctx, true); err != nil {
-				return err
-			}
+			requestRelist(watcher.RelistRequests)
 		case <-updates:
 			select {
 			case <-watcher.Relists:
-				if err := watcher.publish(ctx, true); err != nil {
-					return err
-				}
+				requestRelist(watcher.RelistRequests)
 			default:
-				if err := watcher.publish(ctx, false); err != nil {
-					return err
-				}
+			}
+			if err := watcher.publish(ctx); err != nil {
+				return err
 			}
 		}
 	}
 }
 
-func (watcher Watcher) publish(ctx context.Context, complete bool) error {
+func (watcher Watcher) publish(ctx context.Context) error {
 	batches, err := watcher.Source.Snapshots(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -74,8 +99,8 @@ func (watcher Watcher) publish(ctx context.Context, complete bool) error {
 		return err
 	}
 	for _, batch := range batches {
-		batch.Complete = complete && batch.Complete
-		if len(batch.Candidates) == 0 && !batch.Complete {
+		batch.Complete = false
+		if len(batch.Candidates) == 0 {
 			continue
 		}
 		if err := watcher.Publish.Publish(ctx, batch); err != nil {
@@ -86,6 +111,16 @@ func (watcher Watcher) publish(ctx context.Context, complete bool) error {
 		}
 	}
 	return nil
+}
+
+func requestRelist(requests chan<- struct{}) {
+	if requests == nil {
+		return
+	}
+	select {
+	case requests <- struct{}{}:
+	default:
+	}
 }
 
 func enqueue(queue chan<- struct{}) {
