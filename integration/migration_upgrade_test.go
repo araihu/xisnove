@@ -497,7 +497,10 @@ func assertPostgresAgentCredentialDowngrade(
 	provider *goose.Provider,
 ) {
 	t.Helper()
-	if _, err := provider.Down(context.Background()); err != nil {
+	// Later migrations may be added after the agent-credential migration. Roll
+	// back to the exact version immediately before it so this assertion keeps
+	// testing migration 7 rather than whichever migration happens to be latest.
+	if _, err := provider.DownTo(context.Background(), 6); err != nil {
 		t.Fatal(err)
 	}
 	var agentCount int
