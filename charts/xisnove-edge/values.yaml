@@ -1,0 +1,81 @@
+nameOverride: ""
+fullnameOverride: ""
+
+controlPlane:
+  # Existing Xisnove control-plane URL reached from the monitored cluster.
+  url: ""
+  provisioningSecret:
+    # A narrowly scoped operator provisioning credential. The chart never creates it.
+    name: ""
+    key: token
+
+operator:
+  image:
+    repository: ghcr.io/araihu/xisnove-operator
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 1
+  watchNamespaces: []
+  leaderElection: true
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+agent:
+  enabled: false
+  name: ""
+  locationID: ""
+  image:
+    repository: ghcr.io/araihu/xisnove-agent
+    tag: ""
+  credentialSecret:
+    name: ""
+    key: credential
+  requestedCredentialGeneration: 1
+  capabilities:
+    - http
+    - kubernetes-discovery
+    - kubernetes-watch
+  discovery:
+    clusterWide: false
+    namespaces: []
+    resources:
+      - services
+      - endpointSlices
+      - ingresses
+      - gateways
+      - httpRoutes
+      - grpcRoutes
+    staleAfterSeconds: 300
+  workload:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
+imagePullSecrets: []
+
+networkPolicy:
+  enabled: false
+
+metrics:
+  service:
+    enabled: true
+    port: 8080
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}

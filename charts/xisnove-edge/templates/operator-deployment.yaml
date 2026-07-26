@@ -1,0 +1,98 @@
+{{- $controlPlaneURL := required "controlPlane.url is required" .Values.controlPlane.url -}}
+{{- $provisioningSecret := required "controlPlane.provisioningSecret.name is required" .Values.controlPlane.provisioningSecret.name -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xisnove-edge.operatorServiceAccount" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xisnove-edge.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  replicas: {{ .Values.operator.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "xisnove-edge.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: operator
+  template:
+    metadata:
+      annotations:
+        checksum/provisioning-secret-reference: {{ printf "%s/%s" $provisioningSecret .Values.controlPlane.provisioningSecret.key | sha256sum }}
+        {{- with .Values.operator.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        app.kubernetes.io/name: {{ include "xisnove-edge.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: operator
+    spec:
+      serviceAccountName: {{ include "xisnove-edge.operatorServiceAccount" . }}
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: operator
+          image: {{ include "xisnove-edge.operatorImage" . }}
+          imagePullPolicy: {{ .Values.operator.image.pullPolicy }}
+          args:
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            - --leader-elect={{ .Values.operator.leaderElection }}
+          env:
+            - name: XISNOVE_URL
+              value: {{ $controlPlaneURL | quote }}
+            - name: XISNOVE_PROVISIONING_CREDENTIAL_FILE
+              value: /var/run/xisnove-provisioner/{{ .Values.controlPlane.provisioningSecret.key }}
+            - name: XISNOVE_WATCH_NAMESPACES
+              value: {{ join "," .Values.operator.watchNamespaces | quote }}
+            - name: XISNOVE_AGENT_IMAGE
+              value: {{ include "xisnove-edge.agentImage" . | quote }}
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+          resources:
+            {{- toYaml .Values.operator.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: provisioning-credential
+              mountPath: /var/run/xisnove-provisioner
+              readOnly: true
+      volumes:
+        - name: provisioning-credential
+          secret:
+            secretName: {{ $provisioningSecret }}
+      {{- with .Values.operator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

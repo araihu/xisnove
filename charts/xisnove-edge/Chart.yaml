@@ -1,0 +1,9 @@
+apiVersion: v2
+name: xisnove-edge
+description: Xisnove Kubernetes operator and read-only discovery Agent for monitored clusters
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.30.0-0"
+annotations:
+  artifacthub.io/license: Apache-2.0

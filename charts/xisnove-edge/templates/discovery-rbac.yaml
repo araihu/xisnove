@@ -1,0 +1,73 @@
+{{- if .Values.agent.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "xisnove-edge.discoveryServiceAccount" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xisnove-edge.labels" . | nindent 4 }}
+    app.kubernetes.io/component: discovery
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "xisnove-edge.discoveryServiceAccount" . }}
+  labels:
+    {{- include "xisnove-edge.labels" . | nindent 4 }}
+    app.kubernetes.io/component: discovery
+rules:
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes", "grpcroutes"]
+    verbs: ["get", "list", "watch"]
+{{- if .Values.agent.discovery.clusterWide }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "xisnove-edge.discoveryServiceAccount" . }}
+  labels:
+    {{- include "xisnove-edge.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "xisnove-edge.discoveryServiceAccount" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "xisnove-edge.discoveryServiceAccount" . }}
+    namespace: {{ .Release.Namespace }}
+{{- else }}
+{{- $root := . -}}
+{{- $namespaces := .Values.agent.discovery.namespaces -}}
+{{- if eq (len $namespaces) 0 -}}
+{{- $namespaces = list .Release.Namespace -}}
+{{- end -}}
+{{- range $namespace := $namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "xisnove-edge.discoveryServiceAccount" $root }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "xisnove-edge.labels" $root | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "xisnove-edge.discoveryServiceAccount" $root }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "xisnove-edge.discoveryServiceAccount" $root }}
+    namespace: {{ $root.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end }}

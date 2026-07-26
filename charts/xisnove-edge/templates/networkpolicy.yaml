@@ -1,0 +1,33 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "xisnove-edge.operatorServiceAccount" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xisnove-edge.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "xisnove-edge.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: operator
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+        - port: 8081
+          protocol: TCP
+  # The operator needs the Kubernetes API and the external control plane. Use
+  # cluster policy or CNI FQDN rules to narrow this further for your topology.
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - ports:
+        - port: 443
+          protocol: TCP
+{{- end }}

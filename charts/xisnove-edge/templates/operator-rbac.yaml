@@ -1,0 +1,50 @@
+{{- $root := . -}}
+{{- $namespaces := .Values.operator.watchNamespaces -}}
+{{- if eq (len $namespaces) 0 -}}
+{{- $namespaces = list .Release.Namespace -}}
+{{- end -}}
+{{- range $namespace := $namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "xisnove-edge.operatorServiceAccount" $root }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "xisnove-edge.labels" $root | nindent 4 }}
+rules:
+  - apiGroups: ["monitoring.xisnove.io"]
+    resources: ["monitors", "agents"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["monitoring.xisnove.io"]
+    resources: ["monitors/status", "agents/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["monitoring.xisnove.io"]
+    resources: ["monitors/finalizers", "agents/finalizers"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "xisnove-edge.operatorServiceAccount" $root }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "xisnove-edge.labels" $root | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "xisnove-edge.operatorServiceAccount" $root }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "xisnove-edge.operatorServiceAccount" $root }}
+    namespace: {{ $root.Release.Namespace }}
+{{- end }}
