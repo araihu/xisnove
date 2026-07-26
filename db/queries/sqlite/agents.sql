@@ -17,11 +17,18 @@ INSERT INTO agents (
   capabilities_json, version, last_seen_at, revoked_at, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, sqlc.arg(created_at), sqlc.arg(updated_at));
 
+-- name: CreateAgentCredential :exec
+INSERT INTO agent_credentials (
+  agent_id, generation, credential_hash, created_at, revoked_at, last_authenticated_at
+) VALUES (?, ?, ?, ?, ?, ?);
+
 -- name: FindActiveAgentByCredentialHash :one
-SELECT *
-FROM agents
-WHERE credential_hash = ?
-  AND revoked_at IS NULL;
+SELECT a.*, c.generation AS presented_credential_generation
+FROM agent_credentials c
+JOIN agents a ON a.id = c.agent_id
+WHERE c.credential_hash = ?
+  AND c.revoked_at IS NULL
+  AND a.revoked_at IS NULL;
 
 -- name: GetAgent :one
 SELECT *

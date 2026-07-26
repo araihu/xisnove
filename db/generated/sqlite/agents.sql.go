@@ -77,6 +77,33 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error 
 	return err
 }
 
+const createAgentCredential = `-- name: CreateAgentCredential :exec
+INSERT INTO agent_credentials (
+  agent_id, generation, credential_hash, created_at, revoked_at, last_authenticated_at
+) VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type CreateAgentCredentialParams struct {
+	AgentID             string         `json:"agent_id"`
+	Generation          int64          `json:"generation"`
+	CredentialHash      []byte         `json:"credential_hash"`
+	CreatedAt           string         `json:"created_at"`
+	RevokedAt           sql.NullString `json:"revoked_at"`
+	LastAuthenticatedAt sql.NullString `json:"last_authenticated_at"`
+}
+
+func (q *Queries) CreateAgentCredential(ctx context.Context, arg CreateAgentCredentialParams) error {
+	_, err := q.db.ExecContext(ctx, createAgentCredential,
+		arg.AgentID,
+		arg.Generation,
+		arg.CredentialHash,
+		arg.CreatedAt,
+		arg.RevokedAt,
+		arg.LastAuthenticatedAt,
+	)
+	return err
+}
+
 const createAgentEnrollmentToken = `-- name: CreateAgentEnrollmentToken :exec
 INSERT INTO agent_enrollment_tokens (
   id, location_id, token_hash, expires_at, consumed_at, created_at
@@ -103,15 +130,32 @@ func (q *Queries) CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgen
 }
 
 const findActiveAgentByCredentialHash = `-- name: FindActiveAgentByCredentialHash :one
-SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at, updated_at
-FROM agents
-WHERE credential_hash = ?
-  AND revoked_at IS NULL
+SELECT a.id, a.location_id, a.name, a.credential_hash, a.credential_generation, a.capabilities_json, a.version, a.last_seen_at, a.revoked_at, a.created_at, a.updated_at, c.generation AS presented_credential_generation
+FROM agent_credentials c
+JOIN agents a ON a.id = c.agent_id
+WHERE c.credential_hash = ?
+  AND c.revoked_at IS NULL
+  AND a.revoked_at IS NULL
 `
 
-func (q *Queries) FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error) {
+type FindActiveAgentByCredentialHashRow struct {
+	ID                            string         `json:"id"`
+	LocationID                    string         `json:"location_id"`
+	Name                          string         `json:"name"`
+	CredentialHash                []byte         `json:"credential_hash"`
+	CredentialGeneration          int64          `json:"credential_generation"`
+	CapabilitiesJson              []byte         `json:"capabilities_json"`
+	Version                       sql.NullString `json:"version"`
+	LastSeenAt                    sql.NullString `json:"last_seen_at"`
+	RevokedAt                     sql.NullString `json:"revoked_at"`
+	CreatedAt                     string         `json:"created_at"`
+	UpdatedAt                     sql.NullString `json:"updated_at"`
+	PresentedCredentialGeneration int64          `json:"presented_credential_generation"`
+}
+
+func (q *Queries) FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (FindActiveAgentByCredentialHashRow, error) {
 	row := q.db.QueryRowContext(ctx, findActiveAgentByCredentialHash, credentialHash)
-	var i Agent
+	var i FindActiveAgentByCredentialHashRow
 	err := row.Scan(
 		&i.ID,
 		&i.LocationID,
@@ -124,6 +168,7 @@ func (q *Queries) FindActiveAgentByCredentialHash(ctx context.Context, credentia
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PresentedCredentialGeneration,
 	)
 	return i, err
 }

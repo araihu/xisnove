@@ -161,7 +161,7 @@ func (s *AgentService) Authenticate(
 		SubjectID:            string(record.Agent.ID),
 		CredentialKind:       CredentialAgent,
 		CredentialID:         string(record.Agent.ID),
-		CredentialGeneration: record.Agent.CredentialGeneration,
+		CredentialGeneration: record.PresentedCredentialGeneration,
 	}, nil
 }
 

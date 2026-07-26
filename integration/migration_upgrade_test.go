@@ -273,6 +273,7 @@ func assertCurrentAgentWriterPopulatesUpdatedAt(t *testing.T, handle *database.H
 	if !strings.HasPrefix(updatedAt, "2026-07-25 13:00:00") && updatedAt != createdAt.Format(time.RFC3339Nano) {
 		t.Fatalf("writer updated_at=%s, want %s", updatedAt, createdAt)
 	}
+	assertPresentedCredentialLookup(t, handle, agent.ID)
 	heartbeatAt := createdAt.Add(time.Hour)
 	if err := handle.Store.Transact(context.Background(), func(ctx context.Context, repositories application.Repositories) error {
 		updated, err := repositories.Agents.UpdateHeartbeat(
@@ -298,6 +299,120 @@ func assertCurrentAgentWriterPopulatesUpdatedAt(t *testing.T, handle *database.H
 	if !strings.HasPrefix(updatedAt, "2026-07-25 14:00:00") && updatedAt != heartbeatAt.Format(time.RFC3339Nano) {
 		t.Fatalf("heartbeat updated_at=%s, want %s", updatedAt, heartbeatAt)
 	}
+}
+
+func assertPresentedCredentialLookup(t *testing.T, handle *database.Handle, agentID domain.AgentID) {
+	t.Helper()
+	ctx := context.Background()
+	var credentialCount int
+	if err := handle.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM agent_credentials WHERE agent_id = "+profilePlaceholder(handle.Profile, 1),
+		string(agentID),
+	).Scan(&credentialCount); err != nil {
+		t.Fatal(err)
+	}
+	if credentialCount != 1 {
+		t.Fatalf("enrollment credential rows=%d, want 1", credentialCount)
+	}
+	if err := handle.Store.View(ctx, func(ctx context.Context, repositories application.Repositories) error {
+		record, err := repositories.Agents.FindActiveByCredentialHash(ctx, []byte{9, 10, 11, 12})
+		if err != nil {
+			return err
+		}
+		if record.Agent.ID != agentID || record.PresentedCredentialGeneration != 1 {
+			return fmt.Errorf("generation-1 lookup = %#v", record)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	insert := `INSERT INTO agent_credentials
+		(agent_id, generation, credential_hash, created_at)
+		VALUES (` + profilePlaceholder(handle.Profile, 1) + `, 2, ` + profilePlaceholder(handle.Profile, 2) + `, ` + profilePlaceholder(handle.Profile, 3) + `)`
+	if _, err := handle.DB.ExecContext(ctx, insert, string(agentID), []byte{13, 14, 15, 16}, "2026-07-25T13:30:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	rollbackAgent, err := domain.NewAgent(domain.NewAgentParams{
+		ID: "00000000-0000-4000-8000-000000000110", LocationID: "00000000-0000-4000-8000-000000000101",
+		Name: "rollback-agent", Capabilities: []domain.AgentCapability{domain.CapabilityHTTP},
+		CredentialGeneration: 1, CreatedAt: time.Date(2026, 7, 25, 13, 31, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = handle.Store.Transact(ctx, func(ctx context.Context, repositories application.Repositories) error {
+		return repositories.Agents.Create(ctx, application.AgentRecord{
+			Agent: rollbackAgent, CredentialHash: []byte{13, 14, 15, 16},
+		})
+	})
+	if err == nil {
+		t.Fatal("dual-write accepted a duplicate generation credential")
+	}
+	var rollbackAgentCount int
+	if scanErr := handle.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM agents WHERE id = "+profilePlaceholder(handle.Profile, 1),
+		string(rollbackAgent.ID),
+	).Scan(&rollbackAgentCount); scanErr != nil {
+		t.Fatal(scanErr)
+	}
+	if rollbackAgentCount != 0 {
+		t.Fatalf("failed credential insert left %d legacy agent rows", rollbackAgentCount)
+	}
+	if err := handle.Store.View(ctx, func(ctx context.Context, repositories application.Repositories) error {
+		record, err := repositories.Agents.FindActiveByCredentialHash(ctx, []byte{13, 14, 15, 16})
+		if err != nil {
+			return err
+		}
+		if record.Agent.ID != agentID || record.PresentedCredentialGeneration != 2 || record.Agent.CredentialGeneration != 1 {
+			return fmt.Errorf("overlap lookup = %#v", record)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := application.NewAgentService(application.AgentServiceConfig{
+		Store:  handle.Store,
+		Tokens: fixedCredentialHasher{hash: []byte{13, 14, 15, 16}},
+	})
+	principal, err := service.Authenticate(ctx, "generation-two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if principal.SubjectID != string(agentID) || principal.CredentialGeneration != 2 {
+		t.Fatalf("generation-2 principal=%#v", principal)
+	}
+	update := `UPDATE agent_credentials SET revoked_at = ` + profilePlaceholder(handle.Profile, 1) +
+		` WHERE agent_id = ` + profilePlaceholder(handle.Profile, 2) + ` AND generation = 2`
+	if _, err := handle.DB.ExecContext(ctx, update, "2026-07-25T13:40:00Z", string(agentID)); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Store.View(ctx, func(ctx context.Context, repositories application.Repositories) error {
+		_, err := repositories.Agents.FindActiveByCredentialHash(ctx, []byte{13, 14, 15, 16})
+		return err
+	}); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("revoked credential lookup error=%v, want ErrNotFound", err)
+	}
+	if _, err := service.Authenticate(ctx, "generation-two"); !errors.Is(err, application.ErrInvalidCredentials) {
+		t.Fatalf("revoked credential authentication error=%v, want ErrInvalidCredentials", err)
+	}
+}
+
+type fixedCredentialHasher struct{ hash []byte }
+
+func (fixedCredentialHasher) New() (application.IssuedToken, error) {
+	return application.IssuedToken{}, errors.New("not supported")
+}
+
+func (h fixedCredentialHasher) Hash(string) []byte {
+	return append([]byte(nil), h.hash...)
+}
+
+func profilePlaceholder(profile database.Profile, position int) string {
+	if profile == database.ProfilePostgres {
+		return fmt.Sprintf("$%d", position)
+	}
+	return "?"
 }
 
 func assertAgentUpdatedAtRejectsNull(t *testing.T, handle *database.Handle, postgres bool) {

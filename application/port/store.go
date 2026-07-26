@@ -81,8 +81,9 @@ type EnrollmentTokenRecord struct {
 }
 
 type AgentRecord struct {
-	Agent          domain.Agent
-	CredentialHash []byte
+	Agent                         domain.Agent
+	CredentialHash                []byte
+	PresentedCredentialGeneration uint64
 }
 
 type DueMonitor struct {

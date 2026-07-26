@@ -24,6 +24,7 @@ type Querier interface {
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) error
 	CreateAdmin(ctx context.Context, arg CreateAdminParams) error
 	CreateAgent(ctx context.Context, arg CreateAgentParams) error
+	CreateAgentCredential(ctx context.Context, arg CreateAgentCredentialParams) error
 	CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgentEnrollmentTokenParams) error
 	CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) error
 	CreateLocation(ctx context.Context, arg CreateLocationParams) error
@@ -40,7 +41,7 @@ type Querier interface {
 	DeleteFutureMaintenanceInterval(ctx context.Context, arg DeleteFutureMaintenanceIntervalParams) (int64, error)
 	EndMaintenanceInterval(ctx context.Context, arg EndMaintenanceIntervalParams) (int64, error)
 	FindActiveAPITokenByTokenHash(ctx context.Context, arg FindActiveAPITokenByTokenHashParams) (ApiToken, error)
-	FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error)
+	FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (FindActiveAgentByCredentialHashRow, error)
 	FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error)
 	FindAdminByEmail(ctx context.Context, email string) (Admin, error)
 	GetActiveIdempotencyRecord(ctx context.Context, arg GetActiveIdempotencyRecordParams) (IdempotencyRecord, error)

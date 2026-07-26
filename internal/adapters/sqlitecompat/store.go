@@ -749,6 +749,16 @@ func (r *agentRepository) Create(ctx context.Context, record application.AgentRe
 	if err != nil {
 		return repositoryError("create agent", err)
 	}
+	err = r.queries.CreateAgentCredential(ctx, dbsqlite.CreateAgentCredentialParams{
+		AgentID:        string(record.Agent.ID),
+		Generation:     int64(record.Agent.CredentialGeneration),
+		CredentialHash: record.CredentialHash,
+		CreatedAt:      formatTime(record.Agent.CreatedAt),
+		RevokedAt:      nullableTime(record.Agent.RevokedAt),
+	})
+	if err != nil {
+		return repositoryError("create agent credential", err)
+	}
 	return nil
 }
 
@@ -771,7 +781,17 @@ func (r *agentRepository) FindActiveByCredentialHash(
 	if err != nil {
 		return application.AgentRecord{}, repositoryError("find active agent", err)
 	}
-	return mapAgent(record)
+	mapped, err := mapAgent(dbsqlite.Agent{
+		ID: record.ID, LocationID: record.LocationID, Name: record.Name,
+		CredentialHash: record.CredentialHash, CredentialGeneration: record.CredentialGeneration,
+		CapabilitiesJson: record.CapabilitiesJson, Version: record.Version, LastSeenAt: record.LastSeenAt,
+		RevokedAt: record.RevokedAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+	})
+	if err != nil {
+		return application.AgentRecord{}, err
+	}
+	mapped.PresentedCredentialGeneration = uint64(record.PresentedCredentialGeneration)
+	return mapped, nil
 }
 
 func (r *agentRepository) UpdateHeartbeat(
