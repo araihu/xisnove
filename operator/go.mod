@@ -6,6 +6,7 @@ toolchain go1.26.5
 
 require (
 	github.com/araihu/xisnove v0.0.0-20260725191246-5047bc56dbcb
+	github.com/google/uuid v1.6.0
 	k8s.io/api v0.36.0
 	k8s.io/apiextensions-apiserver v0.36.0
 	k8s.io/apimachinery v0.36.0
@@ -48,7 +49,6 @@ require (
 	github.com/gobuffalo/flect v1.0.3 // indirect
 	github.com/google/cel-go v0.28.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
