@@ -149,11 +149,10 @@ func TestIncidentsDiscoveryNotificationsAndPublicStatusFixtures(t *testing.T) {
 
 	batch := request(t, server.URL, http.MethodPost, "/v1/agent/discovery-candidates:batch", agentToken, map[string]any{
 		"candidates": []map[string]any{{
-			"externalId": "service/default/demo",
-			"kind":       "http",
-			"name":       "demo",
-			"target":     "https://demo.example.test/health",
-			"labels":     map[string]string{"namespace": "default"},
+			"sourceKind": "service", "sourceUid": "service/default/demo", "namespace": "default",
+			"name": "demo", "labels": map[string]string{"namespace": "default"},
+			"protocol": "http", "target": "https://demo.example.test/health",
+			"networkPerspective": "cluster/default", "present": true,
 			"observedAt": "2026-07-25T12:00:00Z",
 		}},
 	}, map[string]string{"Idempotency-Key": "discovery-demo-1"})
@@ -173,6 +172,23 @@ func TestIncidentsDiscoveryNotificationsAndPublicStatusFixtures(t *testing.T) {
 	secondPromotion := decodeObject(t, replayedPromotion)
 	if firstPromotion["monitor"].(map[string]any)["id"] != secondPromotion["monitor"].(map[string]any)["id"] {
 		t.Fatal("promotion idempotency changed the monitor ID")
+	}
+	tombstone := request(t, server.URL, http.MethodPost, "/v1/agent/discovery-candidates:batch", agentToken, map[string]any{
+		"candidates": []map[string]any{{
+			"sourceKind": "service", "sourceUid": "service/default/demo", "namespace": "default",
+			"name": "demo", "labels": map[string]string{"namespace": "default"},
+			"protocol": "http", "target": "https://demo.example.test/health",
+			"networkPerspective": "cluster/default", "present": false,
+			"observedAt": "2026-07-25T12:01:00Z",
+		}},
+	}, map[string]string{"Idempotency-Key": "discovery-demo-tombstone-1"})
+	assertStatus(t, tombstone, http.StatusOK)
+	stale := request(t, server.URL, http.MethodGet, "/v1/discovery-candidates/"+candidate["id"].(string), session, nil, nil)
+	assertStatus(t, stale, http.StatusOK)
+	staleCandidate := decodeObject(t, stale)
+	if staleCandidate["present"] != false || staleCandidate["state"] != "promoted" ||
+		staleCandidate["promotedMonitorId"] != firstPromotion["monitor"].(map[string]any)["id"] {
+		t.Fatalf("tombstoned promoted candidate = %#v", staleCandidate)
 	}
 
 	channel := request(t, server.URL, http.MethodPost, "/v1/notification-channels", session, map[string]any{
@@ -488,8 +504,10 @@ func advertisedOperationRequest(operationID string) any {
 		return map[string]any{"name": "updated contract agent"}
 	case "UpsertDiscoveryCandidates":
 		return map[string]any{"candidates": []any{map[string]any{
-			"externalId": "service/default/contract", "kind": "http", "name": "contract",
-			"target": "https://contract.example.test/health", "labels": map[string]string{},
+			"sourceKind": "service", "sourceUid": "service/default/contract", "namespace": "default",
+			"name": "contract", "labels": map[string]string{}, "protocol": "http",
+			"target": "https://contract.example.test/health", "networkPerspective": "cluster/default",
+			"present":    true,
 			"observedAt": "2026-07-25T12:00:00Z",
 		}}}
 	case "PromoteDiscoveryCandidate":

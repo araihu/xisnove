@@ -71,12 +71,13 @@ func (s *Server) seedFixtures() {
 	}}
 
 	s.candidates = []map[string]any{{
-		"id":         "00000000-0000-4400-8000-000000000401",
-		"externalId": "service/monitoring/router", "agentId": "00000000-0000-4800-8000-000000000801",
-		"locationId": fixtureLocationID, "kind": "http", "name": "router metrics",
-		"target": "https://router.example.test/metrics",
-		"labels": map[string]string{"namespace": "monitoring"}, "state": "pending",
-		"firstSeenAt": fixtureTime, "lastSeenAt": fixtureTime,
+		"id":      "00000000-0000-4400-8000-000000000401",
+		"agentId": "00000000-0000-4800-8000-000000000801", "locationId": fixtureLocationID,
+		"sourceKind": "service", "sourceUid": "service/monitoring/router", "namespace": "monitoring",
+		"name": "router metrics", "labels": map[string]string{"namespace": "monitoring"},
+		"protocol": "http", "target": "https://router.example.test/metrics",
+		"networkPerspective": "cluster/default", "present": true, "state": "pending",
+		"firstSeenAt": fixtureTime, "lastObservedAt": fixtureTime, "updatedAt": fixtureTime,
 	}}
 
 	channelID := "00000000-0000-4500-8000-000000000501"
@@ -392,26 +393,58 @@ func (s *Server) upsertDiscoveryCandidates(w http.ResponseWriter, r *http.Reques
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if len(input.Candidates) < 1 || len(input.Candidates) > 100 {
+	if len(input.Candidates) < 1 || len(input.Candidates) > 500 {
 		writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
 		return
 	}
 	s.mu.Lock()
+	created, updated := 0, 0
 	for _, candidateInput := range input.Candidates {
-		s.counters["candidate"]++
-		s.candidates = append(s.candidates, map[string]any{
-			"id":         deterministicID("candidate", s.counters["candidate"]),
-			"externalId": candidateInput["externalId"], "agentId": "00000000-0000-4800-8000-000000000801",
-			"locationId": fixtureLocationID, "kind": candidateInput["kind"],
-			"name": candidateInput["name"], "target": candidateInput["target"],
-			"labels": candidateInput["labels"], "state": "pending",
-			"firstSeenAt": fixtureTime, "lastSeenAt": fixtureTime,
+		index := slices.IndexFunc(s.candidates, func(item map[string]any) bool {
+			return item["agentId"] == "00000000-0000-4800-8000-000000000801" &&
+				item["locationId"] == fixtureLocationID &&
+				item["sourceKind"] == candidateInput["sourceKind"] &&
+				item["sourceUid"] == candidateInput["sourceUid"] &&
+				item["protocol"] == candidateInput["protocol"] &&
+				item["target"] == candidateInput["target"]
 		})
+		present, _ := candidateInput["present"].(bool)
+		if index < 0 && !present {
+			continue
+		}
+		if index < 0 {
+			s.counters["candidate"]++
+			s.candidates = append(s.candidates, map[string]any{
+				"id":      deterministicID("candidate", s.counters["candidate"]),
+				"agentId": "00000000-0000-4800-8000-000000000801", "locationId": fixtureLocationID,
+				"sourceKind": candidateInput["sourceKind"], "sourceUid": candidateInput["sourceUid"],
+				"namespace": candidateInput["namespace"], "name": candidateInput["name"],
+				"labels": candidateInput["labels"], "protocol": candidateInput["protocol"],
+				"target": candidateInput["target"], "networkPerspective": candidateInput["networkPerspective"],
+				"present": true, "state": "pending", "firstSeenAt": candidateInput["observedAt"],
+				"lastObservedAt": candidateInput["observedAt"], "updatedAt": candidateInput["observedAt"],
+			})
+			created++
+			continue
+		}
+		observedAt, _ := candidateInput["observedAt"].(string)
+		lastObservedAt, _ := s.candidates[index]["lastObservedAt"].(string)
+		if observedAt < lastObservedAt {
+			continue
+		}
+		for _, field := range []string{
+			"namespace", "name", "labels", "networkPerspective", "present",
+		} {
+			s.candidates[index][field] = candidateInput[field]
+		}
+		s.candidates[index]["lastObservedAt"] = candidateInput["observedAt"]
+		s.candidates[index]["updatedAt"] = candidateInput["observedAt"]
+		updated++
 	}
 	count := len(input.Candidates)
 	s.mu.Unlock()
 	s.writeMutation(w, r, http.StatusOK, map[string]any{
-		"accepted": count, "created": count, "updated": 0,
+		"accepted": count, "created": created, "updated": updated,
 	})
 }
 

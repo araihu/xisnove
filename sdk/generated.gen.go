@@ -169,42 +169,42 @@ func (e DNSProbeDefinitionRecordType) Valid() bool {
 	}
 }
 
-// Defines values for DiscoveryCandidateKind.
+// Defines values for DiscoveryCandidateProtocol.
 const (
-	DiscoveryCandidateKindDns  DiscoveryCandidateKind = "dns"
-	DiscoveryCandidateKindHttp DiscoveryCandidateKind = "http"
-	DiscoveryCandidateKindTcp  DiscoveryCandidateKind = "tcp"
+	DiscoveryCandidateProtocolDns  DiscoveryCandidateProtocol = "dns"
+	DiscoveryCandidateProtocolHttp DiscoveryCandidateProtocol = "http"
+	DiscoveryCandidateProtocolTcp  DiscoveryCandidateProtocol = "tcp"
 )
 
-// Valid indicates whether the value is a known member of the DiscoveryCandidateKind enum.
-func (e DiscoveryCandidateKind) Valid() bool {
+// Valid indicates whether the value is a known member of the DiscoveryCandidateProtocol enum.
+func (e DiscoveryCandidateProtocol) Valid() bool {
 	switch e {
-	case DiscoveryCandidateKindDns:
+	case DiscoveryCandidateProtocolDns:
 		return true
-	case DiscoveryCandidateKindHttp:
+	case DiscoveryCandidateProtocolHttp:
 		return true
-	case DiscoveryCandidateKindTcp:
+	case DiscoveryCandidateProtocolTcp:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for DiscoveryCandidateInputKind.
+// Defines values for DiscoveryCandidateInputProtocol.
 const (
-	DiscoveryCandidateInputKindDns  DiscoveryCandidateInputKind = "dns"
-	DiscoveryCandidateInputKindHttp DiscoveryCandidateInputKind = "http"
-	DiscoveryCandidateInputKindTcp  DiscoveryCandidateInputKind = "tcp"
+	DiscoveryCandidateInputProtocolDns  DiscoveryCandidateInputProtocol = "dns"
+	DiscoveryCandidateInputProtocolHttp DiscoveryCandidateInputProtocol = "http"
+	DiscoveryCandidateInputProtocolTcp  DiscoveryCandidateInputProtocol = "tcp"
 )
 
-// Valid indicates whether the value is a known member of the DiscoveryCandidateInputKind enum.
-func (e DiscoveryCandidateInputKind) Valid() bool {
+// Valid indicates whether the value is a known member of the DiscoveryCandidateInputProtocol enum.
+func (e DiscoveryCandidateInputProtocol) Valid() bool {
 	switch e {
-	case DiscoveryCandidateInputKindDns:
+	case DiscoveryCandidateInputProtocolDns:
 		return true
-	case DiscoveryCandidateInputKindHttp:
+	case DiscoveryCandidateInputProtocolHttp:
 		return true
-	case DiscoveryCandidateInputKindTcp:
+	case DiscoveryCandidateInputProtocolTcp:
 		return true
 	default:
 		return false
@@ -789,22 +789,28 @@ type DailyUptimePoint struct {
 
 // DiscoveryCandidate defines model for DiscoveryCandidate.
 type DiscoveryCandidate struct {
-	AgentId           openapi_types.UUID      `json:"agentId"`
-	ExternalId        string                  `json:"externalId"`
-	FirstSeenAt       time.Time               `json:"firstSeenAt"`
-	Id                openapi_types.UUID      `json:"id"`
-	Kind              DiscoveryCandidateKind  `json:"kind"`
-	Labels            map[string]string       `json:"labels"`
-	LastSeenAt        time.Time               `json:"lastSeenAt"`
-	LocationId        openapi_types.UUID      `json:"locationId"`
-	Name              string                  `json:"name"`
-	PromotedMonitorId *openapi_types.UUID     `json:"promotedMonitorId,omitempty"`
-	State             DiscoveryCandidateState `json:"state"`
-	Target            string                  `json:"target"`
+	AgentId            openapi_types.UUID         `json:"agentId"`
+	DriftHint          *string                    `json:"driftHint,omitempty"`
+	FirstSeenAt        time.Time                  `json:"firstSeenAt"`
+	Id                 openapi_types.UUID         `json:"id"`
+	Labels             map[string]string          `json:"labels"`
+	LastObservedAt     time.Time                  `json:"lastObservedAt"`
+	LocationId         openapi_types.UUID         `json:"locationId"`
+	Name               string                     `json:"name"`
+	Namespace          string                     `json:"namespace"`
+	NetworkPerspective string                     `json:"networkPerspective"`
+	Present            bool                       `json:"present"`
+	PromotedMonitorId  *openapi_types.UUID        `json:"promotedMonitorId,omitempty"`
+	Protocol           DiscoveryCandidateProtocol `json:"protocol"`
+	SourceKind         string                     `json:"sourceKind"`
+	SourceUid          string                     `json:"sourceUid"`
+	State              DiscoveryCandidateState    `json:"state"`
+	Target             string                     `json:"target"`
+	UpdatedAt          time.Time                  `json:"updatedAt"`
 }
 
-// DiscoveryCandidateKind defines model for DiscoveryCandidate.Kind.
-type DiscoveryCandidateKind string
+// DiscoveryCandidateProtocol defines model for DiscoveryCandidate.Protocol.
+type DiscoveryCandidateProtocol string
 
 // DiscoveryCandidateBatch defines model for DiscoveryCandidateBatch.
 type DiscoveryCandidateBatch struct {
@@ -820,16 +826,20 @@ type DiscoveryCandidateBatchAcknowledgement struct {
 
 // DiscoveryCandidateInput defines model for DiscoveryCandidateInput.
 type DiscoveryCandidateInput struct {
-	ExternalId string                      `json:"externalId"`
-	Kind       DiscoveryCandidateInputKind `json:"kind"`
-	Labels     map[string]string           `json:"labels"`
-	Name       string                      `json:"name"`
-	ObservedAt time.Time                   `json:"observedAt"`
-	Target     string                      `json:"target"`
+	Labels             map[string]string               `json:"labels"`
+	Name               string                          `json:"name"`
+	Namespace          string                          `json:"namespace"`
+	NetworkPerspective string                          `json:"networkPerspective"`
+	ObservedAt         time.Time                       `json:"observedAt"`
+	Present            bool                            `json:"present"`
+	Protocol           DiscoveryCandidateInputProtocol `json:"protocol"`
+	SourceKind         string                          `json:"sourceKind"`
+	SourceUid          string                          `json:"sourceUid"`
+	Target             string                          `json:"target"`
 }
 
-// DiscoveryCandidateInputKind defines model for DiscoveryCandidateInput.Kind.
-type DiscoveryCandidateInputKind string
+// DiscoveryCandidateInputProtocol defines model for DiscoveryCandidateInput.Protocol.
+type DiscoveryCandidateInputProtocol string
 
 // DiscoveryCandidatePage defines model for DiscoveryCandidatePage.
 type DiscoveryCandidatePage struct {
@@ -2033,12 +2043,16 @@ type ClientInterface interface {
 
 	// UpsertDiscoveryCandidatesWithBody Idempotently upsert a bounded discovery candidate batch
 	//
+	// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
 	UpsertDiscoveryCandidatesWithBody(ctx context.Context, params *UpsertDiscoveryCandidatesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpsertDiscoveryCandidates Idempotently upsert a bounded discovery candidate batch
+	//
+	// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2446,6 +2460,8 @@ func (c *Client) EnrollAgent(ctx context.Context, body EnrollAgentJSONRequestBod
 
 // UpsertDiscoveryCandidatesWithBody Idempotently upsert a bounded discovery candidate batch
 //
+// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
@@ -2462,6 +2478,8 @@ func (c *Client) UpsertDiscoveryCandidatesWithBody(ctx context.Context, params *
 }
 
 // UpsertDiscoveryCandidates Idempotently upsert a bounded discovery candidate batch
+//
+// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -6353,12 +6371,16 @@ type ClientWithResponsesInterface interface {
 
 	// UpsertDiscoveryCandidatesWithBodyWithResponse Idempotently upsert a bounded discovery candidate batch
 	//
+	// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
 	UpsertDiscoveryCandidatesWithBodyWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesResponse, error)
 
 	// UpsertDiscoveryCandidatesWithResponse Idempotently upsert a bounded discovery candidate batch
+	//
+	// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9469,6 +9491,8 @@ func (c *ClientWithResponses) EnrollAgentWithResponse(ctx context.Context, body 
 
 // UpsertDiscoveryCandidatesWithBodyWithResponse Idempotently upsert a bounded discovery candidate batch
 //
+// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
@@ -9481,6 +9505,8 @@ func (c *ClientWithResponses) UpsertDiscoveryCandidatesWithBodyWithResponse(ctx 
 }
 
 // UpsertDiscoveryCandidatesWithResponse Idempotently upsert a bounded discovery candidate batch
+//
+// Upserts observations owned by the authenticated Agent. The server derives agentId and locationId from that principal. Stable identity is (agentId, locationId, sourceKind, sourceUid, protocol, target). present=false marks an existing candidate absent without deleting it or changing a promoted Monitor; an unknown tombstone and observations older than lastObservedAt are idempotent no-ops. Duplicate identities in one batch are rejected, and Idempotency-Key identifies the logical upload batch.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
