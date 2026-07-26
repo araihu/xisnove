@@ -17,6 +17,7 @@ tags:
   - name: notifications
   - name: maintenance
   - name: public-status
+  - name: operator
 paths:
   /v1/sessions:
     post:
@@ -240,6 +241,128 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/MonitorPage'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operator/monitors:apply:
+    post:
+      operationId: applyOperatorMonitor
+      summary: Apply the Monitor owned by one Kubernetes resource
+      tags: [operator]
+      security: [{apiTokenBearer: []}]
+      x-xisnove-scopes: [operator:provision]
+      parameters:
+        - {$ref: '#/components/parameters/RequiredIdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApplyOperatorMonitorRequest'}
+      responses:
+        '200':
+          description: Bounded remote Monitor reconciliation state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperatorMonitorApplyResult'}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operator/monitors:delete:
+    post:
+      operationId: deleteOperatorMonitor
+      summary: Delete the Monitor owned by one Kubernetes resource
+      tags: [operator]
+      security: [{apiTokenBearer: []}]
+      x-xisnove-scopes: [operator:provision]
+      parameters:
+        - {$ref: '#/components/parameters/RequiredIdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeleteOperatorMonitorRequest'}
+      responses:
+        '204': {description: Owned Monitor deleted or already absent}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operator/agents:apply:
+    post:
+      operationId: applyOperatorAgent
+      summary: Apply an Agent and its initial credential atomically
+      tags: [operator]
+      security: [{apiTokenBearer: []}]
+      x-xisnove-scopes: [operator:provision]
+      parameters:
+        - {$ref: '#/components/parameters/RequiredIdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApplyOperatorAgentRequest'}
+      responses:
+        '200':
+          description: Bounded remote Agent reconciliation state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperatorAgentApplyResult'}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operator/agents:delete:
+    post:
+      operationId: deleteOperatorAgent
+      summary: Delete the Agent owned by one Kubernetes resource
+      tags: [operator]
+      security: [{apiTokenBearer: []}]
+      x-xisnove-scopes: [operator:provision]
+      parameters:
+        - {$ref: '#/components/parameters/RequiredIdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeleteOperatorAgentRequest'}
+      responses:
+        '204': {description: Owned Agent deleted or already absent}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operator/agents/{agentId}/credentials/{generation}:
+    parameters:
+      - {$ref: '#/components/parameters/AgentID'}
+      - {$ref: '#/components/parameters/AgentCredentialGeneration'}
+    put:
+      operationId: putOperatorAgentCredential
+      summary: Register a later Agent credential generation
+      tags: [operator]
+      security: [{apiTokenBearer: []}]
+      x-xisnove-scopes: [operator:provision]
+      parameters:
+        - {$ref: '#/components/parameters/RequiredIdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PutOperatorAgentCredentialRequest'}
+      responses:
+        '204': {description: Credential generation registered}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operator/agents/{agentId}/credentials/{generation}:revoke:
+    parameters:
+      - {$ref: '#/components/parameters/AgentID'}
+      - {$ref: '#/components/parameters/AgentCredentialGeneration'}
+    post:
+      operationId: revokeOperatorAgentCredential
+      summary: Revoke an older Agent credential generation after replacement heartbeat
+      tags: [operator]
+      security: [{apiTokenBearer: []}]
+      x-xisnove-scopes: [operator:provision]
+      parameters:
+        - {$ref: '#/components/parameters/RequiredIdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RevokeOperatorAgentCredentialRequest'}
+      responses:
+        '204': {description: Credential generation revoked or already absent}
+        '409': {$ref: '#/components/responses/Problem'}
         default: {$ref: '#/components/responses/Problem'}
   /v1/monitors/{monitorId}:
     parameters:
@@ -1007,6 +1130,7 @@ components:
         - discovery:read
         - discovery:write
         - status:read
+        - operator:provision
     agentBearer:
       type: http
       scheme: bearer
@@ -1104,6 +1228,16 @@ components:
         minLength: 8
         maxLength: 200
         pattern: '^[A-Za-z0-9._~:+/-]+$'
+    RequiredIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Caller-generated key required for an operator mutation retry.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 200
+        pattern: '^[A-Za-z0-9._~:+/-]+$'
   responses:
     Problem:
       description: Problem details
@@ -1144,6 +1278,7 @@ components:
         - discovery:read
         - discovery:write
         - status:read
+        - operator:provision
     CreateAPITokenRequest:
       type: object
       additionalProperties: false
@@ -1153,7 +1288,7 @@ components:
         scopes:
           type: array
           minItems: 1
-          maxItems: 16
+          maxItems: 17
           uniqueItems: true
           items: {$ref: '#/components/schemas/APITokenScope'}
         expiresAt: {type: string, format: date-time}
@@ -1166,7 +1301,7 @@ components:
         scopes:
           type: array
           minItems: 1
-          maxItems: 16
+          maxItems: 17
           uniqueItems: true
           items: {$ref: '#/components/schemas/APITokenScope'}
         expiresAt: {type: string, format: date-time}
@@ -1180,7 +1315,7 @@ components:
         scopes:
           type: array
           minItems: 1
-          maxItems: 16
+          maxItems: 17
           uniqueItems: true
           items: {$ref: '#/components/schemas/APITokenScope'}
         expiresAt: {type: string, format: date-time}
@@ -1447,6 +1582,95 @@ components:
           type: array
           items: {$ref: '#/components/schemas/Monitor'}
         page: {$ref: '#/components/schemas/PageMetadata'}
+    ExternalOwner:
+      type: object
+      additionalProperties: false
+      required: [key, uid]
+      properties:
+        key: {type: string, minLength: 1, maxLength: 512}
+        uid: {type: string, minLength: 1, maxLength: 253}
+    ApplyOperatorMonitorRequest:
+      type: object
+      additionalProperties: false
+      required: [owner, monitor]
+      properties:
+        owner: {$ref: '#/components/schemas/ExternalOwner'}
+        monitor: {$ref: '#/components/schemas/UpdateMonitorRequest'}
+    DeleteOperatorMonitorRequest:
+      type: object
+      additionalProperties: false
+      required: [owner]
+      properties:
+        owner: {$ref: '#/components/schemas/ExternalOwner'}
+        externalId: {type: string, format: uuid}
+    OperatorMonitorApplyResult:
+      type: object
+      additionalProperties: false
+      required: [externalId, state, lastTransitionAt, lastObservedAt]
+      properties:
+        externalId: {type: string, format: uuid}
+        state: {$ref: '#/components/schemas/HealthState'}
+        lastTransitionAt: {type: string, format: date-time}
+        lastObservedAt: {type: string, format: date-time}
+    ApplyOperatorAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [owner, name, locationId, enabled, capabilities, initialCredential]
+      properties:
+        owner: {$ref: '#/components/schemas/ExternalOwner'}
+        name: {type: string, minLength: 1, maxLength: 120}
+        locationId: {type: string, format: uuid}
+        enabled: {type: boolean}
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/AgentCapability'}
+        initialCredential: {$ref: '#/components/schemas/OperatorInitialCredential'}
+    OperatorInitialCredential:
+      type: object
+      additionalProperties: false
+      required: [generation, credential]
+      properties:
+        generation: {type: integer, format: int64, minimum: 1}
+        credential:
+          type: string
+          minLength: 32
+          maxLength: 1024
+          writeOnly: true
+    PutOperatorAgentCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [owner, credential]
+      properties:
+        owner: {$ref: '#/components/schemas/ExternalOwner'}
+        credential:
+          type: string
+          minLength: 32
+          maxLength: 1024
+          writeOnly: true
+    RevokeOperatorAgentCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [owner]
+      properties:
+        owner: {$ref: '#/components/schemas/ExternalOwner'}
+    DeleteOperatorAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [owner]
+      properties:
+        owner: {$ref: '#/components/schemas/ExternalOwner'}
+        externalId: {type: string, format: uuid}
+    OperatorAgentApplyResult:
+      type: object
+      additionalProperties: false
+      required: [externalId, credentialGeneration]
+      properties:
+        externalId: {type: string, format: uuid}
+        credentialGeneration: {type: integer, format: int64, minimum: 1}
+        lastSeenAt: {type: string, format: date-time}
+        lastDiscoveryAt: {type: string, format: date-time}
     CreateAgentEnrollmentTokenRequest:
       type: object
       additionalProperties: false
@@ -1768,13 +1992,15 @@ components:
     DiscoveryCandidateBatch:
       type: object
       additionalProperties: false
-      required: [candidates]
+      required: [candidates, complete, completedAt]
       properties:
         candidates:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 500
           items: {$ref: '#/components/schemas/DiscoveryCandidateInput'}
+        complete: {type: boolean}
+        completedAt: {type: string, format: date-time}
     DiscoveryCandidateBatchAcknowledgement:
       type: object
       additionalProperties: false

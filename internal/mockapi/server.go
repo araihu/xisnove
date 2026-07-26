@@ -47,6 +47,8 @@ type Server struct {
 	agentCredentialsByToken      map[string]*mockAgentCredential
 	agentCredentialsByGeneration map[int64]*mockAgentCredential
 	currentAgentGeneration       int64
+	operatorMonitors             map[string]mockOperatorBinding
+	operatorAgents               map[string]*mockOperatorAgent
 }
 
 type mockAgentCredential struct {
@@ -62,6 +64,18 @@ type apiTokenRecord struct {
 	Name      string
 	Scopes    []string
 	RevokedAt string
+}
+
+type mockOperatorBinding struct {
+	ownerKey   string
+	ownerUID   string
+	externalID string
+}
+
+type mockOperatorAgent struct {
+	mockOperatorBinding
+	credentialGeneration int64
+	credentialHashes     map[int64]string
 }
 
 type storedResponse struct {
@@ -92,6 +106,8 @@ func NewServer() *Server {
 		idempotencyLocks:             map[string]*sync.Mutex{},
 		agentCredentialsByToken:      map[string]*mockAgentCredential{},
 		agentCredentialsByGeneration: map[int64]*mockAgentCredential{},
+		operatorMonitors:             map[string]mockOperatorBinding{},
+		operatorAgents:               map[string]*mockOperatorAgent{},
 		currentAgentGeneration:       1,
 		counters: map[string]int{
 			"token": 1000, "monitor": 2000, "candidate": 3000, "channel": 4000,
@@ -101,6 +117,15 @@ func NewServer() *Server {
 	server.agentCredentialsByToken[initialAgentCredential.token] = initialAgentCredential
 	server.agentCredentialsByGeneration[initialAgentCredential.generation] = initialAgentCredential
 	server.seedFixtures()
+	server.tokensByValue[FixtureFullAPIToken].Scopes = append(server.tokensByValue[FixtureFullAPIToken].Scopes, "operator:provision")
+	server.operatorAgents[operatorOwnerIdentity("fixture/operator-agent", "fixture-agent-uid")] = &mockOperatorAgent{
+		mockOperatorBinding:  mockOperatorBinding{ownerKey: "fixture/operator-agent", ownerUID: "fixture-agent-uid", externalID: fixtureAgentID},
+		credentialGeneration: 2,
+		credentialHashes: map[int64]string{
+			1: mockCredentialHash("xisnove_mock_operator_fixture_credential_0001"),
+			2: mockCredentialHash("xisnove_mock_operator_fixture_credential_0002"),
+		},
+	}
 	return server
 }
 
@@ -121,7 +146,7 @@ func (s *Server) Handler() http.Handler {
 			},
 		},
 	)
-	api := Handler(strict)
+	api := HandlerWithOptions(strict, StdHTTPServerOptions{BaseRouter: newOperatorActionServeMux()})
 	dispatch := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.serveScenario(w, r) {
 			return
@@ -133,6 +158,34 @@ func (s *Server) Handler() http.Handler {
 		panic(fmt.Sprintf("create OpenAPI-conforming mock handler: %v", err))
 	}
 	return captureRequestHash(conforming)
+}
+
+// operatorActionServeMux preserves the OpenAPI action suffix while adapting it
+// to net/http's wildcard grammar. oapi-codegen emits `{generation}:revoke`,
+// which Go's ServeMux rejects; the wrapper removes the action suffix only from
+// the captured path value before the generated handler parses it.
+type operatorActionServeMux struct{ *http.ServeMux }
+
+func newOperatorActionServeMux() *operatorActionServeMux {
+	return &operatorActionServeMux{ServeMux: http.NewServeMux()}
+}
+
+func (m *operatorActionServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	const action = "{generation}:revoke"
+	if !strings.Contains(pattern, action) {
+		m.ServeMux.HandleFunc(pattern, handler)
+		return
+	}
+	pattern = strings.Replace(pattern, action, "{generation}", 1)
+	m.ServeMux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		generation := r.PathValue("generation")
+		if !strings.HasSuffix(generation, ":revoke") {
+			http.NotFound(w, r)
+			return
+		}
+		r.SetPathValue("generation", strings.TrimSuffix(generation, ":revoke"))
+		handler(w, r)
+	})
 }
 
 func (s *Server) dispatchStrict(_ StrictHandlerFunc, operationID string) StrictHandlerFunc {
@@ -200,7 +253,7 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, operationID s
 	case "GetIncident", "ListIncidentEvents":
 		s.incident(w, r, strings.TrimPrefix(r.URL.Path, "/v1/incidents/"))
 	case "UpsertDiscoveryCandidates":
-		s.upsertDiscoveryCandidates(w, r)
+		s.upsertCompleteDiscoveryCandidates(w, r)
 	case "ListDiscoveryCandidates":
 		s.listDiscoveryCandidates(w, r)
 	case "GetDiscoveryCandidate", "PromoteDiscoveryCandidate":
@@ -213,6 +266,9 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, operationID s
 		s.listNotificationDeliveries(w, r)
 	case "GetPublicStatusPage":
 		s.publicStatus(w, r)
+	case "ApplyOperatorMonitor", "DeleteOperatorMonitor", "ApplyOperatorAgent",
+		"PutOperatorAgentCredential", "RevokeOperatorAgentCredential", "DeleteOperatorAgent":
+		s.operatorMutation(w, r, operationID)
 	default:
 		s.serveAdvertisedOperation(w, r, operationID)
 	}
@@ -500,4 +556,298 @@ func cloneMap(value map[string]any) map[string]any {
 		cloned[key] = item
 	}
 	return cloned
+}
+
+func (s *Server) operatorMutation(w http.ResponseWriter, r *http.Request, operationID string) {
+	if !s.authorize(w, r, "operator:provision") {
+		return
+	}
+	if s.replay(w, r) {
+		return
+	}
+	var input map[string]any
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	ownerKey, ownerUID, ok := operatorOwner(input)
+	if !ok {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
+		return
+	}
+	switch operationID {
+	case "ApplyOperatorMonitor":
+		s.applyOperatorMonitor(w, r, ownerKey, ownerUID)
+	case "DeleteOperatorMonitor":
+		s.deleteOperatorMonitor(w, r, ownerKey, ownerUID, optionalString(input, "externalId"))
+	case "ApplyOperatorAgent":
+		credential := nestedString(input, "initialCredential", "credential")
+		generation, validGeneration := nestedInt64(input, "initialCredential", "generation")
+		if credential == "" || !validGeneration {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
+			return
+		}
+		s.applyOperatorAgent(w, r, ownerKey, ownerUID, generation, credential)
+	case "PutOperatorAgentCredential":
+		s.putOperatorAgentCredential(w, r, ownerKey, ownerUID, nestedGeneration(r), optionalString(input, "credential"))
+	case "RevokeOperatorAgentCredential":
+		s.revokeOperatorAgentCredential(w, r, ownerKey, ownerUID, nestedGeneration(r))
+	case "DeleteOperatorAgent":
+		s.deleteOperatorAgent(w, r, ownerKey, ownerUID, optionalString(input, "externalId"))
+	}
+}
+
+func (s *Server) applyOperatorMonitor(w http.ResponseWriter, r *http.Request, key, uid string) {
+	identity := operatorOwnerIdentity(key, uid)
+	s.mu.Lock()
+	binding, found := s.operatorMonitors[identity]
+	if !found {
+		s.counters["monitor"]++
+		binding = mockOperatorBinding{ownerKey: key, ownerUID: uid, externalID: deterministicID("monitor", s.counters["monitor"])}
+		s.operatorMonitors[identity] = binding
+	}
+	s.mu.Unlock()
+	s.writeMutation(w, r, http.StatusOK, map[string]any{
+		"externalId": binding.externalID, "state": "pending",
+		"lastTransitionAt": fixtureTime, "lastObservedAt": fixtureTime,
+	})
+}
+
+func (s *Server) deleteOperatorMonitor(w http.ResponseWriter, r *http.Request, key, uid, externalID string) {
+	identity := operatorOwnerIdentity(key, uid)
+	s.mu.Lock()
+	binding, found := s.operatorMonitors[identity]
+	if (!found && s.monitorBindingForExternalID(externalID)) || (found && externalID != "" && binding.externalID != externalID) {
+		s.mu.Unlock()
+		writeProblem(w, r, http.StatusConflict, "operator_ownership_conflict", "Operator ownership conflict", nil)
+		return
+	}
+	delete(s.operatorMonitors, identity)
+	s.mu.Unlock()
+	s.writeEmptyMutation(w, r, http.StatusNoContent)
+}
+
+func (s *Server) applyOperatorAgent(w http.ResponseWriter, r *http.Request, key, uid string, generation int64, credential string) {
+	identity := operatorOwnerIdentity(key, uid)
+	hash := mockCredentialHash(credential)
+	s.mu.Lock()
+	agent, found := s.operatorAgents[identity]
+	if found {
+		if agent.credentialGeneration != generation || agent.credentialHashes[generation] != hash {
+			s.mu.Unlock()
+			writeProblem(w, r, http.StatusConflict, "operator_credential_hash_conflict", "Operator credential hash conflict", nil)
+			return
+		}
+	} else {
+		s.counters["agent"]++
+		agent = &mockOperatorAgent{
+			mockOperatorBinding:  mockOperatorBinding{ownerKey: key, ownerUID: uid, externalID: operatorAgentID(s.counters["agent"])},
+			credentialGeneration: generation, credentialHashes: map[int64]string{generation: hash},
+		}
+		s.operatorAgents[identity] = agent
+	}
+	s.mu.Unlock()
+	s.writeMutation(w, r, http.StatusOK, map[string]any{
+		"externalId": agent.externalID, "credentialGeneration": agent.credentialGeneration,
+	})
+}
+
+func (s *Server) putOperatorAgentCredential(w http.ResponseWriter, r *http.Request, key, uid string, generation int64, credential string) {
+	if generation < 2 || credential == "" {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
+		return
+	}
+	s.mu.Lock()
+	agent := s.agentBindingForExternalID(r.PathValue("agentId"))
+	if agent == nil || agent.ownerKey != key || agent.ownerUID != uid {
+		s.mu.Unlock()
+		writeProblem(w, r, http.StatusConflict, "operator_ownership_conflict", "Operator ownership conflict", nil)
+		return
+	}
+	hash := mockCredentialHash(credential)
+	if existing, found := agent.credentialHashes[generation]; found && existing != hash {
+		s.mu.Unlock()
+		writeProblem(w, r, http.StatusConflict, "operator_credential_hash_conflict", "Operator credential hash conflict", nil)
+		return
+	}
+	agent.credentialHashes[generation] = hash
+	if generation > agent.credentialGeneration {
+		agent.credentialGeneration = generation
+	}
+	s.mu.Unlock()
+	s.writeEmptyMutation(w, r, http.StatusNoContent)
+}
+
+func (s *Server) revokeOperatorAgentCredential(w http.ResponseWriter, r *http.Request, key, uid string, generation int64) {
+	s.mu.Lock()
+	agent := s.agentBindingForExternalID(r.PathValue("agentId"))
+	if agent == nil || agent.ownerKey != key || agent.ownerUID != uid {
+		s.mu.Unlock()
+		writeProblem(w, r, http.StatusConflict, "operator_ownership_conflict", "Operator ownership conflict", nil)
+		return
+	}
+	if generation >= agent.credentialGeneration {
+		s.mu.Unlock()
+		writeProblem(w, r, http.StatusConflict, "credential_overlap_incomplete", "Replacement credential has not completed an authenticated heartbeat", nil)
+		return
+	}
+	delete(agent.credentialHashes, generation)
+	s.mu.Unlock()
+	s.writeEmptyMutation(w, r, http.StatusNoContent)
+}
+
+func (s *Server) deleteOperatorAgent(w http.ResponseWriter, r *http.Request, key, uid, externalID string) {
+	identity := operatorOwnerIdentity(key, uid)
+	s.mu.Lock()
+	agent, found := s.operatorAgents[identity]
+	if (!found && s.agentBindingForExternalID(externalID) != nil) || (found && externalID != "" && agent.externalID != externalID) {
+		s.mu.Unlock()
+		writeProblem(w, r, http.StatusConflict, "operator_ownership_conflict", "Operator ownership conflict", nil)
+		return
+	}
+	delete(s.operatorAgents, identity)
+	s.mu.Unlock()
+	s.writeEmptyMutation(w, r, http.StatusNoContent)
+}
+
+func (s *Server) upsertCompleteDiscoveryCandidates(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, "agent:discovery") {
+		return
+	}
+	if s.replay(w, r) {
+		return
+	}
+	var input struct {
+		Candidates  []map[string]any `json:"candidates"`
+		Complete    bool             `json:"complete"`
+		CompletedAt string           `json:"completedAt"`
+	}
+	if !decodeJSON(w, r, &input) || len(input.Candidates) > 500 {
+		if len(input.Candidates) > 500 {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
+		}
+		return
+	}
+	s.mu.Lock()
+	created, updated := 0, 0
+	for _, candidateInput := range input.Candidates {
+		index := -1
+		for i, candidate := range s.candidates {
+			if candidate["agentId"] == fixtureAgentID && candidate["locationId"] == fixtureLocationID &&
+				candidate["sourceKind"] == candidateInput["sourceKind"] && candidate["sourceUid"] == candidateInput["sourceUid"] &&
+				candidate["protocol"] == candidateInput["protocol"] && candidate["target"] == candidateInput["target"] {
+				index = i
+				break
+			}
+		}
+		present, _ := candidateInput["present"].(bool)
+		if index < 0 && !present {
+			continue
+		}
+		if index < 0 {
+			s.counters["candidate"]++
+			s.candidates = append(s.candidates, map[string]any{
+				"id": deterministicID("candidate", s.counters["candidate"]), "agentId": fixtureAgentID, "locationId": fixtureLocationID,
+				"sourceKind": candidateInput["sourceKind"], "sourceUid": candidateInput["sourceUid"], "namespace": candidateInput["namespace"],
+				"name": candidateInput["name"], "labels": candidateInput["labels"], "protocol": candidateInput["protocol"],
+				"target": candidateInput["target"], "networkPerspective": candidateInput["networkPerspective"], "present": true,
+				"state": "pending", "firstSeenAt": candidateInput["observedAt"], "lastObservedAt": candidateInput["observedAt"], "updatedAt": candidateInput["observedAt"],
+			})
+			created++
+			continue
+		}
+		for _, field := range []string{"namespace", "name", "labels", "networkPerspective", "present"} {
+			s.candidates[index][field] = candidateInput[field]
+		}
+		s.candidates[index]["lastObservedAt"] = candidateInput["observedAt"]
+		s.candidates[index]["updatedAt"] = candidateInput["observedAt"]
+		updated++
+	}
+	if input.Complete {
+		for _, candidate := range s.candidates {
+			candidate["present"] = false
+		}
+		for _, candidateInput := range input.Candidates {
+			for _, candidate := range s.candidates {
+				if candidate["sourceKind"] == candidateInput["sourceKind"] && candidate["sourceUid"] == candidateInput["sourceUid"] &&
+					candidate["protocol"] == candidateInput["protocol"] && candidate["target"] == candidateInput["target"] {
+					candidate["present"] = candidateInput["present"]
+				}
+			}
+		}
+	}
+	s.mu.Unlock()
+	s.writeMutation(w, r, http.StatusOK, map[string]any{"accepted": len(input.Candidates), "created": created, "updated": updated})
+}
+
+func operatorOwner(input map[string]any) (string, string, bool) {
+	owner, ok := input["owner"].(map[string]any)
+	if !ok {
+		return "", "", false
+	}
+	key, keyOK := owner["key"].(string)
+	uid, uidOK := owner["uid"].(string)
+	return key, uid, keyOK && uidOK && key != "" && uid != ""
+}
+
+func operatorOwnerIdentity(key, uid string) string { return key + "\x00" + uid }
+
+func optionalString(input map[string]any, key string) string {
+	value, _ := input[key].(string)
+	return value
+}
+
+func nestedString(input map[string]any, parent, key string) string {
+	value, _ := input[parent].(map[string]any)
+	return optionalString(value, key)
+}
+
+func nestedInt64(input map[string]any, parent, key string) (int64, bool) {
+	value, _ := input[parent].(map[string]any)
+	switch number := value[key].(type) {
+	case float64:
+		return int64(number), number >= 1 && number == float64(int64(number))
+	case json.Number:
+		parsed, err := number.Int64()
+		return parsed, err == nil && parsed >= 1
+	default:
+		return 0, false
+	}
+}
+
+func nestedGeneration(r *http.Request) int64 {
+	generation, err := strconv.ParseInt(r.PathValue("generation"), 10, 64)
+	if err != nil || generation < 1 {
+		return 0
+	}
+	return generation
+}
+
+func mockCredentialHash(credential string) string {
+	sum := sha256.Sum256([]byte(credential))
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func operatorAgentID(sequence int) string {
+	return fmt.Sprintf("00000000-0000-4800-8000-%012d", sequence)
+}
+
+func (s *Server) monitorBindingForExternalID(externalID string) bool {
+	if externalID == "" {
+		return false
+	}
+	for _, binding := range s.operatorMonitors {
+		if binding.externalID == externalID {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) agentBindingForExternalID(externalID string) *mockOperatorAgent {
+	for _, agent := range s.operatorAgents {
+		if agent.externalID == externalID {
+			return agent
+		}
+	}
+	return nil
 }

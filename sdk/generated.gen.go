@@ -34,6 +34,7 @@ const (
 	MonitorsWrite      APITokenScope = "monitors:write"
 	NotificationsRead  APITokenScope = "notifications:read"
 	NotificationsWrite APITokenScope = "notifications:write"
+	OperatorProvision  APITokenScope = "operator:provision"
 	StatusRead         APITokenScope = "status:read"
 	TokensRead         APITokenScope = "tokens:read"
 	TokensWrite        APITokenScope = "tokens:write"
@@ -67,6 +68,8 @@ func (e APITokenScope) Valid() bool {
 	case NotificationsRead:
 		return true
 	case NotificationsWrite:
+		return true
+	case OperatorProvision:
 		return true
 	case StatusRead:
 		return true
@@ -700,6 +703,22 @@ type AlertmanagerChannelConfigurationInput struct {
 // AlertmanagerChannelConfigurationInputKind defines model for AlertmanagerChannelConfigurationInput.Kind.
 type AlertmanagerChannelConfigurationInputKind string
 
+// ApplyOperatorAgentRequest defines model for ApplyOperatorAgentRequest.
+type ApplyOperatorAgentRequest struct {
+	Capabilities      []AgentCapability         `json:"capabilities"`
+	Enabled           bool                      `json:"enabled"`
+	InitialCredential OperatorInitialCredential `json:"initialCredential"`
+	LocationId        openapi_types.UUID        `json:"locationId"`
+	Name              string                    `json:"name"`
+	Owner             ExternalOwner             `json:"owner"`
+}
+
+// ApplyOperatorMonitorRequest defines model for ApplyOperatorMonitorRequest.
+type ApplyOperatorMonitorRequest struct {
+	Monitor UpdateMonitorRequest `json:"monitor"`
+	Owner   ExternalOwner        `json:"owner"`
+}
+
 // CreateAPITokenRequest defines model for CreateAPITokenRequest.
 type CreateAPITokenRequest struct {
 	ExpiresAt *time.Time      `json:"expiresAt,omitempty"`
@@ -784,6 +803,18 @@ type DailyUptimePoint struct {
 	UptimePercentage float64            `json:"uptimePercentage"`
 }
 
+// DeleteOperatorAgentRequest defines model for DeleteOperatorAgentRequest.
+type DeleteOperatorAgentRequest struct {
+	ExternalId *openapi_types.UUID `json:"externalId,omitempty"`
+	Owner      ExternalOwner       `json:"owner"`
+}
+
+// DeleteOperatorMonitorRequest defines model for DeleteOperatorMonitorRequest.
+type DeleteOperatorMonitorRequest struct {
+	ExternalId *openapi_types.UUID `json:"externalId,omitempty"`
+	Owner      ExternalOwner       `json:"owner"`
+}
+
 // DiscoveryCandidate defines model for DiscoveryCandidate.
 type DiscoveryCandidate struct {
 	AgentId            openapi_types.UUID         `json:"agentId"`
@@ -811,7 +842,9 @@ type DiscoveryCandidateProtocol string
 
 // DiscoveryCandidateBatch defines model for DiscoveryCandidateBatch.
 type DiscoveryCandidateBatch struct {
-	Candidates []DiscoveryCandidateInput `json:"candidates"`
+	Candidates  []DiscoveryCandidateInput `json:"candidates"`
+	Complete    bool                      `json:"complete"`
+	CompletedAt time.Time                 `json:"completedAt"`
 }
 
 // DiscoveryCandidateBatchAcknowledgement defines model for DiscoveryCandidateBatchAcknowledgement.
@@ -865,6 +898,12 @@ type EnrolledAgent struct {
 	AgentId              openapi_types.UUID `json:"agentId"`
 	Credential           string             `json:"credential"`
 	CredentialGeneration int64              `json:"credentialGeneration"`
+}
+
+// ExternalOwner defines model for ExternalOwner.
+type ExternalOwner struct {
+	Key string `json:"key"`
+	Uid string `json:"uid"`
 }
 
 // FieldError defines model for FieldError.
@@ -1169,6 +1208,28 @@ type NotificationRoutePage struct {
 	Page   PageMetadata `json:"page"`
 }
 
+// OperatorAgentApplyResult defines model for OperatorAgentApplyResult.
+type OperatorAgentApplyResult struct {
+	CredentialGeneration int64              `json:"credentialGeneration"`
+	ExternalId           openapi_types.UUID `json:"externalId"`
+	LastDiscoveryAt      *time.Time         `json:"lastDiscoveryAt,omitempty"`
+	LastSeenAt           *time.Time         `json:"lastSeenAt,omitempty"`
+}
+
+// OperatorInitialCredential defines model for OperatorInitialCredential.
+type OperatorInitialCredential struct {
+	Credential *string `json:"credential,omitempty"`
+	Generation int64   `json:"generation"`
+}
+
+// OperatorMonitorApplyResult defines model for OperatorMonitorApplyResult.
+type OperatorMonitorApplyResult struct {
+	ExternalId       openapi_types.UUID `json:"externalId"`
+	LastObservedAt   time.Time          `json:"lastObservedAt"`
+	LastTransitionAt time.Time          `json:"lastTransitionAt"`
+	State            HealthState        `json:"state"`
+}
+
 // PageMetadata defines model for PageMetadata.
 type PageMetadata struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
@@ -1297,6 +1358,17 @@ type PublicStatusPage struct {
 	State           HealthState             `json:"state"`
 }
 
+// PutOperatorAgentCredentialRequest defines model for PutOperatorAgentCredentialRequest.
+type PutOperatorAgentCredentialRequest struct {
+	Credential *string       `json:"credential,omitempty"`
+	Owner      ExternalOwner `json:"owner"`
+}
+
+// RevokeOperatorAgentCredentialRequest defines model for RevokeOperatorAgentCredentialRequest.
+type RevokeOperatorAgentCredentialRequest struct {
+	Owner ExternalOwner `json:"owner"`
+}
+
 // Session defines model for Session.
 type Session struct {
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -1421,6 +1493,9 @@ type NotificationRouteID = openapi_types.UUID
 
 // Offset defines model for Offset.
 type Offset = int32
+
+// RequiredIdempotencyKey defines model for RequiredIdempotencyKey.
+type RequiredIdempotencyKey = string
 
 // CreateAgentEnrollmentTokenParams defines parameters for CreateAgentEnrollmentToken.
 type CreateAgentEnrollmentTokenParams struct {
@@ -1651,6 +1726,42 @@ type UpdateNotificationRouteParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// PutOperatorAgentCredentialParams defines parameters for PutOperatorAgentCredential.
+type PutOperatorAgentCredentialParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// RevokeOperatorAgentCredentialParams defines parameters for RevokeOperatorAgentCredential.
+type RevokeOperatorAgentCredentialParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ApplyOperatorAgentParams defines parameters for ApplyOperatorAgent.
+type ApplyOperatorAgentParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// DeleteOperatorAgentParams defines parameters for DeleteOperatorAgent.
+type DeleteOperatorAgentParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ApplyOperatorMonitorParams defines parameters for ApplyOperatorMonitor.
+type ApplyOperatorMonitorParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// DeleteOperatorMonitorParams defines parameters for DeleteOperatorMonitor.
+type DeleteOperatorMonitorParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
 // CreateAgentEnrollmentTokenJSONRequestBody defines body for CreateAgentEnrollmentToken for application/json ContentType.
 type CreateAgentEnrollmentTokenJSONRequestBody = CreateAgentEnrollmentTokenRequest
 
@@ -1707,6 +1818,24 @@ type CreateNotificationRouteJSONRequestBody = NotificationRouteInput
 
 // UpdateNotificationRouteJSONRequestBody defines body for UpdateNotificationRoute for application/json ContentType.
 type UpdateNotificationRouteJSONRequestBody = NotificationRouteInput
+
+// PutOperatorAgentCredentialJSONRequestBody defines body for PutOperatorAgentCredential for application/json ContentType.
+type PutOperatorAgentCredentialJSONRequestBody = PutOperatorAgentCredentialRequest
+
+// RevokeOperatorAgentCredentialJSONRequestBody defines body for RevokeOperatorAgentCredential for application/json ContentType.
+type RevokeOperatorAgentCredentialJSONRequestBody = RevokeOperatorAgentCredentialRequest
+
+// ApplyOperatorAgentJSONRequestBody defines body for ApplyOperatorAgent for application/json ContentType.
+type ApplyOperatorAgentJSONRequestBody = ApplyOperatorAgentRequest
+
+// DeleteOperatorAgentJSONRequestBody defines body for DeleteOperatorAgent for application/json ContentType.
+type DeleteOperatorAgentJSONRequestBody = DeleteOperatorAgentRequest
+
+// ApplyOperatorMonitorJSONRequestBody defines body for ApplyOperatorMonitor for application/json ContentType.
+type ApplyOperatorMonitorJSONRequestBody = ApplyOperatorMonitorRequest
+
+// DeleteOperatorMonitorJSONRequestBody defines body for DeleteOperatorMonitor for application/json ContentType.
+type DeleteOperatorMonitorJSONRequestBody = DeleteOperatorMonitorRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
@@ -2380,6 +2509,90 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/notification-routes/{routeId} (the `UpdateNotificationRoute` operationId).
 	UpdateNotificationRoute(ctx context.Context, routeId NotificationRouteID, params *UpdateNotificationRouteParams, body UpdateNotificationRouteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOperatorAgentCredentialWithBody Register a later Agent credential generation
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+	PutOperatorAgentCredentialWithBody(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOperatorAgentCredential Register a later Agent credential generation
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+	PutOperatorAgentCredential(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, body PutOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeOperatorAgentCredentialWithBody Revoke an older Agent credential generation after replacement heartbeat
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+	RevokeOperatorAgentCredentialWithBody(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeOperatorAgentCredential Revoke an older Agent credential generation after replacement heartbeat
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+	RevokeOperatorAgentCredential(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, body RevokeOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyOperatorAgentWithBody Apply an Agent and its initial credential atomically
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+	ApplyOperatorAgentWithBody(ctx context.Context, params *ApplyOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyOperatorAgent Apply an Agent and its initial credential atomically
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+	ApplyOperatorAgent(ctx context.Context, params *ApplyOperatorAgentParams, body ApplyOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOperatorAgentWithBody Delete the Agent owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+	DeleteOperatorAgentWithBody(ctx context.Context, params *DeleteOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOperatorAgent Delete the Agent owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+	DeleteOperatorAgent(ctx context.Context, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyOperatorMonitorWithBody Apply the Monitor owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+	ApplyOperatorMonitorWithBody(ctx context.Context, params *ApplyOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyOperatorMonitor Apply the Monitor owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+	ApplyOperatorMonitor(ctx context.Context, params *ApplyOperatorMonitorParams, body ApplyOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOperatorMonitorWithBody Delete the Monitor owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+	DeleteOperatorMonitorWithBody(ctx context.Context, params *DeleteOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOperatorMonitor Delete the Monitor owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+	DeleteOperatorMonitor(ctx context.Context, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSessionWithBody performs a POST /v1/sessions (the `CreateSession` operationId) request,
 	// with any type of body and a specified content type.
@@ -3468,6 +3681,210 @@ func (c *Client) UpdateNotificationRouteWithBody(ctx context.Context, routeId No
 // Corresponds with PUT /v1/notification-routes/{routeId} (the `UpdateNotificationRoute` operationId).
 func (c *Client) UpdateNotificationRoute(ctx context.Context, routeId NotificationRouteID, params *UpdateNotificationRouteParams, body UpdateNotificationRouteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateNotificationRouteRequest(c.Server, routeId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOperatorAgentCredentialWithBody Register a later Agent credential generation
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+func (c *Client) PutOperatorAgentCredentialWithBody(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOperatorAgentCredentialRequestWithBody(c.Server, agentId, generation, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOperatorAgentCredential Register a later Agent credential generation
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+func (c *Client) PutOperatorAgentCredential(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, body PutOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOperatorAgentCredentialRequest(c.Server, agentId, generation, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeOperatorAgentCredentialWithBody Revoke an older Agent credential generation after replacement heartbeat
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+func (c *Client) RevokeOperatorAgentCredentialWithBody(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeOperatorAgentCredentialRequestWithBody(c.Server, agentId, generation, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeOperatorAgentCredential Revoke an older Agent credential generation after replacement heartbeat
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+func (c *Client) RevokeOperatorAgentCredential(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, body RevokeOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeOperatorAgentCredentialRequest(c.Server, agentId, generation, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyOperatorAgentWithBody Apply an Agent and its initial credential atomically
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+func (c *Client) ApplyOperatorAgentWithBody(ctx context.Context, params *ApplyOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyOperatorAgentRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyOperatorAgent Apply an Agent and its initial credential atomically
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+func (c *Client) ApplyOperatorAgent(ctx context.Context, params *ApplyOperatorAgentParams, body ApplyOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyOperatorAgentRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOperatorAgentWithBody Delete the Agent owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+func (c *Client) DeleteOperatorAgentWithBody(ctx context.Context, params *DeleteOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOperatorAgentRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOperatorAgent Delete the Agent owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+func (c *Client) DeleteOperatorAgent(ctx context.Context, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOperatorAgentRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyOperatorMonitorWithBody Apply the Monitor owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+func (c *Client) ApplyOperatorMonitorWithBody(ctx context.Context, params *ApplyOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyOperatorMonitorRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyOperatorMonitor Apply the Monitor owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+func (c *Client) ApplyOperatorMonitor(ctx context.Context, params *ApplyOperatorMonitorParams, body ApplyOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyOperatorMonitorRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOperatorMonitorWithBody Delete the Monitor owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+func (c *Client) DeleteOperatorMonitorWithBody(ctx context.Context, params *DeleteOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOperatorMonitorRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOperatorMonitor Delete the Monitor owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+func (c *Client) DeleteOperatorMonitor(ctx context.Context, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOperatorMonitorRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6221,6 +6638,352 @@ func NewUpdateNotificationRouteRequestWithBody(server string, routeId Notificati
 	return req, nil
 }
 
+// NewPutOperatorAgentCredentialRequest calls the generic PutOperatorAgentCredential builder with application/json body
+func NewPutOperatorAgentCredentialRequest(server string, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, body PutOperatorAgentCredentialJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutOperatorAgentCredentialRequestWithBody(server, agentId, generation, params, "application/json", bodyReader)
+}
+
+// NewPutOperatorAgentCredentialRequestWithBody constructs an http.Request for the PutOperatorAgentCredential method, with any body, and a specified content type
+func NewPutOperatorAgentCredentialRequestWithBody(server string, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agentId", agentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "generation", generation, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/operator/agents/%s/credentials/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewRevokeOperatorAgentCredentialRequest calls the generic RevokeOperatorAgentCredential builder with application/json body
+func NewRevokeOperatorAgentCredentialRequest(server string, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, body RevokeOperatorAgentCredentialJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRevokeOperatorAgentCredentialRequestWithBody(server, agentId, generation, params, "application/json", bodyReader)
+}
+
+// NewRevokeOperatorAgentCredentialRequestWithBody constructs an http.Request for the RevokeOperatorAgentCredential method, with any body, and a specified content type
+func NewRevokeOperatorAgentCredentialRequestWithBody(server string, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agentId", agentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "generation", generation, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/operator/agents/%s/credentials/%s:revoke", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewApplyOperatorAgentRequest calls the generic ApplyOperatorAgent builder with application/json body
+func NewApplyOperatorAgentRequest(server string, params *ApplyOperatorAgentParams, body ApplyOperatorAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplyOperatorAgentRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewApplyOperatorAgentRequestWithBody constructs an http.Request for the ApplyOperatorAgent method, with any body, and a specified content type
+func NewApplyOperatorAgentRequestWithBody(server string, params *ApplyOperatorAgentParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/operator/agents:apply")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteOperatorAgentRequest calls the generic DeleteOperatorAgent builder with application/json body
+func NewDeleteOperatorAgentRequest(server string, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDeleteOperatorAgentRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewDeleteOperatorAgentRequestWithBody constructs an http.Request for the DeleteOperatorAgent method, with any body, and a specified content type
+func NewDeleteOperatorAgentRequestWithBody(server string, params *DeleteOperatorAgentParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/operator/agents:delete")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewApplyOperatorMonitorRequest calls the generic ApplyOperatorMonitor builder with application/json body
+func NewApplyOperatorMonitorRequest(server string, params *ApplyOperatorMonitorParams, body ApplyOperatorMonitorJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplyOperatorMonitorRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewApplyOperatorMonitorRequestWithBody constructs an http.Request for the ApplyOperatorMonitor method, with any body, and a specified content type
+func NewApplyOperatorMonitorRequestWithBody(server string, params *ApplyOperatorMonitorParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/operator/monitors:apply")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteOperatorMonitorRequest calls the generic DeleteOperatorMonitor builder with application/json body
+func NewDeleteOperatorMonitorRequest(server string, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDeleteOperatorMonitorRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewDeleteOperatorMonitorRequestWithBody constructs an http.Request for the DeleteOperatorMonitor method, with any body, and a specified content type
+func NewDeleteOperatorMonitorRequestWithBody(server string, params *DeleteOperatorMonitorParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/operator/monitors:delete")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewCreateSessionRequest calls the generic CreateSession builder with application/json body
 func NewCreateSessionRequest(server string, body CreateSessionJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -6804,6 +7567,90 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/notification-routes/{routeId} (the `UpdateNotificationRoute` operationId).
 	UpdateNotificationRouteWithResponse(ctx context.Context, routeId NotificationRouteID, params *UpdateNotificationRouteParams, body UpdateNotificationRouteJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateNotificationRouteResponse, error)
+
+	// PutOperatorAgentCredentialWithBodyWithResponse Register a later Agent credential generation
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+	PutOperatorAgentCredentialWithBodyWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOperatorAgentCredentialResponse, error)
+
+	// PutOperatorAgentCredentialWithResponse Register a later Agent credential generation
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+	PutOperatorAgentCredentialWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, body PutOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOperatorAgentCredentialResponse, error)
+
+	// RevokeOperatorAgentCredentialWithBodyWithResponse Revoke an older Agent credential generation after replacement heartbeat
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+	RevokeOperatorAgentCredentialWithBodyWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RevokeOperatorAgentCredentialResponse, error)
+
+	// RevokeOperatorAgentCredentialWithResponse Revoke an older Agent credential generation after replacement heartbeat
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+	RevokeOperatorAgentCredentialWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, body RevokeOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*RevokeOperatorAgentCredentialResponse, error)
+
+	// ApplyOperatorAgentWithBodyWithResponse Apply an Agent and its initial credential atomically
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+	ApplyOperatorAgentWithBodyWithResponse(ctx context.Context, params *ApplyOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyOperatorAgentResponse, error)
+
+	// ApplyOperatorAgentWithResponse Apply an Agent and its initial credential atomically
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+	ApplyOperatorAgentWithResponse(ctx context.Context, params *ApplyOperatorAgentParams, body ApplyOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyOperatorAgentResponse, error)
+
+	// DeleteOperatorAgentWithBodyWithResponse Delete the Agent owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+	DeleteOperatorAgentWithBodyWithResponse(ctx context.Context, params *DeleteOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOperatorAgentResponse, error)
+
+	// DeleteOperatorAgentWithResponse Delete the Agent owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+	DeleteOperatorAgentWithResponse(ctx context.Context, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOperatorAgentResponse, error)
+
+	// ApplyOperatorMonitorWithBodyWithResponse Apply the Monitor owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+	ApplyOperatorMonitorWithBodyWithResponse(ctx context.Context, params *ApplyOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyOperatorMonitorResponse, error)
+
+	// ApplyOperatorMonitorWithResponse Apply the Monitor owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+	ApplyOperatorMonitorWithResponse(ctx context.Context, params *ApplyOperatorMonitorParams, body ApplyOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyOperatorMonitorResponse, error)
+
+	// DeleteOperatorMonitorWithBodyWithResponse Delete the Monitor owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+	DeleteOperatorMonitorWithBodyWithResponse(ctx context.Context, params *DeleteOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOperatorMonitorResponse, error)
+
+	// DeleteOperatorMonitorWithResponse Delete the Monitor owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+	DeleteOperatorMonitorWithResponse(ctx context.Context, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOperatorMonitorResponse, error)
 
 	// CreateSessionWithBodyWithResponse performs a POST /v1/sessions (the `CreateSession` operationId) request,
 	// with any type of body and a specified content type.
@@ -9318,6 +10165,308 @@ func (r UpdateNotificationRouteResponse) ContentType() string {
 	return ""
 }
 
+type PutOperatorAgentCredentialResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PutOperatorAgentCredentialResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutOperatorAgentCredentialResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutOperatorAgentCredentialResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutOperatorAgentCredentialResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutOperatorAgentCredentialResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutOperatorAgentCredentialResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeOperatorAgentCredentialResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RevokeOperatorAgentCredentialResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RevokeOperatorAgentCredentialResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeOperatorAgentCredentialResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeOperatorAgentCredentialResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeOperatorAgentCredentialResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeOperatorAgentCredentialResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ApplyOperatorAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OperatorAgentApplyResult
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ApplyOperatorAgentResponse) GetJSON200() *OperatorAgentApplyResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ApplyOperatorAgentResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ApplyOperatorAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ApplyOperatorAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplyOperatorAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplyOperatorAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ApplyOperatorAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOperatorAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DeleteOperatorAgentResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOperatorAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOperatorAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOperatorAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOperatorAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOperatorAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ApplyOperatorMonitorResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OperatorMonitorApplyResult
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ApplyOperatorMonitorResponse) GetJSON200() *OperatorMonitorApplyResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ApplyOperatorMonitorResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ApplyOperatorMonitorResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ApplyOperatorMonitorResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplyOperatorMonitorResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplyOperatorMonitorResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ApplyOperatorMonitorResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOperatorMonitorResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DeleteOperatorMonitorResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOperatorMonitorResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOperatorMonitorResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOperatorMonitorResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOperatorMonitorResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOperatorMonitorResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateSessionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10331,6 +11480,162 @@ func (c *ClientWithResponses) UpdateNotificationRouteWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseUpdateNotificationRouteResponse(rsp)
+}
+
+// PutOperatorAgentCredentialWithBodyWithResponse Register a later Agent credential generation
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+func (c *ClientWithResponses) PutOperatorAgentCredentialWithBodyWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOperatorAgentCredentialResponse, error) {
+	rsp, err := c.PutOperatorAgentCredentialWithBody(ctx, agentId, generation, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOperatorAgentCredentialResponse(rsp)
+}
+
+// PutOperatorAgentCredentialWithResponse Register a later Agent credential generation
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/operator/agents/{agentId}/credentials/{generation} (the `PutOperatorAgentCredential` operationId).
+func (c *ClientWithResponses) PutOperatorAgentCredentialWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *PutOperatorAgentCredentialParams, body PutOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOperatorAgentCredentialResponse, error) {
+	rsp, err := c.PutOperatorAgentCredential(ctx, agentId, generation, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOperatorAgentCredentialResponse(rsp)
+}
+
+// RevokeOperatorAgentCredentialWithBodyWithResponse Revoke an older Agent credential generation after replacement heartbeat
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+func (c *ClientWithResponses) RevokeOperatorAgentCredentialWithBodyWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RevokeOperatorAgentCredentialResponse, error) {
+	rsp, err := c.RevokeOperatorAgentCredentialWithBody(ctx, agentId, generation, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeOperatorAgentCredentialResponse(rsp)
+}
+
+// RevokeOperatorAgentCredentialWithResponse Revoke an older Agent credential generation after replacement heartbeat
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke (the `RevokeOperatorAgentCredential` operationId).
+func (c *ClientWithResponses) RevokeOperatorAgentCredentialWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, params *RevokeOperatorAgentCredentialParams, body RevokeOperatorAgentCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*RevokeOperatorAgentCredentialResponse, error) {
+	rsp, err := c.RevokeOperatorAgentCredential(ctx, agentId, generation, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeOperatorAgentCredentialResponse(rsp)
+}
+
+// ApplyOperatorAgentWithBodyWithResponse Apply an Agent and its initial credential atomically
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+func (c *ClientWithResponses) ApplyOperatorAgentWithBodyWithResponse(ctx context.Context, params *ApplyOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyOperatorAgentResponse, error) {
+	rsp, err := c.ApplyOperatorAgentWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyOperatorAgentResponse(rsp)
+}
+
+// ApplyOperatorAgentWithResponse Apply an Agent and its initial credential atomically
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents:apply (the `ApplyOperatorAgent` operationId).
+func (c *ClientWithResponses) ApplyOperatorAgentWithResponse(ctx context.Context, params *ApplyOperatorAgentParams, body ApplyOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyOperatorAgentResponse, error) {
+	rsp, err := c.ApplyOperatorAgent(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyOperatorAgentResponse(rsp)
+}
+
+// DeleteOperatorAgentWithBodyWithResponse Delete the Agent owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+func (c *ClientWithResponses) DeleteOperatorAgentWithBodyWithResponse(ctx context.Context, params *DeleteOperatorAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOperatorAgentResponse, error) {
+	rsp, err := c.DeleteOperatorAgentWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOperatorAgentResponse(rsp)
+}
+
+// DeleteOperatorAgentWithResponse Delete the Agent owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
+func (c *ClientWithResponses) DeleteOperatorAgentWithResponse(ctx context.Context, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOperatorAgentResponse, error) {
+	rsp, err := c.DeleteOperatorAgent(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOperatorAgentResponse(rsp)
+}
+
+// ApplyOperatorMonitorWithBodyWithResponse Apply the Monitor owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+func (c *ClientWithResponses) ApplyOperatorMonitorWithBodyWithResponse(ctx context.Context, params *ApplyOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyOperatorMonitorResponse, error) {
+	rsp, err := c.ApplyOperatorMonitorWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyOperatorMonitorResponse(rsp)
+}
+
+// ApplyOperatorMonitorWithResponse Apply the Monitor owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/monitors:apply (the `ApplyOperatorMonitor` operationId).
+func (c *ClientWithResponses) ApplyOperatorMonitorWithResponse(ctx context.Context, params *ApplyOperatorMonitorParams, body ApplyOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyOperatorMonitorResponse, error) {
+	rsp, err := c.ApplyOperatorMonitor(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyOperatorMonitorResponse(rsp)
+}
+
+// DeleteOperatorMonitorWithBodyWithResponse Delete the Monitor owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+func (c *ClientWithResponses) DeleteOperatorMonitorWithBodyWithResponse(ctx context.Context, params *DeleteOperatorMonitorParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOperatorMonitorResponse, error) {
+	rsp, err := c.DeleteOperatorMonitorWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOperatorMonitorResponse(rsp)
+}
+
+// DeleteOperatorMonitorWithResponse Delete the Monitor owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
+func (c *ClientWithResponses) DeleteOperatorMonitorWithResponse(ctx context.Context, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOperatorMonitorResponse, error) {
+	rsp, err := c.DeleteOperatorMonitor(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOperatorMonitorResponse(rsp)
 }
 
 // CreateSessionWithBodyWithResponse performs a POST /v1/sessions (the `CreateSession` operationId) request,
@@ -12097,6 +13402,230 @@ func ParseUpdateNotificationRouteResponse(rsp *http.Response) (*UpdateNotificati
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutOperatorAgentCredentialResponse parses an HTTP response from a PutOperatorAgentCredentialWithResponse call
+func ParsePutOperatorAgentCredentialResponse(rsp *http.Response) (*PutOperatorAgentCredentialResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutOperatorAgentCredentialResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeOperatorAgentCredentialResponse parses an HTTP response from a RevokeOperatorAgentCredentialWithResponse call
+func ParseRevokeOperatorAgentCredentialResponse(rsp *http.Response) (*RevokeOperatorAgentCredentialResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeOperatorAgentCredentialResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplyOperatorAgentResponse parses an HTTP response from a ApplyOperatorAgentWithResponse call
+func ParseApplyOperatorAgentResponse(rsp *http.Response) (*ApplyOperatorAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplyOperatorAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperatorAgentApplyResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOperatorAgentResponse parses an HTTP response from a DeleteOperatorAgentWithResponse call
+func ParseDeleteOperatorAgentResponse(rsp *http.Response) (*DeleteOperatorAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOperatorAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApplyOperatorMonitorResponse parses an HTTP response from a ApplyOperatorMonitorWithResponse call
+func ParseApplyOperatorMonitorResponse(rsp *http.Response) (*ApplyOperatorMonitorResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplyOperatorMonitorResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperatorMonitorApplyResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOperatorMonitorResponse parses an HTTP response from a DeleteOperatorMonitorWithResponse call
+func ParseDeleteOperatorMonitorResponse(rsp *http.Response) (*DeleteOperatorMonitorResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOperatorMonitorResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

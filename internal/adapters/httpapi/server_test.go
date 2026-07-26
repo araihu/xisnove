@@ -66,6 +66,23 @@ func TestOperationalEndpoints(t *testing.T) {
 	}
 }
 
+func TestHandlerRegistersOperatorCredentialRevokeAction(t *testing.T) {
+	handler, err := NewHandler(HandlerConfig{Server: NewServer(ServerConfig{}), Ready: func(context.Context) error { return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost,
+		"/v1/operator/agents/00000000-0000-4800-8000-000000000801/credentials/1:revoke",
+		strings.NewReader(`{"owner":{"key":"monitoring.xisnove.io/Agent/default/edge","uid":"agent-uid-1"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "operator-revoke-route-1")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("operator credential revoke route status = %d, body = %s", response.Code, response.Body)
+	}
+}
+
 func TestMetricsEndpointIsOptIn(t *testing.T) {
 	handler, err := NewHandler(HandlerConfig{Server: NewServer(ServerConfig{}), Ready: func(context.Context) error { return nil }})
 	if err != nil {

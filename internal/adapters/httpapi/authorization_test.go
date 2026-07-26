@@ -51,6 +51,23 @@ func TestAuthorizationAllowsOnlyDeclaredTokenScope(t *testing.T) {
 	}
 }
 
+func TestAuthorizationAllowsOnlyProvisioningTokenForOperatorMutation(t *testing.T) {
+	authorization := testOperationAuthorization(t)
+	handler := authorization.middleware(testHumanAuthenticator, testAgentAuthenticator)(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) },
+	))
+	allowed := authorizeRequest(handler, http.MethodPost, "/v1/operator/monitors:apply", "operator-provisioner")
+	if allowed.Code != http.StatusNoContent {
+		t.Fatalf("operator token status = %d, body = %s", allowed.Code, allowed.Body)
+	}
+	for _, token := range []string{"admin-session", "monitor-reader"} {
+		denied := authorizeRequest(handler, http.MethodPost, "/v1/operator/monitors:apply", token)
+		if denied.Code != http.StatusForbidden {
+			t.Errorf("%s status = %d, want 403", token, denied.Code)
+		}
+	}
+}
+
 func TestAuthorizationMetadataRejectsMissingMultipleAndUnknownScopes(t *testing.T) {
 	for name, mutate := range map[string]func(*operationAuthorizationMetadataFixture){
 		"missing": func(fixture *operationAuthorizationMetadataFixture) {
@@ -163,6 +180,8 @@ func testHumanAuthenticator(_ context.Context, raw string) (application.Principa
 		return application.Principal{Kind: application.PrincipalAPIToken, Scopes: []application.Scope{application.ScopeTokensRead}}, nil
 	case "token-writer":
 		return application.Principal{Kind: application.PrincipalAPIToken, Scopes: []application.Scope{application.ScopeTokensWrite}}, nil
+	case "operator-provisioner":
+		return application.Principal{Kind: application.PrincipalAPIToken, Scopes: []application.Scope{application.ScopeOperatorProvision}}, nil
 	default:
 		return application.Principal{}, application.ErrInvalidCredentials
 	}

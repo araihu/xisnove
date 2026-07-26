@@ -109,7 +109,7 @@ func newOperationAuthorization(spec *openapi3.T) (*operationAuthorization, error
 					return nil, fmt.Errorf("human operation %q scope disagrees with the authorization map: %w", id, err)
 				}
 				allowAdmin, allowToken, securityOK := humanSecurityClasses(*operation.Security)
-				if !securityOK || !allowAdmin {
+				if !securityOK || (!allowAdmin && !allowToken) {
 					return nil, fmt.Errorf("human operation %q has unknown credential classes", id)
 				}
 				metadata[routeOperationID] = operationAuthorizationMetadata{

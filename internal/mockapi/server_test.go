@@ -155,6 +155,7 @@ func TestIncidentsDiscoveryNotificationsAndPublicStatusFixtures(t *testing.T) {
 			"networkPerspective": "cluster/default", "present": true,
 			"observedAt": "2026-07-25T12:00:00Z",
 		}},
+		"complete": true, "completedAt": "2026-07-25T12:00:00Z",
 	}, map[string]string{"Idempotency-Key": "discovery-demo-1"})
 	assertStatus(t, batch, http.StatusOK)
 
@@ -181,6 +182,7 @@ func TestIncidentsDiscoveryNotificationsAndPublicStatusFixtures(t *testing.T) {
 			"networkPerspective": "cluster/default", "present": false,
 			"observedAt": "2026-07-25T12:01:00Z",
 		}},
+		"complete": true, "completedAt": "2026-07-25T12:01:00Z",
 	}, map[string]string{"Idempotency-Key": "discovery-demo-tombstone-1"})
 	assertStatus(t, tombstone, http.StatusOK)
 	stale := request(t, server.URL, http.MethodGet, "/v1/discovery-candidates/"+candidate["id"].(string), session, nil, nil)
@@ -370,6 +372,9 @@ func TestEveryAdvertisedOperationReachesTheStrictMockDispatcher(t *testing.T) {
 				continue
 			}
 			path := replacePathParameters(path)
+			if operation.OperationID == "PutOperatorAgentCredential" {
+				path = strings.Replace(path, "/credentials/1", "/credentials/2", 1)
+			}
 			t.Run(operation.OperationID, func(t *testing.T) {
 				server := httptest.NewServer(mockapi.NewServer().Handler())
 				defer server.Close()
@@ -433,6 +438,72 @@ func TestAgentCredentialRotationLifecycleIsOverlapSafe(t *testing.T) {
 	assertStatus(heartbeat(mockapi.FixtureAgentToken, 1), http.StatusUnauthorized)
 	assertStatus(heartbeat(mockapi.FixtureAgentTokenGeneration2, 2), http.StatusNoContent)
 	assertStatus(rotate("credential-lifecycle-rotate-3"), http.StatusCreated)
+}
+
+func TestOperatorMockReplaysOwnedApplyAndRejectsOwnershipAndHashConflicts(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	owner := map[string]any{"key": "monitoring.xisnove.io/Monitor/default/edge", "uid": "monitor-uid-1"}
+	apply := map[string]any{"owner": owner, "monitor": updateMonitorInput("operator edge")}
+	headers := map[string]string{"Idempotency-Key": "operator-monitor-apply-1"}
+	first := request(t, server.URL, http.MethodPost, "/v1/operator/monitors:apply", mockapi.FixtureFullAPIToken, apply, headers)
+	assertStatus(t, first, http.StatusOK)
+	firstState := decodeObject(t, first)
+	if firstState["externalId"] == "" || firstState["credential"] != nil {
+		t.Fatalf("operator monitor result = %#v", firstState)
+	}
+	replayed := request(t, server.URL, http.MethodPost, "/v1/operator/monitors:apply", mockapi.FixtureFullAPIToken, apply, headers)
+	assertStatus(t, replayed, http.StatusOK)
+	if decodeObject(t, replayed)["externalId"] != firstState["externalId"] {
+		t.Fatal("operator apply replay changed external ID")
+	}
+	deleteBody := map[string]any{
+		"owner":      map[string]any{"key": owner["key"], "uid": "different-owner-uid"},
+		"externalId": firstState["externalId"],
+	}
+	deleteResponse := request(t, server.URL, http.MethodPost, "/v1/operator/monitors:delete", mockapi.FixtureFullAPIToken, deleteBody, map[string]string{"Idempotency-Key": "operator-owner-conflict-1"})
+	assertProblem(t, deleteResponse, http.StatusConflict, "operator_ownership_conflict")
+
+	agentOwner := map[string]any{"key": "monitoring.xisnove.io/Agent/default/edge", "uid": "agent-uid-1"}
+	agentApply := map[string]any{
+		"owner": agentOwner, "name": "operator edge", "locationId": "00000000-0000-4000-8000-000000000001",
+		"enabled": true, "capabilities": []string{"http"},
+		"initialCredential": map[string]any{"generation": 1, "credential": "xisnove_mock_operator_initial_credential_0001"},
+	}
+	agentResponse := request(t, server.URL, http.MethodPost, "/v1/operator/agents:apply", mockapi.FixtureFullAPIToken, agentApply, map[string]string{"Idempotency-Key": "operator-agent-apply-1"})
+	assertStatus(t, agentResponse, http.StatusOK)
+	agentState := decodeObject(t, agentResponse)
+	if agentState["externalId"] == "" || agentState["credential"] != nil {
+		t.Fatalf("operator agent result = %#v", agentState)
+	}
+	credentialPath := "/v1/operator/agents/" + agentState["externalId"].(string) + "/credentials/2"
+	rotation := map[string]any{"owner": agentOwner, "credential": "xisnove_mock_operator_rotation_credential_0002"}
+	put := request(t, server.URL, http.MethodPut, credentialPath, mockapi.FixtureFullAPIToken, rotation, map[string]string{"Idempotency-Key": "operator-agent-put-2"})
+	assertStatus(t, put, http.StatusNoContent)
+	conflict := request(t, server.URL, http.MethodPut, credentialPath, mockapi.FixtureFullAPIToken,
+		map[string]any{"owner": agentOwner, "credential": "xisnove_mock_operator_changed_credential_0002"},
+		map[string]string{"Idempotency-Key": "operator-agent-put-changed-2"})
+	assertProblem(t, conflict, http.StatusConflict, "operator_credential_hash_conflict")
+}
+
+func TestDiscoveryMockAcceptsAnEmptyCompleteSnapshot(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	response := request(t, server.URL, http.MethodPost, "/v1/agent/discovery-candidates:batch", agentToken,
+		map[string]any{"candidates": []any{}, "complete": true, "completedAt": "2026-07-25T12:05:00Z"},
+		map[string]string{"Idempotency-Key": "empty-complete-snapshot-1"})
+	assertStatus(t, response, http.StatusOK)
+	acknowledgement := decodeObject(t, response)
+	if acknowledgement["accepted"] != float64(0) || acknowledgement["created"] != float64(0) || acknowledgement["updated"] != float64(0) {
+		t.Fatalf("empty complete acknowledgement = %#v", acknowledgement)
+	}
+	catalog := request(t, server.URL, http.MethodGet, "/v1/discovery-candidates", mockapi.FixtureFullAPIToken, nil, nil)
+	assertStatus(t, catalog, http.StatusOK)
+	for _, item := range decodeObject(t, catalog)["items"].([]any) {
+		if item.(map[string]any)["present"] != false {
+			t.Fatalf("empty complete snapshot left candidate present: %#v", item)
+		}
+	}
 }
 
 func TestAgentResultUploadUsesContractAcknowledgementEnvelope(t *testing.T) {
@@ -509,7 +580,24 @@ func advertisedOperationRequest(operationID string) any {
 			"target": "https://contract.example.test/health", "networkPerspective": "cluster/default",
 			"present":    true,
 			"observedAt": "2026-07-25T12:00:00Z",
-		}}}
+		}}, "complete": true, "completedAt": "2026-07-25T12:00:00Z"}
+	case "ApplyOperatorMonitor":
+		return map[string]any{"owner": operatorFixtureOwner(), "monitor": updateMonitorInput("operator contract monitor")}
+	case "DeleteOperatorMonitor":
+		return map[string]any{"owner": operatorFixtureOwner()}
+	case "ApplyOperatorAgent":
+		return map[string]any{
+			"owner": map[string]any{"key": "fixture/operator-agent-apply", "uid": "fixture-agent-apply-uid"}, "name": "operator contract agent",
+			"locationId": "00000000-0000-4000-8000-000000000001", "enabled": true,
+			"capabilities":      []string{"http"},
+			"initialCredential": map[string]any{"generation": 1, "credential": "xisnove_mock_operator_contract_credential_01"},
+		}
+	case "PutOperatorAgentCredential":
+		return map[string]any{"owner": operatorFixtureOwner(), "credential": "xisnove_mock_operator_fixture_credential_0002"}
+	case "RevokeOperatorAgentCredential":
+		return map[string]any{"owner": operatorFixtureOwner()}
+	case "DeleteOperatorAgent":
+		return map[string]any{"owner": operatorFixtureOwner()}
 	case "PromoteDiscoveryCandidate":
 		return promotionInput("contract promotion")
 	case "CreateNotificationChannel", "UpdateNotificationChannel":
@@ -540,7 +628,8 @@ func advertisedSuccessStatus(operationID string) int {
 	switch operationID {
 	case "RevokeCurrentSession", "RevokeAPIToken", "DisableLocation", "DisableMonitor",
 		"HeartbeatAgent", "LeaseAgentWork", "RevokeAgent", "RevokeAgentCredentialGeneration", "DisableNotificationChannel",
-		"DisableNotificationRoute", "DeleteMaintenance":
+		"DisableNotificationRoute", "DeleteMaintenance", "DeleteOperatorMonitor", "PutOperatorAgentCredential",
+		"RevokeOperatorAgentCredential", "DeleteOperatorAgent":
 		return http.StatusNoContent
 	case "CreateAPIToken", "CreateLocation", "CreateMonitor", "CreateAgentEnrollmentToken",
 		"EnrollAgent", "RotateAgentCredential", "PromoteDiscoveryCandidate",
@@ -551,6 +640,10 @@ func advertisedSuccessStatus(operationID string) int {
 	default:
 		return http.StatusOK
 	}
+}
+
+func operatorFixtureOwner() map[string]any {
+	return map[string]any{"key": "fixture/operator-agent", "uid": "fixture-agent-uid"}
 }
 
 func replacePathParameters(path string) string {

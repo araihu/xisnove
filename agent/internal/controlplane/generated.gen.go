@@ -292,7 +292,9 @@ type DNSProbeDefinitionRecordType string
 
 // DiscoveryCandidateBatch defines model for DiscoveryCandidateBatch.
 type DiscoveryCandidateBatch struct {
-	Candidates []DiscoveryCandidateInput `json:"candidates"`
+	Candidates  []DiscoveryCandidateInput `json:"candidates"`
+	Complete    bool                      `json:"complete"`
+	CompletedAt time.Time                 `json:"completedAt"`
 }
 
 // DiscoveryCandidateBatchAcknowledgement defines model for DiscoveryCandidateBatchAcknowledgement.

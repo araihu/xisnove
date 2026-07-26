@@ -158,6 +158,27 @@ func TestAuthorizationMapDeniesUnknownOperation(t *testing.T) {
 	}
 }
 
+func TestOperatorProvisionScopeAuthorizesOnlyOperatorMutations(t *testing.T) {
+	principal := application.Principal{
+		Kind: application.PrincipalAPIToken,
+		Scopes: []application.Scope{application.Scope("operator:provision")},
+	}
+	for _, operationID := range []string{
+		"applyOperatorMonitor", "deleteOperatorMonitor", "applyOperatorAgent",
+		"putOperatorAgentCredential", "revokeOperatorAgentCredential", "deleteOperatorAgent",
+	} {
+		if err := application.Authorize(operationID, principal); err != nil {
+			t.Errorf("Authorize(%q) = %v, want operator token allowed", operationID, err)
+		}
+	}
+	if err := application.Authorize("createMonitor", principal); !errors.Is(err, application.ErrForbidden) {
+		t.Fatalf("operator token created a monitor directly: %v", err)
+	}
+	if _, err := application.NormalizeScopes([]application.Scope{application.Scope("operator:provision")}); err != nil {
+		t.Fatalf("NormalizeScopes() rejects operator:provision: %v", err)
+	}
+}
+
 type fakeAPITokenRepository struct {
 	records []application.APITokenRecord
 }

@@ -43,6 +43,9 @@ func TestContractUsesLatestOAPICodegenSupportedOpenAPIAndIsValid(t *testing.T) {
 		"replayNotificationDelivery": false, "createMaintenance": false,
 		"listMaintenance": false, "getMaintenance": false,
 		"deleteMaintenance": false, "endMaintenance": false,
+		"applyOperatorMonitor": false, "deleteOperatorMonitor": false,
+		"applyOperatorAgent": false, "putOperatorAgentCredential": false,
+		"revokeOperatorAgentCredential": false, "deleteOperatorAgent": false,
 	}
 	for _, item := range doc.Paths.Map() {
 		for _, op := range []*openapi3.Operation{

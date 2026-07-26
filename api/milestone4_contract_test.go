@@ -20,7 +20,7 @@ var recognizedAPITokenScopes = map[string]bool{
 	"notifications:read": true, "notifications:write": true,
 	"maintenance:read": true, "maintenance:write": true,
 	"discovery:read": true, "discovery:write": true,
-	"status:read": true,
+	"status:read": true, "operator:provision": true,
 }
 
 func TestContractUsesOpenAPI312(t *testing.T) {
@@ -372,8 +372,13 @@ func TestDiscoveryBatchIsBounded(t *testing.T) {
 	}
 	candidates := batch.Value.Properties["candidates"]
 	if candidates == nil || candidates.Value == nil || candidates.Value.MaxItems == nil ||
-		candidates.Value.MinItems != 1 || *candidates.Value.MaxItems != 500 {
+		candidates.Value.MinItems != 0 || *candidates.Value.MaxItems != 500 {
 		t.Fatalf("discovery candidates bound = %#v", candidates)
+	}
+	for _, field := range []string{"complete", "completedAt"} {
+		if !slices.Contains(batch.Value.Required, field) || batch.Value.Properties[field] == nil {
+			t.Errorf("DiscoveryCandidateBatch does not require %s", field)
+		}
 	}
 
 	ack := doc.Components.Schemas["DiscoveryCandidateBatchAcknowledgement"]

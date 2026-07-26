@@ -276,7 +276,9 @@ func TestCreateMonitorRejectsSecretLiteralHeader(t *testing.T) {
 
 func TestCreateTCPAndDNSMonitorsRoundTripThroughSDK(t *testing.T) {
 	strict := httpapi.NewStrictHandler(newConfigurationServer(t), nil)
-	server := httptest.NewServer(httpapi.Handler(strict))
+	server := httptest.NewServer(httpapi.HandlerWithOptions(strict, httpapi.StdHTTPServerOptions{
+		BaseRouter: httpapi.NewOperatorActionServeMux(),
+	}))
 	t.Cleanup(server.Close)
 	client, err := sdk.NewClientWithResponses(server.URL)
 	if err != nil {

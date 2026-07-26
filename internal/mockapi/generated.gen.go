@@ -39,6 +39,7 @@ const (
 	MonitorsWrite      APITokenScope = "monitors:write"
 	NotificationsRead  APITokenScope = "notifications:read"
 	NotificationsWrite APITokenScope = "notifications:write"
+	OperatorProvision  APITokenScope = "operator:provision"
 	StatusRead         APITokenScope = "status:read"
 	TokensRead         APITokenScope = "tokens:read"
 	TokensWrite        APITokenScope = "tokens:write"
@@ -72,6 +73,8 @@ func (e APITokenScope) Valid() bool {
 	case NotificationsRead:
 		return true
 	case NotificationsWrite:
+		return true
+	case OperatorProvision:
 		return true
 	case StatusRead:
 		return true
@@ -705,6 +708,22 @@ type AlertmanagerChannelConfigurationInput struct {
 // AlertmanagerChannelConfigurationInputKind defines model for AlertmanagerChannelConfigurationInput.Kind.
 type AlertmanagerChannelConfigurationInputKind string
 
+// ApplyOperatorAgentRequest defines model for ApplyOperatorAgentRequest.
+type ApplyOperatorAgentRequest struct {
+	Capabilities      []AgentCapability         `json:"capabilities"`
+	Enabled           bool                      `json:"enabled"`
+	InitialCredential OperatorInitialCredential `json:"initialCredential"`
+	LocationId        openapi_types.UUID        `json:"locationId"`
+	Name              string                    `json:"name"`
+	Owner             ExternalOwner             `json:"owner"`
+}
+
+// ApplyOperatorMonitorRequest defines model for ApplyOperatorMonitorRequest.
+type ApplyOperatorMonitorRequest struct {
+	Monitor UpdateMonitorRequest `json:"monitor"`
+	Owner   ExternalOwner        `json:"owner"`
+}
+
 // CreateAPITokenRequest defines model for CreateAPITokenRequest.
 type CreateAPITokenRequest struct {
 	ExpiresAt *time.Time      `json:"expiresAt,omitempty"`
@@ -789,6 +808,18 @@ type DailyUptimePoint struct {
 	UptimePercentage float64            `json:"uptimePercentage"`
 }
 
+// DeleteOperatorAgentRequest defines model for DeleteOperatorAgentRequest.
+type DeleteOperatorAgentRequest struct {
+	ExternalId *openapi_types.UUID `json:"externalId,omitempty"`
+	Owner      ExternalOwner       `json:"owner"`
+}
+
+// DeleteOperatorMonitorRequest defines model for DeleteOperatorMonitorRequest.
+type DeleteOperatorMonitorRequest struct {
+	ExternalId *openapi_types.UUID `json:"externalId,omitempty"`
+	Owner      ExternalOwner       `json:"owner"`
+}
+
 // DiscoveryCandidate defines model for DiscoveryCandidate.
 type DiscoveryCandidate struct {
 	AgentId            openapi_types.UUID         `json:"agentId"`
@@ -816,7 +847,9 @@ type DiscoveryCandidateProtocol string
 
 // DiscoveryCandidateBatch defines model for DiscoveryCandidateBatch.
 type DiscoveryCandidateBatch struct {
-	Candidates []DiscoveryCandidateInput `json:"candidates"`
+	Candidates  []DiscoveryCandidateInput `json:"candidates"`
+	Complete    bool                      `json:"complete"`
+	CompletedAt time.Time                 `json:"completedAt"`
 }
 
 // DiscoveryCandidateBatchAcknowledgement defines model for DiscoveryCandidateBatchAcknowledgement.
@@ -870,6 +903,12 @@ type EnrolledAgent struct {
 	AgentId              openapi_types.UUID `json:"agentId"`
 	Credential           string             `json:"credential"`
 	CredentialGeneration int64              `json:"credentialGeneration"`
+}
+
+// ExternalOwner defines model for ExternalOwner.
+type ExternalOwner struct {
+	Key string `json:"key"`
+	Uid string `json:"uid"`
 }
 
 // FieldError defines model for FieldError.
@@ -1174,6 +1213,28 @@ type NotificationRoutePage struct {
 	Page   PageMetadata `json:"page"`
 }
 
+// OperatorAgentApplyResult defines model for OperatorAgentApplyResult.
+type OperatorAgentApplyResult struct {
+	CredentialGeneration int64              `json:"credentialGeneration"`
+	ExternalId           openapi_types.UUID `json:"externalId"`
+	LastDiscoveryAt      *time.Time         `json:"lastDiscoveryAt,omitempty"`
+	LastSeenAt           *time.Time         `json:"lastSeenAt,omitempty"`
+}
+
+// OperatorInitialCredential defines model for OperatorInitialCredential.
+type OperatorInitialCredential struct {
+	Credential *string `json:"credential,omitempty"`
+	Generation int64   `json:"generation"`
+}
+
+// OperatorMonitorApplyResult defines model for OperatorMonitorApplyResult.
+type OperatorMonitorApplyResult struct {
+	ExternalId       openapi_types.UUID `json:"externalId"`
+	LastObservedAt   time.Time          `json:"lastObservedAt"`
+	LastTransitionAt time.Time          `json:"lastTransitionAt"`
+	State            HealthState        `json:"state"`
+}
+
 // PageMetadata defines model for PageMetadata.
 type PageMetadata struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
@@ -1302,6 +1363,17 @@ type PublicStatusPage struct {
 	State           HealthState             `json:"state"`
 }
 
+// PutOperatorAgentCredentialRequest defines model for PutOperatorAgentCredentialRequest.
+type PutOperatorAgentCredentialRequest struct {
+	Credential *string       `json:"credential,omitempty"`
+	Owner      ExternalOwner `json:"owner"`
+}
+
+// RevokeOperatorAgentCredentialRequest defines model for RevokeOperatorAgentCredentialRequest.
+type RevokeOperatorAgentCredentialRequest struct {
+	Owner ExternalOwner `json:"owner"`
+}
+
 // Session defines model for Session.
 type Session struct {
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -1426,6 +1498,9 @@ type NotificationRouteID = openapi_types.UUID
 
 // Offset defines model for Offset.
 type Offset = int32
+
+// RequiredIdempotencyKey defines model for RequiredIdempotencyKey.
+type RequiredIdempotencyKey = string
 
 // CreateAgentEnrollmentTokenParams defines parameters for CreateAgentEnrollmentToken.
 type CreateAgentEnrollmentTokenParams struct {
@@ -1656,6 +1731,42 @@ type UpdateNotificationRouteParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// PutOperatorAgentCredentialParams defines parameters for PutOperatorAgentCredential.
+type PutOperatorAgentCredentialParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// RevokeOperatorAgentCredentialParams defines parameters for RevokeOperatorAgentCredential.
+type RevokeOperatorAgentCredentialParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ApplyOperatorAgentParams defines parameters for ApplyOperatorAgent.
+type ApplyOperatorAgentParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// DeleteOperatorAgentParams defines parameters for DeleteOperatorAgent.
+type DeleteOperatorAgentParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// ApplyOperatorMonitorParams defines parameters for ApplyOperatorMonitor.
+type ApplyOperatorMonitorParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// DeleteOperatorMonitorParams defines parameters for DeleteOperatorMonitor.
+type DeleteOperatorMonitorParams struct {
+	// IdempotencyKey Caller-generated key required for an operator mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
 // CreateAgentEnrollmentTokenJSONRequestBody defines body for CreateAgentEnrollmentToken for application/json ContentType.
 type CreateAgentEnrollmentTokenJSONRequestBody = CreateAgentEnrollmentTokenRequest
 
@@ -1712,6 +1823,24 @@ type CreateNotificationRouteJSONRequestBody = NotificationRouteInput
 
 // UpdateNotificationRouteJSONRequestBody defines body for UpdateNotificationRoute for application/json ContentType.
 type UpdateNotificationRouteJSONRequestBody = NotificationRouteInput
+
+// PutOperatorAgentCredentialJSONRequestBody defines body for PutOperatorAgentCredential for application/json ContentType.
+type PutOperatorAgentCredentialJSONRequestBody = PutOperatorAgentCredentialRequest
+
+// RevokeOperatorAgentCredentialJSONRequestBody defines body for RevokeOperatorAgentCredential for application/json ContentType.
+type RevokeOperatorAgentCredentialJSONRequestBody = RevokeOperatorAgentCredentialRequest
+
+// ApplyOperatorAgentJSONRequestBody defines body for ApplyOperatorAgent for application/json ContentType.
+type ApplyOperatorAgentJSONRequestBody = ApplyOperatorAgentRequest
+
+// DeleteOperatorAgentJSONRequestBody defines body for DeleteOperatorAgent for application/json ContentType.
+type DeleteOperatorAgentJSONRequestBody = DeleteOperatorAgentRequest
+
+// ApplyOperatorMonitorJSONRequestBody defines body for ApplyOperatorMonitor for application/json ContentType.
+type ApplyOperatorMonitorJSONRequestBody = ApplyOperatorMonitorRequest
+
+// DeleteOperatorMonitorJSONRequestBody defines body for DeleteOperatorMonitor for application/json ContentType.
+type DeleteOperatorMonitorJSONRequestBody = DeleteOperatorMonitorRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
@@ -2115,6 +2244,24 @@ type ServerInterface interface {
 	// UpdateNotificationRoute Replace a notification route
 	// (PUT /v1/notification-routes/{routeId})
 	UpdateNotificationRoute(w http.ResponseWriter, r *http.Request, routeId NotificationRouteID, params UpdateNotificationRouteParams)
+	// PutOperatorAgentCredential Register a later Agent credential generation
+	// (PUT /v1/operator/agents/{agentId}/credentials/{generation})
+	PutOperatorAgentCredential(w http.ResponseWriter, r *http.Request, agentId AgentID, generation AgentCredentialGeneration, params PutOperatorAgentCredentialParams)
+	// RevokeOperatorAgentCredential Revoke an older Agent credential generation after replacement heartbeat
+	// (POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke)
+	RevokeOperatorAgentCredential(w http.ResponseWriter, r *http.Request, agentId AgentID, generation AgentCredentialGeneration, params RevokeOperatorAgentCredentialParams)
+	// ApplyOperatorAgent Apply an Agent and its initial credential atomically
+	// (POST /v1/operator/agents:apply)
+	ApplyOperatorAgent(w http.ResponseWriter, r *http.Request, params ApplyOperatorAgentParams)
+	// DeleteOperatorAgent Delete the Agent owned by one Kubernetes resource
+	// (POST /v1/operator/agents:delete)
+	DeleteOperatorAgent(w http.ResponseWriter, r *http.Request, params DeleteOperatorAgentParams)
+	// ApplyOperatorMonitor Apply the Monitor owned by one Kubernetes resource
+	// (POST /v1/operator/monitors:apply)
+	ApplyOperatorMonitor(w http.ResponseWriter, r *http.Request, params ApplyOperatorMonitorParams)
+	// DeleteOperatorMonitor Delete the Monitor owned by one Kubernetes resource
+	// (POST /v1/operator/monitors:delete)
+	DeleteOperatorMonitor(w http.ResponseWriter, r *http.Request, params DeleteOperatorMonitorParams)
 
 	// (POST /v1/sessions)
 	CreateSession(w http.ResponseWriter, r *http.Request)
@@ -4154,6 +4301,312 @@ func (siw *ServerInterfaceWrapper) UpdateNotificationRoute(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// PutOperatorAgentCredential operation middleware
+func (siw *ServerInterfaceWrapper) PutOperatorAgentCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "generation" -------------
+	var generation AgentCredentialGeneration
+
+	err = runtime.BindStyledParameterWithOptions("simple", "generation", r.PathValue("generation"), &generation, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "generation", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutOperatorAgentCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey RequiredIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutOperatorAgentCredential(w, r, agentId, generation, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeOperatorAgentCredential operation middleware
+func (siw *ServerInterfaceWrapper) RevokeOperatorAgentCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentId" -------------
+	var agentId AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentId", r.PathValue("agentId"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "generation" -------------
+	var generation AgentCredentialGeneration
+
+	err = runtime.BindStyledParameterWithOptions("simple", "generation", r.PathValue("generation"), &generation, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "generation", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeOperatorAgentCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey RequiredIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeOperatorAgentCredential(w, r, agentId, generation, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyOperatorAgent operation middleware
+func (siw *ServerInterfaceWrapper) ApplyOperatorAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyOperatorAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey RequiredIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyOperatorAgent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOperatorAgent operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOperatorAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOperatorAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey RequiredIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOperatorAgent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyOperatorMonitor operation middleware
+func (siw *ServerInterfaceWrapper) ApplyOperatorMonitor(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyOperatorMonitorParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey RequiredIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyOperatorMonitor(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOperatorMonitor operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOperatorMonitor(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOperatorMonitorParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey RequiredIdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOperatorMonitor(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateSession operation middleware
 func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.Request) {
 
@@ -4330,6 +4783,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/locations/{locationId}", wrapper.UpdateLocation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/monitors", wrapper.ListMonitors)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/monitors", wrapper.CreateMonitor)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/operator/monitors:apply", wrapper.ApplyOperatorMonitor)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/operator/monitors:delete", wrapper.DeleteOperatorMonitor)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/operator/agents:apply", wrapper.ApplyOperatorAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/operator/agents:delete", wrapper.DeleteOperatorAgent)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/operator/agents/{agentId}/credentials/{generation}", wrapper.PutOperatorAgentCredential)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/operator/agents/{agentId}/credentials/{generation}:revoke", wrapper.RevokeOperatorAgentCredential)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/monitors/{monitorId}", wrapper.DisableMonitor)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/monitors/{monitorId}", wrapper.GetMonitor)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/monitors/{monitorId}", wrapper.UpdateMonitor)
@@ -6456,6 +6915,322 @@ func (response UpdateNotificationRoutedefaultApplicationProblemPlusJSONResponse)
 	return err
 }
 
+type PutOperatorAgentCredentialRequestObject struct {
+	AgentId    AgentID                   `json:"agentId"`
+	Generation AgentCredentialGeneration `json:"generation"`
+	Params     PutOperatorAgentCredentialParams
+	Body       *PutOperatorAgentCredentialJSONRequestBody
+}
+
+type PutOperatorAgentCredentialResponseObject interface {
+	VisitPutOperatorAgentCredentialResponse(w http.ResponseWriter) error
+}
+
+type PutOperatorAgentCredential204Response struct {
+}
+
+func (response PutOperatorAgentCredential204Response) VisitPutOperatorAgentCredentialResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PutOperatorAgentCredential409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PutOperatorAgentCredential409ApplicationProblemPlusJSONResponse) VisitPutOperatorAgentCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutOperatorAgentCredentialdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutOperatorAgentCredentialdefaultApplicationProblemPlusJSONResponse) VisitPutOperatorAgentCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeOperatorAgentCredentialRequestObject struct {
+	AgentId    AgentID                   `json:"agentId"`
+	Generation AgentCredentialGeneration `json:"generation"`
+	Params     RevokeOperatorAgentCredentialParams
+	Body       *RevokeOperatorAgentCredentialJSONRequestBody
+}
+
+type RevokeOperatorAgentCredentialResponseObject interface {
+	VisitRevokeOperatorAgentCredentialResponse(w http.ResponseWriter) error
+}
+
+type RevokeOperatorAgentCredential204Response struct {
+}
+
+func (response RevokeOperatorAgentCredential204Response) VisitRevokeOperatorAgentCredentialResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeOperatorAgentCredential409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeOperatorAgentCredential409ApplicationProblemPlusJSONResponse) VisitRevokeOperatorAgentCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeOperatorAgentCredentialdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeOperatorAgentCredentialdefaultApplicationProblemPlusJSONResponse) VisitRevokeOperatorAgentCredentialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyOperatorAgentRequestObject struct {
+	Params ApplyOperatorAgentParams
+	Body   *ApplyOperatorAgentJSONRequestBody
+}
+
+type ApplyOperatorAgentResponseObject interface {
+	VisitApplyOperatorAgentResponse(w http.ResponseWriter) error
+}
+
+type ApplyOperatorAgent200JSONResponse OperatorAgentApplyResult
+
+func (response ApplyOperatorAgent200JSONResponse) VisitApplyOperatorAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyOperatorAgent409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyOperatorAgent409ApplicationProblemPlusJSONResponse) VisitApplyOperatorAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyOperatorAgentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ApplyOperatorAgentdefaultApplicationProblemPlusJSONResponse) VisitApplyOperatorAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOperatorAgentRequestObject struct {
+	Params DeleteOperatorAgentParams
+	Body   *DeleteOperatorAgentJSONRequestBody
+}
+
+type DeleteOperatorAgentResponseObject interface {
+	VisitDeleteOperatorAgentResponse(w http.ResponseWriter) error
+}
+
+type DeleteOperatorAgent204Response struct {
+}
+
+func (response DeleteOperatorAgent204Response) VisitDeleteOperatorAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOperatorAgent409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteOperatorAgent409ApplicationProblemPlusJSONResponse) VisitDeleteOperatorAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOperatorAgentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteOperatorAgentdefaultApplicationProblemPlusJSONResponse) VisitDeleteOperatorAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyOperatorMonitorRequestObject struct {
+	Params ApplyOperatorMonitorParams
+	Body   *ApplyOperatorMonitorJSONRequestBody
+}
+
+type ApplyOperatorMonitorResponseObject interface {
+	VisitApplyOperatorMonitorResponse(w http.ResponseWriter) error
+}
+
+type ApplyOperatorMonitor200JSONResponse OperatorMonitorApplyResult
+
+func (response ApplyOperatorMonitor200JSONResponse) VisitApplyOperatorMonitorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyOperatorMonitor409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyOperatorMonitor409ApplicationProblemPlusJSONResponse) VisitApplyOperatorMonitorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyOperatorMonitordefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ApplyOperatorMonitordefaultApplicationProblemPlusJSONResponse) VisitApplyOperatorMonitorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOperatorMonitorRequestObject struct {
+	Params DeleteOperatorMonitorParams
+	Body   *DeleteOperatorMonitorJSONRequestBody
+}
+
+type DeleteOperatorMonitorResponseObject interface {
+	VisitDeleteOperatorMonitorResponse(w http.ResponseWriter) error
+}
+
+type DeleteOperatorMonitor204Response struct {
+}
+
+func (response DeleteOperatorMonitor204Response) VisitDeleteOperatorMonitorResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOperatorMonitor409ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteOperatorMonitor409ApplicationProblemPlusJSONResponse) VisitDeleteOperatorMonitorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteOperatorMonitordefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteOperatorMonitordefaultApplicationProblemPlusJSONResponse) VisitDeleteOperatorMonitorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateSessionRequestObject struct {
 	Body *CreateSessionJSONRequestBody
 }
@@ -6726,6 +7501,24 @@ type StrictServerInterface interface {
 	// UpdateNotificationRoute Replace a notification route
 	// (PUT /v1/notification-routes/{routeId})
 	UpdateNotificationRoute(ctx context.Context, request UpdateNotificationRouteRequestObject) (UpdateNotificationRouteResponseObject, error)
+	// PutOperatorAgentCredential Register a later Agent credential generation
+	// (PUT /v1/operator/agents/{agentId}/credentials/{generation})
+	PutOperatorAgentCredential(ctx context.Context, request PutOperatorAgentCredentialRequestObject) (PutOperatorAgentCredentialResponseObject, error)
+	// RevokeOperatorAgentCredential Revoke an older Agent credential generation after replacement heartbeat
+	// (POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke)
+	RevokeOperatorAgentCredential(ctx context.Context, request RevokeOperatorAgentCredentialRequestObject) (RevokeOperatorAgentCredentialResponseObject, error)
+	// ApplyOperatorAgent Apply an Agent and its initial credential atomically
+	// (POST /v1/operator/agents:apply)
+	ApplyOperatorAgent(ctx context.Context, request ApplyOperatorAgentRequestObject) (ApplyOperatorAgentResponseObject, error)
+	// DeleteOperatorAgent Delete the Agent owned by one Kubernetes resource
+	// (POST /v1/operator/agents:delete)
+	DeleteOperatorAgent(ctx context.Context, request DeleteOperatorAgentRequestObject) (DeleteOperatorAgentResponseObject, error)
+	// ApplyOperatorMonitor Apply the Monitor owned by one Kubernetes resource
+	// (POST /v1/operator/monitors:apply)
+	ApplyOperatorMonitor(ctx context.Context, request ApplyOperatorMonitorRequestObject) (ApplyOperatorMonitorResponseObject, error)
+	// DeleteOperatorMonitor Delete the Monitor owned by one Kubernetes resource
+	// (POST /v1/operator/monitors:delete)
+	DeleteOperatorMonitor(ctx context.Context, request DeleteOperatorMonitorRequestObject) (DeleteOperatorMonitorResponseObject, error)
 
 	// (POST /v1/sessions)
 	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
@@ -8291,6 +9084,208 @@ func (sh *strictHandler) UpdateNotificationRoute(w http.ResponseWriter, r *http.
 	}
 }
 
+// PutOperatorAgentCredential operation middleware
+func (sh *strictHandler) PutOperatorAgentCredential(w http.ResponseWriter, r *http.Request, agentId AgentID, generation AgentCredentialGeneration, params PutOperatorAgentCredentialParams) {
+	var request PutOperatorAgentCredentialRequestObject
+
+	request.AgentId = agentId
+	request.Generation = generation
+	request.Params = params
+
+	var body PutOperatorAgentCredentialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutOperatorAgentCredential(ctx, request.(PutOperatorAgentCredentialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutOperatorAgentCredential")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutOperatorAgentCredentialResponseObject); ok {
+		if err := validResponse.VisitPutOperatorAgentCredentialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeOperatorAgentCredential operation middleware
+func (sh *strictHandler) RevokeOperatorAgentCredential(w http.ResponseWriter, r *http.Request, agentId AgentID, generation AgentCredentialGeneration, params RevokeOperatorAgentCredentialParams) {
+	var request RevokeOperatorAgentCredentialRequestObject
+
+	request.AgentId = agentId
+	request.Generation = generation
+	request.Params = params
+
+	var body RevokeOperatorAgentCredentialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeOperatorAgentCredential(ctx, request.(RevokeOperatorAgentCredentialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeOperatorAgentCredential")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeOperatorAgentCredentialResponseObject); ok {
+		if err := validResponse.VisitRevokeOperatorAgentCredentialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApplyOperatorAgent operation middleware
+func (sh *strictHandler) ApplyOperatorAgent(w http.ResponseWriter, r *http.Request, params ApplyOperatorAgentParams) {
+	var request ApplyOperatorAgentRequestObject
+
+	request.Params = params
+
+	var body ApplyOperatorAgentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApplyOperatorAgent(ctx, request.(ApplyOperatorAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApplyOperatorAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApplyOperatorAgentResponseObject); ok {
+		if err := validResponse.VisitApplyOperatorAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteOperatorAgent operation middleware
+func (sh *strictHandler) DeleteOperatorAgent(w http.ResponseWriter, r *http.Request, params DeleteOperatorAgentParams) {
+	var request DeleteOperatorAgentRequestObject
+
+	request.Params = params
+
+	var body DeleteOperatorAgentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOperatorAgent(ctx, request.(DeleteOperatorAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOperatorAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOperatorAgentResponseObject); ok {
+		if err := validResponse.VisitDeleteOperatorAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApplyOperatorMonitor operation middleware
+func (sh *strictHandler) ApplyOperatorMonitor(w http.ResponseWriter, r *http.Request, params ApplyOperatorMonitorParams) {
+	var request ApplyOperatorMonitorRequestObject
+
+	request.Params = params
+
+	var body ApplyOperatorMonitorJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApplyOperatorMonitor(ctx, request.(ApplyOperatorMonitorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApplyOperatorMonitor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApplyOperatorMonitorResponseObject); ok {
+		if err := validResponse.VisitApplyOperatorMonitorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteOperatorMonitor operation middleware
+func (sh *strictHandler) DeleteOperatorMonitor(w http.ResponseWriter, r *http.Request, params DeleteOperatorMonitorParams) {
+	var request DeleteOperatorMonitorRequestObject
+
+	request.Params = params
+
+	var body DeleteOperatorMonitorJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOperatorMonitor(ctx, request.(DeleteOperatorMonitorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOperatorMonitor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOperatorMonitorResponseObject); ok {
+		if err := validResponse.VisitDeleteOperatorMonitorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateSession operation middleware
 func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	var request CreateSessionRequestObject
@@ -8375,141 +9370,152 @@ func (sh *strictHandler) GetPublicStatusPage(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"g5yHZTlbGsk5IFA8LoPg8fPj/wQAAP//",
+	"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",
+	"PP//AAAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

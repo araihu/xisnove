@@ -213,6 +213,9 @@ var operationScopes = map[string]Scope{
 	"replayNotificationDelivery": ScopeNotificationsWrite,
 	"createMaintenance":          ScopeMaintenanceWrite, "listMaintenance": ScopeMaintenanceRead,
 	"getMaintenance": ScopeMaintenanceRead, "deleteMaintenance": ScopeMaintenanceWrite, "endMaintenance": ScopeMaintenanceWrite,
+	"applyOperatorMonitor": ScopeOperatorProvision, "deleteOperatorMonitor": ScopeOperatorProvision,
+	"applyOperatorAgent": ScopeOperatorProvision, "putOperatorAgentCredential": ScopeOperatorProvision,
+	"revokeOperatorAgentCredential": ScopeOperatorProvision, "deleteOperatorAgent": ScopeOperatorProvision,
 }
 
 func Authorize(operationID string, principal Principal) error {

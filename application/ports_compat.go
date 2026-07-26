@@ -90,6 +90,7 @@ const (
 	ScopeDiscoveryRead                        = port.ScopeDiscoveryRead
 	ScopeDiscoveryWrite                       = port.ScopeDiscoveryWrite
 	ScopeStatusRead                           = port.ScopeStatusRead
+	ScopeOperatorProvision                    = port.ScopeOperatorProvision
 	NotificationAttemptDelivered              = port.NotificationAttemptDelivered
 	NotificationAttemptTransientFailure       = port.NotificationAttemptTransientFailure
 	NotificationAttemptPermanentFailure       = port.NotificationAttemptPermanentFailure

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -48,7 +49,7 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 			},
 		},
 	)
-	api := Handler(strict)
+	api := HandlerWithOptions(strict, StdHTTPServerOptions{BaseRouter: NewOperatorActionServeMux()})
 	api = admitAgentWork(config.AdmitWork)(api)
 	var authenticateHuman, authenticateAgent BearerAuthenticator
 	if config.Server != nil && config.Server.auth != nil {
@@ -104,6 +105,36 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	return correlationIDs(logRequests(recoverPanics(root))), nil
+}
+
+// operatorActionServeMux adapts an OpenAPI action suffix to net/http's
+// wildcard grammar without changing the canonical public route. oapi-codegen
+// emits `{generation}:revoke`, which ServeMux rejects; the wrapper restores the
+// generation value expected by the generated parser before invoking it.
+type operatorActionServeMux struct{ *http.ServeMux }
+
+// NewOperatorActionServeMux returns the safe generated-server router for
+// callers that compose a strict handler outside NewHandler.
+func NewOperatorActionServeMux() ServeMux {
+	return &operatorActionServeMux{ServeMux: http.NewServeMux()}
+}
+
+func (m *operatorActionServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	const action = "{generation}:revoke"
+	if !strings.Contains(pattern, action) {
+		m.ServeMux.HandleFunc(pattern, handler)
+		return
+	}
+	pattern = strings.Replace(pattern, action, "{generation}", 1)
+	m.ServeMux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		generation := r.PathValue("generation")
+		if !strings.HasSuffix(generation, ":revoke") {
+			http.NotFound(w, r)
+			return
+		}
+		r.SetPathValue("generation", strings.TrimSuffix(generation, ":revoke"))
+		handler(w, r)
+	})
 }
 
 func admitAgentWork(

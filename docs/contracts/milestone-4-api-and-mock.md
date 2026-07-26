@@ -24,6 +24,30 @@ opaque `cursor` values and return `page.nextCursor`. Retryable mutations accept
 `Idempotency-Key`. Errors use `application/problem+json` with
 RFC 9457 members plus the stable `code` and `correlationId` extensions.
 
+## Milestone 5 Kubernetes operator boundary
+
+The operator uses only a narrowly scoped API token with
+`operator:provision`; administrator sessions and Agent credentials cannot call
+these endpoints. All six operator mutations require `Idempotency-Key` and
+return RFC 9457 `409` conflicts for owner, idempotency, or credential-hash
+disagreement:
+
+- `POST /v1/operator/monitors:apply` and `POST /v1/operator/monitors:delete`;
+- `POST /v1/operator/agents:apply` and `POST /v1/operator/agents:delete`;
+- `PUT /v1/operator/agents/{agentId}/credentials/{generation}`;
+- `POST /v1/operator/agents/{agentId}/credentials/{generation}:revoke`.
+
+Every request carries an owner `{key, uid}`. Delete may additionally carry an
+optional `externalId` as a consistency proof. Agent apply atomically carries
+the initial credential `{generation, credential}`; later credential PUTs carry
+only a new write-only credential. Plaintext credentials are absent from every
+operator response, replay body, mock fixture, and status model.
+
+Discovery batches now require batch-level `complete` and `completedAt`. A
+successful complete batch may contain zero candidates; only a complete snapshot
+lets the control plane mark unlisted candidates absent. Partial batches make no
+absence claim.
+
 ## Generated surfaces
 
 Run all generators from the repository root:
@@ -117,6 +141,10 @@ Idempotency entries are isolated by principal, operation, key, and canonical
 request-body hash. Reusing a key with a changed body returns
 `idempotency_key_reused`. Credential-issuing operations retain only a replay
 marker and return `credential_already_issued` instead of replaying plaintext.
+Operator fixtures additionally replay same-owner applies deterministically and
+return `operator_ownership_conflict` or `operator_credential_hash_conflict`
+without retaining credential plaintext. An empty complete discovery snapshot is
+accepted and marks fixture candidates absent.
 
 ### Fixture credentials
 

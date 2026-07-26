@@ -29,6 +29,7 @@ const (
 	ScopeDiscoveryRead      Scope = "discovery:read"
 	ScopeDiscoveryWrite     Scope = "discovery:write"
 	ScopeStatusRead         Scope = "status:read"
+	ScopeOperatorProvision  Scope = "operator:provision"
 )
 
 var recognizedScopes = map[Scope]struct{}{
@@ -41,6 +42,7 @@ var recognizedScopes = map[Scope]struct{}{
 	ScopeMaintenanceRead: {}, ScopeMaintenanceWrite: {},
 	ScopeDiscoveryRead: {}, ScopeDiscoveryWrite: {},
 	ScopeStatusRead: {},
+	ScopeOperatorProvision: {},
 }
 
 func NormalizeScopes(scopes []Scope) ([]Scope, error) {
