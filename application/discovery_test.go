@@ -51,6 +51,18 @@ func TestUpsertDiscoveryBatchIsBoundedAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestPublishDiscoverySnapshotAllowsEmptyCompleteButRejectsEmptyPartial(t *testing.T) {
+	fixture := newDiscoveryFixture()
+	completedAt := time.Date(2026, 7, 26, 12, 5, 0, 0, time.UTC)
+	ack, err := fixture.service.PublishSnapshot(context.Background(), "agent-1", "complete-empty", true, completedAt, nil)
+	if err != nil || ack != (port.DiscoveryBatchAcknowledgement{}) {
+		t.Fatalf("empty complete = %#v, %v", ack, err)
+	}
+	if _, err := fixture.service.PublishSnapshot(context.Background(), "agent-1", "partial-empty", false, time.Time{}, nil); !errors.Is(err, port.ErrConflict) {
+		t.Fatalf("empty partial = %v, want conflict", err)
+	}
+}
+
 func TestTombstoneMarksCandidateStaleWithoutDeletingPromotion(t *testing.T) {
 	fixture := newDiscoveryFixture()
 	input := fixture.input("uid-1", true)

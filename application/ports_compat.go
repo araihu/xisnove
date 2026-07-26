@@ -49,6 +49,8 @@ type IncidentResolutionFilter = port.IncidentResolutionFilter
 type AgentCredentialRecord = port.AgentCredentialRecord
 type CreateAgentCredentialGenerationCommand = port.CreateAgentCredentialGenerationCommand
 type CredentialGenerationRevokeOutcome = port.CredentialGenerationRevokeOutcome
+type ExternalOwner = port.ExternalOwner
+type OperatorBinding = port.OperatorBinding
 type AdminRepository = port.AdminRepository
 type SessionRepository = port.SessionRepository
 type APITokenRepository = port.APITokenRepository
@@ -68,6 +70,7 @@ type AuditRepository = port.AuditRepository
 type RetentionRepository = port.RetentionRepository
 type ManagementQueryRepository = port.ManagementQueryRepository
 type ManagementCommandRepository = port.ManagementCommandRepository
+type OperatorRepository = port.OperatorRepository
 
 var ErrRetryableTransaction = port.ErrRetryableTransaction
 

@@ -72,26 +72,53 @@ func NewDiscoveryService(config DiscoveryServiceConfig) *DiscoveryService {
 }
 
 func (s *DiscoveryService) Publish(ctx context.Context, agentID domain.AgentID, batchID string, inputs []DiscoveryInput) (port.DiscoveryBatchAcknowledgement, error) {
+	return s.PublishSnapshot(ctx, agentID, batchID, false, time.Time{}, inputs)
+}
+
+// PublishSnapshot accepts either a delta (partial) publication or a complete
+// point-in-time inventory. Only complete publications may be empty: an empty
+// partial would carry no useful observation and must not become an accidental
+// absence claim. A complete batch uses one observation time throughout so the
+// repository can atomically fence and mark absent candidates.
+func (s *DiscoveryService) PublishSnapshot(
+	ctx context.Context,
+	agentID domain.AgentID,
+	batchID string,
+	complete bool,
+	completedAt time.Time,
+	inputs []DiscoveryInput,
+) (port.DiscoveryBatchAcknowledgement, error) {
 	if s == nil || s.store == nil || s.newCandidateID == nil || s.now == nil {
 		return port.DiscoveryBatchAcknowledgement{}, errors.New("discovery service is not configured")
 	}
 	batchID = strings.TrimSpace(batchID)
-	if agentID == "" || batchID == "" || len(inputs) == 0 {
+	if agentID == "" || batchID == "" {
 		return port.DiscoveryBatchAcknowledgement{}, &ValidationError{Fields: map[string]string{"batch": "agent, batch id, and candidates are required"}}
+	}
+	if complete && completedAt.IsZero() {
+		return port.DiscoveryBatchAcknowledgement{}, &ValidationError{Fields: map[string]string{"completedAt": "is required for a complete snapshot"}}
+	}
+	if !complete && (!completedAt.IsZero() || len(inputs) == 0) {
+		return port.DiscoveryBatchAcknowledgement{}, port.ErrConflict
 	}
 	if len(inputs) > MaxDiscoveryBatchSize {
 		return port.DiscoveryBatchAcknowledgement{}, ErrDiscoveryBatchTooLarge
 	}
 	requestHash, err := CanonicalRequestFingerprint(struct {
-		AgentID domain.AgentID
-		Inputs  []DiscoveryInput
-	}{agentID, inputs})
+		AgentID     domain.AgentID
+		Complete    bool
+		CompletedAt time.Time
+		Inputs      []DiscoveryInput
+	}{agentID, complete, completedAt.UTC(), inputs})
 	if err != nil {
 		return port.DiscoveryBatchAcknowledgement{}, fmt.Errorf("fingerprint discovery batch: %w", err)
 	}
 	candidates := make([]domain.DiscoveryCandidate, len(inputs))
 	identities := make(map[domain.DiscoveryIdentity]int, len(inputs))
 	for index, input := range inputs {
+		if complete && !input.ObservedAt.Equal(completedAt) {
+			return port.DiscoveryBatchAcknowledgement{}, &ValidationError{Fields: map[string]string{fmt.Sprintf("candidates[%d].observedAt", index): "must equal completedAt for a complete snapshot"}}
+		}
 		candidate, err := domain.NewDiscoveryCandidate(domain.NewDiscoveryCandidateParams{
 			ID: domain.DiscoveryCandidateID(s.newCandidateID()), AgentID: agentID, LocationID: input.LocationID,
 			SourceKind: input.SourceKind, SourceUID: input.SourceUID, Namespace: input.Namespace, Name: input.Name,
@@ -115,7 +142,7 @@ func (s *DiscoveryService) Publish(ctx context.Context, agentID domain.AgentID, 
 			return errors.New("discovery repository is not configured")
 		}
 		var applyErr error
-		acknowledgement, applyErr = repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{ID: batchID, AgentID: agentID, RequestHash: requestHash, Candidates: candidates, CreatedAt: s.now().UTC()})
+		acknowledgement, applyErr = repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{ID: batchID, AgentID: agentID, RequestHash: requestHash, Candidates: candidates, Complete: complete, CompletedAt: completedAt.UTC(), CreatedAt: s.now().UTC()})
 		return applyErr
 	})
 	return acknowledgement, err

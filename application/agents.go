@@ -12,6 +12,10 @@ import (
 
 var ErrInvalidEnrollmentToken = errors.New("invalid enrollment token")
 
+// AgentService's existing TokenIssuer is also the explicit hasher supplied to
+// OperatorService when registering caller-owned Agent credentials.
+var _ CredentialHasher = (TokenIssuer)(nil)
+
 type EnrollmentCredential struct {
 	Token     string
 	ExpiresAt time.Time

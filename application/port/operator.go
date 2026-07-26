@@ -21,6 +21,9 @@ type OperatorBinding struct {
 }
 
 type OperatorRepository interface {
+	// Resolve and Bind are called from the same UnitOfWork transaction as the
+	// controlled resource mutation. Implementations enforce uniqueness of
+	// Kind/ResourceID across owners, including tombstoned bindings.
 	Resolve(context.Context, ExternalOwner, string) (OperatorBinding, error)
 	Bind(context.Context, OperatorBinding) error
 	Tombstone(context.Context, ExternalOwner, string, time.Time) error
