@@ -67,6 +67,32 @@ func TestAPITokenScopesCanBeUpdatedAndRevoked(t *testing.T) {
 	assertProblem(t, response, http.StatusUnauthorized, "unauthorized")
 }
 
+func TestFixtureAPITokensUseStoredScopesAndRevocation(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+
+	response := request(t, server.URL, http.MethodGet, "/v1/monitors", mockapi.FixtureReadOnlyAPIToken, nil, nil)
+	assertStatus(t, response, http.StatusOK)
+	response = request(t, server.URL, http.MethodPost, "/v1/monitors", mockapi.FixtureReadOnlyAPIToken, monitorInput("read-only"), nil)
+	assertProblem(t, response, http.StatusForbidden, "insufficient_scope")
+
+	response = request(t, server.URL, http.MethodPost, "/v1/monitors", mockapi.FixtureFullAPIToken, monitorInput("full-access"), nil)
+	assertStatus(t, response, http.StatusCreated)
+	response = request(
+		t,
+		server.URL,
+		http.MethodDelete,
+		"/v1/api-tokens/00000000-0000-4100-8000-000000000001",
+		session,
+		nil,
+		nil,
+	)
+	assertStatus(t, response, http.StatusNoContent)
+	response = request(t, server.URL, http.MethodGet, "/v1/monitors", mockapi.FixtureFullAPIToken, nil, nil)
+	assertProblem(t, response, http.StatusUnauthorized, "unauthorized")
+}
+
 func TestMonitorsAreCursorPagedAndIdempotent(t *testing.T) {
 	server := httptest.NewServer(mockapi.NewServer().Handler())
 	defer server.Close()

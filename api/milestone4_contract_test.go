@@ -113,6 +113,26 @@ func TestAPITokenScopeVocabularyIsExact(t *testing.T) {
 	}
 }
 
+func TestAPITokenScopeCapacityCoversRecognizedVocabulary(t *testing.T) {
+	doc := loadContract(t)
+	for schemaName, propertyName := range map[string]string{
+		"CreateAPITokenRequest": "scopes",
+		"UpdateAPITokenRequest": "scopes",
+		"APIToken":              "scopes",
+	} {
+		schema := doc.Components.Schemas[schemaName]
+		if schema == nil || schema.Value == nil || schema.Value.Properties[propertyName] == nil {
+			t.Fatalf("%s.%s is missing", schemaName, propertyName)
+		}
+		maxItems := schema.Value.Properties[propertyName].Value.MaxItems
+		if maxItems == nil {
+			t.Errorf("%s.%s maxItems is unset, want at least %d", schemaName, propertyName, len(recognizedAPITokenScopes))
+		} else if *maxItems < uint64(len(recognizedAPITokenScopes)) {
+			t.Errorf("%s.%s maxItems = %d, want at least %d", schemaName, propertyName, *maxItems, len(recognizedAPITokenScopes))
+		}
+	}
+}
+
 func TestAnonymousOperationsAreExplicit(t *testing.T) {
 	doc := loadContract(t)
 	want := []string{"createSession", "enrollAgent", "getPublicStatusPage"}

@@ -13,7 +13,9 @@ func (s *Server) seedFixtures() {
 		Name: "fixture full access",
 		Scopes: []string{
 			"tokens:read", "tokens:write", "locations:read", "locations:write",
-			"monitors:read", "monitors:write", "agents:read", "agents:write",
+			"monitors:read", "monitors:write", "agents:read", "agents:write", "incidents:read",
+			"notifications:read", "notifications:write",
+			"maintenance:read", "maintenance:write", "discovery:read", "discovery:write", "status:read",
 		},
 	}
 	readOnly := &apiTokenRecord{

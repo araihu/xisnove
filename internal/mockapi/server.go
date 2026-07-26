@@ -248,9 +248,6 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, scope string)
 	if token == FixtureSessionToken && s.sessionActive {
 		return true
 	}
-	if token == FixtureFullAPIToken {
-		return true
-	}
 	if token == FixtureAgentToken && strings.HasPrefix(scope, "agent:") {
 		return true
 	}
