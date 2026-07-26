@@ -52,6 +52,11 @@ func TestLoadingSurfacesPrecedeAndReplaceResults(t *testing.T) {
 			t.Errorf("missing %q", want)
 		}
 	}
+	for _, want := range []string{`data-preserve-focus`, `hx-disabled-elt="find button[type='submit']"`, `data-goshtoso-loading`, "Searching…"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("real search loading contract missing %q", want)
+		}
+	}
 }
 
 func TestMonitorContentDistinguishesEmptyFilteredAndPartialStates(t *testing.T) {
@@ -103,7 +108,8 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	body := rendered.String()
 	for _, want := range []string{
 		`id="monitor-detail"`, `aria-labelledby="monitor-detail-heading"`,
-		`id="monitor-detail-heading"`, "Home DNS", "DEGRADED",
+		`data-monitor-id="` + monitorID.String() + `"`, `aria-selected="true"`,
+		`id="monitor-detail-heading" tabindex="-1" data-autofocus`, "Home DNS", "DEGRADED",
 		"Current health", "Configuration", "Observation history",
 		"History is not exposed by the current public API",
 		"60 seconds", "2500 ms", "3 failures", "2 successes",

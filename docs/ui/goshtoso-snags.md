@@ -1,13 +1,20 @@
-# Goshtoso v0.0.12 consumer notes and snags
+# Goshtoso v0.0.13 consumer notes and snags
 
-The foundation started on `github.com/araihu/goshtoso v0.0.12`. The integrated
-UI read the globally installed consumer skill and its complete application
-patterns, visual acceptance, and generated component reference from immutable
-guidance commit `5d2e74e4c693ffb17a7443b8b77ed195f815cd05`.
+The consumer now uses exact `github.com/araihu/goshtoso v0.0.13` (tag target
+`6e1b94a473d3e6903347c75955b126b980abde32`). Its default
+`head.Dependencies()` loader is exercised under five ordered CDN failures and
+the embedded fallbacks, with SRI, CSP nonce propagation, Mask, Alpine plugins,
+HTMX, combobox, ready/fallback/error events, and terminal rejection asserted in
+Chromium. Xisnove remains CDN-first; `WithLocalRuntime` is not justified for
+this networked application.
+
+The foundation started on `github.com/araihu/goshtoso v0.0.12`, followed the
+immutable guidance checkpoint `5d2e74e4c693ffb17a7443b8b77ed195f815cd05`,
+and is now migrated to the tagged v0.0.13 API and updated global consumer skill.
 
 ## Component inventory
 
-The foundation uses the v0.0.12 public APIs for `head.Dependencies`,
+The foundation uses the public APIs for `head.Dependencies`,
 `alert.Alert`, `button.Button`, `card.Card`, `navbar.Navbar`, and
 `textinput.TextInput` (username only). It uses package-owned dimensions and
 button functional options; no removed render helper, compatibility alias, or
@@ -17,13 +24,9 @@ consumer CSS artifact to regenerate.
 
 The integrated slice additionally uses `appshell.AppShell`,
 `pageheader.PageHeader`, `toolbar.Toolbar`, `table.Table`,
-`emptystate.EmptyState`, and `skeleton.Skeleton`. These packages are absent
-from v0.0.12, so the module is pinned to the exact pseudo-version
-`v0.0.13-0.20260726064127-5d2e74e4c693` rather than a moving branch or
-`latest`. This is an explicit exception to the earlier v0.0.12 pin, required
-by the newer immutable handoff. No Goshtoso source, generated component, or
-removed internal helper was copied or patched in Xisnove. A future Goshtoso
-release should make this pin a normal tagged dependency.
+`emptystate.EmptyState`, and `skeleton.Skeleton`. They are now available from
+the exact v0.0.13 tag. No Goshtoso source, generated component, or removed
+internal helper is copied or patched in Xisnove.
 
 ## Snags
 
@@ -49,11 +52,11 @@ release should make this pin a normal tagged dependency.
 The first snag is worth fixing upstream because it affects every Goshtoso
 consumer that expects password semantics to remain safe without Alpine.
 
-4. **Application-pattern components are newer than the latest pinned tag.**
-   The required packages compile only from guidance commit `5d2e74e`. Resolving
-   its pseudo-version also encountered a transient `sum.golang.org` HTTP 500;
-   a module-scoped direct Git fetch completed the pin. Ordinary `GOWORK=off go
-   mod tidy`, generation, and tests then work without a local Goshtoso checkout.
+4. **The initial application-pattern dependency required a pre-release pin.**
+   Before v0.0.13, the required packages compiled only from guidance commit
+   `5d2e74e`; resolving it also encountered a transient `sum.golang.org` HTTP
+   500. This is resolved by the exact v0.0.13 tag, and ordinary `GOWORK=off go
+   mod tidy`, generation, and tests work without a local Goshtoso checkout.
 5. **Sidebar Overlay omits Escape and trigger-focus restoration.** The public
    overlay supplies a labelled native trigger, backdrop, panel and Alpine open
    state, but it does not close on Escape or return focus. Xisnove composes a
@@ -107,3 +110,22 @@ consumer that expects password semantics to remain safe without Alpine.
     so the workspace renders an explicit partial "history unavailable" state
     instead of inventing a BFF endpoint or copying a wire model. This is an
     expected application boundary rather than a Goshtoso defect.
+
+13. **The v0.0.13 default changes CSP from a static allow-list into a nonce
+    contract.** The loader creates scripts dynamically and propagates its nonce;
+    Xisnove therefore generates a request nonce through `templ.WithNonce`, uses
+    it on its own external `app.js`, and combines `strict-dynamic`, the default
+    unpkg origin, self, and Alpine's required `unsafe-eval`. The old self-only
+    policy silently forced every primary onto fallback, so a working page did
+    not prove the intended CDN-first path.
+14. **Recovered network failures remain visible as browser network diagnostics.**
+    Acceptance records JavaScript exceptions/events rather than treating an
+    expected failed primary request as a console-cleanliness defect. A separate
+    terminal test catches the rejected `ready` promise and requires exactly one
+    `goshtoso:dependency-error` event.
+15. **Sidebar Overlay v0.0.13 closes on Escape but still does not restore focus
+    or expose a dynamic open/close trigger label.** Xisnove keeps a small
+    application script that reflects `aria-expanded`, changes the label, and
+    restores trigger focus. The public `PanelPositionClass` and
+    `BackdropPositionClass` solve viewport ownership; the browser measures
+    positive viewport intersection.

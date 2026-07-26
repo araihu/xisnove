@@ -27,14 +27,15 @@ unknown, up, degraded with active incident, upstream error and timeout. These
 are browser-visible captures driven through the BFF and controlled API
 responses, not source-only assertions. The final evidence is exactly 58
 PNG-encoded files
-under `/Users/guilhermecastro/.codex/visualizations/2026/07/24/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-goshtoso-guidance-6eef695`.
+under `/Users/guilhermecastro/.codex/visualizations/2026/07/26/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-v0.0.13`.
 The browser harness requests lossless encoding, rejects bytes without the
 eight-byte PNG signature before writing, and re-reads every `.png` artifact at
 the end of the run. The final evidence was also checked with the system `file`
 utility rather than trusting filename extensions.
 
-The smoke verifies direct navigation, HTMX navigation, Back restoration of
-content/title/focus/scroll, no unexpected console errors, the AppShell skip
+The smoke verifies direct navigation, HTMX navigation, Back and Forward with a
+fresh authoritative SDK read, one selected identity across URL/detail/focus/
+row styling/`aria-selected`, no unexpected JavaScript console errors, the AppShell skip
 link, visible focus, mobile navigation open/Escape/focus return, persistent
 labels and names, one desktop main scroll surface, hidden idle skeleton
 geometry, Goshtoso-owned table overflow at 390 px, row-action focusability and
@@ -61,8 +62,19 @@ monitor detail, mobile monitors with its open drawer, and public status. The
 test compares focus to visible DOM order, rejects hidden focus stops, requires
 a computed outline or box shadow at every stop, activates representative
 native links, and retains the dedicated skip-link, row-action, drawer
-Escape/focus-return, HTMX and Back checks. No manual screen-reader session is
+Escape/focus-return and truthful label/`aria-expanded`, a positive intersecting
+drawer bounding box, HTMX and Back/Forward checks. No manual screen-reader session is
 claimed.
+
+Monitor loading evidence is no longer simulated DOM state. At both widths, the
+harness holds the real HTMX search while the API response is delayed,
+double-clicks the submitter, and observes `button.WithLoadingText`,
+`hx-disabled-elt`, hidden results, one control-plane read, then the restored
+Search label and exact focus/caret. The default dependency harness separately
+forces all five versioned unpkg primaries to fail and proves ordered embedded
+fallback with Collapse, Focus, Mask, Alpine, HTMX and combobox behavior. A
+terminal primary+local failure emits one error event and its rejected ready
+promise is handled.
 
 Manual original-resolution review covered representative 390 px and 1440 px
 login, populated monitors, selected-monitor detail, loading, partial health,

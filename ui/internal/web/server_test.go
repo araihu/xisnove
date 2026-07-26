@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/google/uuid"
@@ -29,21 +31,15 @@ const (
 
 var csrfValuePattern = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
-func TestHandlerMountsGoshtosoAssetsDirectly(t *testing.T) {
+func TestHandlerMountsEveryGoshtosoRuntimeAssetDirectly(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/assets/styles.css", nil)
-	recorder := httptest.NewRecorder()
-
-	handler.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", recorder.Code)
-	}
-	if !strings.Contains(recorder.Header().Get("Content-Type"), "text/css") {
-		t.Fatalf("Content-Type = %q", recorder.Header().Get("Content-Type"))
-	}
-	if recorder.Body.Len() < 10_000 {
-		t.Fatalf("asset body is unexpectedly small: %d bytes", recorder.Body.Len())
+	for _, path := range []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL} {
+		request := httptest.NewRequest(http.MethodGet, "https://ui.example.test"+path, nil)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK || recorder.Body.Len() == 0 {
+			t.Errorf("GET %s = %d, %d bytes", path, recorder.Code, recorder.Body.Len())
+		}
 	}
 }
 
@@ -160,6 +156,22 @@ func TestPublicStatusRendersFullPageOrHTMXFragment(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedUnknownRouteKeepsShellAndNoStoreRecovery(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/unknown-workspace", nil)
+	request.AddCookie(loginSession(t, handler))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound || recorder.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("unknown route = %d, Cache-Control %q", recorder.Code, recorder.Header().Get("Cache-Control"))
+	}
+	for _, want := range []string{`id="main-content"`, `id="problem-content"`, `href="/monitors"`, "Return to monitors"} {
+		if !strings.Contains(recorder.Body.String(), want) {
+			t.Errorf("in-shell recovery missing %q", want)
+		}
+	}
+}
+
 func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
 	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/app.js", nil)
@@ -168,9 +180,57 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
 		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
 	}
-	const wantCSP = "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
-	if got := recorder.Header().Get("Content-Security-Policy"); got != wantCSP {
-		t.Fatalf("Content-Security-Policy = %q, want %q", got, wantCSP)
+	for _, want := range []string{"script-src 'nonce-", "'strict-dynamic'", "'unsafe-eval'", "https://unpkg.com", "'self'", "connect-src 'self'"} {
+		if got := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, want) {
+			t.Errorf("Content-Security-Policy = %q, missing %q", got, want)
+		}
+	}
+}
+
+func TestLoginPageUsesOrderedCDNFirstDependenciesWithNonceAndFallback(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/login", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	body := recorder.Body.String()
+
+	match := regexp.MustCompile(`data-goshtoso-dependencies="([^"]+)"`).FindStringSubmatch(body)
+	if len(match) != 2 {
+		t.Fatalf("dependency loader config missing: %s", body)
+	}
+	var config struct {
+		Dependencies []struct {
+			Name        string `json:"name"`
+			PrimaryURL  string `json:"primary_url"`
+			FallbackURL string `json:"fallback_url"`
+			Integrity   string `json:"integrity"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(html.UnescapeString(match[1])), &config); err != nil {
+		t.Fatalf("decode dependency config: %v", err)
+	}
+	wantNames := []string{"alpine-collapse", "alpine-focus", "alpine-mask", "alpine", "htmx", "combobox"}
+	if len(config.Dependencies) != len(wantNames) {
+		t.Fatalf("dependency count = %d, want %d", len(config.Dependencies), len(wantNames))
+	}
+	for index, dependency := range config.Dependencies {
+		if dependency.Name != wantNames[index] {
+			t.Errorf("dependency[%d] = %q, want %q", index, dependency.Name, wantNames[index])
+		}
+		if index < 5 {
+			if !strings.HasPrefix(dependency.PrimaryURL, "https://unpkg.com/") || !strings.HasPrefix(dependency.FallbackURL, "/assets/") || !strings.HasPrefix(dependency.Integrity, "sha384-") {
+				t.Errorf("dependency[%d] is not pinned CDN-first with SRI and fallback: %#v", index, dependency)
+			}
+		} else if dependency.PrimaryURL != "/assets/js/combobox.js" || dependency.FallbackURL != "" {
+			t.Errorf("combobox source = %#v", dependency)
+		}
+	}
+	nonceMatch := regexp.MustCompile(`src="/assets/js/dependency-loader.js"[^>]* nonce="([^"]+)"`).FindStringSubmatch(body)
+	if len(nonceMatch) != 2 || !strings.Contains(body, `src="/ui/app.js" defer nonce="`+nonceMatch[1]+`"`) {
+		t.Fatalf("loader and application script do not share request nonce: %s", body)
+	}
+	if csp := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "'nonce-"+nonceMatch[1]+"'") {
+		t.Fatalf("CSP nonce does not match rendered scripts: %q", csp)
 	}
 }
 
@@ -192,7 +252,7 @@ func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{`id="monitor-content"`, `value="dns"`, "Home DNS (selected)", "UNKNOWN", "Some health is unavailable", `hx-target="#main-content"`} {
+	for _, want := range []string{`id="monitor-content"`, `value="dns"`, `aria-selected="true"`, `data-monitor-id="` + monitorID.String() + `"`, `id="monitor-detail"`, `data-autofocus`, "UNKNOWN", "Some health is unavailable", `hx-target="#main-content"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("monitor fragment missing %q", want)
 		}

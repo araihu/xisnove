@@ -90,17 +90,83 @@ func New(cfg Config) (http.Handler, error) {
 }
 
 const applicationJS = `(() => {
+  let pendingFocus = null;
+
   function focusMain() {
     const main = document.getElementById("main-content");
     if (!main) return;
     main.scrollTop = 0;
-    main.focus({preventScroll: true});
+    const explicit = main.querySelector("[data-autofocus]");
+    (explicit || main).focus({preventScroll: true});
     const heading = main.querySelector("h1");
     if (heading) document.title = heading.textContent.trim() + " · Xisnove";
   }
-  document.addEventListener("htmx:afterSettle", focusMain);
-  document.addEventListener("htmx:historyRestore", () => setTimeout(focusMain, 0));
-  window.addEventListener("popstate", () => setTimeout(focusMain, 100));
+
+  function rememberFocus(event) {
+    const source = event.detail?.elt;
+    if (!source?.closest?.("[data-preserve-focus]")) return;
+    const active = document.activeElement;
+    if (!active?.id) return;
+    pendingFocus = {
+      id: active.id,
+      start: typeof active.selectionStart === "number" ? active.selectionStart : null,
+      end: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+    };
+  }
+
+  function settle(event) {
+    if (pendingFocus) {
+      const target = document.getElementById(pendingFocus.id);
+      if (target) {
+        target.focus({preventScroll: true});
+        if (pendingFocus.start !== null && target.setSelectionRange) {
+          target.setSelectionRange(pendingFocus.start, pendingFocus.end);
+        }
+        pendingFocus = null;
+        return;
+      }
+      pendingFocus = null;
+    }
+    if (event.detail?.elt?.closest?.("[data-preserve-focus]")) return;
+    focusMain();
+  }
+
+  async function refreshAuthoritative() {
+    const main = document.getElementById("main-content");
+    if (!main || !location.pathname.startsWith("/monitors")) return focusMain();
+    try {
+      const response = await fetch(location.href, {headers: {"HX-Request": "true"}, cache: "no-store"});
+      if (!response.ok) return;
+      main.innerHTML = await response.text();
+      window.htmx?.process(main);
+    } finally {
+      focusMain();
+    }
+  }
+
+  function configureMobileNavigation() {
+    const trigger = document.querySelector("#mobile-monitoring-panel")?.parentElement?.querySelector("button[aria-controls='mobile-monitoring-panel']");
+    if (!trigger || trigger.dataset.xisConfigured) return;
+    trigger.dataset.xisConfigured = "true";
+    const reflect = () => trigger.setAttribute("aria-label", trigger.getAttribute("aria-expanded") === "true" ? "Close monitoring navigation" : "Open monitoring navigation");
+    new MutationObserver(reflect).observe(trigger, {attributes: true, attributeFilter: ["aria-expanded"]});
+    reflect();
+    window.addEventListener("keydown", event => {
+      if (event.key !== "Escape" || trigger.getAttribute("aria-expanded") !== "true") return;
+      trigger.focus({preventScroll: true});
+      setTimeout(() => { reflect(); trigger.focus({preventScroll: true}); }, 0);
+    }, true);
+  }
+
+  document.addEventListener("htmx:beforeRequest", rememberFocus);
+  document.addEventListener("htmx:afterSettle", settle);
+  document.addEventListener("htmx:historyRestore", () => setTimeout(refreshAuthoritative, 0));
+  window.addEventListener("pageshow", event => { if (event.persisted) refreshAuthoritative(); });
+  window.goshtosoDependencies?.ready.then(() => {
+    configureMobileNavigation();
+    if (document.querySelector("#main-content [data-autofocus]")) focusMain();
+  }).catch(() => {});
+  document.addEventListener("htmx:afterSettle", configureMobileNavigation);
 })();
 `
 
@@ -485,6 +551,11 @@ func (s *server) writeProblem(w http.ResponseWriter, r *http.Request, p problem)
 		return
 	}
 	v := view.Problem{Title: p.Title, Detail: p.Detail, Code: p.Code, CorrelationID: p.CorrelationID}
+	if credential, ok := s.cookies.Session(r); ok && r.URL.Path != "/login" && r.URL.Path != "/status" {
+		csrfToken := s.cookies.SessionCSRF(credential)
+		s.renderAdaptive(w, r, p.Status, view.ShellProblemPage(csrfToken, v), view.ShellProblemContent(v))
+		return
+	}
 	s.renderAdaptive(w, r, p.Status, view.ProblemPage(v), view.ProblemContent(v))
 }
 
@@ -617,13 +688,22 @@ func (w *statusRecorder) Write(body []byte) (int, error) {
 
 func (s *server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nonce := s.newCSPNonce()
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
-		next.ServeHTTP(w, r)
+		w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'nonce-%s' 'strict-dynamic' 'unsafe-eval' https://unpkg.com 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", nonce))
+		next.ServeHTTP(w, r.WithContext(templ.WithNonce(r.Context(), nonce)))
 	})
+}
+
+func (s *server) newCSPNonce() string {
+	value := make([]byte, 18)
+	if _, err := io.ReadFull(s.random, value); err == nil {
+		return base64.RawURLEncoding.EncodeToString(value)
+	}
+	return fmt.Sprintf("xisnove-%d", s.fallbackID.Add(1))
 }
 
 func (s *server) recoverPanics(next http.Handler) http.Handler {

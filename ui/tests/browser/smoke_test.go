@@ -38,6 +38,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	vpsEdge := sdk.Monitor{Id: unknownID, Name: "VPS edge", Description: "External ingress", Kind: sdk.MonitorKindHttp, Enabled: true, LocationId: locationID, IntervalSeconds: 30, TimeoutMillis: 1500, FailureThreshold: 2, RecoveryThreshold: 2, UpdatedAt: observedAt}
 	var scenario atomic.Value
 	scenario.Store("success")
+	var monitorRequests atomic.Int32
 	apiCalls := make([]string, 0, 8)
 	var apiMu sync.Mutex
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +81,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(sdk.PublicStatusPage{GeneratedAt: time.Now(), State: sdk.Degraded, Monitors: []sdk.PublicStatusMonitor{{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", State: sdk.Up}}, ActiveIncidents: []sdk.PublicIncidentSummary{{Id: uuid.New(), MonitorId: monitorID, MonitorName: "Home DNS", OpenedAt: time.Now(), LastTransitionAt: time.Now(), Severity: sdk.Critical, State: sdk.PublicIncidentSummaryStateOpen}}})
 			}
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors":
+			monitorRequests.Add(1)
 			requireBearer(t, r)
 			switch scenario.Load().(string) {
 			case "monitors-loading":
@@ -195,10 +197,30 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors?selected="+monitorID.String()), chromedp.WaitVisible("#monitor-detail")); err != nil {
 		t.Fatalf("direct monitor detail: %v", err)
 	}
+	assertSelectedMonitorIdentity(t, ctx, monitorID.String())
 	assertAccessibleSurface(t, ctx, "#monitor-content")
 	assertDetailGeometry(t, ctx)
 	assertSequentialKeyboardTraversal(t, ctx, "monitor detail")
 	captureMatrix(t, ctx, screenshotDir, "monitor-detail", "#monitor-detail")
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`[aria-label="Select monitor `+unknownID.String()+`"]`),
+		chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+unknownID.String()+`'`, nil),
+	); err != nil {
+		t.Fatalf("HTMX monitor selection: %v", err)
+	}
+	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
+	beforeHistoryRead := monitorRequests.Load()
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+monitorID.String()+`'`, nil)); err != nil {
+		t.Fatalf("selected monitor Back: %v", err)
+	}
+	assertSelectedMonitorIdentity(t, ctx, monitorID.String())
+	if monitorRequests.Load() <= beforeHistoryRead {
+		t.Error("selected monitor Back did not re-read authoritative server state")
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.forward()`, nil), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+unknownID.String()+`'`, nil)); err != nil {
+		t.Fatalf("selected monitor Forward: %v", err)
+	}
+	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors"), chromedp.WaitVisible("#monitor-results")); err != nil {
 		t.Fatal(err)
 	}
@@ -224,32 +246,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	assertShellGeometry(t, ctx)
 	assertMobileNavigation(t, ctx)
-	scenario.Store("monitors-loading")
-	var refreshStarted bool
-	var loadingGeometry struct{ Visible, ResultsHidden, SameBounds bool }
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),rr=results?.getBoundingClientRect();if(!e||!rr)return false;e.dataset.expectedLeft=String(rr.left);e.dataset.expectedWidth=String(rr.width);fetch('/monitors',{headers:{'HX-Request':'true'}}).catch(()=>{});e.classList.add('htmx-request');results.setAttribute('aria-busy','true');return true})()`, &refreshStarted), chromedp.Evaluate(`(()=>{const loading=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),lr=loading?.getBoundingClientRect(),rr=results?.getBoundingClientRect();return {visible:!!loading&&getComputedStyle(loading).display!=='none'&&lr.height>0,resultsHidden:!!results&&getComputedStyle(results).display==='none'&&rr.height===0,sameBounds:!!lr&&Math.abs(lr.left-Number(loading.dataset.expectedLeft))<1&&Math.abs(lr.width-Number(loading.dataset.expectedWidth))<1}})()`, &loadingGeometry)); err != nil {
-		t.Fatalf("loading state: %v", err)
-	}
-	if !refreshStarted {
-		t.Fatal("monitor refresh link missing")
-	}
-	if !loadingGeometry.Visible || !loadingGeometry.ResultsHidden || !loadingGeometry.SameBounds {
-		t.Fatalf("monitor loading does not replace the result surface: %#v", loadingGeometry)
-	}
-	captureState(t, ctx, screenshotDir, "monitors-loading", "#monitor-loading")
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading');e?.classList.remove('htmx-request');document.querySelector('#monitor-results')?.setAttribute('aria-busy','false')})()`, nil)); err != nil {
-		t.Fatal(err)
-	}
-	scenario.Store("success")
-
-	if err := chromedp.Run(ctx,
-		chromedp.SetValue("#monitor-search", "dns"),
-		chromedp.Click(`form[hx-get="/monitors"] button[type="submit"]`),
-		chromedp.WaitVisible("#monitor-table"),
-		chromedp.Poll(`location.search.includes("q=dns")`, nil),
-	); err != nil {
-		t.Fatalf("HTMX search: %v", err)
-	}
+	captureHeldSearchLoading(t, ctx, ui.URL, screenshotDir, &scenario, &monitorRequests)
 	var monitorHTML string
 	if err := chromedp.Run(ctx, chromedp.OuterHTML("html", &monitorHTML)); err != nil {
 		t.Fatal(err)
@@ -258,12 +255,13 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		t.Fatal("HTMX result missing monitor or leaked bearer")
 	}
 	var afterSwapOK bool
-	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='main-content'`, nil), chromedp.Evaluate(`document.activeElement?.id==='main-content' && document.title==='Monitors · Xisnove'`, &afterSwapOK), chromedp.Evaluate(`(()=>{const spacer=document.createElement('div');spacer.style.height='2000px';spacer.id='history-scroll-fixture';document.querySelector('#monitor-results').append(spacer);document.querySelector('#main-content').scrollTop=200})()`, nil)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.id==='monitor-search' && document.querySelector('#monitor-search')?.selectionStart===1 && document.querySelector('#monitor-search')?.selectionEnd===2 && document.title==='Monitors · Xisnove'`, &afterSwapOK), chromedp.Evaluate(`(()=>{const spacer=document.createElement('div');spacer.style.height='2000px';spacer.id='history-scroll-fixture';document.querySelector('#monitor-results').append(spacer);document.querySelector('#main-content').scrollTop=200})()`, nil)); err != nil {
 		t.Fatal(err)
 	}
 	if !afterSwapOK {
-		t.Error("HTMX search did not update title and focus main content")
+		t.Error("HTMX search did not preserve search focus and caret")
 	}
+	requestsBeforeBack := monitorRequests.Load()
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`location.search === ""`, nil)); err != nil {
 		t.Fatalf("history back: %v", err)
 	}
@@ -273,6 +271,17 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	if !backOK {
 		t.Error("Back did not restore monitor content, title, focus, and scroll")
+	}
+	if monitorRequests.Load() <= requestsBeforeBack {
+		t.Error("Back restored cached markup without an authoritative no-store monitor read")
+	}
+
+	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/unknown-workspace"), chromedp.WaitVisible("#problem-content")); err != nil {
+		t.Fatalf("unknown route recovery: %v", err)
+	}
+	var inShell bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`!!document.querySelector('#main-content #problem-content a[href="/monitors"]')`, &inShell)); err != nil || !inShell {
+		t.Fatalf("unknown route did not retain the authenticated shell: %v", err)
 	}
 
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/status"), chromedp.WaitVisible("#status-content")); err != nil {
@@ -499,14 +508,22 @@ func assertAccessibleSurface(t *testing.T, ctx context.Context, selector string)
 		if result.Skip == "" {
 			t.Error("AppShell skip link is missing")
 		}
+		var hasDetail bool
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`!!document.querySelector('#monitor-detail')`, &hasDetail)); err != nil {
+			t.Fatal(err)
+		}
+		if hasDetail {
+			return
+		}
 		var focus struct {
 			Href    string `json:"href"`
 			Outline string `json:"outline"`
+			Visible bool   `json:"visible"`
 		}
-		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.blur()`, nil), chromedp.KeyEvent("\t"), chromedp.Evaluate(`({href:document.activeElement.getAttribute("href")||"",outline:getComputedStyle(document.activeElement).outlineStyle})`, &focus)); err != nil {
+		if err := chromedp.Run(ctx, chromedp.KeyEvent("\t"), chromedp.Evaluate(`(()=>{const e=document.activeElement,r=e.getBoundingClientRect();return {href:e.getAttribute("href")||"",outline:getComputedStyle(e).outlineStyle,visible:r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight}})()`, &focus)); err != nil {
 			t.Fatal(err)
 		}
-		if focus.Href != "#main-content" || focus.Outline == "none" {
+		if focus.Href != "#main-content" || focus.Outline == "none" || !focus.Visible {
 			t.Errorf("first keyboard focus = %#v, want visible skip link", focus)
 		}
 	}
@@ -646,7 +663,10 @@ func assertDetailGeometry(t *testing.T, ctx context.Context) {
 
 func assertMobileNavigation(t *testing.T, ctx context.Context) {
 	t.Helper()
-	var opened bool
+	var opened struct {
+		Expanded, Reachable, OneTrigger bool
+		Label                           string
+	}
 	var triggerFocused bool
 	if err := chromedp.Run(ctx,
 		chromedp.EmulateViewport(390, 900),
@@ -654,27 +674,74 @@ func assertMobileNavigation(t *testing.T, ctx context.Context) {
 		chromedp.Evaluate(`document.activeElement === document.querySelector('button[aria-label="Open monitoring navigation"]')`, &triggerFocused),
 		chromedp.Click(`button[aria-label="Open monitoring navigation"]`),
 		chromedp.Sleep(100*time.Millisecond),
-		chromedp.Evaluate(`(()=>{const trigger=document.querySelector('button[aria-label="Open monitoring navigation"]'),panel=document.querySelector('#mobile-monitoring-panel');return trigger?.getAttribute('aria-expanded')==='true' && getComputedStyle(panel).display!=='none' && panel.querySelector('a[href="/status"]')?.textContent.includes('Public status')===true})()`, &opened),
+		chromedp.Evaluate(`(()=>{const trigger=document.querySelector('button[aria-controls="mobile-monitoring-panel"]'),panel=document.querySelector('#mobile-monitoring-panel'),r=panel?.getBoundingClientRect();return {expanded:trigger?.getAttribute('aria-expanded')==='true',label:trigger?.getAttribute('aria-label')||'',reachable:!!r&&r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight&&panel.querySelector('a[href="/status"]')?.textContent.includes('Public status')===true,oneTrigger:document.querySelectorAll('button[aria-controls="mobile-monitoring-panel"]').length===1}})()`, &opened),
 	); err != nil {
 		t.Fatalf("open mobile navigation: %v", err)
 	}
 	if !triggerFocused {
 		t.Error("mobile navigation trigger is not keyboard focusable")
 	}
-	if !opened {
-		t.Fatal("mobile status navigation did not open with its public trigger")
+	if !opened.Expanded || !opened.Reachable || !opened.OneTrigger || opened.Label != "Close monitoring navigation" {
+		t.Fatalf("mobile status navigation contract = %#v", opened)
 	}
 	assertSequentialKeyboardTraversal(t, ctx, "mobile monitors and drawer")
 	var returned bool
 	if err := chromedp.Run(ctx,
 		chromedp.KeyEvent("\u001b"),
 		chromedp.WaitNotVisible("#mobile-monitoring-panel"),
-		chromedp.Evaluate(`document.activeElement === document.querySelector('button[aria-label="Open monitoring navigation"]')`, &returned),
+		chromedp.Evaluate(`(()=>{const trigger=document.querySelector('button[aria-controls="mobile-monitoring-panel"]');return document.activeElement===trigger&&trigger.getAttribute('aria-label')==='Open monitoring navigation'&&trigger.getAttribute('aria-expanded')==='false'})()`, &returned),
 	); err != nil {
 		t.Fatalf("close mobile navigation: %v", err)
 	}
 	if !returned {
 		t.Error("mobile navigation did not return focus to its trigger")
+	}
+}
+
+func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir string, scenario *atomic.Value, monitorRequests *atomic.Int32) {
+	t.Helper()
+	for _, width := range []int64{390, 1440} {
+		scenario.Store("success")
+		if err := chromedp.Run(ctx, chromedp.Navigate(baseURL+"/monitors"), chromedp.WaitVisible("#monitor-results"), chromedp.EmulateViewport(width, 900)); err != nil {
+			t.Fatalf("prepare held search at %dpx: %v", width, err)
+		}
+		scenario.Store("monitors-loading")
+		before := monitorRequests.Load()
+		var pending struct {
+			Loading, ResultsHidden, Disabled, PendingCopy bool
+		}
+		var screenshot []byte
+		if err := chromedp.Run(ctx,
+			chromedp.Evaluate(`(()=>{const input=document.querySelector('#monitor-search'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]');input.value='dns';input.focus();input.setSelectionRange(1,2);button.click();button.click();return true})()`, nil),
+			chromedp.Poll(`document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === true`, nil, chromedp.WithPollingInterval(10*time.Millisecond)),
+			chromedp.Evaluate(`(()=>{const loading=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]'),lr=loading?.getBoundingClientRect(),rr=results?.getBoundingClientRect();return {loading:!!lr&&lr.height>0,resultsHidden:!!rr&&rr.height===0,disabled:button?.disabled===true,pendingCopy:button?.textContent.includes('Searching…')===true}})()`, &pending),
+			chromedp.FullScreenshot(&screenshot, 100),
+			chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false`, nil),
+		); err != nil {
+			t.Fatalf("held search at %dpx: %v", width, err)
+		}
+		if !pending.Loading || !pending.ResultsHidden || !pending.Disabled || !pending.PendingCopy {
+			t.Fatalf("held search state at %dpx = %#v", width, pending)
+		}
+		if delta := monitorRequests.Load() - before; delta != 1 {
+			t.Fatalf("double-click search issued %d control-plane reads, want 1", delta)
+		}
+		writePNGArtifact(t, filepath.Join(dir, fmt.Sprintf("state-monitors-loading-%d.png", width)), screenshot)
+	}
+	scenario.Store("success")
+}
+
+func assertSelectedMonitorIdentity(t *testing.T, ctx context.Context, id string) {
+	t.Helper()
+	var identity struct {
+		URL, Detail, Focus, Selected string
+		SelectedCount                int
+	}
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='monitor-detail-heading'`, nil), chromedp.Evaluate(`(()=>{const selected=document.querySelector('tr[aria-selected="true"]');return {url:new URL(location.href).searchParams.get('selected')||'',detail:document.querySelector('#monitor-detail')?.dataset.monitorId||'',focus:document.activeElement?.closest('[data-monitor-id]')?.dataset.monitorId||'',selected:selected?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length}})()`, &identity)); err != nil {
+		t.Fatal(err)
+	}
+	if identity.URL != id || identity.Detail != id || identity.Selected != id || identity.SelectedCount != 1 || identity.Focus != id {
+		t.Fatalf("selected monitor identity = %#v, want %s", identity, id)
 	}
 }
 

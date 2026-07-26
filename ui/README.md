@@ -6,9 +6,11 @@ by the public generated Go SDK. No root database,
 sqlc, domain, application, or server-internal package is imported.
 
 The SDK dependency is pinned to frozen Xisnove commit `07467ccf39e67c5cd7a68878db8c2023318e6189`.
-Goshtoso is pinned to immutable guidance commit
-`5d2e74e4c693ffb17a7443b8b77ed195f815cd05`; see the documented v0.0.12
-exception in [`../docs/ui/goshtoso-snags.md`](../docs/ui/goshtoso-snags.md).
+Goshtoso is pinned exactly to the released `v0.0.13`. The UI uses the default
+CDN-first `head.Dependencies()` contract with version-matched embedded fallback
+served by `assets.Handler()`; it deliberately does not use local-only runtime
+mode because Xisnove is a networked BFF. See
+[`../docs/ui/goshtoso-snags.md`](../docs/ui/goshtoso-snags.md).
 
 ## Development
 
@@ -43,6 +45,11 @@ make test           # module tests with the local workspace disabled by CI
 make check          # generation drift, tests, and vet
 make browser-smoke  # real Chromium smoke; local TLS server by default
 ```
+
+The browser smoke includes a dedicated failure harness that proves all five
+versioned CDN dependencies fall back in order, including Mask, nonce/SRI/event
+behavior and a terminal primary+fallback failure. The integrated smoke holds
+the real monitor search request to verify pending copy and deduplication.
 
 Set `XISNOVE_UI_BROWSER_BASE_URL` to run the browser smoke against an already
 running UI, `XISNOVE_UI_BROWSER_BIN` to select Chromium, and
