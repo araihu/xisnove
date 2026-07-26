@@ -42,3 +42,4 @@ Task 8: complete (commits b084dc1..6a50813, independent review clean; full make 
 Task 9: implementation complete (manager, generated-SDK credential reload, namespaced Lease/cache, probes, least-privilege Helm/RBAC, existingSecret docs; review pending)
 Task 9: fix round 1/5 (6 addressed, 0 open — bounded HTTP/shutdown, mandatory namespace, active-active guard, required Secret key, cache-aware readiness; review pending)
 Task 9: fix round 2/5 (2 addressed, 0 open — typed public Helm schema and defense-in-depth template checks; review pending)
+Task 9: complete (commits 30c0afc..3023b19, independent review clean; operator race/vet/verify/build and Helm lint/adversarial render gates passed)
