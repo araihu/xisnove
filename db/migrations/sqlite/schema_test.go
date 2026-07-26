@@ -79,3 +79,22 @@ func TestHumanClientAuthSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestIdempotencySchema(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00006_idempotency.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"CREATE TABLE idempotency_records",
+		"PRIMARY KEY (principal_id, operation_id, idempotency_key)",
+		"idempotency_records_expiry",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("idempotency schema is missing %q", expected)
+		}
+	}
+}

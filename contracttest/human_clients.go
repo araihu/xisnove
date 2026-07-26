@@ -16,6 +16,201 @@ import (
 
 const humanClientAdminID = "00000000-0000-4000-8000-000000000101"
 
+// RunIdempotency executes the durable idempotency repository contract against
+// each isolated UnitOfWork returned by factory.
+func RunIdempotency(t *testing.T, factory Factory) {
+	t.Helper()
+
+	t.Run("idempotency replay and live conflict", func(t *testing.T) {
+		testIdempotencyReplayAndLiveConflict(t, factory(t))
+	})
+	t.Run("idempotency concurrent expired replacement", func(t *testing.T) {
+		testIdempotencyConcurrentExpiredReplacement(t, factory(t))
+	})
+	t.Run("idempotency rollback", func(t *testing.T) {
+		testIdempotencyRollback(t, factory(t))
+	})
+	t.Run("idempotency bounded cleanup", func(t *testing.T) {
+		testIdempotencyBoundedCleanup(t, factory(t))
+	})
+}
+
+func testIdempotencyReplayAndLiveConflict(t *testing.T, store application.UnitOfWork) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	record := idempotencyFixture("replay", "hash-original", "resource-original", now, now.Add(time.Hour))
+	transact(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		if repositories.Idempotency == nil {
+			t.Fatal("Idempotency repository is not wired")
+		}
+		return repositories.Idempotency.Create(ctx, record)
+	})
+	view(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		got, err := repositories.Idempotency.Get(ctx, record.PrincipalID, record.OperationID, record.Key, now)
+		if err != nil {
+			return err
+		}
+		if got != record {
+			t.Fatalf("Get() = %#v, want %#v", got, record)
+		}
+		return nil
+	})
+
+	changed := record
+	changed.RequestHash = "hash-changed"
+	changed.ResourceID = "resource-changed"
+	changed.CreatedAt = now.Add(time.Second)
+	changed.ExpiresAt = now.Add(2 * time.Hour)
+	err := store.Transact(ctx, func(ctx context.Context, repositories application.Repositories) error {
+		return repositories.Idempotency.Create(ctx, changed)
+	})
+	if !errors.Is(err, application.ErrConflict) {
+		t.Fatalf("replace live record error = %v, want ErrConflict", err)
+	}
+	view(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		got, err := repositories.Idempotency.Get(ctx, record.PrincipalID, record.OperationID, record.Key, now)
+		if err != nil {
+			return err
+		}
+		if got.RequestHash != record.RequestHash || got.ResourceID != record.ResourceID {
+			t.Fatalf("live conflict changed record: %#v", got)
+		}
+		return nil
+	})
+}
+
+func testIdempotencyConcurrentExpiredReplacement(t *testing.T, store application.UnitOfWork) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 13, 0, 0, 0, time.UTC)
+	expired := idempotencyFixture("replace", "hash-expired", "resource-expired", now.Add(-2*time.Hour), now.Add(-time.Second))
+	transact(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		if repositories.Idempotency == nil {
+			t.Fatal("Idempotency repository is not wired")
+		}
+		return repositories.Idempotency.Create(ctx, expired)
+	})
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, suffix := range []string{"a", "b"} {
+		suffix := suffix
+		go func() {
+			<-start
+			replacement := idempotencyFixture("replace", "hash-"+suffix, "resource-"+suffix, now, now.Add(time.Hour))
+			results <- store.Transact(ctx, func(ctx context.Context, repositories application.Repositories) error {
+				return repositories.Idempotency.Create(ctx, replacement)
+			})
+		}()
+	}
+	close(start)
+	var successes, conflicts int
+	for range 2 {
+		switch err := <-results; {
+		case err == nil:
+			successes++
+		case errors.Is(err, application.ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("concurrent replacement error = %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent replacement = %d successes, %d conflicts", successes, conflicts)
+	}
+	view(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		got, err := repositories.Idempotency.Get(ctx, expired.PrincipalID, expired.OperationID, expired.Key, now)
+		if err != nil {
+			return err
+		}
+		if got.RequestHash != "hash-a" && got.RequestHash != "hash-b" {
+			t.Fatalf("replacement winner = %#v", got)
+		}
+		if got.ResourceID != "resource-"+got.RequestHash[len("hash-"):] {
+			t.Fatalf("replacement fields were mixed: %#v", got)
+		}
+		return nil
+	})
+}
+
+func testIdempotencyRollback(t *testing.T, store application.UnitOfWork) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 14, 0, 0, 0, time.UTC)
+	record := idempotencyFixture("rollback", "hash-rollback", "resource-rollback", now, now.Add(time.Hour))
+	stop := errors.New("stop")
+	err := store.Transact(ctx, func(ctx context.Context, repositories application.Repositories) error {
+		if repositories.Idempotency == nil {
+			t.Fatal("Idempotency repository is not wired")
+		}
+		if err := repositories.Idempotency.Create(ctx, record); err != nil {
+			return err
+		}
+		return stop
+	})
+	if !errors.Is(err, stop) {
+		t.Fatalf("Transact() error = %v, want stop", err)
+	}
+	view(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		_, err := repositories.Idempotency.Get(ctx, record.PrincipalID, record.OperationID, record.Key, now)
+		if !errors.Is(err, application.ErrNotFound) {
+			t.Fatalf("rolled-back Get() error = %v, want ErrNotFound", err)
+		}
+		return nil
+	})
+}
+
+func testIdempotencyBoundedCleanup(t *testing.T, store application.UnitOfWork) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 15, 0, 0, 0, time.UTC)
+	transact(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		if repositories.Idempotency == nil {
+			t.Fatal("Idempotency repository is not wired")
+		}
+		for index := range 3 {
+			record := idempotencyFixture(
+				fmt.Sprintf("cleanup-expired-%d", index), fmt.Sprintf("hash-%d", index), fmt.Sprintf("resource-%d", index),
+				now.Add(-2*time.Hour), now.Add(-time.Duration(index+1)*time.Minute),
+			)
+			if err := repositories.Idempotency.Create(ctx, record); err != nil {
+				return err
+			}
+		}
+		return repositories.Idempotency.Create(ctx, idempotencyFixture("cleanup-live", "hash-live", "resource-live", now, now.Add(time.Hour)))
+	})
+	transact(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		deleted, err := repositories.Idempotency.DeleteExpired(ctx, now, 2)
+		if err != nil {
+			return err
+		}
+		if deleted != 2 {
+			t.Fatalf("first DeleteExpired() = %d, want 2", deleted)
+		}
+		deleted, err = repositories.Idempotency.DeleteExpired(ctx, now, 2)
+		if err != nil {
+			return err
+		}
+		if deleted != 1 {
+			t.Fatalf("second DeleteExpired() = %d, want 1", deleted)
+		}
+		return nil
+	})
+	view(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		_, err := repositories.Idempotency.Get(ctx, "principal", "operation", "cleanup-live", now)
+		return err
+	})
+}
+
+func idempotencyFixture(key, requestHash, resourceID string, createdAt, expiresAt time.Time) application.IdempotencyRecord {
+	return application.IdempotencyRecord{
+		PrincipalID: "principal", OperationID: "operation", Key: key,
+		RequestHash: requestHash, ResourceKind: "monitor", ResourceID: resourceID,
+		CreatedAt: createdAt.UTC(), ExpiresAt: expiresAt.UTC(),
+	}
+}
+
 func seedHumanClientAdmin(t *testing.T, store application.UnitOfWork) {
 	t.Helper()
 	transact(t, context.Background(), store, func(ctx context.Context, repositories application.Repositories) error {

@@ -36,6 +36,7 @@ type Querier interface {
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	DatabaseNow(ctx context.Context) (time.Time, error)
 	DeleteExpiredDailyUptime(ctx context.Context, arg DeleteExpiredDailyUptimeParams) (int64, error)
+	DeleteExpiredIdempotencyRecords(ctx context.Context, arg DeleteExpiredIdempotencyRecordsParams) (int64, error)
 	DeleteExpiredProbeResults(ctx context.Context, arg DeleteExpiredProbeResultsParams) (int64, error)
 	DeleteFutureMaintenanceInterval(ctx context.Context, arg DeleteFutureMaintenanceIntervalParams) (int64, error)
 	EndMaintenanceInterval(ctx context.Context, arg EndMaintenanceIntervalParams) (int64, error)
@@ -43,6 +44,7 @@ type Querier interface {
 	FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error)
 	FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error)
 	FindAdminByEmail(ctx context.Context, email string) (Admin, error)
+	GetActiveIdempotencyRecord(ctx context.Context, arg GetActiveIdempotencyRecordParams) (IdempotencyRecord, error)
 	GetActiveIncidentByMonitor(ctx context.Context, monitorID string) (Incident, error)
 	GetAgent(ctx context.Context, id string) (Agent, error)
 	GetCheckRun(ctx context.Context, id string) (CheckRun, error)
@@ -84,6 +86,7 @@ type Querier interface {
 	MarkNotificationRetrying(ctx context.Context, arg MarkNotificationRetryingParams) (int64, error)
 	MarkNotificationSuppressed(ctx context.Context, arg MarkNotificationSuppressedParams) (int64, error)
 	OpenIncident(ctx context.Context, arg OpenIncidentParams) error
+	PutIdempotencyRecord(ctx context.Context, arg PutIdempotencyRecordParams) (int64, error)
 	RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error)
 	ReleaseEndedMaintenanceClaim(ctx context.Context, arg ReleaseEndedMaintenanceClaimParams) (int64, error)
 	ReleaseNotificationClaim(ctx context.Context, arg ReleaseNotificationClaimParams) (int64, error)

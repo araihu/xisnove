@@ -11,7 +11,7 @@ import (
 )
 
 func TestPersistenceConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T) application.UnitOfWork {
+	factory := func(t *testing.T) application.UnitOfWork {
 		t.Helper()
 		db, err := sqlitestore.Open(filepath.Join(t.TempDir(), "conformance.db"))
 		if err != nil {
@@ -22,5 +22,7 @@ func TestPersistenceConformance(t *testing.T) {
 			t.Fatal(err)
 		}
 		return sqlitestore.NewStore(db)
-	})
+	}
+	conformance.Run(t, factory)
+	conformance.RunIdempotency(t, factory)
 }

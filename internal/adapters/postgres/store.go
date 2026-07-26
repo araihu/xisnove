@@ -81,6 +81,7 @@ func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 		Admins:               &adminRepository{queries: queries},
 		Sessions:             &sessionRepository{queries: queries},
 		APITokens:            &apiTokenRepository{queries: queries},
+		Idempotency:          &idempotencyRepository{queries: queries},
 		Locations:            &locationRepository{queries: queries},
 		Monitors:             &monitorRepository{queries: queries},
 		Health:               &healthRepository{queries: queries},

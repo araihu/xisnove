@@ -11,7 +11,7 @@ import (
 )
 
 func TestPersistenceConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T) application.UnitOfWork {
+	factory := func(t *testing.T) application.UnitOfWork {
 		t.Helper()
 		db, err := tursolocal.Open(
 			context.Background(),
@@ -25,5 +25,7 @@ func TestPersistenceConformance(t *testing.T) {
 			t.Fatal(err)
 		}
 		return tursolocal.NewStore(db)
-	})
+	}
+	conformance.Run(t, factory)
+	conformance.RunIdempotency(t, factory)
 }

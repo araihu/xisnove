@@ -11,7 +11,7 @@ import (
 func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 5 {
+	if migrations.LatestVersion != 6 {
 		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
 	}
 	var schema strings.Builder
@@ -57,6 +57,25 @@ func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	} {
 		if !strings.Contains(schema.String(), expected) {
 			t.Fatalf("migration family is missing %q", expected)
+		}
+	}
+}
+
+func TestIdempotencySchema(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00006_idempotency.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"CREATE TABLE idempotency_records",
+		"PRIMARY KEY (principal_id, operation_id, idempotency_key)",
+		"idempotency_records_expiry",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("idempotency schema is missing %q", expected)
 		}
 	}
 }

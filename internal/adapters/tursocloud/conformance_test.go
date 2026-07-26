@@ -27,11 +27,13 @@ func TestPersistenceConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conformance.Run(t, func(t *testing.T) application.UnitOfWork {
+	factory := func(t *testing.T) application.UnitOfWork {
 		t.Helper()
 		resetManagedTurso(t, db)
 		return tursocloud.NewStore(db)
-	})
+	}
+	conformance.Run(t, factory)
+	conformance.RunIdempotency(t, factory)
 }
 
 func managedTestDatabase(t *testing.T, ctx context.Context) (string, string) {
@@ -71,6 +73,7 @@ func managedTestDatabase(t *testing.T, ctx context.Context) (string, string) {
 func resetManagedTurso(t *testing.T, database *sql.DB) {
 	t.Helper()
 	for _, table := range []string{
+		"idempotency_records",
 		"notification_delivery_attempts",
 		"notification_outbox",
 		"notification_routes",

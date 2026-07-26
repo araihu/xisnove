@@ -17,7 +17,7 @@ import (
 
 func TestPersistenceConformance(t *testing.T) {
 	baseURL := postgrescontainer.URL(t, os.Getenv("XISNOVE_TEST_POSTGRES_URL"))
-	conformance.Run(t, func(t *testing.T) application.UnitOfWork {
+	factory := func(t *testing.T) application.UnitOfWork {
 		t.Helper()
 		ctx := context.Background()
 		admin, err := postgres.Open(ctx, baseURL)
@@ -55,5 +55,7 @@ func TestPersistenceConformance(t *testing.T) {
 			t.Fatal(fmt.Errorf("migrate PostgreSQL test schema: %w", err))
 		}
 		return postgres.NewStore(db)
-	})
+	}
+	conformance.Run(t, factory)
+	conformance.RunIdempotency(t, factory)
 }

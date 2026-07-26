@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -15,6 +16,61 @@ import (
 
 type apiTokenRepository struct {
 	queries *dbpostgres.Queries
+}
+
+type idempotencyRepository struct {
+	queries *dbpostgres.Queries
+}
+
+func (r *idempotencyRepository) Get(
+	ctx context.Context,
+	principalID string,
+	operationID string,
+	key string,
+	now time.Time,
+) (application.IdempotencyRecord, error) {
+	record, err := r.queries.GetActiveIdempotencyRecord(ctx, dbpostgres.GetActiveIdempotencyRecordParams{
+		PrincipalID: principalID, OperationID: operationID, IdempotencyKey: key, Now: formatTime(now),
+	})
+	if err != nil {
+		return application.IdempotencyRecord{}, repositoryError("get active idempotency record", err)
+	}
+	return application.IdempotencyRecord{
+		PrincipalID: record.PrincipalID, OperationID: record.OperationID, Key: record.IdempotencyKey,
+		RequestHash: record.RequestHash, ResourceKind: record.ResourceKind, ResourceID: record.ResourceID,
+		CreatedAt: formatTime(record.CreatedAt), ExpiresAt: formatTime(record.ExpiresAt),
+	}, nil
+}
+
+func (r *idempotencyRepository) Create(ctx context.Context, record application.IdempotencyRecord) error {
+	affected, err := r.queries.PutIdempotencyRecord(ctx, dbpostgres.PutIdempotencyRecordParams{
+		PrincipalID: record.PrincipalID, OperationID: record.OperationID, IdempotencyKey: record.Key,
+		RequestHash: record.RequestHash, ResourceKind: record.ResourceKind, ResourceID: record.ResourceID,
+		CreatedAt: formatTime(record.CreatedAt), ExpiresAt: formatTime(record.ExpiresAt),
+	})
+	if err != nil {
+		return repositoryError("put idempotency record", err)
+	}
+	if affected != 1 {
+		return fmt.Errorf("put idempotency record: %w", application.ErrConflict)
+	}
+	return nil
+}
+
+func (r *idempotencyRepository) DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	if limit > math.MaxInt32 {
+		limit = math.MaxInt32
+	}
+	deleted, err := r.queries.DeleteExpiredIdempotencyRecords(ctx, dbpostgres.DeleteExpiredIdempotencyRecordsParams{
+		Cutoff: formatTime(now), RowLimit: int32(limit),
+	})
+	if err != nil {
+		return 0, repositoryError("delete expired idempotency records", err)
+	}
+	return deleted, nil
 }
 
 func (r *apiTokenRepository) Create(ctx context.Context, record application.APITokenRecord) error {

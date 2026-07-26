@@ -85,6 +85,17 @@ type DailyUptime struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
+type IdempotencyRecord struct {
+	PrincipalID    string `json:"principal_id"`
+	OperationID    string `json:"operation_id"`
+	IdempotencyKey string `json:"idempotency_key"`
+	RequestHash    string `json:"request_hash"`
+	ResourceKind   string `json:"resource_kind"`
+	ResourceID     string `json:"resource_id"`
+	CreatedAt      string `json:"created_at"`
+	ExpiresAt      string `json:"expires_at"`
+}
+
 type Incident struct {
 	ID               string         `json:"id"`
 	MonitorID        string         `json:"monitor_id"`
