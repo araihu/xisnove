@@ -70,6 +70,32 @@ editors := []sdk.RequestEditorFn{
 }
 ```
 
+The handwritten public SDK layer also provides:
+
+- `ErrorFromResponse`, which turns non-2xx responses into a redacted `APIError`
+  containing the RFC 9457 code, correlation ID, status, and field errors;
+- operation-bound `*PageFetcher` methods for every cursor-paged resource;
+- `WalkPages`, which passes cursors opaquely, observes cancellation, and rejects
+  repeated cursor cycles.
+
+For example:
+
+```go
+fetch := client.DiscoveryCandidatesPageFetcher(
+    sdk.ListDiscoveryCandidatesParams{Present: &present},
+    sdk.WithBearerToken(token),
+)
+err := sdk.WalkPages(ctx, fetch, func(_ context.Context, items []sdk.DiscoveryCandidate) error {
+    // Render or process one bounded page.
+    return nil
+})
+```
+
+Page fetchers copy their generated parameter value before replacing only its
+cursor, so filters and compatibility fields remain stable and caller-owned
+parameters are not mutated. The external-module fixture imports these helpers
+to keep the SDK's transitive consumer dependencies in the compatibility gate.
+
 ## Run the mock
 
 ```sh

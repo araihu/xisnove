@@ -59,7 +59,10 @@ func (c *ClientWithResponses) RequireMonitor(
 		return nil, err
 	}
 	if response.JSON200 == nil {
-		return nil, fmt.Errorf("get monitor: HTTP %d", response.StatusCode())
+		if err := ErrorFromResponse(response.HTTPResponse, response.Body); err != nil {
+			return nil, fmt.Errorf("get monitor: %w", err)
+		}
+		return nil, errors.New("get monitor: response has no success body")
 	}
 	return response.JSON200, nil
 }

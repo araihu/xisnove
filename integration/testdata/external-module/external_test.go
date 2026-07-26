@@ -9,6 +9,7 @@ import (
 	"github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/contracttest"
 	"github.com/araihu/xisnove/domain"
+	"github.com/araihu/xisnove/sdk"
 )
 
 type locationRepository struct {
@@ -86,5 +87,15 @@ func TestContractFactoryAcceptsPlainUnitOfWork(t *testing.T) {
 	factory := contracttest.Factory(newUnitOfWork)
 	if got := factory(t); got == nil {
 		t.Fatal("contract factory returned a nil UnitOfWork")
+	}
+}
+
+func TestExternalModuleCanUsePublicSDKHelpers(t *testing.T) {
+	page := sdk.Page[string]{Items: []string{"external"}}
+	if page.Items[0] != "external" {
+		t.Fatalf("SDK page = %#v", page)
+	}
+	if editor := sdk.WithBearerToken("external-token"); editor == nil {
+		t.Fatal("SDK bearer editor is nil")
 	}
 }
