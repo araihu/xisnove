@@ -168,7 +168,7 @@ func TestEdgeChartRequiresExistingProvisioningSecret(t *testing.T) {
 	if err == nil {
 		t.Fatalf("helm template unexpectedly accepted a missing existingSecret:\n%s", output)
 	}
-	if !bytes.Contains(output, []byte("controlPlane.existingSecret.name is required")) {
+	if !bytes.Contains(output, []byte("controlPlane.existingSecret.name must be a non-empty string")) {
 		t.Fatalf("helm template error does not identify the required existingSecret:\n%s", output)
 	}
 }
@@ -177,6 +177,7 @@ func TestEdgeChartRequiresExistingProvisioningSecretKey(t *testing.T) {
 	t.Parallel()
 
 	output, err := renderEdgeChart(t,
+		"--skip-schema-validation",
 		"--set", "controlPlane.url=https://xisnove.example.test",
 		"--set", "controlPlane.existingSecret.name=xisnove-provisioner",
 		"--set", "controlPlane.existingSecret.key=",
@@ -184,7 +185,7 @@ func TestEdgeChartRequiresExistingProvisioningSecretKey(t *testing.T) {
 	if err == nil {
 		t.Fatalf("helm template unexpectedly accepted an empty existingSecret key:\n%s", output)
 	}
-	if !bytes.Contains(output, []byte("controlPlane.existingSecret.key is required")) {
+	if !bytes.Contains(output, []byte("controlPlane.existingSecret.key must be a non-empty string")) {
 		t.Fatalf("helm template error does not identify the required existingSecret key:\n%s", output)
 	}
 }
@@ -220,11 +221,12 @@ func TestEdgeChartRejectsUnsafeShutdownBudget(t *testing.T) {
 		name      string
 		graceful  string
 		podBudget string
+		message   string
 	}{
-		{name: "equal", graceful: "30", podBudget: "30"},
-		{name: "lower", graceful: "30", podBudget: "29"},
-		{name: "negative graceful", graceful: "-1", podBudget: "45"},
-		{name: "negative pod budget", graceful: "30", podBudget: "-1"},
+		{name: "equal", graceful: "30", podBudget: "30", message: "operator.terminationGracePeriodSeconds must be greater than operator.gracefulShutdownTimeoutSeconds, and both must be positive"},
+		{name: "lower", graceful: "30", podBudget: "29", message: "operator.terminationGracePeriodSeconds must be greater than operator.gracefulShutdownTimeoutSeconds, and both must be positive"},
+		{name: "negative graceful", graceful: "-1", podBudget: "45", message: "operator.gracefulShutdownTimeoutSeconds"},
+		{name: "negative pod budget", graceful: "30", podBudget: "-1", message: "operator.terminationGracePeriodSeconds"},
 	}
 	for _, test := range tests {
 		test := test
@@ -237,10 +239,85 @@ func TestEdgeChartRejectsUnsafeShutdownBudget(t *testing.T) {
 			if err == nil {
 				t.Fatalf("helm template accepted unsafe shutdown budget:\n%s", output)
 			}
-			if !bytes.Contains(output, []byte("operator.terminationGracePeriodSeconds must be greater than operator.gracefulShutdownTimeoutSeconds, and both must be positive")) {
+			if !bytes.Contains(output, []byte(test.message)) {
 				t.Fatalf("unexpected shutdown validation error:\n%s", output)
 			}
 		})
+	}
+}
+
+func TestEdgeChartSchemaRejectsMistypedSecurityValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		arguments []string
+		field     string
+		typeName  string
+	}{
+		{name: "leader election string", arguments: []string{"--set-string", "operator.leaderElection=false", "--set", "operator.replicas=2"}, field: "leaderElection", typeName: "boolean"},
+		{name: "numeric Secret name", arguments: []string{"--set", "controlPlane.existingSecret.name=123"}, field: "name", typeName: "string"},
+		{name: "boolean Secret key", arguments: []string{"--set", "controlPlane.existingSecret.key=true"}, field: "key", typeName: "string"},
+		{name: "whitespace Secret name", arguments: []string{"--set-string", "controlPlane.existingSecret.name=   "}, field: "name", typeName: "pattern"},
+		{name: "whitespace Secret key", arguments: []string{"--set-string", "controlPlane.existingSecret.key=   "}, field: "key", typeName: "pattern"},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			arguments := append(requiredChartValues(), test.arguments...)
+			output, err := renderEdgeChart(t, arguments...)
+			if err == nil {
+				t.Fatalf("helm template accepted mistyped value:\n%s", output)
+			}
+			if !bytes.Contains(output, []byte(test.field)) || !bytes.Contains(output, []byte(test.typeName)) {
+				t.Fatalf("schema error does not identify %s as %s:\n%s", test.field, test.typeName, output)
+			}
+		})
+	}
+}
+
+func TestEdgeChartRejectsWhitespaceAndMistypedSecretsInTemplate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		arguments []string
+		message   string
+	}{
+		{name: "whitespace name", arguments: []string{"--skip-schema-validation", "--set-string", "controlPlane.existingSecret.name=   "}, message: "controlPlane.existingSecret.name must be a non-empty string"},
+		{name: "whitespace key", arguments: []string{"--skip-schema-validation", "--set-string", "controlPlane.existingSecret.key=   "}, message: "controlPlane.existingSecret.key must be a non-empty string"},
+		{name: "numeric name", arguments: []string{"--skip-schema-validation", "--set", "controlPlane.existingSecret.name=123"}, message: "controlPlane.existingSecret.name must be a non-empty string"},
+		{name: "boolean key", arguments: []string{"--skip-schema-validation", "--set", "controlPlane.existingSecret.key=true"}, message: "controlPlane.existingSecret.key must be a non-empty string"},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			arguments := append(requiredChartValues(), test.arguments...)
+			output, err := renderEdgeChart(t, arguments...)
+			if err == nil {
+				t.Fatalf("helm template accepted unsafe Secret value:\n%s", output)
+			}
+			if !bytes.Contains(output, []byte(test.message)) {
+				t.Fatalf("unexpected Secret validation error:\n%s", output)
+			}
+		})
+	}
+}
+
+func TestEdgeChartTemplateRejectsStringLeaderElectionWithoutSchema(t *testing.T) {
+	t.Parallel()
+
+	arguments := append(requiredChartValues(),
+		"--skip-schema-validation",
+		"--set", "operator.replicas=2",
+		"--set-string", "operator.leaderElection=false",
+	)
+	output, err := renderEdgeChart(t, arguments...)
+	if err == nil {
+		t.Fatalf("helm template accepted string leaderElection:\n%s", output)
+	}
+	if !bytes.Contains(output, []byte("operator.leaderElection must be a boolean")) {
+		t.Fatalf("unexpected leaderElection type error:\n%s", output)
 	}
 }
 

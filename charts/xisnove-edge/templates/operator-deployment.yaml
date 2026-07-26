@@ -1,7 +1,25 @@
 {{- $controlPlaneURL := required "controlPlane.url is required" .Values.controlPlane.url -}}
-{{- $provisioningSecret := required "controlPlane.existingSecret.name is required" .Values.controlPlane.existingSecret.name -}}
-{{- $provisioningSecretKey := required "controlPlane.existingSecret.key is required" .Values.controlPlane.existingSecret.key -}}
-{{- if and (gt (int .Values.operator.replicas) 1) (not .Values.operator.leaderElection) -}}
+{{- $provisioningSecret := "" -}}
+{{- if kindIs "string" .Values.controlPlane.existingSecret.name -}}
+{{- $provisioningSecret = trim .Values.controlPlane.existingSecret.name -}}
+{{- end -}}
+{{- if eq $provisioningSecret "" -}}
+{{- fail "controlPlane.existingSecret.name must be a non-empty string" -}}
+{{- end -}}
+{{- $provisioningSecretKey := "" -}}
+{{- if kindIs "string" .Values.controlPlane.existingSecret.key -}}
+{{- $provisioningSecretKey = trim .Values.controlPlane.existingSecret.key -}}
+{{- end -}}
+{{- if eq $provisioningSecretKey "" -}}
+{{- fail "controlPlane.existingSecret.key must be a non-empty string" -}}
+{{- end -}}
+{{- $leaderElection := true -}}
+{{- if kindIs "bool" .Values.operator.leaderElection -}}
+{{- $leaderElection = .Values.operator.leaderElection -}}
+{{- else -}}
+{{- fail "operator.leaderElection must be a boolean" -}}
+{{- end -}}
+{{- if and (gt (int .Values.operator.replicas) 1) (not $leaderElection) -}}
 {{- fail "leader election is required when operator.replicas is greater than 1" -}}
 {{- end -}}
 {{- $gracefulShutdown := int .Values.operator.gracefulShutdownTimeoutSeconds -}}
@@ -103,9 +121,9 @@ spec:
       volumes:
         - name: provisioning-credential
           secret:
-            secretName: {{ $provisioningSecret }}
+            secretName: {{ $provisioningSecret | quote }}
             items:
-              - key: {{ $provisioningSecretKey }}
+              - key: {{ $provisioningSecretKey | quote }}
                 path: credential
       {{- with .Values.operator.nodeSelector }}
       nodeSelector:

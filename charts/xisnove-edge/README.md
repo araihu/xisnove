@@ -37,3 +37,9 @@ pod's `operator.terminationGracePeriodSeconds` must be positive and strictly
 larger so Kubernetes does not terminate the process before controller-runtime
 finishes. The chart rejects more than one operator replica when leader election
 is disabled.
+
+`values.schema.json` rejects YAML-coerced Secret names/keys, non-boolean leader
+election values, fractional/zero replicas, and non-positive shutdown budgets
+before templates render. Secret names and keys must contain a non-whitespace
+character; use `--set-string` when supplying values that YAML could otherwise
+coerce.

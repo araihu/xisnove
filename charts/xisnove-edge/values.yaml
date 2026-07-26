@@ -6,7 +6,6 @@ controlPlane:
   url: ""
   existingSecret:
     # A narrowly scoped operator provisioning credential. The chart never creates or mutates it.
-    name: ""
     key: token
 
 operator:

@@ -45,6 +45,11 @@ the manager cache synchronizes. Manager shutdown requires a positive
 `--graceful-shutdown-timeout`. In Helm, the pod termination grace period must
 strictly exceed that timeout.
 
+The chart's public values schema enforces the operator replica, leader-election,
+shutdown, and provisioning Secret value types before template rendering. The
+templates repeat security-sensitive type and relationship checks as defense in
+depth.
+
 The Helm chart requires `controlPlane.existingSecret.name` and mounts only its
 configured key. Agent credential Secrets are controller-owned and mutable. The
 operator refuses to adopt an existing Secret not controlled by its Agent.
