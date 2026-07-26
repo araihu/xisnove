@@ -79,6 +79,7 @@ type Querier interface {
 	ListNotificationOutbox(ctx context.Context, arg ListNotificationOutboxParams) ([]NotificationOutbox, error)
 	ListNotificationRoutes(ctx context.Context, arg ListNotificationRoutesParams) ([]NotificationRoute, error)
 	ListProbeResultsForDailyAggregation(ctx context.Context, arg ListProbeResultsForDailyAggregationParams) ([]ListProbeResultsForDailyAggregationRow, error)
+	ListPublicStatusMonitors(ctx context.Context) ([]ListPublicStatusMonitorsRow, error)
 	ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error)
 	ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error)
 	ManagementAdvanceAgentGeneration(ctx context.Context, arg ManagementAdvanceAgentGenerationParams) (int64, error)
