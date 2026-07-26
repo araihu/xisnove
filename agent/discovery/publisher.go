@@ -21,10 +21,21 @@ const (
 type Batch struct {
 	ID         string
 	Candidates []controlplane.DiscoveryCandidateInput
+	// Complete is an absence assertion for the entire configured inventory. It
+	// is never true for a partial watch update or an oversized chunk.
+	Complete    bool
+	CompletedAt time.Time
 }
 
 type Producer interface {
 	Snapshot(context.Context) (Batch, error)
+}
+
+// MultiProducer is used for inventories that exceed the API's bounded batch
+// limit. Each returned batch must be partial; Runner publishes every chunk.
+type MultiProducer interface {
+	Producer
+	Snapshots(context.Context) ([]Batch, error)
 }
 type Publisher interface {
 	Publish(context.Context, Batch) error
@@ -98,18 +109,34 @@ func (runner Runner) RunOnce(ctx context.Context) error {
 	if runner.Producer == nil || runner.Publisher == nil {
 		return errors.New("discovery runner is not configured")
 	}
+	if producer, ok := runner.Producer.(MultiProducer); ok {
+		batches, err := producer.Snapshots(ctx)
+		if err != nil {
+			return fmt.Errorf("produce discovery snapshots: %w", err)
+		}
+		for _, batch := range batches {
+			if err := runner.publish(ctx, batch); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	batch, err := runner.Producer.Snapshot(ctx)
 	if err != nil {
 		return fmt.Errorf("produce discovery snapshot: %w", err)
 	}
-	if len(batch.Candidates) == 0 {
-		return nil
-	}
+	return runner.publish(ctx, batch)
+}
+
+func (runner Runner) publish(ctx context.Context, batch Batch) error {
 	if batch.ID == "" {
 		return errors.New("produce discovery snapshot: empty batch id")
 	}
 	if len(batch.Candidates) > MaxBatchSize {
 		return ErrBatchTooLarge
+	}
+	if len(batch.Candidates) == 0 && !batch.Complete {
+		return nil
 	}
 	if err := runner.Publisher.Publish(ctx, batch); err != nil {
 		return fmt.Errorf("publish discovery snapshot: %w", err)
@@ -126,8 +153,11 @@ func (publisher APIPublisher) Publish(ctx context.Context, batch Batch) error {
 	if publisher.Client == nil || publisher.Credentials == nil {
 		return errors.New("discovery API publisher is not configured")
 	}
-	if len(batch.Candidates) == 0 || len(batch.Candidates) > MaxBatchSize || batch.ID == "" {
+	if len(batch.Candidates) > MaxBatchSize || batch.ID == "" {
 		return ErrBatchTooLarge
+	}
+	if batch.CompletedAt.IsZero() {
+		batch.CompletedAt = time.Now().UTC()
 	}
 	bundle, err := publisher.Credentials.Current(ctx)
 	if err != nil {
@@ -143,7 +173,7 @@ func (publisher APIPublisher) Publish(ctx context.Context, batch Batch) error {
 	key := controlplane.IdempotencyKey(batch.ID)
 	response, err := publisher.Client.UpsertDiscoveryCandidatesWithResponse(ctx,
 		&controlplane.UpsertDiscoveryCandidatesParams{IdempotencyKey: &key},
-		controlplane.DiscoveryCandidateBatch{Candidates: batch.Candidates}, editor)
+		controlplane.DiscoveryCandidateBatch{Candidates: batch.Candidates, Complete: batch.Complete, CompletedAt: batch.CompletedAt}, editor)
 	if err != nil {
 		return err
 	}

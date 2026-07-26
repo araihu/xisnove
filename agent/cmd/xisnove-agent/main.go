@@ -14,18 +14,31 @@ import (
 	"time"
 
 	"github.com/araihu/xisnove/agent/credentials"
+	"github.com/araihu/xisnove/agent/discovery"
+	kubernetesdiscovery "github.com/araihu/xisnove/agent/discovery/kubernetes"
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 	"github.com/araihu/xisnove/agent/probe"
 	"github.com/araihu/xisnove/agent/worker"
+	"k8s.io/client-go/dynamic"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 var version = "dev"
 
 type config struct {
-	controlPlaneURL string
-	credentialFile  string
-	allowedPrivate  []netip.Prefix
-	capabilities    []controlplane.AgentCapability
+	controlPlaneURL     string
+	credentialFile      string
+	allowedPrivate      []netip.Prefix
+	capabilities        []controlplane.AgentCapability
+	kubernetesDiscovery kubernetesDiscoveryConfig
+}
+
+type kubernetesDiscoveryConfig struct {
+	enabled    bool
+	watch      bool
+	namespaces []string
+	resources  []kubernetesdiscovery.Resource
 }
 
 func main() {
@@ -70,6 +83,13 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if config.kubernetesDiscovery.enabled {
+		go func() {
+			if err := runKubernetesDiscovery(ctx, config, client); err != nil && ctx.Err() == nil {
+				slog.Warn("Kubernetes discovery stopped", "error", err)
+			}
+		}()
+	}
 	for ctx.Err() == nil {
 		if err := probeWorker.RunOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Warn("agent iteration failed", "error", err)
@@ -125,12 +145,101 @@ func loadConfig(getenv func(string) string) (config, error) {
 		return config{}, err
 	}
 
+	kubernetesDiscovery, err := parseKubernetesDiscovery(getenv, capabilities)
+	if err != nil {
+		return config{}, err
+	}
+
 	return config{
-		controlPlaneURL: strings.TrimRight(controlPlaneURL.String(), "/"),
-		credentialFile:  credentialFile,
-		allowedPrivate:  allowedPrivate,
-		capabilities:    capabilities,
+		controlPlaneURL:     strings.TrimRight(controlPlaneURL.String(), "/"),
+		credentialFile:      credentialFile,
+		allowedPrivate:      allowedPrivate,
+		capabilities:        capabilities,
+		kubernetesDiscovery: kubernetesDiscovery,
 	}, nil
+}
+
+func parseKubernetesDiscovery(getenv func(string) string, capabilities []controlplane.AgentCapability) (kubernetesDiscoveryConfig, error) {
+	hasCapability := false
+	watch := false
+	for _, capability := range capabilities {
+		if capability == controlplane.AgentCapabilityKubernetesDiscovery || capability == controlplane.AgentCapabilityKubernetesWatch {
+			hasCapability = true
+		}
+		if capability == controlplane.AgentCapabilityKubernetesWatch {
+			watch = true
+		}
+	}
+	namespaces := splitCSV(getenv("XISNOVE_DISCOVERY_NAMESPACES"))
+	resources := splitCSV(getenv("XISNOVE_DISCOVERY_RESOURCES"))
+	if !hasCapability || len(namespaces) == 0 || len(resources) == 0 {
+		return kubernetesDiscoveryConfig{}, nil
+	}
+	parsed := make([]kubernetesdiscovery.Resource, 0, len(resources))
+	seen := map[kubernetesdiscovery.Resource]struct{}{}
+	for _, value := range resources {
+		resource := kubernetesdiscovery.Resource(value)
+		switch resource {
+		case kubernetesdiscovery.ResourceServices, kubernetesdiscovery.ResourceEndpointSlices, kubernetesdiscovery.ResourceIngresses, kubernetesdiscovery.ResourceGateways, kubernetesdiscovery.ResourceHTTPRoutes, kubernetesdiscovery.ResourceGRPCRoutes:
+		default:
+			return kubernetesDiscoveryConfig{}, fmt.Errorf("XISNOVE_DISCOVERY_RESOURCES contains invalid value %q", value)
+		}
+		if _, duplicate := seen[resource]; !duplicate {
+			seen[resource] = struct{}{}
+			parsed = append(parsed, resource)
+		}
+	}
+	return kubernetesDiscoveryConfig{enabled: true, watch: watch, namespaces: namespaces, resources: parsed}, nil
+}
+
+func splitCSV(raw string) []string {
+	seen := map[string]struct{}{}
+	var values []string
+	for _, value := range strings.Split(raw, ",") {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, duplicate := seen[value]; !duplicate {
+			seen[value] = struct{}{}
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+func runKubernetesDiscovery(ctx context.Context, config config, client *controlplane.ClientWithResponses) error {
+	restConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("load in-cluster Kubernetes config: %w", err)
+	}
+	kubeClient, err := clientset.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("create Kubernetes client: %w", err)
+	}
+	dynamicClient, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("create Kubernetes dynamic client: %w", err)
+	}
+	source := kubernetesdiscovery.Source{Core: kubeClient.CoreV1(), Discovery: kubeClient.DiscoveryV1(), Networking: kubeClient.NetworkingV1(), Dynamic: dynamicClient, Namespaces: config.kubernetesDiscovery.namespaces, Resources: config.kubernetesDiscovery.resources, Perspective: "kubernetes:in-cluster", OnDiagnostic: func(diagnostic kubernetesdiscovery.Diagnostic) {
+		slog.Warn("Kubernetes discovery diagnostic", "code", diagnostic.Code, "source", diagnostic.Source.Kind+"/"+diagnostic.Source.Namespace+"/"+diagnostic.Source.Name)
+	}}
+	publisher := discovery.APIPublisher{Client: client, Credentials: credentialProvider(config)}
+	if config.kubernetesDiscovery.watch {
+		watchers, err := source.Watchers(publisher)
+		if err != nil {
+			return fmt.Errorf("configure Kubernetes discovery watchers: %w", err)
+		}
+		for _, watcher := range watchers {
+			go func(watcher kubernetesdiscovery.Watcher) {
+				if err := watcher.Run(ctx); err != nil && ctx.Err() == nil {
+					slog.Warn("Kubernetes discovery watcher stopped", "error", err)
+				}
+			}(watcher)
+		}
+	}
+	runner := discovery.Runner{Producer: source, Publisher: publisher}
+	return runner.Run(ctx, discovery.LoopConfig{Enabled: true, Cadence: 5 * time.Minute, MinBackoff: time.Second, MaxBackoff: time.Minute, OnError: func(err error) { slog.Warn("Kubernetes discovery cycle failed", "error", err) }})
 }
 
 func parseCapabilities(raw string) ([]controlplane.AgentCapability, error) {

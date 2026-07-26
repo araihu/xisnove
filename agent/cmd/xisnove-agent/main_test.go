@@ -101,3 +101,26 @@ func TestLoadConfigRejectsMissingOrUnsafeValues(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfigEnablesKubernetesDiscoveryOnlyWhenConfigured(t *testing.T) {
+	base := map[string]string{
+		"XISNOVE_URL": "https://monitor.example.com", "XISNOVE_AGENT_CREDENTIAL_FILE": "/run/secrets/agent",
+	}
+	config, err := loadConfig(func(key string) string { return base[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.kubernetesDiscovery.enabled {
+		t.Fatalf("raw agent unexpectedly enabled Kubernetes discovery: %#v", config)
+	}
+	base["XISNOVE_AGENT_CAPABILITIES"] = "http,kubernetes-discovery"
+	base["XISNOVE_DISCOVERY_NAMESPACES"] = "payments,default"
+	base["XISNOVE_DISCOVERY_RESOURCES"] = "services,ingresses"
+	config, err = loadConfig(func(key string) string { return base[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.kubernetesDiscovery.enabled || len(config.kubernetesDiscovery.namespaces) != 2 || len(config.kubernetesDiscovery.resources) != 2 {
+		t.Fatalf("Kubernetes discovery config = %#v", config.kubernetesDiscovery)
+	}
+}

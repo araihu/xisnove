@@ -73,12 +73,35 @@ func TestRunnerPublishesBoundedSnapshot(t *testing.T) {
 	}
 }
 
+func TestRunnerPublishesAnEmptyCompleteSnapshot(t *testing.T) {
+	completedAt := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	producer := &fakeProducer{batch: discovery.Batch{ID: "empty", Complete: true, CompletedAt: completedAt}}
+	publisher := &fakePublisher{}
+	if err := (discovery.Runner{Producer: producer, Publisher: publisher}).RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if publisher.calls != 1 || !publisher.batch.Complete || !publisher.batch.CompletedAt.Equal(completedAt) || len(publisher.batch.Candidates) != 0 {
+		t.Fatalf("published batch = %#v", publisher.batch)
+	}
+}
+
 func TestRunnerRejectsOversizedSnapshotWithoutPublishing(t *testing.T) {
 	producer := &fakeProducer{batch: discovery.Batch{ID: "batch-1", Candidates: make([]controlplane.DiscoveryCandidateInput, 501)}}
 	publisher := &fakePublisher{}
 	err := (discovery.Runner{Producer: producer, Publisher: publisher}).RunOnce(context.Background())
 	if !errors.Is(err, discovery.ErrBatchTooLarge) || publisher.calls != 0 {
 		t.Fatalf("error=%v publisher calls=%d", err, publisher.calls)
+	}
+}
+
+func TestRunnerPublishesPartialChunksFromMultiProducer(t *testing.T) {
+	producer := multiProducer{batches: []discovery.Batch{{ID: "chunk-1", Candidates: make([]controlplane.DiscoveryCandidateInput, 500)}, {ID: "chunk-2", Candidates: make([]controlplane.DiscoveryCandidateInput, 1)}}}
+	publisher := &recordingPublisher{}
+	if err := (discovery.Runner{Producer: producer, Publisher: publisher}).RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(publisher.batches) != 2 || publisher.batches[0].Complete || publisher.batches[1].Complete {
+		t.Fatalf("published batches = %#v", publisher.batches)
 	}
 }
 
@@ -164,10 +187,53 @@ func TestAPIPublisherFailsClosedOnPartialAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestAPIPublisherSendsCompletionFields(t *testing.T) {
+	completedAt := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		var body controlplane.DiscoveryCandidateBatch
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if !body.Complete || !body.CompletedAt.Equal(completedAt) || len(body.Candidates) != 0 {
+			t.Fatalf("body = %#v", body)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(response).Encode(controlplane.DiscoveryCandidateBatchAcknowledgement{})
+	}))
+	t.Cleanup(server.Close)
+	client, err := controlplane.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := discovery.APIPublisher{Client: client, Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "credential", Generation: 1}}}
+	if err := publisher.Publish(context.Background(), discovery.Batch{ID: "empty", Complete: true, CompletedAt: completedAt}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 type fakeProducer struct {
 	batch discovery.Batch
 	err   error
 	calls int
+}
+
+type multiProducer struct {
+	batches []discovery.Batch
+	err     error
+}
+
+func (producer multiProducer) Snapshot(context.Context) (discovery.Batch, error) {
+	return discovery.Batch{}, errors.New("Snapshot must not be called for a multi producer")
+}
+func (producer multiProducer) Snapshots(context.Context) ([]discovery.Batch, error) {
+	return producer.batches, producer.err
+}
+
+type recordingPublisher struct{ batches []discovery.Batch }
+
+func (publisher *recordingPublisher) Publish(_ context.Context, batch discovery.Batch) error {
+	publisher.batches = append(publisher.batches, batch)
+	return nil
 }
 
 func (f *fakeProducer) Snapshot(context.Context) (discovery.Batch, error) {
