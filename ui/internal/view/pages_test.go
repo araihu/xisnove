@@ -25,8 +25,26 @@ func TestStatusContentAnnouncesHTMXRefreshes(t *testing.T) {
 	if err := StatusContent(sdk.PublicStatusPage{State: sdk.Unknown}).Render(t.Context(), &rendered); err != nil {
 		t.Fatalf("render status content: %v", err)
 	}
-	if !strings.Contains(rendered.String(), `aria-live="polite"`) {
+	if !strings.Contains(rendered.String(), `aria-live="polite"`) || !strings.Contains(rendered.String(), `class="xis-status-results`) {
 		t.Fatalf("status content is not a polite live region: %s", rendered.String())
+	}
+}
+
+func TestLoadingSurfacesPrecedeAndReplaceResults(t *testing.T) {
+	var rendered strings.Builder
+	if err := MonitorContent(MonitorList{}).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	loading := strings.Index(body, `id="monitor-loading"`)
+	results := strings.Index(body, `id="monitor-results"`)
+	if loading < 0 || results < 0 || loading >= results {
+		t.Fatalf("loading/result sibling order is not stable: %s", body)
+	}
+	for _, want := range []string{"xis-results-surface", "xis-results"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q", want)
+		}
 	}
 }
 

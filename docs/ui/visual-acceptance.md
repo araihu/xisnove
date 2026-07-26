@@ -22,7 +22,8 @@ state images at both widths: invalid and timed-out login; monitor loading,
 empty, filtered-empty, upstream error and partial/unknown; and public empty,
 unknown, up, degraded with active incident, upstream error and timeout. These
 are browser-visible captures driven through the BFF and controlled API
-responses, not source-only assertions.
+responses, not source-only assertions. The final evidence is exactly 50 PNGs
+under `/Users/guilhermecastro/.codex/visualizations/2026/07/24/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-m4a-final`.
 
 The smoke verifies direct navigation, HTMX navigation, Back restoration of
 content/title/focus/scroll, no unexpected console errors, the AppShell skip
@@ -31,14 +32,31 @@ labels and names, one desktop main scroll surface, hidden idle skeleton
 geometry, Goshtoso-owned table overflow at 390 px, row-action focusability and
 absence of opaque bearer credentials in DOM content. It uses the generated SDK
 adapter and asserts session, monitor page, monitor health and public-status
-routes.
+routes. Loading also asserts that the result surface has zero visible geometry
+while the skeleton is active and that the skeleton reuses the result surface's
+horizontal boundaries.
 
 The automated P1 accessibility scan is an in-repo browser equivalent rather
-than axe. It fails on missing accessible names, broken labels, duplicate IDs,
-invalid main/banner landmarks, nested headers and measurable text contrast. It
-passed Minimal light and the other required theme/mode combinations. Desktop
-placeholder width is measured using the rendered font and padding. No manual
-screen-reader session is claimed.
+than axe. It runs after every one of the 50 captures and fails on missing
+accessible names, broken labels, duplicate IDs, invalid main/banner landmarks,
+nested headers and measurable text contrast. Transparent backgrounds are
+alpha-composited through every rendered ancestor; a one-pixel canvas converts
+modern CSS colors such as `oklch()` into sRGB before WCAG luminance is measured.
+It passed Minimal light and all other required theme/mode/state combinations.
+Desktop placeholder width is measured using the rendered font and padding.
+
+Sequential Tab traversal was exercised for login, desktop monitors, mobile
+monitors with its open drawer, and public status. The test compares focus to
+visible DOM order, rejects hidden focus stops, requires a computed outline or
+box shadow at every stop, activates representative native links, and retains
+the dedicated skip-link, row-action, drawer Escape/focus-return, HTMX and Back
+checks. No manual screen-reader session is claimed.
+
+Manual original-resolution review covered representative 390 px and 1440 px
+login, populated monitors, loading, partial health, status and active-incident
+captures across both themes and modes. It found no clipping, stale loading
+content, lost hierarchy or unreadable semantic state in those representatives;
+this is visual inspection, not an assistive-technology session.
 
 Application CSS uses Xisnove-owned selectors and Goshtoso semantic custom
 properties. It does not assume arbitrary utilities exist in embedded CSS;

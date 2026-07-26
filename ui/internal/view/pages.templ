@@ -53,7 +53,8 @@ templ Document(title string, content templ.Component) {
 			@head.Dependencies()
 			<script src="/ui/app.js" defer></script>
 			<style>
-				:root { --xis-gap: 1rem; }
+				:root { --xis-gap: 1rem; --xis-action-bg: #111827; --xis-action-fg: #ffffff; }
+				.dark { --xis-action-bg: #f5f5f5; --xis-action-fg: #171717; }
 				body { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }
 				.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }
 				.xis-brand { font-size: 1.25rem; font-weight: 700; color: var(--color-on-surface-strong); }
@@ -66,7 +67,14 @@ templ Document(title string, content templ.Component) {
 				.xis-select, .xis-input { min-height: 2.75rem; min-width: 0; max-width: 100%; border: 1px solid var(--color-outline-strong, var(--color-outline)); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }
 				.dark .xis-select, .dark .xis-input { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }
 				.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+				.xis-native-link, .xis-action-link { color: #075985; }
+				html.dark body .xis-native-link, html.dark body .xis-action-link { color: #7dd3fc; }
+				.xis-visual-test *, .xis-visual-test *::before, .xis-visual-test *::after { transition: none; animation: none; }
+				.xis-public-nav a:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; box-shadow: 0 0 0 3px var(--color-surface); }
+				.dark .xis-public-nav a:focus-visible { outline-color: var(--color-primary-dark); box-shadow: 0 0 0 3px var(--color-surface-dark); }
+				.xis-primary-action { background: var(--xis-action-bg); border-color: var(--xis-action-bg); color: var(--xis-action-fg); }
 				.xis-results { display: grid; gap: 1rem; min-width: 0; min-height: 16rem; }
+				.xis-results-surface { width: 100%; min-width: 0; min-height: 16rem; }
 				.xis-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
 				.xis-table-scroll table { min-width: 48rem; }
 				.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }
@@ -75,8 +83,12 @@ templ Document(title string, content templ.Component) {
 				.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
 				.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 				.xis-password { width: 100%; }
-				.xis-skeleton { display: none; min-height: 12rem; }
+				.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 				.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
+				#monitor-loading.htmx-request ~ .xis-results, #status-loading.htmx-request ~ .xis-status-results { display: none; }
+				.xis-state-info, .xis-state-warning, .xis-state-success, .xis-state-danger, .xis-status-badge { color: var(--color-on-surface-strong); }
+				.xis-state-info *, .xis-state-warning *, .xis-state-success *, .xis-state-danger *, .xis-status-badge * { color: inherit; }
+				.dark .xis-state-info, .dark .xis-state-warning, .dark .xis-state-success, .dark .xis-state-danger, .dark .xis-status-badge { color: var(--color-on-surface-dark-strong); }
 				.xis-mobile-nav { display: none; }
 				.xis-topbar { min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--color-outline); background: var(--color-surface); }
 				.dark .xis-topbar { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark); }
@@ -116,7 +128,7 @@ templ LoginContent(csrfToken, errorMessage string) {
 		<div class="xis-stack" style="max-width:32rem;margin:8vh auto 0">
 			<h1 id="login-heading" class="sr-only">Administrator sign in</h1>
 			if errorMessage != "" {
-				@alert.Alert(alert.Config{Title: "Sign-in failed", Description: errorMessage, Tone: alert.ToneDanger})
+				@alert.Alert(alert.Config{Title: "Sign-in failed", Description: errorMessage, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 			}
 			@card.Card(card.Config{Title: "Administrator sign in", Description: "Use the local Xisnove administrator account. Credentials are sent only to this BFF.", Footer: LoginForm(csrfToken), RootClass: "max-w-none"})
 			<a class="xis-native-link" href="/status">View public status</a>
@@ -131,14 +143,14 @@ templ LoginForm(csrfToken string) {
 		<label class="xis-field" for="password">Password
 			<input id="password" name="password" type="password" autocomplete="current-password" required class="xis-input xis-password"/>
 		</label>
-		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithRootClass("w-full")) { Sign in }
+		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithRootClass("w-full xis-primary-action")) { Sign in }
 	</form>
 }
 
 templ LogoutForm(csrfToken string) {
 	<form method="post" action="/logout">
 		<input type="hidden" name="_csrf" value={ csrfToken }/>
-		@button.Button(button.WithType("submit"), button.WithTone(button.ToneAlternate), button.WithSize(button.SizeSmall)) { Sign out }
+		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithSize(button.SizeSmall), button.WithRootClass("xis-primary-action")) { Sign out }
 	</form>
 }
 
@@ -190,7 +202,7 @@ templ MonitorErrorPage(csrfToken string, problem Problem) { @ShellPage("Monitors
 templ MonitorErrorContent(problem Problem) {
 	<section id="monitor-content" class="xis-content xis-stack" aria-labelledby="monitor-heading">
 		@pageheader.PageHeader(pageheader.Config{Title: "Monitors", Description: "Monitor inventory and current health.", TitleAttrs: templ.Attributes{"id": "monitor-heading"}})
-		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger})
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 		<a class="xis-native-link" href={ templ.SafeURL(problem.RetryURL) } hx-get={ problem.RetryURL } hx-target="#main-content" hx-push-url="true">Retry</a>
 	</section>
 }
@@ -199,12 +211,12 @@ templ MonitorContent(data MonitorList) {
 	<section id="monitor-content" class="xis-content xis-stack" aria-labelledby="monitor-heading">
 		@pageheader.PageHeader(pageheader.Config{Title: "Monitors", Description: monitorDescription(data), TitleAttrs: templ.Attributes{"id": "monitor-heading"}})
 		@toolbar.Toolbar(toolbar.Config{Label: "Monitor tools", Search: MonitorSearch(data.Query), Actions: MonitorRefresh(data)})
-		<div id="monitor-loading" class="htmx-indicator xis-skeleton">
+		<div id="monitor-loading" class="htmx-indicator xis-skeleton xis-results-surface" aria-live="polite">
 			@skeleton.Skeleton(skeleton.Config{Shape: skeleton.ShapeRectangle, Count: 1, Label: "Loading monitors", RootClass: "min-h-64"})
 		</div>
-		<div id="monitor-results" class="xis-results" aria-live="polite" aria-busy="false">
+		<div id="monitor-results" class="xis-results xis-results-surface" aria-live="polite" aria-busy="false">
 			if data.HealthFailures > 0 {
-				@alert.Alert(alert.Config{Title: "Some health is unavailable", Description: fmt.Sprintf("%d monitor health result(s) could not be loaded. Available monitors remain usable and unknown states are shown explicitly.", data.HealthFailures), Tone: alert.ToneWarning})
+				@alert.Alert(alert.Config{Title: "Some health is unavailable", Description: fmt.Sprintf("%d monitor health result(s) could not be loaded. Available monitors remain usable and unknown states are shown explicitly.", data.HealthFailures), Tone: alert.ToneWarning, RootClass: "xis-state-warning"})
 			}
 			if len(data.Monitors) == 0 {
 				if data.Query != "" {
@@ -227,7 +239,7 @@ templ MonitorSearch(query string) {
 		<label class="xis-field xis-monitor-search-field" for="monitor-search">Search monitors
 			<input class="xis-input" id="monitor-search" type="search" name="q" value={ query } placeholder="Name, kind, or description"/>
 		</label>
-		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary)) { Search }
+		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithRootClass("xis-primary-action")) { Search }
 	</form>
 }
 
@@ -235,24 +247,26 @@ templ MonitorRefresh(data MonitorList) {
 	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.Cursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Refresh</a>
 }
 
-templ ClearSearch() { @link.Link("/monitors", link.WithAppearance(link.AppearanceButton), link.WithAttrs(templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"})) { Clear search } }
+templ ClearSearch() { @link.Link("/monitors", link.WithAppearance(link.AppearanceButton), link.WithRootClass("xis-primary-action"), link.WithAttrs(templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"})) { Clear search } }
 
 templ NextPage(data MonitorList) {
 	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.NextCursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Next page</a>
 }
 
-templ MonitorActions(data MonitorList, id string) { @link.Link(monitorURL(data.Query, data.Cursor, id), link.WithSize(link.SizeSmall), link.WithAttrs(templ.Attributes{"aria-label": "Select monitor " + id, "hx-get": monitorURL(data.Query, data.Cursor, id), "hx-target": "#main-content", "hx-push-url": "true"})) { Select } }
+templ MonitorActions(data MonitorList, id string) {
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, id)) } aria-label={ "Select monitor " + id } hx-get={ monitorURL(data.Query, data.Cursor, id) } hx-target="#main-content" hx-push-url="true">Select</a>
+}
 
 templ StatusPage(data sdk.PublicStatusPage) { @Document("Public status", PublicStatusShell(data)) }
 templ StatusErrorPage(problem Problem) { @Document("Public status", PublicStatusErrorShell(problem)) }
 
 templ PublicStatusErrorShell(problem Problem) {
-	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}})
+	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", NavClass: "xis-public-nav", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}})
 	@PublicStatusError(problem)
 }
 
 templ PublicStatusShell(data sdk.PublicStatusPage) {
-	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}})
+	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", NavClass: "xis-public-nav", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}})
 	@StatusContent(data)
 }
 
@@ -262,30 +276,32 @@ templ StatusContent(data sdk.PublicStatusPage) {
 			@pageheader.PageHeader(pageheader.Config{Title: "Xisnove status", Description: "Aggregate status for public monitors."})
 			<a class="xis-native-link" href="/status" hx-get="/status" hx-target="#status-content" hx-swap="outerHTML" hx-indicator="#status-loading">Refresh</a>
 		</div>
-		<div id="status-loading" class="htmx-indicator">@skeleton.Skeleton(skeleton.Config{Label: "Refreshing public status", Count: 3})</div>
-		@alert.Alert(alert.Config{Title: publicStatusTitle(data.State), Description: "Generated " + formattedTime(data.GeneratedAt) + ".", Tone: healthTone(data.State)})
-		if len(data.Monitors) == 0 {
-			@emptystate.EmptyState(emptystate.Config{Title: "No public monitors", Description: "Public monitors will appear here after they are configured."})
-		} else {
-			<section aria-label="Public monitors">
-				for _, monitor := range data.Monitors {
-					<article id={ "monitor-" + monitor.Id.String() } class="xis-public-row">
-						<div><h2>{ monitor.Name }</h2><p class="xis-meta">{ monitor.Description }</p></div>
-						@healthBadge(monitor.State)
-					</article>
-				}
-			</section>
-		}
-		if len(data.ActiveIncidents) > 0 {
-			@alert.Alert(alert.Config{Title: "Active incidents", Description: fmt.Sprintf("%d incident(s) currently affect public monitors.", len(data.ActiveIncidents)), Tone: alert.ToneDanger})
-		}
+		<div id="status-loading" class="htmx-indicator xis-skeleton xis-results-surface" aria-live="polite">@skeleton.Skeleton(skeleton.Config{Label: "Refreshing public status", Count: 3, RootClass: "min-h-64"})</div>
+		<div class="xis-status-results xis-results-surface xis-stack">
+			@alert.Alert(alert.Config{Title: publicStatusTitle(data.State), Description: "Generated " + formattedTime(data.GeneratedAt) + ".", Tone: healthTone(data.State), RootClass: healthStateClass(data.State)})
+			if len(data.Monitors) == 0 {
+				@emptystate.EmptyState(emptystate.Config{Title: "No public monitors", Description: "Public monitors will appear here after they are configured."})
+			} else {
+				<section aria-label="Public monitors">
+					for _, monitor := range data.Monitors {
+						<article id={ "monitor-" + monitor.Id.String() } class="xis-public-row">
+							<div><h2>{ monitor.Name }</h2><p class="xis-meta">{ monitor.Description }</p></div>
+							@healthBadge(monitor.State)
+						</article>
+					}
+				</section>
+			}
+			if len(data.ActiveIncidents) > 0 {
+				@alert.Alert(alert.Config{Title: "Active incidents", Description: fmt.Sprintf("%d incident(s) currently affect public monitors.", len(data.ActiveIncidents)), Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+			}
+		</div>
 	</main>
 }
 
 templ PublicStatusError(problem Problem) {
 	<main id="status-content" aria-live="polite" class="xis-content xis-stack">
 		@pageheader.PageHeader(pageheader.Config{Title: "Xisnove status", Description: "Aggregate status for public monitors."})
-		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger})
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 		<a class="xis-native-link" href="/status" hx-get="/status" hx-target="#status-content" hx-swap="outerHTML">Retry</a>
 	</main>
 }
@@ -293,7 +309,7 @@ templ PublicStatusError(problem Problem) {
 templ ProblemPage(problem Problem) { @Document(problem.Title, ProblemContent(problem)) }
 templ ProblemContent(problem Problem) {
 	<main id="problem-content" class="xis-content xis-stack">
-		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger})
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 		<div class="xis-meta"><p>Error code: <code>{ problem.Code }</code></p><p>Correlation ID: <code>{ problem.CorrelationID }</code></p></div>
 	</main>
 }
@@ -332,7 +348,11 @@ func enabledLabel(enabled bool) string { if enabled { return "Yes" }; return "No
 func healthBadge(state sdk.HealthState) templ.Component {
 	tone := badge.ToneDefault
 	switch state { case sdk.Up: tone = badge.ToneSuccess; case sdk.Down: tone = badge.ToneDanger; case sdk.Degraded: tone = badge.ToneWarning; case sdk.Pending: tone = badge.ToneInfo }
-	return badge.Badge(badge.Config{Label: strings.ToUpper(string(state)), Tone: tone, Appearance: badge.AppearanceSoft, Indicator: true})
+	return badge.Badge(badge.Config{Label: strings.ToUpper(string(state)), Tone: tone, Appearance: badge.AppearanceSoft, Indicator: true, RootClass: "xis-status-badge"})
+}
+
+func healthStateClass(state sdk.HealthState) string {
+	switch state { case sdk.Up: return "xis-state-success"; case sdk.Degraded: return "xis-state-warning"; case sdk.Down: return "xis-state-danger"; default: return "xis-state-info" }
 }
 
 func healthTone(state sdk.HealthState) alert.Tone {

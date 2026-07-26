@@ -69,3 +69,25 @@ consumer that expects password semantics to remain safe without Alpine.
    guidance says AppShell Header is content rather than another header, so
    Xisnove uses a native top-bar container there. A public Navbar content-only
    mode would remove this composition trap.
+8. **Theme transitions obscured acceptance-state truth.** Applying the next
+   theme marker and scanning immediately can sample Goshtoso's
+   `transition-colors` between its light and dark values. The acceptance driver
+   now updates Alpine state and DOM markers together, asserts the exact settled
+   markers and applies an application-owned test root that disables transitions
+   for deterministic screenshots. The contrast scanner also needed a canvas
+   conversion because Chrome reports some computed colors as `oklch()`.
+9. **Several rendered semantic pairs needed consumer-level contrast fixes.**
+   The complete scanner exposed a 4.41:1 primary action and lower dark action,
+   warning/success/status combinations in the required themes. Xisnove uses
+   product semantic action tokens and isolated root classes for primary
+   actions, alerts and health badges. Monitor row actions use a native link so
+   Goshtoso's link-specific dark utility cannot override the application color
+   contract. Labels and status text remain present; no Goshtoso source or
+   generated file was patched.
+10. **Navbar intentionally hides focus outlines without a per-link class
+    hook.** A source dive found `focus:outline-hidden` on both public nav links;
+    `NavLink` exposes attributes but not a dedicated root-class field. Xisnove
+    scopes a visible outline and box shadow through the public navbar's
+    `NavClass`. The keyboard suite caught both missing indicators before the
+    override. A public link-class option would avoid this consumer CSS escape
+    hatch.

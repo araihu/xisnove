@@ -152,6 +152,11 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
 		t.Fatal(err)
 	}
+	assertSequentialKeyboardTraversal(t, ctx, "login")
+	assertKeyboardActivation(t, ctx, `a[href="/status"]`, "#status-content")
+	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
+		t.Fatal(err)
+	}
 	captureMatrix(t, ctx, screenshotDir, "login", "#login-content")
 	t.Log("captured login happy matrix; rendering controlled login failures")
 	invalidHTML := loginStateHTML(t, handler, "invalid")
@@ -182,6 +187,10 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	assertAccessibleSurface(t, ctx, "#monitor-content")
 	assertP1Accessibility(t, ctx)
 	captureMatrix(t, ctx, screenshotDir, "monitors", "#monitor-content")
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900)); err != nil {
+		t.Fatal(err)
+	}
+	assertSequentialKeyboardTraversal(t, ctx, "desktop monitors")
 	for _, state := range []struct{ name, path, ready string }{
 		{"monitors-empty", "/monitors", "#monitor-results"},
 		{"monitors-filtered", "/monitors?q=dns", "#monitor-results"},
@@ -202,15 +211,15 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	assertMobileNavigation(t, ctx)
 	scenario.Store("monitors-loading")
 	var refreshStarted bool
-	var loadingVisible bool
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading');if(!e)return false;fetch('/monitors',{headers:{'HX-Request':'true'}}).catch(()=>{});e.classList.add('htmx-request');document.querySelector('#monitor-results')?.setAttribute('aria-busy','true');return true})()`, &refreshStarted), chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading');return !!e&&getComputedStyle(e).display!=='none'&&e.getBoundingClientRect().height>0})()`, &loadingVisible)); err != nil {
+	var loadingGeometry struct{ Visible, ResultsHidden, SameBounds bool }
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),rr=results?.getBoundingClientRect();if(!e||!rr)return false;e.dataset.expectedLeft=String(rr.left);e.dataset.expectedWidth=String(rr.width);fetch('/monitors',{headers:{'HX-Request':'true'}}).catch(()=>{});e.classList.add('htmx-request');results.setAttribute('aria-busy','true');return true})()`, &refreshStarted), chromedp.Evaluate(`(()=>{const loading=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),lr=loading?.getBoundingClientRect(),rr=results?.getBoundingClientRect();return {visible:!!loading&&getComputedStyle(loading).display!=='none'&&lr.height>0,resultsHidden:!!results&&getComputedStyle(results).display==='none'&&rr.height===0,sameBounds:!!lr&&Math.abs(lr.left-Number(loading.dataset.expectedLeft))<1&&Math.abs(lr.width-Number(loading.dataset.expectedWidth))<1}})()`, &loadingGeometry)); err != nil {
 		t.Fatalf("loading state: %v", err)
 	}
 	if !refreshStarted {
 		t.Fatal("monitor refresh link missing")
 	}
-	if !loadingVisible {
-		t.Fatal("monitor loading indicator did not become visible during the controlled API delay")
+	if !loadingGeometry.Visible || !loadingGeometry.ResultsHidden || !loadingGeometry.SameBounds {
+		t.Fatalf("monitor loading does not replace the result surface: %#v", loadingGeometry)
 	}
 	captureState(t, ctx, screenshotDir, "monitors-loading", "#monitor-loading")
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading');e?.classList.remove('htmx-request');document.querySelector('#monitor-results')?.setAttribute('aria-busy','false')})()`, nil)); err != nil {
@@ -257,6 +266,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	assertAccessibleSurface(t, ctx, "#status-content")
 	assertP1Accessibility(t, ctx)
 	captureMatrix(t, ctx, screenshotDir, "status", "#status-content")
+	assertSequentialKeyboardTraversal(t, ctx, "public status")
 	for _, state := range []string{"public-empty", "public-unknown", "public-up", "public-degraded", "public-error", "public-timeout"} {
 		scenario.Store(state)
 		if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/status"), chromedp.WaitVisible("#status-content")); err != nil {
@@ -347,7 +357,16 @@ func captureState(t *testing.T, ctx context.Context, dir, name, readySelector st
 	t.Helper()
 	for _, width := range []int64{390, 1440} {
 		var screenshot []byte
-		if err := chromedp.Run(ctx, chromedp.EmulateViewport(width, 900), chromedp.WaitVisible(readySelector), chromedp.FullScreenshot(&screenshot, 90)); err != nil {
+		var ready bool
+		visibility := fmt.Sprintf(`(()=>{const e=document.querySelector(%q);return !!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden'&&e.getClientRects().length>0})()`, readySelector)
+		if err := chromedp.Run(ctx, chromedp.EmulateViewport(width, 900), chromedp.Evaluate(`document.documentElement.classList.add('xis-visual-test')`, nil), chromedp.Sleep(350*time.Millisecond), chromedp.Evaluate(visibility, &ready)); err != nil {
+			t.Fatalf("capture %s: %v", name, err)
+		}
+		if !ready {
+			t.Fatalf("capture %s: %s is not visibly rendered", name, readySelector)
+		}
+		assertP1Accessibility(t, ctx)
+		if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 90)); err != nil {
 			t.Fatalf("capture %s: %v", name, err)
 		}
 		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("state-%s-%d.png", name, width)), screenshot, 0o644); err != nil {
@@ -370,18 +389,27 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 				name := fmt.Sprintf("%s-%d-%s-%s.png", surface, width, theme, mode)
 				var screenshot []byte
 				var overflow bool
-				script := fmt.Sprintf(`(()=>{document.documentElement.dataset.theme=%q;document.documentElement.classList.toggle("dark",%t);const themeControl=document.querySelector('#theme-choice');if(themeControl)themeControl.value=%q;const modeControl=document.querySelector('#mode-choice');if(modeControl)modeControl.value=%q;})()`, theme, mode == "dark", theme, mode)
+				var applied bool
+				script := fmt.Sprintf(`(()=>{const root=document.documentElement,state=window.Alpine?.$data(root);root.classList.add('xis-visual-test');if(state){state.theme=%q;state.dark=%t}root.dataset.theme=%q;root.classList.toggle("dark",%t);localStorage.setItem('xisnove-theme',%q);localStorage.setItem('xisnove-mode',%q);const themeControl=document.querySelector('#theme-choice');if(themeControl)themeControl.value=%q;const modeControl=document.querySelector('#mode-choice');if(modeControl)modeControl.value=%q;})()`, theme, mode == "dark", theme, mode == "dark", theme, mode, theme, mode)
 				if err := chromedp.Run(ctx,
 					chromedp.EmulateViewport(width, 900),
 					chromedp.Evaluate(script, nil),
+					chromedp.Sleep(350*time.Millisecond),
 					chromedp.WaitVisible(readySelector),
+					chromedp.Evaluate(fmt.Sprintf(`document.documentElement.dataset.theme===%q && document.documentElement.classList.contains('dark')===%t`, theme, mode == "dark"), &applied),
 					chromedp.Evaluate(`document.documentElement.scrollWidth > document.documentElement.clientWidth`, &overflow),
-					chromedp.FullScreenshot(&screenshot, 90),
 				); err != nil {
+					t.Fatalf("capture %s: %v", name, err)
+				}
+				assertP1Accessibility(t, ctx)
+				if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 90)); err != nil {
 					t.Fatalf("capture %s: %v", name, err)
 				}
 				if overflow {
 					t.Errorf("%s has horizontal page overflow", name)
+				}
+				if !applied {
+					t.Fatalf("%s theme/mode markers did not settle", name)
 				}
 				if err := os.WriteFile(filepath.Join(dir, name), screenshot, 0o644); err != nil {
 					t.Fatal(err)
@@ -440,15 +468,17 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 		if (document.querySelector('header header')) failures.push('nested-header-landmark');
 		const bannerHeaders=[...document.querySelectorAll('header')].filter(e=>!e.closest('main,section,article,aside'));
 		if (bannerHeaders.length > 1) failures.push('banner-landmarks:'+bannerHeaders.length);
-		const parse = value => { const m=value.match(/[\d.]+/g); return m ? m.slice(0,3).map(Number) : [0,0,0]; };
+		const colorCanvas=document.createElement('canvas'); colorCanvas.width=colorCanvas.height=1; const colorContext=colorCanvas.getContext('2d',{willReadFrequently:true});
+		const parse = value => { colorContext.clearRect(0,0,1,1); colorContext.fillStyle='rgba(0,0,0,0)'; colorContext.fillStyle=value; colorContext.fillRect(0,0,1,1); const v=colorContext.getImageData(0,0,1,1).data; return [v[0],v[1],v[2],v[3]/255]; };
+		const over = (fg,bg) => { const a=fg[3]+bg[3]*(1-fg[3]); if (!a) return [0,0,0,0]; return [(fg[0]*fg[3]+bg[0]*bg[3]*(1-fg[3]))/a,(fg[1]*fg[3]+bg[1]*bg[3]*(1-fg[3]))/a,(fg[2]*fg[3]+bg[2]*bg[3]*(1-fg[3]))/a,a]; };
+		const background = e => { let color=[0,0,0,0]; for(let node=e;node;node=node.parentElement) color=over(color,parse(getComputedStyle(node).backgroundColor)); return over(color,[255,255,255,1]); };
 		const lum = rgb => { const c=rgb.map(v=>v/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
 		const ratio = (a,b) => (Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
-		for (const e of document.querySelectorAll('h1,h2,p,label,a,button,td,th')) {
+		for (const e of document.querySelectorAll('h1,h2,h3,p,label,a,button,td,th,span,li,code,legend')) {
 			if (!visible(e) || !e.textContent.trim()) continue;
-			const cs=getComputedStyle(e), bg=getComputedStyle(e.closest('button,a,[role=alert],td,th') || e.parentElement || document.body).backgroundColor;
-			if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') continue;
+			const cs=getComputedStyle(e), bg=background(e), fg=over(parse(cs.color),bg);
 			const px=parseFloat(cs.fontSize), threshold=(px>=24 || (px>=18.66 && parseInt(cs.fontWeight)>=700))?3:4.5;
-			if (ratio(parse(cs.color),parse(bg)) < threshold) failures.push('contrast:'+e.tagName.toLowerCase()+':'+e.textContent.trim().slice(0,32));
+			const measured=ratio(fg,bg); if (measured < threshold) failures.push('contrast:'+measured.toFixed(2)+':'+e.tagName.toLowerCase()+':'+e.textContent.trim().slice(0,32)+':fg='+fg.slice(0,3).map(Math.round).join(',')+':bg='+bg.slice(0,3).map(Math.round).join(',')+':raw='+cs.color+'/'+cs.backgroundColor+':theme='+document.documentElement.dataset.theme+':dark='+document.documentElement.classList.contains('dark')+':class='+e.className+':darkMatch='+e.matches('.dark .xis-action-link'));
 		}
 		return [...new Set(failures)];
 	})()`
@@ -457,6 +487,45 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 	}
 	if len(violations) > 0 {
 		t.Fatalf("P1 accessibility violations: %v", violations)
+	}
+}
+
+func assertSequentialKeyboardTraversal(t *testing.T, ctx context.Context, surface string) {
+	t.Helper()
+	var expected int
+	const prepare = `(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]');const nodes=[...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);nodes.forEach((e,i)=>e.dataset.xisKeyboardIndex=String(i));document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return nodes.length})()`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(prepare, &expected)); err != nil {
+		t.Fatalf("prepare %s keyboard traversal: %v", surface, err)
+	}
+	if expected == 0 {
+		t.Fatalf("%s has no visible keyboard controls", surface)
+	}
+	for index := 0; index < expected; index++ {
+		var focus struct {
+			Index        string `json:"index"`
+			Outline      string `json:"outline"`
+			OutlineWidth string `json:"outlineWidth"`
+			Shadow       string `json:"shadow"`
+		}
+		if err := chromedp.Run(ctx, chromedp.KeyEvent("\t"), chromedp.Evaluate(`(()=>{const e=document.activeElement,s=getComputedStyle(e);return {index:e?.dataset.xisKeyboardIndex||'',outline:s.outlineStyle,outlineWidth:s.outlineWidth,shadow:s.boxShadow}})()`, &focus)); err != nil {
+			t.Fatalf("%s keyboard step %d: %v", surface, index, err)
+		}
+		if focus.Index != fmt.Sprint(index) {
+			t.Fatalf("%s keyboard order step %d focused index %q (hidden or out-of-order stop)", surface, index, focus.Index)
+		}
+		if (focus.Outline == "none" || focus.OutlineWidth == "0px") && (focus.Shadow == "none" || focus.Shadow == "") {
+			t.Errorf("%s keyboard step %d has no computed visible focus indicator", surface, index)
+		}
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelectorAll('[data-xis-keyboard-index]').forEach(e=>delete e.dataset.xisKeyboardIndex)`, nil)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertKeyboardActivation(t *testing.T, ctx context.Context, selector, readySelector string) {
+	t.Helper()
+	if err := chromedp.Run(ctx, chromedp.Focus(selector), chromedp.KeyEvent("\r"), chromedp.WaitVisible(readySelector)); err != nil {
+		t.Fatalf("keyboard activation %s: %v", selector, err)
 	}
 }
 
@@ -511,6 +580,7 @@ func assertMobileNavigation(t *testing.T, ctx context.Context) {
 	if !opened {
 		t.Fatal("mobile status navigation did not open with its public trigger")
 	}
+	assertSequentialKeyboardTraversal(t, ctx, "mobile monitors and drawer")
 	var returned bool
 	if err := chromedp.Run(ctx,
 		chromedp.KeyEvent("\u001b"),
