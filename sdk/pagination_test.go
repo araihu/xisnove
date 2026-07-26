@@ -106,3 +106,19 @@ func TestWalkPagesObservesCancellationBetweenPages(t *testing.T) {
 		t.Fatalf("WalkPages() = %v after %d fetches", err, fetches)
 	}
 }
+
+func TestWalkPagesObservesCancellationAfterTerminalPageCallback(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	err := sdk.WalkPages(ctx,
+		func(context.Context, string) (sdk.Page[int], error) {
+			return sdk.Page[int]{Items: []int{1}, NextCursor: ""}, nil
+		},
+		func(context.Context, []int) error {
+			cancel()
+			return nil
+		},
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("WalkPages() = %v, want terminal callback cancellation", err)
+	}
+}

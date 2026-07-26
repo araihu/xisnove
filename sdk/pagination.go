@@ -44,6 +44,9 @@ func WalkPages[T any](ctx context.Context, fetch PageFetcher[T], callback PageCa
 		if err := callback(ctx, page.Items); err != nil {
 			return err
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if page.NextCursor == "" {
 			return nil
 		}
