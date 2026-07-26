@@ -108,7 +108,7 @@ func seedBackupState(t *testing.T, db *sql.DB) {
 	t.Helper()
 	statements := []string{
 		`INSERT INTO admins (id, email, password_hash, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'admin@example.com', 'hash', '2026-07-25T00:00:00Z')`,
-		`INSERT INTO locations (id, name, created_at) VALUES ('00000000-0000-4000-8000-000000000002', 'public', '2026-07-25T00:00:00Z')`,
+		`INSERT INTO locations (id, name, enabled, created_at, updated_at) VALUES ('00000000-0000-4000-8000-000000000002', 'public', 1, '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z')`,
 		`INSERT INTO monitors (id, name, kind, interval_ms, timeout_ms, failure_threshold, recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at) VALUES ('00000000-0000-4000-8000-000000000003', 'target', 'http', 60000, 5000, 3, 2, '{"kind":"http","method":"GET","url":"https://example.com"}', 1, '2026-07-25T00:01:00Z', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z')`,
 		`INSERT INTO monitor_locations (monitor_id, location_id, required) VALUES ('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000002', 1)`,
 		`INSERT INTO agents (id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, created_at, updated_at) VALUES ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000002', 'agent', X'01', 1, '["http"]', 'v1', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z')`,
