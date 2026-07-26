@@ -23,6 +23,7 @@ func (k keyring) Get(service, account string) (string, error) {
 }
 
 func (keyring) Set(string, string, string) error { return errors.New("unexpected write") }
+func (keyring) Delete(string, string) error      { return errors.New("unexpected delete") }
 
 func TestResolverOpensCurrentOrExplicitProfileWithCredential(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
@@ -81,6 +82,37 @@ func TestResolverFailsBeforeCredentialLookupWhenNoProfileSelected(t *testing.T) 
 	}
 	if _, err := resolver.Open(""); !errors.Is(err, session.ErrProfileNotFound) {
 		t.Fatalf("Open() error = %v, want ErrProfileNotFound", err)
+	}
+	if reads != 0 {
+		t.Fatalf("credential reads = %d, want 0", reads)
+	}
+}
+
+func TestResolverOpensPublicProfileWithoutReadingCredential(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := (config.Store{Path: configPath}).Save(config.Config{
+		Version:        1,
+		CurrentProfile: "public",
+		Profiles: map[string]config.Profile{
+			"public": {URL: "https://status.example", Credential: config.CredentialRef{Mode: config.CredentialEnv, Reference: "MISSING_TOKEN"}},
+		},
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	reads := 0
+	resolver := session.Resolver{
+		Store: config.Store{Path: configPath},
+		Credentials: credential.Resolver{LookupEnv: func(string) (string, bool) {
+			reads++
+			return "", false
+		}},
+	}
+	profile, err := resolver.Profile("")
+	if err != nil {
+		t.Fatalf("Profile() error = %v", err)
+	}
+	if profile.Name != "public" || profile.URL != "https://status.example" {
+		t.Fatalf("Profile() = %#v", profile)
 	}
 	if reads != 0 {
 		t.Fatalf("credential reads = %d, want 0", reads)

@@ -16,15 +16,33 @@ type Session struct {
 	Token string
 }
 
+type Profile struct {
+	Name       string
+	URL        string
+	Credential config.CredentialRef
+}
+
 type Resolver struct {
 	Store       config.Store
 	Credentials credential.Resolver
 }
 
 func (r Resolver) Open(profileOverride string) (Session, error) {
+	profile, err := r.Profile(profileOverride)
+	if err != nil {
+		return Session{}, err
+	}
+	token, err := r.Credentials.Lookup(profile.Credential)
+	if err != nil {
+		return Session{}, fmt.Errorf("resolve credential for profile %q: %w", profile.Name, err)
+	}
+	return Session{Name: profile.Name, URL: profile.URL, Token: token}, nil
+}
+
+func (r Resolver) Profile(profileOverride string) (Profile, error) {
 	cfg, err := r.Store.Load()
 	if err != nil {
-		return Session{}, fmt.Errorf("load profiles: %w", err)
+		return Profile{}, fmt.Errorf("load profiles: %w", err)
 	}
 	name := profileOverride
 	if name == "" {
@@ -32,11 +50,7 @@ func (r Resolver) Open(profileOverride string) (Session, error) {
 	}
 	profile, ok := cfg.Profiles[name]
 	if name == "" || !ok {
-		return Session{}, fmt.Errorf("%w: select one with --profile or `xisnove profile use NAME`", ErrProfileNotFound)
+		return Profile{}, fmt.Errorf("%w: select one with --profile or `xisnove profile use NAME`", ErrProfileNotFound)
 	}
-	token, err := r.Credentials.Lookup(profile.Credential)
-	if err != nil {
-		return Session{}, fmt.Errorf("resolve credential for profile %q: %w", name, err)
-	}
-	return Session{Name: name, URL: profile.URL, Token: token}, nil
+	return Profile{Name: name, URL: profile.URL, Credential: profile.Credential}, nil
 }

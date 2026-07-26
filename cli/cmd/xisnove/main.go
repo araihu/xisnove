@@ -8,6 +8,6 @@ import (
 )
 
 func main() {
-	runner := command.Runner{Stdout: os.Stdout, Stderr: os.Stderr}
+	runner := command.Runner{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}
 	os.Exit(runner.Run(context.Background(), os.Args[1:]))
 }

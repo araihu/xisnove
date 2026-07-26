@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/araihu/xisnove/cli/internal/command"
 	"github.com/araihu/xisnove/cli/internal/config"
 	"github.com/araihu/xisnove/cli/internal/credential"
+	"github.com/araihu/xisnove/cli/internal/problem"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +32,43 @@ func (fakeSDKFamily) Command(runtime command.Runtime) *cobra.Command {
 			}
 			_, err = fmt.Fprintf(runtime.Stdout, "%s %s token-bytes=%d\n", session.Name, session.URL, len(session.Token))
 			return err
+		},
+	}
+}
+
+type sdkProbeFamily struct{}
+
+func (sdkProbeFamily) Name() string { return "probe" }
+
+func (sdkProbeFamily) Command(runtime command.Runtime) *cobra.Command {
+	return &cobra.Command{
+		Use: "probe",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, _, err := runtime.OpenClient(true)
+			if err != nil {
+				return err
+			}
+			response, err := client.GetPublicStatusWithResponse(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if response.JSON200 == nil {
+				return fmt.Errorf("HTTP %d", response.StatusCode())
+			}
+			return nil
+		},
+	}
+}
+
+type unavailableSDKFamily struct{}
+
+func (unavailableSDKFamily) Name() string { return "monitor" }
+
+func (unavailableSDKFamily) Command(command.Runtime) *cobra.Command {
+	return &cobra.Command{
+		Use: "monitor",
+		RunE: func(*cobra.Command, []string) error {
+			return problem.ContractUnavailable("monitor")
 		},
 	}
 }
@@ -137,7 +177,7 @@ func TestProfileSetReportsInvalidCredentialModeAsUsage(t *testing.T) {
 
 func TestUnavailableSDKFamilyReturnsTypedProblemOnStderr(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	exitCode := (command.Runner{Stdout: &stdout, Stderr: &stderr}).Run(context.Background(), []string{
+	exitCode := (command.Runner{Stdout: &stdout, Stderr: &stderr, Families: []command.Family{unavailableSDKFamily{}}}).Run(context.Background(), []string{
 		"--output", "json", "monitor",
 	})
 	if exitCode != 1 {
@@ -185,7 +225,7 @@ func TestHelpDeclaresAllHumanWorkflowFamilies(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("Run() exit = %d, stderr = %s", exitCode, stderr.String())
 	}
-	for _, family := range []string{"profile", "auth", "monitor", "location", "agent", "incident", "notification", "discovery", "status"} {
+	for _, family := range []string{"profile", "auth", "monitor", "location", "agent", "incident", "notification", "discovery", "maintenance", "status"} {
 		if !strings.Contains(stdout.String(), family) {
 			t.Fatalf("help does not contain %q\n%s", family, stdout.String())
 		}
@@ -226,5 +266,40 @@ func TestInjectedSDKFamilyOpensExplicitProfileThroughCredentialAbstraction(t *te
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRuntimeBuildsGeneratedSDKClientWithBearerEditor(t *testing.T) {
+	authorization := ""
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		authorization = request.Header.Get("Authorization")
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"activeIncidents":[],"generatedAt":"2026-07-25T12:00:00Z","monitors":[],"state":"up"}`))
+	}))
+	defer server.Close()
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := (config.Store{Path: configPath}).Save(config.Config{
+		Version:        1,
+		CurrentProfile: "mock",
+		Profiles: map[string]config.Profile{
+			"mock": {URL: server.URL, Credential: config.CredentialRef{Mode: config.CredentialEnv, Reference: "MOCK_TOKEN"}},
+		},
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	runner := command.Runner{
+		Stdout:   &stdout,
+		Stderr:   &stderr,
+		Families: []command.Family{sdkProbeFamily{}},
+		Credentials: credential.Resolver{LookupEnv: func(string) (string, bool) {
+			return "bearer-value", true
+		}},
+	}
+	if exit := runner.Run(context.Background(), []string{"--config", configPath, "probe"}); exit != 0 {
+		t.Fatalf("Run() exit = %d, stderr = %s", exit, stderr.String())
+	}
+	if authorization != "Bearer bearer-value" {
+		t.Fatalf("Authorization = %q", authorization)
 	}
 }
