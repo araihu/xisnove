@@ -87,3 +87,13 @@ No plaintext credential is written to status, conditions, logs, or Deployment
 environment. `operator/api` generated code was run and has no semantic diff:
 the existing CRD schema is unchanged, so chart/CRD and manager wiring remain
 for their explicitly later task. No push was performed.
+
+## Fix round 1: continuous observation and bounded reconciliation keys
+
+Added owner-proven read-only Agent observation across the public contract,
+application view, HTTP server, mock, SDK adapter, and controller. State now
+separates active registered generation from heartbeat-presented generation; the
+latter alone permits revoke. Apply keys include object generation, all
+controller keys are compact digest values below 200 bytes, and Monitor
+apply/delete keys are deterministic. UTF-8 condition truncation is bounded to
+256 bytes. Root generation, focused race tests, and operator verification pass.

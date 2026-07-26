@@ -44,10 +44,11 @@ func (r *MonitorReconciler) Reconcile(ctx context.Context, request ctrl.Request)
 	}
 	previousStatus := monitor.Status.DeepCopy()
 	state, err := r.ControlPlane.ApplyMonitor(ctx, controlplane.ApplyMonitorRequest{
-		Owner:      ownerFor(monitor, "Monitor"),
-		ExternalID: monitor.Status.ExternalID,
-		Name:       name,
-		Spec:       *monitor.Spec.DeepCopy(),
+		Owner:          ownerFor(monitor, "Monitor"),
+		ExternalID:     monitor.Status.ExternalID,
+		Name:           name,
+		Spec:           *monitor.Spec.DeepCopy(),
+		IdempotencyKey: boundedIdempotencyKey("monitor-apply", ownerFor(monitor, "Monitor"), monitor.Generation, "apply"),
 	})
 	if err != nil {
 		return ctrl.Result{}, r.recordFailure(ctx, monitor, err)
@@ -92,8 +93,9 @@ func (r *MonitorReconciler) finalize(ctx context.Context, monitor *monitoringv1a
 	}
 	if !isForceDelete(monitor) {
 		err := r.ControlPlane.DeleteMonitor(ctx, controlplane.DeleteRemoteObjectRequest{
-			Owner:      ownerFor(monitor, "Monitor"),
-			ExternalID: monitor.Status.ExternalID,
+			Owner:          ownerFor(monitor, "Monitor"),
+			ExternalID:     monitor.Status.ExternalID,
+			IdempotencyKey: boundedIdempotencyKey("monitor-delete", ownerFor(monitor, "Monitor"), 0, "delete"),
 		})
 		if err = ignoreRemoteNotFound(err); err != nil {
 			return ctrl.Result{}, safeError(err)

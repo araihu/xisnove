@@ -70,6 +70,13 @@ func TestOperatorAgentApplyReplaysHashOnlyAndGuardsCredentialRevocation(t *testi
 	if first.ExternalID == "" || first.CredentialGeneration != 1 {
 		t.Fatalf("state = %#v", first)
 	}
+	observed, err := service.ObserveAgent(context.Background(), ObserveOperatorAgent{Owner: request.Owner, ExternalID: first.ExternalID})
+	if err != nil || observed.ExternalID != first.ExternalID {
+		t.Fatalf("observe = %#v, %v", observed, err)
+	}
+	if _, err := service.ObserveAgent(context.Background(), ObserveOperatorAgent{Owner: port.ExternalOwner{Key: request.Owner.Key, UID: "recreated-uid"}, ExternalID: first.ExternalID}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("recreated UID observe = %v, want not found", err)
+	}
 	if string(first.ExternalID) == request.InitialCredential.Credential {
 		t.Fatal("plaintext credential reached metadata response")
 	}

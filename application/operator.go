@@ -66,10 +66,16 @@ type ApplyOperatorAgent struct {
 }
 
 type OperatorAgentState struct {
-	ExternalID           domain.AgentID
-	CredentialGeneration uint64
-	LastSeenAt           time.Time
-	LastDiscoveryAt      time.Time
+	ExternalID                    domain.AgentID
+	CredentialGeneration          uint64
+	PresentedCredentialGeneration uint64
+	LastSeenAt                    time.Time
+	LastDiscoveryAt               time.Time
+}
+
+type ObserveOperatorAgent struct {
+	Owner      port.ExternalOwner
+	ExternalID domain.AgentID
 }
 
 type PutOperatorCredential struct {
@@ -360,6 +366,35 @@ func (s OperatorService) ApplyAgent(ctx context.Context, request ApplyOperatorAg
 	})
 	if err != nil {
 		return OperatorAgentState{}, fmt.Errorf("apply operator agent: %w", err)
+	}
+	return result, nil
+}
+
+func (s OperatorService) ObserveAgent(ctx context.Context, request ObserveOperatorAgent) (OperatorAgentState, error) {
+	if err := s.ready(false); err != nil {
+		return OperatorAgentState{}, err
+	}
+	if err := validateOperatorOwner(request.Owner); err != nil {
+		return OperatorAgentState{}, err
+	}
+	var result OperatorAgentState
+	err := s.Store.View(ctx, func(ctx context.Context, repositories Repositories) error {
+		if repositories.Operator == nil || repositories.Agents == nil {
+			return errors.New("operator agent repositories are not configured")
+		}
+		binding, err := repositories.Operator.Resolve(ctx, request.Owner, operatorAgentKind)
+		if err != nil {
+			return err
+		}
+		id := domain.AgentID(binding.ResourceID)
+		if request.ExternalID != "" && request.ExternalID != id {
+			return ErrConflict
+		}
+		result, err = operatorAgentState(ctx, repositories, id)
+		return err
+	})
+	if err != nil {
+		return OperatorAgentState{}, fmt.Errorf("observe operator agent: %w", err)
 	}
 	return result, nil
 }
@@ -738,7 +773,7 @@ func operatorAgentState(ctx context.Context, repositories Repositories, id domai
 	if err != nil {
 		return OperatorAgentState{}, err
 	}
-	state := OperatorAgentState{ExternalID: id, CredentialGeneration: agent.Agent.CredentialGeneration, LastSeenAt: agent.Agent.LastSeenAt}
+	state := OperatorAgentState{ExternalID: id, CredentialGeneration: agent.Agent.CredentialGeneration, PresentedCredentialGeneration: agent.PresentedCredentialGeneration, LastSeenAt: agent.Agent.LastSeenAt}
 	if agent.LastCompleteDiscoveryAt != nil {
 		state.LastDiscoveryAt = *agent.LastCompleteDiscoveryAt
 	}

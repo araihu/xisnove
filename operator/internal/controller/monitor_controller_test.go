@@ -54,6 +54,9 @@ func TestMonitorReconcileUsesStableOwnershipAndBoundedStatus(t *testing.T) {
 		if request.Owner.UID != "monitor-uid" {
 			t.Fatalf("request[%d] owner UID = %q, want monitor-uid", index, request.Owner.UID)
 		}
+		if request.IdempotencyKey == "" || len(request.IdempotencyKey) > 200 {
+			t.Fatalf("request[%d] idempotency key=%q", index, request.IdempotencyKey)
+		}
 	}
 	if requests[1].ExternalID != "monitor-remote-1" {
 		t.Fatalf("second external ID = %q, want stable remote ID", requests[1].ExternalID)
@@ -302,9 +305,17 @@ type fakeControlPlane struct {
 	applyMonitor     func(context.Context, controlplane.ApplyMonitorRequest) (controlplane.MonitorState, error)
 	deleteMonitor    func(context.Context, controlplane.DeleteRemoteObjectRequest) error
 	applyAgent       func(context.Context, controlplane.ApplyAgentRequest) (controlplane.AgentState, error)
+	observeAgent     func(context.Context, controlplane.ObserveAgentRequest) (controlplane.AgentState, error)
 	putCredential    func(context.Context, controlplane.PutAgentCredentialRequest) error
 	revokeCredential func(context.Context, controlplane.RevokeAgentCredentialRequest) error
 	deleteAgent      func(context.Context, controlplane.DeleteRemoteObjectRequest) error
+}
+
+func (f *fakeControlPlane) ObserveAgent(ctx context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+	if f.observeAgent == nil {
+		return controlplane.AgentState{}, errors.New("unexpected ObserveAgent call")
+	}
+	return f.observeAgent(ctx, request)
 }
 
 func (f *fakeControlPlane) ApplyMonitor(ctx context.Context, request controlplane.ApplyMonitorRequest) (controlplane.MonitorState, error) {

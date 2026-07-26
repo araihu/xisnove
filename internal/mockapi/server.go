@@ -266,12 +266,39 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, operationID s
 		s.listNotificationDeliveries(w, r)
 	case "GetPublicStatusPage":
 		s.publicStatus(w, r)
+	case "ObserveOperatorAgent":
+		s.observeOperatorAgent(w, r)
 	case "ApplyOperatorMonitor", "DeleteOperatorMonitor", "ApplyOperatorAgent",
 		"PutOperatorAgentCredential", "RevokeOperatorAgentCredential", "DeleteOperatorAgent":
 		s.operatorMutation(w, r, operationID)
 	default:
 		s.serveAdvertisedOperation(w, r, operationID)
 	}
+}
+
+func (s *Server) observeOperatorAgent(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, "operator:provision") {
+		return
+	}
+	var input map[string]any
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	key, uid, ok := operatorOwner(input)
+	if !ok {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
+		return
+	}
+	externalID := optionalString(input, "externalId")
+	s.mu.Lock()
+	agent := s.operatorAgents[operatorOwnerIdentity(key, uid)]
+	if agent == nil || (externalID != "" && externalID != agent.externalID) {
+		s.mu.Unlock()
+		writeProblem(w, r, http.StatusConflict, "operator_ownership_conflict", "Operator ownership conflict", nil)
+		return
+	}
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"externalId": agent.externalID, "credentialGeneration": agent.credentialGeneration, "presentedCredentialGeneration": agent.credentialGeneration})
 }
 
 func (s *Server) serveScenario(w http.ResponseWriter, r *http.Request) bool {

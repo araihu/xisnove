@@ -94,6 +94,25 @@ func (s *Server) DeleteOperatorAgent(ctx context.Context, request DeleteOperator
 	return DeleteOperatorAgent204Response{}, nil
 }
 
+func (s *Server) ObserveOperatorAgent(ctx context.Context, request ObserveOperatorAgentRequestObject) (ObserveOperatorAgentResponseObject, error) {
+	if request.Body == nil {
+		return observeOperatorAgentProblem(requiredBodyError())
+	}
+	var externalID domain.AgentID
+	if request.Body.ExternalId != nil {
+		externalID = domain.AgentID(request.Body.ExternalId.String())
+	}
+	state, err := s.operator.ObserveAgent(ctx, application.ObserveOperatorAgent{Owner: operatorOwner(request.Body.Owner), ExternalID: externalID})
+	if err != nil {
+		return observeOperatorAgentProblem(err)
+	}
+	mapped, err := operatorAgentResult(state)
+	if err != nil {
+		return nil, err
+	}
+	return ObserveOperatorAgent200JSONResponse(mapped), nil
+}
+
 func (s *Server) PutOperatorAgentCredential(ctx context.Context, request PutOperatorAgentCredentialRequestObject) (PutOperatorAgentCredentialResponseObject, error) {
 	if request.Body == nil || request.Body.Credential == nil {
 		return putOperatorCredentialProblem(requiredBodyError())
@@ -157,6 +176,10 @@ func operatorAgentResult(state application.OperatorAgentState) (OperatorAgentApp
 		return OperatorAgentApplyResult{}, err
 	}
 	result := OperatorAgentApplyResult{ExternalId: id, CredentialGeneration: int64(state.CredentialGeneration)}
+	if state.PresentedCredentialGeneration > 0 {
+		value := int64(state.PresentedCredentialGeneration)
+		result.PresentedCredentialGeneration = &value
+	}
 	if !state.LastSeenAt.IsZero() {
 		value := state.LastSeenAt
 		result.LastSeenAt = &value
@@ -209,6 +232,16 @@ func deleteOperatorAgentProblem(err error) (DeleteOperatorAgentResponseObject, e
 		return DeleteOperatorAgent409ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse(problem)}, nil
 	}
 	return DeleteOperatorAgentdefaultApplicationProblemPlusJSONResponse{Body: problem, StatusCode: status}, nil
+}
+func observeOperatorAgentProblem(err error) (ObserveOperatorAgentResponseObject, error) {
+	problem, status, ok := operatorProblem(err)
+	if !ok {
+		return nil, err
+	}
+	if status == 409 {
+		return ObserveOperatorAgent409ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse(problem)}, nil
+	}
+	return ObserveOperatorAgentdefaultApplicationProblemPlusJSONResponse{Body: problem, StatusCode: status}, nil
 }
 func putOperatorCredentialProblem(err error) (PutOperatorAgentCredentialResponseObject, error) {
 	problem, status, ok := operatorProblem(err)

@@ -322,6 +322,26 @@ paths:
         '204': {description: Owned Agent deleted or already absent}
         '409': {$ref: '#/components/responses/Problem'}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/operator/agents:observe:
+    post:
+      operationId: observeOperatorAgent
+      summary: Read bounded state for an Agent owned by one Kubernetes resource
+      tags: [operator]
+      security: [{apiTokenBearer: []}]
+      x-xisnove-scopes: [operator:provision]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ObserveOperatorAgentRequest'}
+      responses:
+        '200':
+          description: Bounded remote Agent observation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperatorAgentApplyResult'}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/operator/agents/{agentId}/credentials/{generation}:
     parameters:
       - {$ref: '#/components/parameters/AgentID'}
@@ -1662,6 +1682,13 @@ components:
       properties:
         owner: {$ref: '#/components/schemas/ExternalOwner'}
         externalId: {type: string, format: uuid}
+    ObserveOperatorAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [owner]
+      properties:
+        owner: {$ref: '#/components/schemas/ExternalOwner'}
+        externalId: {type: string, format: uuid}
     OperatorAgentApplyResult:
       type: object
       additionalProperties: false
@@ -1669,6 +1696,7 @@ components:
       properties:
         externalId: {type: string, format: uuid}
         credentialGeneration: {type: integer, format: int64, minimum: 1}
+        presentedCredentialGeneration: {type: integer, format: int64, minimum: 1}
         lastSeenAt: {type: string, format: date-time}
         lastDiscoveryAt: {type: string, format: date-time}
     CreateAgentEnrollmentTokenRequest:

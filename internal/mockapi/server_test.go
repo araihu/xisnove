@@ -492,7 +492,7 @@ func TestOperatorMockRejectsNonInitialAgentCredentialGeneration(t *testing.T) {
 	response := request(t, server.URL, http.MethodPost, "/v1/operator/agents:apply", mockapi.FixtureFullAPIToken,
 		map[string]any{
 			"owner": map[string]any{"key": "monitoring.xisnove.io/Agent/default/edge", "uid": "agent-uid-generation-2"},
-			"name": "operator edge", "locationId": "00000000-0000-4000-8000-000000000001",
+			"name":  "operator edge", "locationId": "00000000-0000-4000-8000-000000000001",
 			"enabled": true, "capabilities": []string{"http"},
 			"initialCredential": map[string]any{"generation": 2, "credential": "xisnove_mock_operator_initial_credential_0002"},
 		}, map[string]string{"Idempotency-Key": "operator-agent-generation-2"})
@@ -597,6 +597,8 @@ func advertisedOperationRequest(operationID string) any {
 	case "ApplyOperatorMonitor":
 		return map[string]any{"owner": operatorFixtureOwner(), "monitor": updateMonitorInput("operator contract monitor")}
 	case "DeleteOperatorMonitor":
+		return map[string]any{"owner": operatorFixtureOwner()}
+	case "ObserveOperatorAgent":
 		return map[string]any{"owner": operatorFixtureOwner()}
 	case "ApplyOperatorAgent":
 		return map[string]any{

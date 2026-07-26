@@ -58,10 +58,16 @@ type ApplyAgentRequest struct {
 }
 
 type AgentState struct {
-	ExternalID           string
-	CredentialGeneration int64
-	LastHeartbeatAt      time.Time
-	LastDiscoverySyncAt  time.Time
+	ExternalID                    string
+	CredentialGeneration          int64
+	PresentedCredentialGeneration int64
+	LastHeartbeatAt               time.Time
+	LastDiscoverySyncAt           time.Time
+}
+
+type ObserveAgentRequest struct {
+	Owner      OwnerReference
+	ExternalID string
 }
 
 type PutAgentCredentialRequest struct {
@@ -84,6 +90,7 @@ type Client interface {
 	ApplyMonitor(context.Context, ApplyMonitorRequest) (MonitorState, error)
 	DeleteMonitor(context.Context, DeleteRemoteObjectRequest) error
 	ApplyAgent(context.Context, ApplyAgentRequest) (AgentState, error)
+	ObserveAgent(context.Context, ObserveAgentRequest) (AgentState, error)
 	PutAgentCredential(context.Context, PutAgentCredentialRequest) error
 	RevokeAgentCredential(context.Context, RevokeAgentCredentialRequest) error
 	DeleteAgent(context.Context, DeleteRemoteObjectRequest) error

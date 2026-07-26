@@ -1,10 +1,13 @@
 package controller
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/araihu/xisnove/operator/internal/controlplane"
 	apiMeta "k8s.io/apimachinery/pkg/api/meta"
@@ -53,7 +56,16 @@ func boundMessage(message string) string {
 		return message
 	}
 	const suffix = "..."
-	return message[:MaxConditionMessageLength-len(suffix)] + suffix
+	limit := MaxConditionMessageLength - len(suffix)
+	for limit > 0 && !utf8.ValidString(message[:limit]) {
+		limit--
+	}
+	return message[:limit] + suffix
+}
+
+func boundedIdempotencyKey(prefix string, owner controlplane.OwnerReference, generation int64, action string) string {
+	sum := sha256.Sum256([]byte(owner.Key + "\x00" + owner.UID + "\x00" + strconv.FormatInt(generation, 10) + "\x00" + action))
+	return prefix + "-" + fmt.Sprintf("%x", sum[:16])
 }
 
 func setCondition(conditions *[]metav1.Condition, generation int64, conditionType string, status metav1.ConditionStatus, reason, message string) {

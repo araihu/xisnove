@@ -144,6 +144,41 @@ func (c *Client) ApplyAgent(ctx context.Context, request controlplane.ApplyAgent
 	if response.JSON200.LastDiscoveryAt != nil {
 		state.LastDiscoverySyncAt = *response.JSON200.LastDiscoveryAt
 	}
+	if response.JSON200.PresentedCredentialGeneration != nil {
+		state.PresentedCredentialGeneration = *response.JSON200.PresentedCredentialGeneration
+	}
+	return state, nil
+}
+
+func (c *Client) ObserveAgent(ctx context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+	body := publicsdk.ObserveOperatorAgentRequest{Owner: owner(request.Owner)}
+	if request.ExternalID != "" {
+		id, err := uuid.Parse(request.ExternalID)
+		if err != nil {
+			return controlplane.AgentState{}, errors.New("control plane agent identifier is invalid")
+		}
+		body.ExternalId = &id
+	}
+	response, err := c.client.ObserveOperatorAgentWithResponse(ctx, body)
+	if err != nil {
+		return controlplane.AgentState{}, transportError(err)
+	}
+	if err := responseError(response.HTTPResponse, response.Body); err != nil {
+		return controlplane.AgentState{}, err
+	}
+	if response.JSON200 == nil {
+		return controlplane.AgentState{}, errors.New("control plane response missing agent state")
+	}
+	state := controlplane.AgentState{ExternalID: response.JSON200.ExternalId.String(), CredentialGeneration: response.JSON200.CredentialGeneration}
+	if response.JSON200.PresentedCredentialGeneration != nil {
+		state.PresentedCredentialGeneration = *response.JSON200.PresentedCredentialGeneration
+	}
+	if response.JSON200.LastSeenAt != nil {
+		state.LastHeartbeatAt = *response.JSON200.LastSeenAt
+	}
+	if response.JSON200.LastDiscoveryAt != nil {
+		state.LastDiscoverySyncAt = *response.JSON200.LastDiscoveryAt
+	}
 	return state, nil
 }
 

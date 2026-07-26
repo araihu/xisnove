@@ -53,6 +53,17 @@ func TestOperatorMutationsFreezeOwnershipScopeAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestOperatorAgentObservationIsOwnerProvenAndReadOnly(t *testing.T) {
+	doc := loadContract(t)
+	operation := operationByID(t, doc, "observeOperatorAgent")
+	item := doc.Paths.Value("/v1/operator/agents:observe")
+	if item == nil || item.Post != operation { t.Fatal("observe operation is not POST /v1/operator/agents:observe") }
+	if parameter(operation.Parameters, "header", "Idempotency-Key") != nil { t.Fatal("observation must not require idempotency") }
+	if operation.Security == nil || len(*operation.Security) != 1 || (*operation.Security)[0]["apiTokenBearer"] == nil { t.Fatal("observation must require provisioning API token") }
+	request := requiredSchema(t, doc, "ObserveOperatorAgentRequest")
+	if !slices.Contains(request.Required, "owner") || request.Properties["owner"].Ref != "#/components/schemas/ExternalOwner" { t.Fatal("observation must require owner") }
+}
+
 func TestOperatorOwnerAndCredentialSchemasProtectReconciliation(t *testing.T) {
 	doc := loadContract(t)
 	for _, name := range []string{

@@ -216,6 +216,7 @@ var operationScopes = map[string]Scope{
 	"applyOperatorMonitor": ScopeOperatorProvision, "deleteOperatorMonitor": ScopeOperatorProvision,
 	"applyOperatorAgent": ScopeOperatorProvision, "putOperatorAgentCredential": ScopeOperatorProvision,
 	"revokeOperatorAgentCredential": ScopeOperatorProvision, "deleteOperatorAgent": ScopeOperatorProvision,
+	"observeOperatorAgent": ScopeOperatorProvision,
 }
 
 func Authorize(operationID string, principal Principal) error {

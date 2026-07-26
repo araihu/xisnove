@@ -107,6 +107,14 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (
 			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("control plane returned an invalid Agent state"))
 		}
 		agent.Status.ExternalID = state.ExternalID
+	} else if agent.Status.ExternalID != "" {
+		state, err = r.ControlPlane.ObserveAgent(ctx, controlplane.ObserveAgentRequest{Owner: ownerFor(agent, "Agent"), ExternalID: agent.Status.ExternalID})
+		if err != nil {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
+		}
+		if state.ExternalID != agent.Status.ExternalID {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("control plane observation returned a different Agent identifier"))
+		}
 	}
 
 	if current == nil && next != nil {
@@ -165,7 +173,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (
 	if previous := previousCredentialGeneration(secret); previous > 0 {
 		agent.Status.PreviousCredentialGeneration = &previous
 		agent.Status.RotationPhase = monitoringv1alpha1.RotationPhaseAwaitingHeartbeat
-		if state.CredentialGeneration >= current.Generation && !state.LastHeartbeatAt.IsZero() {
+		if state.PresentedCredentialGeneration >= current.Generation && !state.LastHeartbeatAt.IsZero() {
 			if err := r.ControlPlane.RevokeAgentCredential(ctx, controlplane.RevokeAgentCredentialRequest{
 				Owner: ownerFor(agent, "Agent"), ExternalID: agent.Status.ExternalID, Generation: previous,
 				IdempotencyKey: credentialIdempotencyKey(agent, previous, "revoke"),
@@ -548,16 +556,15 @@ func newCredential() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(value), nil
 }
 func applyIdempotencyKey(agent *monitoringv1alpha1.Agent) string {
-	owner := ownerFor(agent, "Agent")
-	return owner.Key + "/" + owner.UID + "/apply/1"
+	return boundedIdempotencyKey("agent-apply", ownerFor(agent, "Agent"), agent.Generation, "apply")
 }
 func credentialIdempotencyKey(agent *monitoringv1alpha1.Agent, generation int64, action string) string {
 	owner := ownerFor(agent, "Agent")
-	return owner.Key + "/" + owner.UID + "/credential/" + strconv.FormatInt(generation, 10) + "/" + action
+	return boundedIdempotencyKey("agent-credential", owner, generation, action)
 }
 func deleteIdempotencyKey(agent *monitoringv1alpha1.Agent) string {
 	owner := ownerFor(agent, "Agent")
-	return owner.Key + "/" + owner.UID + "/delete"
+	return boundedIdempotencyKey("agent-delete", owner, 0, "delete")
 }
 func joinCapabilities(capabilities []monitoringv1alpha1.AgentCapability) string {
 	values := make([]string, len(capabilities))

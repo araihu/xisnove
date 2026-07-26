@@ -1208,12 +1208,19 @@ type NotificationRoutePage struct {
 	Page   PageMetadata `json:"page"`
 }
 
+// ObserveOperatorAgentRequest defines model for ObserveOperatorAgentRequest.
+type ObserveOperatorAgentRequest struct {
+	ExternalId *openapi_types.UUID `json:"externalId,omitempty"`
+	Owner      ExternalOwner       `json:"owner"`
+}
+
 // OperatorAgentApplyResult defines model for OperatorAgentApplyResult.
 type OperatorAgentApplyResult struct {
-	CredentialGeneration int64              `json:"credentialGeneration"`
-	ExternalId           openapi_types.UUID `json:"externalId"`
-	LastDiscoveryAt      *time.Time         `json:"lastDiscoveryAt,omitempty"`
-	LastSeenAt           *time.Time         `json:"lastSeenAt,omitempty"`
+	CredentialGeneration          int64              `json:"credentialGeneration"`
+	ExternalId                    openapi_types.UUID `json:"externalId"`
+	LastDiscoveryAt               *time.Time         `json:"lastDiscoveryAt,omitempty"`
+	LastSeenAt                    *time.Time         `json:"lastSeenAt,omitempty"`
+	PresentedCredentialGeneration *int64             `json:"presentedCredentialGeneration,omitempty"`
 }
 
 // OperatorInitialCredential defines model for OperatorInitialCredential.
@@ -1830,6 +1837,9 @@ type ApplyOperatorAgentJSONRequestBody = ApplyOperatorAgentRequest
 
 // DeleteOperatorAgentJSONRequestBody defines body for DeleteOperatorAgent for application/json ContentType.
 type DeleteOperatorAgentJSONRequestBody = DeleteOperatorAgentRequest
+
+// ObserveOperatorAgentJSONRequestBody defines body for ObserveOperatorAgent for application/json ContentType.
+type ObserveOperatorAgentJSONRequestBody = ObserveOperatorAgentRequest
 
 // ApplyOperatorMonitorJSONRequestBody defines body for ApplyOperatorMonitor for application/json ContentType.
 type ApplyOperatorMonitorJSONRequestBody = ApplyOperatorMonitorRequest
@@ -2565,6 +2575,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
 	DeleteOperatorAgent(ctx context.Context, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ObserveOperatorAgentWithBody Read bounded state for an Agent owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+	ObserveOperatorAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ObserveOperatorAgent Read bounded state for an Agent owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+	ObserveOperatorAgent(ctx context.Context, body ObserveOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApplyOperatorMonitorWithBody Apply the Monitor owned by one Kubernetes resource
 	//
@@ -3817,6 +3841,40 @@ func (c *Client) DeleteOperatorAgentWithBody(ctx context.Context, params *Delete
 // Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
 func (c *Client) DeleteOperatorAgent(ctx context.Context, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteOperatorAgentRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ObserveOperatorAgentWithBody Read bounded state for an Agent owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+func (c *Client) ObserveOperatorAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewObserveOperatorAgentRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ObserveOperatorAgent Read bounded state for an Agent owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+func (c *Client) ObserveOperatorAgent(ctx context.Context, body ObserveOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewObserveOperatorAgentRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6878,6 +6936,46 @@ func NewDeleteOperatorAgentRequestWithBody(server string, params *DeleteOperator
 	return req, nil
 }
 
+// NewObserveOperatorAgentRequest calls the generic ObserveOperatorAgent builder with application/json body
+func NewObserveOperatorAgentRequest(server string, body ObserveOperatorAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewObserveOperatorAgentRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewObserveOperatorAgentRequestWithBody constructs an http.Request for the ObserveOperatorAgent method, with any body, and a specified content type
+func NewObserveOperatorAgentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/operator/agents:observe")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewApplyOperatorMonitorRequest calls the generic ApplyOperatorMonitor builder with application/json body
 func NewApplyOperatorMonitorRequest(server string, params *ApplyOperatorMonitorParams, body ApplyOperatorMonitorJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -7623,6 +7721,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/operator/agents:delete (the `DeleteOperatorAgent` operationId).
 	DeleteOperatorAgentWithResponse(ctx context.Context, params *DeleteOperatorAgentParams, body DeleteOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOperatorAgentResponse, error)
+
+	// ObserveOperatorAgentWithBodyWithResponse Read bounded state for an Agent owned by one Kubernetes resource
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+	ObserveOperatorAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ObserveOperatorAgentResponse, error)
+
+	// ObserveOperatorAgentWithResponse Read bounded state for an Agent owned by one Kubernetes resource
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+	ObserveOperatorAgentWithResponse(ctx context.Context, body ObserveOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ObserveOperatorAgentResponse, error)
 
 	// ApplyOperatorMonitorWithBodyWithResponse Apply the Monitor owned by one Kubernetes resource
 	//
@@ -10364,6 +10476,61 @@ func (r DeleteOperatorAgentResponse) ContentType() string {
 	return ""
 }
 
+type ObserveOperatorAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OperatorAgentApplyResult
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ObserveOperatorAgentResponse) GetJSON200() *OperatorAgentApplyResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ObserveOperatorAgentResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ObserveOperatorAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ObserveOperatorAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ObserveOperatorAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ObserveOperatorAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ObserveOperatorAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ApplyOperatorMonitorResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11584,6 +11751,32 @@ func (c *ClientWithResponses) DeleteOperatorAgentWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseDeleteOperatorAgentResponse(rsp)
+}
+
+// ObserveOperatorAgentWithBodyWithResponse Read bounded state for an Agent owned by one Kubernetes resource
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+func (c *ClientWithResponses) ObserveOperatorAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ObserveOperatorAgentResponse, error) {
+	rsp, err := c.ObserveOperatorAgentWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseObserveOperatorAgentResponse(rsp)
+}
+
+// ObserveOperatorAgentWithResponse Read bounded state for an Agent owned by one Kubernetes resource
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/operator/agents:observe (the `ObserveOperatorAgent` operationId).
+func (c *ClientWithResponses) ObserveOperatorAgentWithResponse(ctx context.Context, body ObserveOperatorAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ObserveOperatorAgentResponse, error) {
+	rsp, err := c.ObserveOperatorAgent(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseObserveOperatorAgentResponse(rsp)
 }
 
 // ApplyOperatorMonitorWithBodyWithResponse Apply the Monitor owned by one Kubernetes resource
@@ -13543,6 +13736,46 @@ func ParseDeleteOperatorAgentResponse(rsp *http.Response) (*DeleteOperatorAgentR
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseObserveOperatorAgentResponse parses an HTTP response from a ObserveOperatorAgentWithResponse call
+func ParseObserveOperatorAgentResponse(rsp *http.Response) (*ObserveOperatorAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ObserveOperatorAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperatorAgentApplyResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Problem

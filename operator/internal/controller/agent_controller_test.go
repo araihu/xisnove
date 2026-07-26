@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	monitoringv1alpha1 "github.com/araihu/xisnove/operator/api/v1alpha1"
 	"github.com/araihu/xisnove/operator/internal/controlplane"
@@ -77,7 +78,7 @@ func TestAgentCredentialRotationPromotesOnlyAfterPutAndRevokesAfterHeartbeat(t *
 	revokes := 0
 	remote := &fakeControlPlane{
 		applyAgent: func(_ context.Context, request controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
-			return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: heartbeatGeneration, LastHeartbeatAt: now, LastDiscoverySyncAt: now}, nil
+			return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 2, PresentedCredentialGeneration: heartbeatGeneration, LastHeartbeatAt: now, LastDiscoverySyncAt: now}, nil
 		},
 		putCredential: func(_ context.Context, request controlplane.PutAgentCredentialRequest) error {
 			puts++
@@ -219,11 +220,16 @@ func TestAgentCredentialRevokeCrashKeepsPreviousForIdempotentRetry(t *testing.T)
 	agent := validAgent("revoke-crash")
 	heartbeatGeneration := int64(1)
 	revokes := 0
+	observes := 0
 	remote := &fakeControlPlane{
 		applyAgent: func(context.Context, controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
-			return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: heartbeatGeneration, LastHeartbeatAt: now}, nil
+			return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 2, PresentedCredentialGeneration: heartbeatGeneration, LastHeartbeatAt: now}, nil
 		},
-		putCredential:    func(context.Context, controlplane.PutAgentCredentialRequest) error { return nil },
+		putCredential: func(context.Context, controlplane.PutAgentCredentialRequest) error { return nil },
+		observeAgent: func(_ context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+			observes++
+			return controlplane.AgentState{ExternalID: request.ExternalID, CredentialGeneration: 2, PresentedCredentialGeneration: 2, LastHeartbeatAt: now}, nil
+		},
 		revokeCredential: func(context.Context, controlplane.RevokeAgentCredentialRequest) error { revokes++; return nil },
 	}
 	base := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&monitoringv1alpha1.Agent{}).WithObjects(agent).Build()
@@ -256,6 +262,10 @@ func TestAgentCredentialRevokeCrashKeepsPreviousForIdempotentRetry(t *testing.T)
 	}
 	if revokes != 2 {
 		t.Fatalf("revokes=%d, want 2", revokes)
+	}
+	reconcileAgent(t, r, agent)
+	if observes != 1 {
+		t.Fatalf("observes=%d, want 1", observes)
 	}
 }
 
@@ -339,6 +349,15 @@ func TestConditionMessagesAndCountAreBounded(t *testing.T) {
 	newCondition := findCondition(conditions, "New")
 	if newCondition == nil || len(newCondition.Message) != MaxConditionMessageLength {
 		t.Fatalf("new condition=%#v", newCondition)
+	}
+}
+
+func TestBoundMessagePreservesUTF8(t *testing.T) {
+	t.Parallel()
+	message := strings.Repeat("😀", 100)
+	got := boundMessage(message)
+	if len(got) > MaxConditionMessageLength || !utf8.ValidString(got) {
+		t.Fatalf("bounded message bytes=%d valid=%t", len(got), utf8.ValidString(got))
 	}
 }
 
