@@ -12,21 +12,24 @@ import (
 )
 
 var (
-	ErrNotFound          = errors.New("control-plane object not found")
-	ErrOwnershipConflict = errors.New("control-plane ownership conflict")
+	ErrNotFound           = errors.New("control-plane object not found")
+	ErrOwnershipConflict  = errors.New("control-plane ownership conflict")
+	ErrCredentialConflict = errors.New("control-plane credential conflict")
 )
 
 type OwnerReference struct {
-	// Key is stable across retries and includes the Kubernetes UID so a
-	// recreated resource cannot take ownership of an older remote object.
+	// Key is stable across retries. UID distinguishes a recreated Kubernetes
+	// resource from the object it replaced.
 	Key string
+	UID string
 }
 
 type ApplyMonitorRequest struct {
-	Owner      OwnerReference
-	ExternalID string
-	Name       string
-	Spec       monitoringv1alpha1.MonitorSpec
+	Owner          OwnerReference
+	ExternalID     string
+	Name           string
+	Spec           monitoringv1alpha1.MonitorSpec
+	IdempotencyKey string
 }
 
 type MonitorState struct {
@@ -39,51 +42,49 @@ type DeleteRemoteObjectRequest struct {
 	Owner OwnerReference
 	// ExternalID may be empty when a remote apply succeeded but the Kubernetes
 	// status write was lost. Implementations must then resolve strictly by Owner.
-	ExternalID string
+	ExternalID     string
+	IdempotencyKey string
 }
 
 type ApplyAgentRequest struct {
-	Owner                OwnerReference
-	ExternalID           string
-	Name                 string
-	Spec                 monitoringv1alpha1.AgentSpec
-	NeedsCredential      bool
-	CredentialGeneration int64
-	IdempotencyKey       string
-}
-
-type IssuedCredential struct {
-	// Value is write-only Secret material and must never be logged or copied to status.
-	Value      []byte
-	Generation int64
+	Owner      OwnerReference
+	ExternalID string
+	Name       string
+	Spec       monitoringv1alpha1.AgentSpec
+	// InitialCredential is write-only Secret material. The adapter sends it only
+	// with generation 1; it must never be logged or copied to status.
+	InitialCredential []byte
+	IdempotencyKey    string
 }
 
 type AgentState struct {
-	ExternalID                    string
-	Credential                    *IssuedCredential
-	HeartbeatCredentialGeneration int64
-	LastHeartbeatAt               time.Time
-	LastDiscoverySyncAt           time.Time
+	ExternalID           string
+	CredentialGeneration int64
+	LastHeartbeatAt      time.Time
+	LastDiscoverySyncAt  time.Time
 }
 
-type IssueAgentCredentialRequest struct {
-	Owner               OwnerReference
-	ExternalID          string
-	RequestedGeneration int64
-	IdempotencyKey      string
-}
-
-type RevokeAgentCredentialRequest struct {
+type PutAgentCredentialRequest struct {
 	Owner      OwnerReference
 	ExternalID string
 	Generation int64
+	// Credential is write-only Secret material and must never be logged or copied to status.
+	Credential     []byte
+	IdempotencyKey string
+}
+
+type RevokeAgentCredentialRequest struct {
+	Owner          OwnerReference
+	ExternalID     string
+	Generation     int64
+	IdempotencyKey string
 }
 
 type Client interface {
 	ApplyMonitor(context.Context, ApplyMonitorRequest) (MonitorState, error)
 	DeleteMonitor(context.Context, DeleteRemoteObjectRequest) error
 	ApplyAgent(context.Context, ApplyAgentRequest) (AgentState, error)
-	IssueAgentCredential(context.Context, IssueAgentCredentialRequest) (IssuedCredential, error)
+	PutAgentCredential(context.Context, PutAgentCredentialRequest) error
 	RevokeAgentCredential(context.Context, RevokeAgentCredentialRequest) error
 	DeleteAgent(context.Context, DeleteRemoteObjectRequest) error
 }
