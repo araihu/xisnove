@@ -38,3 +38,4 @@ Task 8: fix round 3/5 (1 addressed, 0 open — failed post-bootstrap Apply retri
 Task 8: fix round 4/5 (acceptance guardrails strengthened)
 Task 8: fix round 5/5 (post-bootstrap and generation-three convergence acceptance evidence)
 Task 8: parent correction after round 5 (control-plane capability assertion, truthful Synced evidence, and mock credential-free creation parity)
+Task 8: complete (commits b084dc1..6a50813, independent review clean; full make check passed with Colima, Vacuum 309 warnings and 0 errors)
