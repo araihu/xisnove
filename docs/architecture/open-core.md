@@ -44,9 +44,10 @@ versioning; external consumers should use `errors.Is` for documented error
 identities rather than matching error strings.
 
 - `domain` owns the ID/value types and pure constructors:
-  `NewLocation`, `NewAgent`, `NewHTTPMonitor`, `NewTCPMonitor`,
-  `NewDNSMonitor`, `NewMaintenanceInterval`, `NewNotificationChannel`,
-  `NewNotificationRoute`, and `NewNotificationIdentity`.
+  `domain.NewLocation`, `domain.NewAgent`, `domain.NewHTTPMonitor`,
+  `domain.NewTCPMonitor`, `domain.NewDNSMonitor`,
+  `domain.NewMaintenanceInterval`, `domain.NewNotificationChannel`,
+  `domain.NewNotificationRoute`, and `domain.NewNotificationIdentity`.
 - `application/port.UnitOfWork` and
   `application/port.Repositories` are the operational transaction boundary
   and its callback-scoped repository set. The repository interfaces and record
@@ -54,15 +55,23 @@ identities rather than matching error strings.
   `application/port.ErrNotFound` and `application/port.ErrConflict` retain
   their error identity for portable adapter behavior.
 - `application` owns use-case commands, views, service configuration structs,
-  and service constructors. `NewConfigurationService`, `NewAuthService`,
-  `NewAgentService`, `NewLeaseService`, `NewResultService`,
-  `NewHealthService`, `NewStalenessService`, `NewScheduler`,
-  `NewNotificationAdminService`, `NewNotificationSecretService`,
-  `NewDeliveryWorker`, `NewMaintenanceWorker`, and `NewRetentionWorker`
+  and service constructors. `application.NewConfigurationService`,
+  `application.NewAuthService`, `application.NewAgentService`,
+  `application.NewLeaseService`, `application.NewResultService`,
+  `application.NewHealthService`, `application.NewStalenessService`,
+  `application.NewStalenessServiceWithObserver`, `application.NewScheduler`,
+  `application.NewNotificationAdminService`,
+  `application.NewNotificationSecretService`, `application.NewDeliveryWorker`,
+  `application.NewMaintenanceWorker`, and `application.NewRetentionWorker`
   preserve their documented dependency-injection and validation behavior.
-  Error identities exported by these services include the authentication,
-  enrollment, no-work, notification-key/lease, maintenance-lease, and
-  retention-lease errors; callers may keep using `errors.Is` across releases.
+  Its stable error identities are `application.ErrAlreadyBootstrapped`,
+  `application.ErrInvalidCredentials`, `application.ErrInvalidEmail`,
+  `application.ErrWeakPassword`, `application.ErrInvalidEnrollmentToken`,
+  `application.ErrNoWork`, `application.ErrNotificationKeyUnavailable`,
+  `application.ErrNotificationLeaseLost`,
+  `application.ErrMaintenanceLeaseLost`, and
+  `application.ErrRetentionLeaseLost`; callers may use `errors.Is` across
+  releases.
 - `contracttest.Factory` accepts only an
   `application/port.UnitOfWork`, and `contracttest.Run` is the stable adapter
   behavioral-suite entry point. Adapter provisioning and credentials stay in

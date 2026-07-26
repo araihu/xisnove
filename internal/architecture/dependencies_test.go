@@ -3,15 +3,19 @@ package architecture_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 func TestPublicPackagesRespectDependencyDirection(t *testing.T) {
@@ -79,83 +83,153 @@ func TestLegacyInternalPublicPackagesAreGone(t *testing.T) {
 }
 
 func TestAnalyticsArchivePortsRemainDistinctFromOperationalDeclarations(t *testing.T) {
-	packageDir := filepath.Join(repositoryRoot(t), "application", "port")
-	packages, err := parser.ParseDir(token.NewFileSet(), packageDir, func(info os.FileInfo) bool {
-		return strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go")
-	}, 0)
-	if err != nil {
-		t.Fatalf("parse public ports: %v", err)
+	loaded, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedTypes,
+		Dir:  repositoryRoot(t),
+		Env:  append(os.Environ(), "GOWORK=off"),
+	}, "github.com/araihu/xisnove/application/port")
+	if err != nil || packages.PrintErrors(loaded) != 0 || len(loaded) != 1 {
+		t.Fatalf("load public ports: packages=%d err=%v", len(loaded), err)
 	}
-	publicPorts, ok := packages["port"]
+	violations := analyticsArchivePortViolations(loaded[0].Types)
+	if len(violations) != 0 {
+		t.Fatal(strings.Join(violations, "; "))
+	}
+}
+
+func TestAnalyticsArchivePortValidationFixtures(t *testing.T) {
+	const operational = `package port
+type UnitOfWork interface { View() }
+type Store interface { Save() }
+type MonitorRepository interface { Get() }
+type Repositories struct { Monitors MonitorRepository }
+`
+	tests := []struct {
+		name        string
+		declaration string
+		wantInvalid bool
+	}{
+		{"independent", `type AnalyticsWriter interface { Append(string) error }`, false},
+		{"names are harmless", `type AnalyticsWriter interface { Append(UnitOfWork string, Store int) error }`, false},
+		{"non-interface", `type AnalyticsRecord struct{ Value string }`, true},
+		{"direct alias", `type AnalyticsPort = UnitOfWork`, true},
+		{"direct embed", `type AnalyticsPort interface { UnitOfWork }`, true},
+		{"alias parameter", `type OperationalAlias = UnitOfWork; type AnalyticsPort interface { Use(OperationalAlias) }`, true},
+		{"alias result", `type OperationalAlias = Store; type ArchivePort interface { Open() OperationalAlias }`, true},
+		{"alias embed", `type OperationalAlias = UnitOfWork; type ArchivePort interface { OperationalAlias }`, true},
+		{"repository parameter", `type ArchivePort interface { Store(MonitorRepository) }`, true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fileset := token.NewFileSet()
+			file, err := parser.ParseFile(fileset, "fixture.go", operational+test.declaration, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checked, err := (&types.Config{}).Check("fixture/port", fileset, []*ast.File{file}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			violations := analyticsArchivePortViolations(checked)
+			if got := len(violations) != 0; got != test.wantInvalid {
+				t.Fatalf("invalid = %v, want %v; violations = %v", got, test.wantInvalid, violations)
+			}
+		})
+	}
+}
+
+type operationalDeclaration struct {
+	name  string
+	type_ types.Type
+}
+
+func analyticsArchivePortViolations(checked *types.Package) []string {
+	scope := checked.Scope()
+	operational := make([]operationalDeclaration, 0)
+	for _, name := range []string{"UnitOfWork", "Store", "Repositories"} {
+		object := scope.Lookup(name)
+		if object == nil {
+			return []string{fmt.Sprintf("required operational declaration %s is missing", name)}
+		}
+		operational = append(operational, operationalDeclaration{name, object.Type()})
+	}
+	repositories, ok := scope.Lookup("Repositories").Type().Underlying().(*types.Struct)
 	if !ok {
-		t.Fatal("public port package was not parsed")
+		return []string{"Repositories must remain a struct"}
+	}
+	for index := range repositories.NumFields() {
+		field := repositories.Field(index)
+		operational = append(operational, operationalDeclaration{field.Type().String(), field.Type()})
 	}
 
-	operational := map[string]bool{
-		"UnitOfWork":   true,
-		"Store":        true,
-		"Repositories": true,
-	}
-	for _, file := range publicPorts.Files {
-		for _, declaration := range file.Decls {
-			general, ok := declaration.(*ast.GenDecl)
-			if !ok || general.Tok != token.TYPE {
-				continue
+	var violations []string
+	for _, name := range scope.Names() {
+		lowerName := strings.ToLower(name)
+		if !strings.Contains(lowerName, "analytics") && !strings.Contains(lowerName, "archive") {
+			continue
+		}
+		object, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok {
+			continue
+		}
+		if object.IsAlias() {
+			violations = append(violations, name+" must be a distinct interface declaration, not an alias")
+			continue
+		}
+		named, ok := object.Type().(*types.Named)
+		if !ok {
+			violations = append(violations, name+" must be a named interface")
+			continue
+		}
+		interfaceType, ok := named.Underlying().(*types.Interface)
+		if !ok {
+			violations = append(violations, name+" must be an interface distinct from operational persistence")
+			continue
+		}
+		interfaceType.Complete()
+		for index := range interfaceType.NumEmbeddeds() {
+			if reused := reusedOperationalType(interfaceType.EmbeddedType(index), operational); reused != "" {
+				violations = append(violations, fmt.Sprintf("%s embeds operational declaration %s", name, reused))
 			}
-			for _, specification := range general.Specs {
-				typeSpec := specification.(*ast.TypeSpec)
-				if typeSpec.Name.Name != "Repositories" {
-					continue
-				}
-				repositories, ok := typeSpec.Type.(*ast.StructType)
-				if !ok {
-					t.Fatal("Repositories must remain a struct")
-				}
-				for _, field := range repositories.Fields.List {
-					if identifier, ok := field.Type.(*ast.Ident); ok {
-						operational[identifier.Name] = true
+		}
+		for index := range interfaceType.NumMethods() {
+			method := interfaceType.Method(index)
+			signature := method.Type().(*types.Signature)
+			for _, tuple := range []*types.Tuple{signature.Params(), signature.Results()} {
+				for item := range tuple.Len() {
+					if reused := reusedOperationalType(tuple.At(item).Type(), operational); reused != "" {
+						violations = append(violations, fmt.Sprintf("%s.%s reuses operational declaration %s", name, method.Name(), reused))
 					}
 				}
 			}
 		}
 	}
+	return violations
+}
 
-	for _, file := range publicPorts.Files {
-		for _, declaration := range file.Decls {
-			general, ok := declaration.(*ast.GenDecl)
-			if !ok || general.Tok != token.TYPE {
-				continue
-			}
-			for _, specification := range general.Specs {
-				typeSpec := specification.(*ast.TypeSpec)
-				name := strings.ToLower(typeSpec.Name.Name)
-				if !strings.Contains(name, "analytics") && !strings.Contains(name, "archive") {
-					continue
-				}
-				if typeSpec.Assign.IsValid() {
-					t.Fatalf("%s must be a distinct interface declaration, not an alias", typeSpec.Name)
-				}
-				interfaceType, ok := typeSpec.Type.(*ast.InterfaceType)
-				if !ok {
-					t.Fatalf("%s must be an interface distinct from operational persistence", typeSpec.Name)
-				}
-				for _, method := range interfaceType.Methods.List {
-					var reused string
-					ast.Inspect(method.Type, func(node ast.Node) bool {
-						identifier, ok := node.(*ast.Ident)
-						if ok && operational[identifier.Name] {
-							reused = identifier.Name
-							return false
-						}
-						return true
-					})
-					if reused != "" {
-						t.Fatalf("%s reuses operational declaration %s", typeSpec.Name, reused)
-					}
-				}
-			}
+func reusedOperationalType(candidate types.Type, operational []operationalDeclaration) string {
+	candidate = types.Unalias(candidate)
+	for _, declaration := range operational {
+		if types.Identical(candidate, types.Unalias(declaration.type_)) {
+			return declaration.name
 		}
 	}
+	switch typed := candidate.(type) {
+	case *types.Pointer:
+		return reusedOperationalType(typed.Elem(), operational)
+	case *types.Slice:
+		return reusedOperationalType(typed.Elem(), operational)
+	case *types.Array:
+		return reusedOperationalType(typed.Elem(), operational)
+	case *types.Map:
+		if reused := reusedOperationalType(typed.Key(), operational); reused != "" {
+			return reused
+		}
+		return reusedOperationalType(typed.Elem(), operational)
+	case *types.Chan:
+		return reusedOperationalType(typed.Elem(), operational)
+	}
+	return ""
 }
 
 func TestOpenCoreGuideDocumentsStablePublicSurface(t *testing.T) {
@@ -165,10 +239,43 @@ func TestOpenCoreGuideDocumentsStablePublicSurface(t *testing.T) {
 	}
 	for _, identifier := range []string{
 		"## Stable public identifiers",
+		"`domain.NewLocation`",
+		"`domain.NewAgent`",
+		"`domain.NewHTTPMonitor`",
+		"`domain.NewTCPMonitor`",
+		"`domain.NewDNSMonitor`",
+		"`domain.NewMaintenanceInterval`",
+		"`domain.NewNotificationChannel`",
+		"`domain.NewNotificationRoute`",
+		"`domain.NewNotificationIdentity`",
 		"`application/port.UnitOfWork`",
 		"`application/port.Repositories`",
 		"`application/port.ErrNotFound`",
 		"`application/port.ErrConflict`",
+		"`application.NewConfigurationService`",
+		"`application.NewAuthService`",
+		"`application.NewAgentService`",
+		"`application.NewLeaseService`",
+		"`application.NewResultService`",
+		"`application.NewHealthService`",
+		"`application.NewStalenessService`",
+		"`application.NewStalenessServiceWithObserver`",
+		"`application.NewScheduler`",
+		"`application.NewNotificationAdminService`",
+		"`application.NewNotificationSecretService`",
+		"`application.NewDeliveryWorker`",
+		"`application.NewMaintenanceWorker`",
+		"`application.NewRetentionWorker`",
+		"`application.ErrAlreadyBootstrapped`",
+		"`application.ErrInvalidCredentials`",
+		"`application.ErrInvalidEmail`",
+		"`application.ErrWeakPassword`",
+		"`application.ErrInvalidEnrollmentToken`",
+		"`application.ErrNoWork`",
+		"`application.ErrNotificationKeyUnavailable`",
+		"`application.ErrNotificationLeaseLost`",
+		"`application.ErrMaintenanceLeaseLost`",
+		"`application.ErrRetentionLeaseLost`",
 		"`contracttest.Factory`",
 		"`contracttest.Run`",
 		"application compatibility aliases",
