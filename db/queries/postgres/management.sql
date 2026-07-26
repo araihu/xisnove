@@ -22,7 +22,15 @@ WHERE id = sqlc.arg(id) AND enabled = TRUE;
 -- name: ManagementGetMonitor :one
 SELECT m.*, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE m.id = sqlc.arg(id)
 ORDER BY ml.location_id ASC
 LIMIT 1;
@@ -30,7 +38,15 @@ LIMIT 1;
 -- name: ManagementListMonitors :many
 SELECT m.*, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE NOT sqlc.arg(has_after)::boolean
    OR m.display_order::bigint > sqlc.arg(after_sort)::bigint
    OR (m.display_order::bigint = sqlc.arg(after_sort)::bigint AND m.id > NULLIF(sqlc.arg(after_id)::text, '')::uuid)

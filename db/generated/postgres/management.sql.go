@@ -218,7 +218,15 @@ func (q *Queries) ManagementGetLocation(ctx context.Context, id string) (Managem
 const managementGetMonitor = `-- name: ManagementGetMonitor :one
 SELECT m.id, m.name, m.kind, m.interval_ms, m.timeout_ms, m.failure_threshold, m.recovery_threshold, m.probe_json, m.enabled, m.next_run_at, m.created_at, m.updated_at, m.description, m.labels_json, m.display_order, m.public, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE m.id = $1
 ORDER BY ml.location_id ASC
 LIMIT 1
@@ -515,7 +523,15 @@ func (q *Queries) ManagementListLocations(ctx context.Context, arg ManagementLis
 const managementListMonitors = `-- name: ManagementListMonitors :many
 SELECT m.id, m.name, m.kind, m.interval_ms, m.timeout_ms, m.failure_threshold, m.recovery_threshold, m.probe_json, m.enabled, m.next_run_at, m.created_at, m.updated_at, m.description, m.labels_json, m.display_order, m.public, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE NOT $1::boolean
    OR m.display_order::bigint > $2::bigint
    OR (m.display_order::bigint = $2::bigint AND m.id > NULLIF($3::text, '')::uuid)

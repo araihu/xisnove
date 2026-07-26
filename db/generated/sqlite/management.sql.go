@@ -214,7 +214,15 @@ func (q *Queries) ManagementGetLocation(ctx context.Context, id string) (Managem
 const managementGetMonitor = `-- name: ManagementGetMonitor :one
 SELECT m.id, m.name, m.kind, m.interval_ms, m.timeout_ms, m.failure_threshold, m.recovery_threshold, m.probe_json, m.enabled, m.next_run_at, m.created_at, m.updated_at, m.description, m.labels_json, m.display_order, m.public, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE m.id = ?
 ORDER BY ml.location_id ASC
 LIMIT 1
@@ -341,16 +349,56 @@ const managementListIncidentEvents = `-- name: ManagementListIncidentEvents :man
 SELECT id, incident_id, previous_state, state, severity, created_at, "action" FROM incident_events
 WHERE incident_id = ?1
   AND (?2 = 0
-       OR julianday(created_at) > julianday(?3)
-       OR (julianday(created_at) = julianday(?3) AND id > ?4))
-ORDER BY julianday(created_at) ASC, id ASC
+       OR (
+         substr(created_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(created_at, '.') > 0
+             THEN substr(created_at, instr(created_at, '.') + 1, instr(created_at, 'Z') - instr(created_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) > (
+         substr(CAST(?3 AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(?3 AS TEXT), '.') > 0
+             THEN substr(CAST(?3 AS TEXT), instr(CAST(?3 AS TEXT), '.') + 1, instr(CAST(?3 AS TEXT), 'Z') - instr(CAST(?3 AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       )
+       OR ((
+         substr(created_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(created_at, '.') > 0
+             THEN substr(created_at, instr(created_at, '.') + 1, instr(created_at, 'Z') - instr(created_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) = (
+         substr(CAST(?3 AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(?3 AS TEXT), '.') > 0
+             THEN substr(CAST(?3 AS TEXT), instr(CAST(?3 AS TEXT), '.') + 1, instr(CAST(?3 AS TEXT), 'Z') - instr(CAST(?3 AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) AND id > ?4))
+ORDER BY
+  substr(created_at, 1, 19) ASC,
+  substr(
+    CASE WHEN instr(created_at, '.') > 0
+      THEN substr(created_at, instr(created_at, '.') + 1, instr(created_at, 'Z') - instr(created_at, '.') - 1)
+      ELSE ''
+    END || '000000000', 1, 9
+  ) ASC,
+  id ASC
 LIMIT ?5
 `
 
 type ManagementListIncidentEventsParams struct {
 	IncidentID string      `json:"incident_id"`
 	HasAfter   interface{} `json:"has_after"`
-	AfterSort  interface{} `json:"after_sort"`
+	AfterSort  string      `json:"after_sort"`
 	AfterID    string      `json:"after_id"`
 	RowLimit   int64       `json:"row_limit"`
 }
@@ -398,16 +446,56 @@ WHERE (?1 = ''
        OR (?1 = 'open' AND recovered_at IS NULL)
        OR (?1 = 'resolved' AND recovered_at IS NOT NULL))
   AND (?2 = 0
-       OR julianday(opened_at) < julianday(?3)
-       OR (julianday(opened_at) = julianday(?3) AND id < ?4))
-ORDER BY julianday(opened_at) DESC, id DESC
+       OR (
+         substr(opened_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(opened_at, '.') > 0
+             THEN substr(opened_at, instr(opened_at, '.') + 1, instr(opened_at, 'Z') - instr(opened_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) < (
+         substr(CAST(?3 AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(?3 AS TEXT), '.') > 0
+             THEN substr(CAST(?3 AS TEXT), instr(CAST(?3 AS TEXT), '.') + 1, instr(CAST(?3 AS TEXT), 'Z') - instr(CAST(?3 AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       )
+       OR ((
+         substr(opened_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(opened_at, '.') > 0
+             THEN substr(opened_at, instr(opened_at, '.') + 1, instr(opened_at, 'Z') - instr(opened_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) = (
+         substr(CAST(?3 AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(?3 AS TEXT), '.') > 0
+             THEN substr(CAST(?3 AS TEXT), instr(CAST(?3 AS TEXT), '.') + 1, instr(CAST(?3 AS TEXT), 'Z') - instr(CAST(?3 AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) AND id < ?4))
+ORDER BY
+  substr(opened_at, 1, 19) DESC,
+  substr(
+    CASE WHEN instr(opened_at, '.') > 0
+      THEN substr(opened_at, instr(opened_at, '.') + 1, instr(opened_at, 'Z') - instr(opened_at, '.') - 1)
+      ELSE ''
+    END || '000000000', 1, 9
+  ) DESC,
+  id DESC
 LIMIT ?5
 `
 
 type ManagementListIncidentsParams struct {
 	Resolution interface{} `json:"resolution"`
 	HasAfter   interface{} `json:"has_after"`
-	AfterSort  interface{} `json:"after_sort"`
+	AfterSort  string      `json:"after_sort"`
 	AfterID    string      `json:"after_id"`
 	RowLimit   int64       `json:"row_limit"`
 }
@@ -511,7 +599,15 @@ func (q *Queries) ManagementListLocations(ctx context.Context, arg ManagementLis
 const managementListMonitors = `-- name: ManagementListMonitors :many
 SELECT m.id, m.name, m.kind, m.interval_ms, m.timeout_ms, m.failure_threshold, m.recovery_threshold, m.probe_json, m.enabled, m.next_run_at, m.created_at, m.updated_at, m.description, m.labels_json, m.display_order, m.public, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE ?1 = 0
    OR m.display_order > ?2
    OR (m.display_order = ?2 AND m.id > ?3)

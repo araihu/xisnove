@@ -23,7 +23,15 @@ WHERE id = sqlc.arg(id) AND enabled = 1;
 -- name: ManagementGetMonitor :one
 SELECT m.*, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE m.id = ?
 ORDER BY ml.location_id ASC
 LIMIT 1;
@@ -31,7 +39,15 @@ LIMIT 1;
 -- name: ManagementListMonitors :many
 SELECT m.*, ml.location_id, ml.required
 FROM monitors m
-JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN monitor_locations ml
+  ON ml.monitor_id = m.id
+ AND ml.location_id = (
+   SELECT selected.location_id
+   FROM monitor_locations selected
+   WHERE selected.monitor_id = m.id
+   ORDER BY selected.location_id ASC
+   LIMIT 1
+ )
 WHERE sqlc.arg(has_after) = 0
    OR m.display_order > sqlc.arg(after_sort)
    OR (m.display_order = sqlc.arg(after_sort) AND m.id > sqlc.arg(after_id))
@@ -120,16 +136,96 @@ WHERE (sqlc.arg(resolution) = ''
        OR (sqlc.arg(resolution) = 'open' AND recovered_at IS NULL)
        OR (sqlc.arg(resolution) = 'resolved' AND recovered_at IS NOT NULL))
   AND (sqlc.arg(has_after) = 0
-       OR julianday(opened_at) < julianday(sqlc.arg(after_sort))
-       OR (julianday(opened_at) = julianday(sqlc.arg(after_sort)) AND id < sqlc.arg(after_id)))
-ORDER BY julianday(opened_at) DESC, id DESC
+       OR (
+         substr(opened_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(opened_at, '.') > 0
+             THEN substr(opened_at, instr(opened_at, '.') + 1, instr(opened_at, 'Z') - instr(opened_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) < (
+         substr(CAST(sqlc.arg(after_sort) AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') > 0
+             THEN substr(CAST(sqlc.arg(after_sort) AS TEXT), instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') + 1, instr(CAST(sqlc.arg(after_sort) AS TEXT), 'Z') - instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       )
+       OR ((
+         substr(opened_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(opened_at, '.') > 0
+             THEN substr(opened_at, instr(opened_at, '.') + 1, instr(opened_at, 'Z') - instr(opened_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) = (
+         substr(CAST(sqlc.arg(after_sort) AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') > 0
+             THEN substr(CAST(sqlc.arg(after_sort) AS TEXT), instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') + 1, instr(CAST(sqlc.arg(after_sort) AS TEXT), 'Z') - instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) AND id < sqlc.arg(after_id)))
+ORDER BY
+  substr(opened_at, 1, 19) DESC,
+  substr(
+    CASE WHEN instr(opened_at, '.') > 0
+      THEN substr(opened_at, instr(opened_at, '.') + 1, instr(opened_at, 'Z') - instr(opened_at, '.') - 1)
+      ELSE ''
+    END || '000000000', 1, 9
+  ) DESC,
+  id DESC
 LIMIT sqlc.arg(row_limit);
 
 -- name: ManagementListIncidentEvents :many
 SELECT * FROM incident_events
 WHERE incident_id = sqlc.arg(incident_id)
   AND (sqlc.arg(has_after) = 0
-       OR julianday(created_at) > julianday(sqlc.arg(after_sort))
-       OR (julianday(created_at) = julianday(sqlc.arg(after_sort)) AND id > sqlc.arg(after_id)))
-ORDER BY julianday(created_at) ASC, id ASC
+       OR (
+         substr(created_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(created_at, '.') > 0
+             THEN substr(created_at, instr(created_at, '.') + 1, instr(created_at, 'Z') - instr(created_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) > (
+         substr(CAST(sqlc.arg(after_sort) AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') > 0
+             THEN substr(CAST(sqlc.arg(after_sort) AS TEXT), instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') + 1, instr(CAST(sqlc.arg(after_sort) AS TEXT), 'Z') - instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       )
+       OR ((
+         substr(created_at, 1, 19) ||
+         substr(
+           CASE WHEN instr(created_at, '.') > 0
+             THEN substr(created_at, instr(created_at, '.') + 1, instr(created_at, 'Z') - instr(created_at, '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) = (
+         substr(CAST(sqlc.arg(after_sort) AS TEXT), 1, 19) ||
+         substr(
+           CASE WHEN instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') > 0
+             THEN substr(CAST(sqlc.arg(after_sort) AS TEXT), instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') + 1, instr(CAST(sqlc.arg(after_sort) AS TEXT), 'Z') - instr(CAST(sqlc.arg(after_sort) AS TEXT), '.') - 1)
+             ELSE ''
+           END || '000000000', 1, 9
+         )
+       ) AND id > sqlc.arg(after_id)))
+ORDER BY
+  substr(created_at, 1, 19) ASC,
+  substr(
+    CASE WHEN instr(created_at, '.') > 0
+      THEN substr(created_at, instr(created_at, '.') + 1, instr(created_at, 'Z') - instr(created_at, '.') - 1)
+      ELSE ''
+    END || '000000000', 1, 9
+  ) ASC,
+  id ASC
 LIMIT sqlc.arg(row_limit);

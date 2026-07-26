@@ -47,8 +47,8 @@ func testManagementLifecycleAndKeysets(t *testing.T, store application.UnitOfWor
 	if err != nil {
 		t.Fatal(err)
 	}
-	incidentA := domain.Incident{ID: "00000000-0000-4000-8000-000000000831", MonitorID: monitorA.ID, State: domain.HealthDown, Severity: domain.IncidentCritical, OpenedAt: now.Add(10 * time.Minute), LastTransitionAt: now.Add(10 * time.Minute)}
-	incidentB := domain.Incident{ID: "00000000-0000-4000-8000-000000000832", MonitorID: monitorB.ID, State: domain.HealthDown, Severity: domain.IncidentCritical, OpenedAt: incidentA.OpenedAt, LastTransitionAt: incidentA.OpenedAt}
+	incidentA := domain.Incident{ID: "00000000-0000-4000-8000-000000000831", MonitorID: monitorA.ID, State: domain.HealthDown, Severity: domain.IncidentCritical, OpenedAt: now.Add(10*time.Minute + 200*time.Microsecond), LastTransitionAt: now.Add(10*time.Minute + 200*time.Microsecond)}
+	incidentB := domain.Incident{ID: "00000000-0000-4000-8000-000000000832", MonitorID: monitorB.ID, State: domain.HealthDown, Severity: domain.IncidentCritical, OpenedAt: now.Add(10*time.Minute + 100*time.Microsecond), LastTransitionAt: now.Add(10*time.Minute + 100*time.Microsecond)}
 
 	transact(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
 		for _, location := range []domain.Location{locationB, locationA} {
@@ -67,6 +67,9 @@ func testManagementLifecycleAndKeysets(t *testing.T, store application.UnitOfWor
 				return err
 			}
 		}
+		if err := repositories.Monitors.AssignLocation(ctx, application.MonitorLocation{MonitorID: monitorA.ID, LocationID: locationB.ID, Required: false}); err != nil {
+			return err
+		}
 		if err := repositories.Agents.Create(ctx, application.AgentRecord{Agent: agent, CredentialHash: []byte("generation-1")}); err != nil {
 			return err
 		}
@@ -78,8 +81,14 @@ func testManagementLifecycleAndKeysets(t *testing.T, store application.UnitOfWor
 				return err
 			}
 		}
-		for index, eventID := range []string{"00000000-0000-4000-8000-000000000841", "00000000-0000-4000-8000-000000000842"} {
-			if err := repositories.Incidents.AppendEvent(ctx, domain.IncidentEvent{ID: eventID, IncidentID: incidentA.ID, Action: domain.NotificationChange, PreviousState: domain.HealthDegraded, State: domain.HealthDown, Severity: domain.IncidentCritical, CreatedAt: now.Add(time.Duration(index+20) * time.Minute)}); err != nil {
+		for _, event := range []struct {
+			id string
+			at time.Time
+		}{
+			{"00000000-0000-4000-8000-000000000841", now.Add(20*time.Minute + 200*time.Microsecond)},
+			{"00000000-0000-4000-8000-000000000842", now.Add(20*time.Minute + 100*time.Microsecond)},
+		} {
+			if err := repositories.Incidents.AppendEvent(ctx, domain.IncidentEvent{ID: event.id, IncidentID: incidentA.ID, Action: domain.NotificationChange, PreviousState: domain.HealthDegraded, State: domain.HealthDown, Severity: domain.IncidentCritical, CreatedAt: event.at}); err != nil {
 				return err
 			}
 		}
@@ -99,8 +108,16 @@ func testManagementLifecycleAndKeysets(t *testing.T, store application.UnitOfWor
 			t.Fatalf("second location page = %#v, %v", locations, err)
 		}
 		monitors, err := repositories.Management.ListMonitors(ctx, application.IntKeysetRequest{Limit: 1})
-		if err != nil || len(monitors) != 1 || monitors[0].Monitor.ID != monitorA.ID {
+		if err != nil || len(monitors) != 1 || monitors[0].Monitor.ID != monitorA.ID || monitors[0].LocationID != locationA.ID || !monitors[0].RequiredLocation {
 			t.Fatalf("first monitor page = %#v, %v", monitors, err)
+		}
+		monitor, err := repositories.Management.GetMonitor(ctx, monitorA.ID)
+		if err != nil || monitor.LocationID != monitors[0].LocationID || monitor.RequiredLocation != monitors[0].RequiredLocation {
+			t.Fatalf("monitor get/list assignment mismatch: get=%#v list=%#v error=%v", monitor, monitors[0], err)
+		}
+		allMonitors, err := repositories.Management.ListMonitors(ctx, application.IntKeysetRequest{Limit: 10})
+		if err != nil || len(allMonitors) != 2 || allMonitors[0].Monitor.ID != monitorA.ID || allMonitors[1].Monitor.ID != monitorB.ID {
+			t.Fatalf("monitor list with multiple assignments = %#v, %v", allMonitors, err)
 		}
 		monitors, err = repositories.Management.ListMonitors(ctx, application.IntKeysetRequest{Limit: 2, HasAfter: true, AfterSort: 7, AfterID: string(monitorA.ID)})
 		if err != nil || len(monitors) != 1 || monitors[0].Monitor.ID != monitorB.ID {
@@ -115,19 +132,19 @@ func testManagementLifecycleAndKeysets(t *testing.T, store application.UnitOfWor
 			t.Fatalf("second agent page = %#v, %v", agents, err)
 		}
 		incidents, err := repositories.Management.ListIncidents(ctx, application.IncidentListRequest{TimeKeysetRequest: application.TimeKeysetRequest{Limit: 1}})
-		if err != nil || len(incidents) != 1 || incidents[0].ID != incidentB.ID {
+		if err != nil || len(incidents) != 1 || incidents[0].ID != incidentA.ID {
 			t.Fatalf("first incident page = %#v, %v", incidents, err)
 		}
-		incidents, err = repositories.Management.ListIncidents(ctx, application.IncidentListRequest{TimeKeysetRequest: application.TimeKeysetRequest{Limit: 2, HasAfter: true, AfterSort: incidentB.OpenedAt, AfterID: string(incidentB.ID)}, Resolution: application.IncidentResolutionOpen})
-		if err != nil || len(incidents) != 1 || incidents[0].ID != incidentA.ID {
+		incidents, err = repositories.Management.ListIncidents(ctx, application.IncidentListRequest{TimeKeysetRequest: application.TimeKeysetRequest{Limit: 2, HasAfter: true, AfterSort: incidentA.OpenedAt, AfterID: string(incidentA.ID)}, Resolution: application.IncidentResolutionOpen})
+		if err != nil || len(incidents) != 1 || incidents[0].ID != incidentB.ID {
 			t.Fatalf("second incident page = %#v, %v", incidents, err)
 		}
 		events, err := repositories.Management.ListIncidentEvents(ctx, incidentA.ID, application.TimeKeysetRequest{Limit: 1})
-		if err != nil || len(events) != 1 || events[0].ID != "00000000-0000-4000-8000-000000000841" {
+		if err != nil || len(events) != 1 || events[0].ID != "00000000-0000-4000-8000-000000000842" {
 			t.Fatalf("first event page = %#v, %v", events, err)
 		}
 		events, err = repositories.Management.ListIncidentEvents(ctx, incidentA.ID, application.TimeKeysetRequest{Limit: 2, HasAfter: true, AfterSort: events[0].CreatedAt, AfterID: events[0].ID})
-		if err != nil || len(events) != 1 || events[0].ID != "00000000-0000-4000-8000-000000000842" {
+		if err != nil || len(events) != 1 || events[0].ID != "00000000-0000-4000-8000-000000000841" {
 			t.Fatalf("second event page = %#v, %v", events, err)
 		}
 		return nil
