@@ -29,15 +29,24 @@ Start a local control plane:
 go run ./cmd/xisnove-server db migrate \
   --database-profile sqlite --database-url ./dev.db
 printf '%s\n' 'replace-with-at-least-16-characters' > ./dev-admin-password
+openssl rand -base64 32 > ./dev-cursor-signing-key
 chmod 600 ./dev-admin-password
+chmod 600 ./dev-cursor-signing-key
 go run ./cmd/xisnove-server admin bootstrap \
   --database-profile sqlite \
   --database-url ./dev.db \
   --email admin@example.com \
   --password-file ./dev-admin-password
 go run ./cmd/xisnove-server serve \
-  --database-profile sqlite --database-url ./dev.db
+  --database-profile sqlite --database-url ./dev.db \
+  --cursor-signing-key-file ./dev-cursor-signing-key
 ```
+
+`serve` requires a cursor HMAC key containing at least 32 bytes, supplied only
+through `--cursor-signing-key-file` or `XISNOVE_CURSOR_SIGNING_KEY_FILE`.
+Mount the same mode-0600 secret file in every replica so cursors remain valid
+across restarts and load balancing. Rotate it only with an explicit cursor
+invalidation plan; replacing it immediately invalidates outstanding cursors.
 
 The same three commands accept `turso-local`, `turso-cloud`, and `postgres`.
 Managed Turso additionally requires `--database-auth-token-file`; the token is
