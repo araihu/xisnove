@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/araihu/xisnove/agent/credentials"
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 	"github.com/araihu/xisnove/agent/probe"
 	"github.com/araihu/xisnove/agent/worker"
@@ -60,18 +61,11 @@ func run() error {
 		}
 	}
 	probeWorker := &worker.Worker{
-		Client: client,
-		Credential: func() (string, error) {
-			contents, err := os.ReadFile(config.credentialFile)
-			if err != nil {
-				return "", err
-			}
-			return strings.TrimSpace(string(contents)), nil
-		},
-		Executor:             probe.NewDispatcher(httpExecutor, tcpExecutor, dnsExecutor),
-		Capabilities:         config.capabilities,
-		Version:              version,
-		CredentialGeneration: 1,
+		Client:       client,
+		Credentials:  credentialProvider(config),
+		Executor:     probe.NewDispatcher(httpExecutor, tcpExecutor, dnsExecutor),
+		Capabilities: config.capabilities,
+		Version:      version,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -88,6 +82,10 @@ func run() error {
 		}
 	}
 	return nil
+}
+
+func credentialProvider(config config) credentials.Provider {
+	return credentials.FileProvider{Path: config.credentialFile}
 }
 
 func loadConfig(getenv func(string) string) (config, error) {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/araihu/xisnove/agent/credentials"
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 )
 
@@ -117,26 +118,26 @@ func (runner Runner) RunOnce(ctx context.Context) error {
 }
 
 type APIPublisher struct {
-	Client     *controlplane.ClientWithResponses
-	Credential func() (string, error)
+	Client      *controlplane.ClientWithResponses
+	Credentials credentials.Provider
 }
 
 func (publisher APIPublisher) Publish(ctx context.Context, batch Batch) error {
-	if publisher.Client == nil || publisher.Credential == nil {
+	if publisher.Client == nil || publisher.Credentials == nil {
 		return errors.New("discovery API publisher is not configured")
 	}
 	if len(batch.Candidates) == 0 || len(batch.Candidates) > MaxBatchSize || batch.ID == "" {
 		return ErrBatchTooLarge
 	}
-	credential, err := publisher.Credential()
+	bundle, err := publisher.Credentials.Current(ctx)
 	if err != nil {
 		return fmt.Errorf("read agent credential: %w", err)
 	}
-	if credential == "" {
-		return errors.New("read agent credential: empty credential")
+	if bundle.Credential == "" || bundle.Generation <= 0 {
+		return errors.New("read agent credential: invalid bundle")
 	}
 	editor := func(_ context.Context, request *http.Request) error {
-		request.Header.Set("Authorization", "Bearer "+credential)
+		request.Header.Set("Authorization", "Bearer "+bundle.Credential)
 		return nil
 	}
 	key := controlplane.IdempotencyKey(batch.ID)

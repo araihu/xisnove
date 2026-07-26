@@ -1,11 +1,28 @@
 package main
 
 import (
+	"context"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 )
+
+func TestCredentialProviderReadsOnlyConfiguredBundleFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "current.json")
+	if err := os.WriteFile(path, []byte(`{"credential":"credential-from-file","generation":17}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := credentialProvider(config{credentialFile: path}).Current(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundle.Credential != "credential-from-file" || bundle.Generation != 17 {
+		t.Fatalf("bundle = %#v", bundle)
+	}
+}
 
 func TestLoadConfig(t *testing.T) {
 	values := map[string]string{

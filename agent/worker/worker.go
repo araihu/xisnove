@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/araihu/xisnove/agent/credentials"
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 )
 
@@ -18,12 +19,11 @@ type Executor interface {
 }
 
 type Worker struct {
-	Client               *controlplane.ClientWithResponses
-	Credential           func() (string, error)
-	Executor             Executor
-	Capabilities         []controlplane.AgentCapability
-	Version              string
-	CredentialGeneration int64
+	Client       *controlplane.ClientWithResponses
+	Credentials  credentials.Provider
+	Executor     Executor
+	Capabilities []controlplane.AgentCapability
+	Version      string
 
 	resultsOnce sync.Once
 	results     chan controlplane.ProbeResultInput
@@ -35,11 +35,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 	})
 	capabilities := w.enabledCapabilities()
 	probeCapabilities := enabledProbeCapabilities(capabilities)
-	generation := w.CredentialGeneration
-	if generation <= 0 {
-		generation = 1
-	}
-	editor, err := w.bearerEditor()
+	bundle, editor, err := w.bearerEditor(ctx)
 	if err != nil {
 		return err
 	}
@@ -47,7 +43,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 		ctx,
 		controlplane.AgentHeartbeat{
 			Version:              w.Version,
-			CredentialGeneration: generation,
+			CredentialGeneration: bundle.Generation,
 			Capabilities:         capabilities,
 		},
 		editor,
@@ -63,7 +59,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 	}
 
 	for len(w.results) < cap(w.results) {
-		editor, err = w.bearerEditor()
+		_, editor, err = w.bearerEditor(ctx)
 		if err != nil {
 			return err
 		}
@@ -115,7 +111,7 @@ func (w *Worker) uploadUntilAcknowledged(
 ) error {
 	backoff := 100 * time.Millisecond
 	for {
-		editor, err := w.bearerEditor()
+		_, editor, err := w.bearerEditor(ctx)
 		if err != nil {
 			return err
 		}
@@ -205,16 +201,19 @@ func enabledProbeCapabilities(capabilities []controlplane.AgentCapability) []con
 	return probes
 }
 
-func (w *Worker) bearerEditor() (controlplane.RequestEditorFn, error) {
-	credential, err := w.Credential()
+func (w *Worker) bearerEditor(ctx context.Context) (credentials.Bundle, controlplane.RequestEditorFn, error) {
+	if w.Credentials == nil {
+		return credentials.Bundle{}, nil, errors.New("agent credential provider is not configured")
+	}
+	bundle, err := w.Credentials.Current(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("read agent credential: %w", err)
+		return credentials.Bundle{}, nil, fmt.Errorf("read agent credential: %w", err)
 	}
-	if credential == "" {
-		return nil, errors.New("read agent credential: empty credential")
+	if bundle.Credential == "" || bundle.Generation <= 0 {
+		return credentials.Bundle{}, nil, errors.New("read agent credential: invalid bundle")
 	}
-	return func(_ context.Context, request *http.Request) error {
-		request.Header.Set("Authorization", "Bearer "+credential)
+	return bundle, func(_ context.Context, request *http.Request) error {
+		request.Header.Set("Authorization", "Bearer "+bundle.Credential)
 		return nil
 	}, nil
 }

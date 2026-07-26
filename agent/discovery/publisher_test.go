@@ -6,12 +6,55 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/agent/credentials"
 	"github.com/araihu/xisnove/agent/discovery"
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 )
+
+func TestAPIPublisherReloadsCredentialBundleBeforeEachRequest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "current.json")
+	writeCredentialBundle(t, path, `{"credential":"first-credential","generation":7}`)
+	var authorizations []string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		authorizations = append(authorizations, request.Header.Get("Authorization"))
+		response.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(response).Encode(controlplane.DiscoveryCandidateBatchAcknowledgement{Accepted: 1})
+	}))
+	t.Cleanup(server.Close)
+	client, err := controlplane.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := discovery.APIPublisher{
+		Client:      client,
+		Credentials: credentials.FileProvider{Path: path},
+	}
+	if err := publisher.Publish(context.Background(), testBatch("first")); err != nil {
+		t.Fatal(err)
+	}
+	replacement := filepath.Join(filepath.Dir(path), "replacement.json")
+	writeCredentialBundle(t, replacement, `{"credential":"second-credential","generation":8}`)
+	if err := os.Rename(replacement, path); err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.Publish(context.Background(), testBatch("second")); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Bearer first-credential", "Bearer second-credential"}
+	if len(authorizations) != len(want) {
+		t.Fatalf("authorizations = %#v", authorizations)
+	}
+	for index := range want {
+		if authorizations[index] != want[index] {
+			t.Fatalf("authorization[%d] = %q, want %q", index, authorizations[index], want[index])
+		}
+	}
+}
 
 func TestRunnerPublishesBoundedSnapshot(t *testing.T) {
 	producer := &fakeProducer{batch: discovery.Batch{ID: "batch-1", Candidates: []controlplane.DiscoveryCandidateInput{{
@@ -115,7 +158,7 @@ func TestAPIPublisherFailsClosedOnPartialAcknowledgement(t *testing.T) {
 			ObservedAt: time.Now().UTC(),
 		}
 	}
-	err = (discovery.APIPublisher{Client: client, Credential: func() (string, error) { return "credential", nil }}).Publish(context.Background(), discovery.Batch{ID: "batch-1", Candidates: candidates})
+	err = (discovery.APIPublisher{Client: client, Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "credential", Generation: 16}}}).Publish(context.Background(), discovery.Batch{ID: "batch-1", Candidates: candidates})
 	if !errors.Is(err, discovery.ErrPartialAcknowledgement) || requests != 1 {
 		t.Fatalf("error=%v requests=%d", err, requests)
 	}
@@ -137,6 +180,31 @@ type fakePublisher struct {
 	err   error
 	errs  []error
 	calls int
+}
+
+func testBatch(id string) discovery.Batch {
+	return discovery.Batch{ID: id, Candidates: []controlplane.DiscoveryCandidateInput{{
+		SourceKind: "service", SourceUid: "uid-1", Protocol: controlplane.DiscoveryCandidateInputProtocolHttp,
+		Namespace: "default", Name: "api", Target: "https://api.default.svc/health",
+		NetworkPerspective: "cluster-a", Present: true, Labels: map[string]string{},
+		ObservedAt: time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC),
+	}}}
+}
+
+func writeCredentialBundle(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type fixedCredentials struct {
+	bundle credentials.Bundle
+	err    error
+}
+
+func (credentials fixedCredentials) Current(context.Context) (credentials.Bundle, error) {
+	return credentials.bundle, credentials.err
 }
 
 func (f *fakePublisher) Publish(_ context.Context, batch discovery.Batch) error {

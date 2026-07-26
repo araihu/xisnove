@@ -7,14 +7,81 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/araihu/xisnove/agent/credentials"
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 	"github.com/araihu/xisnove/agent/worker"
 )
+
+func TestRunOnceReloadsCredentialBundleBetweenHeartbeats(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "current.json")
+	writeCredentialBundle(t, path, `{"credential":"first-credential","generation":7}`)
+	var heartbeats []struct {
+		credential string
+		generation int64
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/agent/heartbeat":
+			var heartbeat controlplane.AgentHeartbeat
+			if err := json.NewDecoder(request.Body).Decode(&heartbeat); err != nil {
+				t.Fatal(err)
+			}
+			heartbeats = append(heartbeats, struct {
+				credential string
+				generation int64
+			}{request.Header.Get("Authorization"), heartbeat.CredentialGeneration})
+			response.WriteHeader(http.StatusNoContent)
+		case "/v1/agent/work:lease":
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected path %q", request.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := controlplane.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := worker.Worker{
+		Client:      client,
+		Credentials: credentials.FileProvider{Path: path},
+		Executor:    fixedExecutor{},
+		Version:     "v0.1.0",
+	}
+	if err := instance.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	replacement := filepath.Join(filepath.Dir(path), "replacement.json")
+	writeCredentialBundle(t, replacement, `{"credential":"second-credential","generation":8}`)
+	if err := os.Rename(replacement, path); err != nil {
+		t.Fatal(err)
+	}
+	if err := instance.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		credential string
+		generation int64
+	}{
+		{"Bearer first-credential", 7},
+		{"Bearer second-credential", 8},
+	}
+	if len(heartbeats) != len(want) {
+		t.Fatalf("heartbeats = %#v", heartbeats)
+	}
+	for index := range want {
+		if heartbeats[index] != want[index] {
+			t.Fatalf("heartbeat[%d] = %#v, want %#v", index, heartbeats[index], want[index])
+		}
+	}
+}
 
 func TestRunOnceLeasesExecutesAndUploadsResult(t *testing.T) {
 	for _, acknowledgement := range []string{"accepted", "duplicate"} {
@@ -63,13 +130,10 @@ func TestRunOnceLeasesExecutesAndUploadsResult(t *testing.T) {
 				t.Fatal(err)
 			}
 			instance := worker.Worker{
-				Client: client,
-				Credential: func() (string, error) {
-					return "agent-credential", nil
-				},
-				Executor:             fixedExecutor{},
-				Version:              "v0.1.0",
-				CredentialGeneration: 1,
+				Client:      client,
+				Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "agent-credential", Generation: 11}},
+				Executor:    fixedExecutor{},
+				Version:     "v0.1.0",
 			}
 
 			if err := instance.RunOnce(context.Background()); err != nil {
@@ -105,13 +169,10 @@ func TestRunOnceReturnsNilWhenLeaseHasNoWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	instance := worker.Worker{
-		Client: client,
-		Credential: func() (string, error) {
-			return "agent-credential", nil
-		},
-		Executor:             fixedExecutor{},
-		Version:              "v0.1.0",
-		CredentialGeneration: 1,
+		Client:      client,
+		Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "agent-credential", Generation: 12}},
+		Executor:    fixedExecutor{},
+		Version:     "v0.1.0",
 	}
 
 	if err := instance.RunOnce(context.Background()); err != nil {
@@ -148,7 +209,7 @@ func TestRunOnceAdvertisesDiscoveryButLeasesOnlyProbeCapabilities(t *testing.T) 
 		controlplane.AgentCapabilityKubernetesDiscovery,
 		controlplane.AgentCapabilityKubernetesWatch,
 	}
-	instance := worker.Worker{Client: client, Credential: func() (string, error) { return "credential", nil }, Executor: fixedExecutor{}, Capabilities: capabilities}
+	instance := worker.Worker{Client: client, Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "credential", Generation: 13}}, Executor: fixedExecutor{}, Capabilities: capabilities}
 	if err := instance.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +237,7 @@ func TestRunOnceDiscoveryOnlyHeartbeatDoesNotRequestProbeLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	instance := worker.Worker{Client: client, Credential: func() (string, error) { return "credential", nil }, Executor: fixedExecutor{}, Capabilities: []controlplane.AgentCapability{controlplane.AgentCapabilityKubernetesDiscovery}}
+	instance := worker.Worker{Client: client, Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "credential", Generation: 14}}, Executor: fixedExecutor{}, Capabilities: []controlplane.AgentCapability{controlplane.AgentCapabilityKubernetesDiscovery}}
 	if err := instance.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -240,8 +301,8 @@ func TestRunOnceBatchUploadRetriesIdenticalResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	instance := worker.Worker{
-		Client: client, Credential: func() (string, error) { return "credential", nil },
-		Executor: fixedExecutor{}, Version: "test", CredentialGeneration: 1,
+		Client: client, Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "credential", Generation: 15}},
+		Executor: fixedExecutor{}, Version: "test",
 	}
 	if err := instance.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
@@ -296,4 +357,20 @@ func testHTTPWork() controlplane.ProbeWork {
 		TimeoutMillis: 5000,
 		Probe:         definition,
 	}
+}
+
+func writeCredentialBundle(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type fixedCredentials struct {
+	bundle credentials.Bundle
+	err    error
+}
+
+func (credentials fixedCredentials) Current(context.Context) (credentials.Bundle, error) {
+	return credentials.bundle, credentials.err
 }
