@@ -3,8 +3,10 @@ package view
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/araihu/xisnove/sdk"
+	"github.com/google/uuid"
 )
 
 func TestLoginContentNamesItsMainRegionAndKeepsPasswordSafeWithoutJavaScript(t *testing.T) {
@@ -73,5 +75,59 @@ func TestMonitorContentDistinguishesEmptyFilteredAndPartialStates(t *testing.T) 
 				}
 			}
 		})
+	}
+}
+
+func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
+	locationID := uuid.MustParse("20000000-0000-4000-8000-000000000001")
+	observedAt := time.Date(2026, time.July, 26, 12, 30, 0, 0, time.UTC)
+	data := MonitorList{
+		Monitors: []sdk.Monitor{{
+			Id: monitorID, Name: "Home DNS", Description: "Resolver reachability",
+			Kind: sdk.MonitorKindDns, Enabled: true, Public: true,
+			LocationId: locationID, RequiredLocation: true,
+			IntervalSeconds: 60, TimeoutMillis: 2500,
+			FailureThreshold: 3, RecoveryThreshold: 2, UpdatedAt: observedAt,
+		}},
+		Health: map[string]sdk.MonitorHealth{
+			monitorID.String(): {MonitorId: monitorID, State: sdk.Degraded, LastTransitionAt: observedAt},
+		},
+		Query: "dns", Cursor: "opaque/page", Selected: monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`id="monitor-detail"`, `aria-labelledby="monitor-detail-heading"`,
+		`id="monitor-detail-heading"`, "Home DNS", "DEGRADED",
+		"Current health", "Configuration", "Observation history",
+		"History is not exposed by the current public API",
+		"60 seconds", "2500 ms", "3 failures", "2 successes",
+		locationID.String(), "26 Jul 2026 12:30 UTC",
+		`href="/monitors?cursor=opaque%2Fpage&amp;q=dns"`, "Close detail",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("selected monitor workspace missing %q", want)
+		}
+	}
+	if strings.Count(body, "<h1") != 1 {
+		t.Errorf("selected monitor workspace changed page heading count: %s", body)
+	}
+}
+
+func TestMonitorContentNamesUnavailableSelectionWithoutReplacingTheList(t *testing.T) {
+	var rendered strings.Builder
+	if err := MonitorContent(MonitorList{Selected: "missing-monitor"}).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	for _, want := range []string{"No monitors yet", "Selected monitor unavailable", "Close detail"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("unavailable selection missing %q", want)
+		}
 	}
 }

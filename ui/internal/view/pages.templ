@@ -26,7 +26,7 @@ import (
 
 type MonitorList struct {
 	Monitors []sdk.Monitor
-	Health map[string]sdk.HealthState
+	Health map[string]sdk.MonitorHealth
 	Cursor string
 	NextCursor string
 	Query string
@@ -83,6 +83,16 @@ templ Document(title string, content templ.Component) {
 				.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
 				.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 				.xis-status-results { align-content: start; align-items: start; min-height: 0; }
+				.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr); gap: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--color-outline); }
+				.dark .xis-detail-workspace { border-color: var(--color-outline-dark-strong); }
+				.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
+				.xis-detail-identity { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+				.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }
+				.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
+				.xis-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }
+				.xis-detail-facts dt { color: var(--color-on-surface-muted); }
+				.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }
+				.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
 				.xis-password { width: 100%; }
 				.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 				.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
@@ -94,7 +104,7 @@ templ Document(title string, content templ.Component) {
 				.xis-topbar { min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--color-outline); background: var(--color-surface); }
 				.dark .xis-topbar { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark); }
 				.xis-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
-				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-public-row { grid-template-columns: 1fr; } .xis-mobile-nav { display: block; } }
+				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; } .xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; } .dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); } .xis-mobile-nav { display: block; } }
 			</style>
 		</head>
 		<body>
@@ -231,7 +241,63 @@ templ MonitorContent(data MonitorList) {
 			if data.NextCursor != "" {
 				@NextPage(data)
 			}
+			if data.Selected != "" {
+				if monitor, health, ok := selectedMonitor(data); ok {
+					@MonitorDetail(data, monitor, health)
+				} else {
+					@alert.Alert(alert.Config{Title: "Selected monitor unavailable", Description: "The selected monitor is not present in this result page. The monitor list remains available; close the detail or select a visible row.", Tone: alert.ToneWarning, RootClass: "xis-state-warning", Link: &alert.LinkConfig{Label: "Close detail", Href: monitorURL(data.Query, data.Cursor, "")}})
+				}
+			}
 		</div>
+	</section>
+}
+
+templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-heading">
+		<div class="xis-detail-main">
+			<div class="xis-detail-identity">
+				<div>
+					<p class="xis-meta">Selected monitor</p>
+					<h2 id="monitor-detail-heading">{ monitor.Name }</h2>
+					<p class="xis-meta"><code>{ monitor.Id.String() }</code></p>
+				</div>
+				@healthBadge(health.State)
+			</div>
+			<section class="xis-detail-section" aria-labelledby="monitor-health-heading">
+				<h3 id="monitor-health-heading">Current health</h3>
+				<p>{ monitor.Description }</p>
+				<dl class="xis-detail-facts">
+					<dt>State</dt><dd>{ strings.ToUpper(string(health.State)) }</dd>
+					<dt>Last transition</dt><dd>{ formattedTime(health.LastTransitionAt) }</dd>
+					<dt>Locations observed</dt><dd>{ fmt.Sprintf("%d", len(health.Locations)) }</dd>
+				</dl>
+			</section>
+			<section class="xis-detail-section" aria-labelledby="monitor-configuration-heading">
+				<h3 id="monitor-configuration-heading">Configuration</h3>
+				<dl class="xis-detail-facts">
+					<dt>Kind</dt><dd>{ strings.ToUpper(string(monitor.Kind)) }</dd>
+					<dt>Interval</dt><dd>{ fmt.Sprintf("%d seconds", monitor.IntervalSeconds) }</dd>
+					<dt>Timeout</dt><dd>{ fmt.Sprintf("%d ms", monitor.TimeoutMillis) }</dd>
+					<dt>Open after</dt><dd>{ fmt.Sprintf("%d failures", monitor.FailureThreshold) }</dd>
+					<dt>Recover after</dt><dd>{ fmt.Sprintf("%d successes", monitor.RecoveryThreshold) }</dd>
+				</dl>
+			</section>
+			<section class="xis-detail-section" aria-labelledby="monitor-history-heading">
+				<h3 id="monitor-history-heading">Observation history</h3>
+				@alert.Alert(alert.Config{Title: "History unavailable in this view", Description: "History is not exposed by the current public API. Current health and configuration remain available without replacing the monitor list.", Tone: alert.ToneInfo, RootClass: "xis-state-info"})
+			</section>
+		</div>
+		<aside class="xis-detail-rail" aria-label="Monitor metadata and actions">
+			<h3>Monitor metadata</h3>
+			<dl class="xis-detail-facts">
+				<dt>Enabled</dt><dd>{ enabledLabel(monitor.Enabled) }</dd>
+				<dt>Public</dt><dd>{ enabledLabel(monitor.Public) }</dd>
+				<dt>Location</dt><dd><code>{ monitor.LocationId.String() }</code></dd>
+				<dt>Required</dt><dd>{ enabledLabel(monitor.RequiredLocation) }</dd>
+				<dt>Updated</dt><dd>{ formattedTime(monitor.UpdatedAt) }</dd>
+			</dl>
+			<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-push-url="true">Close detail</a>
+		</aside>
 	</section>
 }
 
@@ -333,7 +399,8 @@ func monitorTable(data MonitorList) table.Config {
 	rows := make([]table.Row, 0, len(data.Monitors))
 	for _, monitor := range data.Monitors {
 		id := monitor.Id.String()
-		state := data.Health[id]
+		health := data.Health[id]
+		state := health.State
 		if state == "" { state = sdk.Unknown }
 		name := monitor.Name
 		if data.Selected == id { name += " (selected)" }
@@ -342,6 +409,16 @@ func monitorTable(data MonitorList) table.Config {
 		}})
 	}
 	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
+}
+
+func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {
+	for _, monitor := range data.Monitors {
+		if monitor.Id.String() != data.Selected { continue }
+		health := data.Health[data.Selected]
+		if health.State == "" { health = sdk.MonitorHealth{MonitorId: monitor.Id, State: sdk.Unknown} }
+		return monitor, health, true
+	}
+	return sdk.Monitor{}, sdk.MonitorHealth{}, false
 }
 
 func enabledLabel(enabled bool) string { if enabled { return "Yes" }; return "No" }

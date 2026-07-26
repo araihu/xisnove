@@ -97,3 +97,13 @@ consumer that expects password semantics to remain safe without Alpine.
     wrote `.png` filenames. Xisnove now requests 100, validates the PNG magic
     bytes before every write and scans the whole evidence directory after the
     run. This was harness misuse, not a Goshtoso defect.
+12. **Detail Workspace is an application composition, not a single public
+    component.** The immutable component reference and current public API were
+    inspected before adding the selected-monitor workspace. Goshtoso provides
+    the Page Header, badges, alerts, links, table, and shell vocabulary, but no
+    dedicated detail/definition-list primitive; Xisnove therefore composes the
+    workspace with application-owned semantic CSS variables. The public API
+    exposes current monitor health but no probe-result history read operation,
+    so the workspace renders an explicit partial "history unavailable" state
+    instead of inventing a BFF endpoint or copying a wire model. This is an
+    expected application boundary rather than a Goshtoso defect.

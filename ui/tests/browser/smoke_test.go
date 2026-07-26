@@ -32,6 +32,10 @@ import (
 func TestIntegratedBrowserSmoke(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
 	unknownID := uuid.MustParse("10000000-0000-4000-8000-000000000002")
+	locationID := uuid.MustParse("20000000-0000-4000-8000-000000000001")
+	observedAt := time.Date(2026, time.July, 26, 12, 30, 0, 0, time.UTC)
+	homeDNS := sdk.Monitor{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", Kind: sdk.MonitorKindDns, Enabled: true, Public: true, LocationId: locationID, RequiredLocation: true, IntervalSeconds: 60, TimeoutMillis: 2500, FailureThreshold: 3, RecoveryThreshold: 2, UpdatedAt: observedAt}
+	vpsEdge := sdk.Monitor{Id: unknownID, Name: "VPS edge", Description: "External ingress", Kind: sdk.MonitorKindHttp, Enabled: true, LocationId: locationID, IntervalSeconds: 30, TimeoutMillis: 1500, FailureThreshold: 2, RecoveryThreshold: 2, UpdatedAt: observedAt}
 	var scenario atomic.Value
 	scenario.Store("success")
 	apiCalls := make([]string, 0, 8)
@@ -80,7 +84,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			switch scenario.Load().(string) {
 			case "monitors-loading":
 				time.Sleep(300 * time.Millisecond)
-				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{{Id: monitorID, Name: "Home DNS", Kind: sdk.MonitorKindDns, Enabled: true}}, Page: sdk.PageMetadata{}})
+				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{homeDNS}, Page: sdk.PageMetadata{}})
 			case "monitors-empty":
 				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Page: sdk.PageMetadata{}})
 			case "monitors-filtered":
@@ -89,7 +93,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = w.Write([]byte(`{"title":"upstream offline"}`))
 			default:
-				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", Kind: sdk.MonitorKindDns, Enabled: true}, {Id: unknownID, Name: "VPS edge", Description: "External ingress", Kind: sdk.MonitorKindHttp, Enabled: true}}, Page: sdk.PageMetadata{}})
+				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{homeDNS, vpsEdge}, Page: sdk.PageMetadata{}})
 			}
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors/"+monitorID.String()+"/health":
 			requireBearer(t, r)
@@ -97,7 +101,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up, LastTransitionAt: time.Now()})
+			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up, LastTransitionAt: observedAt})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors/"+unknownID.String()+"/health":
 			requireBearer(t, r)
 			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: unknownID, State: sdk.Unknown, LastTransitionAt: time.Now()})
@@ -188,6 +192,16 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	assertAccessibleSurface(t, ctx, "#monitor-content")
 	assertP1Accessibility(t, ctx)
 	captureMatrix(t, ctx, screenshotDir, "monitors", "#monitor-content")
+	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors?selected="+monitorID.String()), chromedp.WaitVisible("#monitor-detail")); err != nil {
+		t.Fatalf("direct monitor detail: %v", err)
+	}
+	assertAccessibleSurface(t, ctx, "#monitor-content")
+	assertDetailGeometry(t, ctx)
+	assertSequentialKeyboardTraversal(t, ctx, "monitor detail")
+	captureMatrix(t, ctx, screenshotDir, "monitor-detail", "#monitor-detail")
+	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors"), chromedp.WaitVisible("#monitor-results")); err != nil {
+		t.Fatal(err)
+	}
 	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900)); err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +311,11 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			t.Errorf("API calls %#v missing %q", calls, want)
 		}
 	}
-	assertPNGArtifacts(t, screenshotDir)
+	expectedArtifacts := 58
+	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
+		expectedArtifacts = 30
+	}
+	assertPNGArtifacts(t, screenshotDir, expectedArtifacts)
 	t.Logf("browser matrix and integrated SDK routes passed; screenshots: %s", screenshotDir)
 }
 
@@ -432,14 +450,14 @@ func writePNGArtifact(t *testing.T, path string, screenshot []byte) {
 	}
 }
 
-func assertPNGArtifacts(t *testing.T, dir string) {
+func assertPNGArtifacts(t *testing.T, dir string, expected int) {
 	t.Helper()
 	paths, err := filepath.Glob(filepath.Join(dir, "*.png"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) == 0 {
-		t.Fatal("browser run produced no PNG artifacts")
+	if len(paths) != expected {
+		t.Fatalf("browser run produced %d PNG artifacts, want %d", len(paths), expected)
 	}
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -601,6 +619,28 @@ func assertShellGeometry(t *testing.T, ctx context.Context) {
 	}
 	if mobile.PageOverflow || !mobile.TableOverflow || !mobile.ActionFocus {
 		t.Errorf("mobile shell geometry = %#v", mobile)
+	}
+}
+
+func assertDetailGeometry(t *testing.T, ctx context.Context) {
+	t.Helper()
+	for _, test := range []struct {
+		width  int64
+		mobile bool
+	}{{390, true}, {1440, false}} {
+		var result struct {
+			PageOverflow bool    `json:"pageOverflow"`
+			RailAfter    bool    `json:"railAfter"`
+			RailBelow    bool    `json:"railBelow"`
+			RailRight    bool    `json:"railRight"`
+			DetailWidth  float64 `json:"detailWidth"`
+		}
+		if err := chromedp.Run(ctx, chromedp.EmulateViewport(test.width, 900), chromedp.Evaluate(`(()=>{const detail=document.querySelector('#monitor-detail'),main=detail?.querySelector('.xis-detail-main'),rail=detail?.querySelector('.xis-detail-rail'),dr=detail?.getBoundingClientRect(),mr=main?.getBoundingClientRect(),rr=rail?.getBoundingClientRect();return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,railAfter:!!main&&!!rail&&!!(main.compareDocumentPosition(rail)&Node.DOCUMENT_POSITION_FOLLOWING),railBelow:!!mr&&!!rr&&rr.top>=mr.bottom-1,railRight:!!mr&&!!rr&&rr.left>=mr.right-1,detailWidth:dr?.width||0}})()`, &result)); err != nil {
+			t.Fatalf("detail geometry at %dpx: %v", test.width, err)
+		}
+		if result.PageOverflow || !result.RailAfter || result.DetailWidth <= 0 || (test.mobile && !result.RailBelow) || (!test.mobile && !result.RailRight) {
+			t.Errorf("detail geometry at %dpx = %#v", test.width, result)
+		}
 	}
 }
 

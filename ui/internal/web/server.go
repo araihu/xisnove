@@ -370,9 +370,9 @@ func filterMonitors(monitors []sdk.Monitor, query string) []sdk.Monitor {
 	return filtered
 }
 
-func (s *server) enrichMonitorHealth(ctx context.Context, credential string, monitors []sdk.Monitor) (map[string]sdk.HealthState, int, bool) {
+func (s *server) enrichMonitorHealth(ctx context.Context, credential string, monitors []sdk.Monitor) (map[string]sdk.MonitorHealth, int, bool) {
 	const parallelism = 4
-	health := make(map[string]sdk.HealthState, len(monitors))
+	health := make(map[string]sdk.MonitorHealth, len(monitors))
 	sem := make(chan struct{}, parallelism)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -396,14 +396,14 @@ func (s *server) enrichMonitorHealth(ctx context.Context, credential string, mon
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				health[monitor.Id.String()] = sdk.Unknown
+				health[monitor.Id.String()] = sdk.MonitorHealth{MonitorId: monitor.Id, State: sdk.Unknown}
 				failures++
 				if errors.Is(err, controlplane.ErrUnauthorized) || isAPIStatus(err, http.StatusUnauthorized) {
 					unauthorized = true
 				}
 				return
 			}
-			health[monitor.Id.String()] = value.State
+			health[monitor.Id.String()] = value
 		}()
 	}
 	wg.Wait()
