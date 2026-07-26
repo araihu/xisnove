@@ -198,30 +198,48 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 	return i, err
 }
 
+const touchAgentCredentialAuthentication = `-- name: TouchAgentCredentialAuthentication :execrows
+UPDATE agent_credentials
+SET last_authenticated_at = ?1
+WHERE agent_id = ?2
+  AND generation = ?3
+  AND revoked_at IS NULL
+`
+
+type TouchAgentCredentialAuthenticationParams struct {
+	LastAuthenticatedAt sql.NullString `json:"last_authenticated_at"`
+	AgentID             string         `json:"agent_id"`
+	Generation          int64          `json:"generation"`
+}
+
+func (q *Queries) TouchAgentCredentialAuthentication(ctx context.Context, arg TouchAgentCredentialAuthenticationParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchAgentCredentialAuthentication, arg.LastAuthenticatedAt, arg.AgentID, arg.Generation)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateAgentHeartbeat = `-- name: UpdateAgentHeartbeat :execrows
 UPDATE agents
 SET version = ?1,
-    credential_generation = ?2,
-    capabilities_json = ?3,
-    last_seen_at = ?4,
-    updated_at = ?4
-WHERE id = ?5
+    capabilities_json = ?2,
+    last_seen_at = ?3,
+    updated_at = ?3
+WHERE id = ?4
   AND revoked_at IS NULL
-  AND credential_generation = ?2
 `
 
 type UpdateAgentHeartbeatParams struct {
-	Version              sql.NullString `json:"version"`
-	CredentialGeneration int64          `json:"credential_generation"`
-	CapabilitiesJson     []byte         `json:"capabilities_json"`
-	LastSeenAt           sql.NullString `json:"last_seen_at"`
-	ID                   string         `json:"id"`
+	Version          sql.NullString `json:"version"`
+	CapabilitiesJson []byte         `json:"capabilities_json"`
+	LastSeenAt       sql.NullString `json:"last_seen_at"`
+	ID               string         `json:"id"`
 }
 
 func (q *Queries) UpdateAgentHeartbeat(ctx context.Context, arg UpdateAgentHeartbeatParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, updateAgentHeartbeat,
 		arg.Version,
-		arg.CredentialGeneration,
 		arg.CapabilitiesJson,
 		arg.LastSeenAt,
 		arg.ID,

@@ -48,10 +48,15 @@ WHERE id = sqlc.arg(id);
 -- name: UpdateAgentHeartbeat :execrows
 UPDATE agents
 SET version = sqlc.arg(version),
-    credential_generation = sqlc.arg(credential_generation),
     capabilities_json = sqlc.arg(capabilities_json),
     last_seen_at = sqlc.arg(last_seen_at),
     updated_at = sqlc.arg(last_seen_at)
 WHERE id = sqlc.arg(id)
-  AND revoked_at IS NULL
-  AND credential_generation = sqlc.arg(credential_generation);
+  AND revoked_at IS NULL;
+
+-- name: TouchAgentCredentialAuthentication :execrows
+UPDATE agent_credentials
+SET last_authenticated_at = sqlc.arg(last_authenticated_at)
+WHERE agent_id = sqlc.arg(agent_id)
+  AND generation = sqlc.arg(generation)
+  AND revoked_at IS NULL;

@@ -333,6 +333,12 @@ func assertPresentedCredentialLookup(t *testing.T, handle *database.Handle, agen
 	if _, err := handle.DB.ExecContext(ctx, insert, string(agentID), []byte{13, 14, 15, 16}, "2026-07-25T13:30:00Z"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := handle.DB.ExecContext(ctx,
+		"UPDATE agents SET credential_generation = 2 WHERE id = "+profilePlaceholder(handle.Profile, 1),
+		string(agentID),
+	); err != nil {
+		t.Fatal(err)
+	}
 	rollbackAgent, err := domain.NewAgent(domain.NewAgentParams{
 		ID: "00000000-0000-4000-8000-000000000110", LocationID: "00000000-0000-4000-8000-000000000101",
 		Name: "rollback-agent", Capabilities: []domain.AgentCapability{domain.CapabilityHTTP},
@@ -364,23 +370,50 @@ func assertPresentedCredentialLookup(t *testing.T, handle *database.Handle, agen
 		if err != nil {
 			return err
 		}
-		if record.Agent.ID != agentID || record.PresentedCredentialGeneration != 2 || record.Agent.CredentialGeneration != 1 {
+		if record.Agent.ID != agentID || record.PresentedCredentialGeneration != 2 || record.Agent.CredentialGeneration != 2 {
 			return fmt.Errorf("overlap lookup = %#v", record)
 		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewAgentService(application.AgentServiceConfig{
-		Store:  handle.Store,
-		Tokens: fixedCredentialHasher{hash: []byte{13, 14, 15, 16}},
-	})
+	newService := func(hash []byte, observedAt time.Time) *application.AgentService {
+		return application.NewAgentService(application.AgentServiceConfig{
+			Store: handle.Store, Tokens: fixedCredentialHasher{hash: hash}, Now: func() time.Time { return observedAt },
+		})
+	}
+	oldService := newService([]byte{9, 10, 11, 12}, time.Date(2026, 7, 25, 13, 32, 0, 0, time.UTC))
+	oldPrincipal, err := oldService.Authenticate(ctx, "generation-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldPrincipal.CredentialGeneration != 1 {
+		t.Fatalf("generation-1 principal=%#v", oldPrincipal)
+	}
+	if err := oldService.Heartbeat(ctx, oldPrincipal, 1, "overlap-old", []domain.AgentCapability{domain.CapabilityHTTP}); err != nil {
+		t.Fatalf("old overlapping heartbeat: %v", err)
+	}
+	service := newService([]byte{13, 14, 15, 16}, time.Date(2026, 7, 25, 13, 33, 0, 0, time.UTC))
 	principal, err := service.Authenticate(ctx, "generation-two")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if principal.SubjectID != string(agentID) || principal.CredentialGeneration != 2 {
 		t.Fatalf("generation-2 principal=%#v", principal)
+	}
+	if err := service.Heartbeat(ctx, principal, 2, "overlap-new", []domain.AgentCapability{domain.CapabilityHTTP}); err != nil {
+		t.Fatalf("new overlapping heartbeat: %v", err)
+	}
+	for generation, want := range map[int]string{1: "2026-07-25T13:32:00", 2: "2026-07-25T13:33:00"} {
+		var observed string
+		query := `SELECT CAST(last_authenticated_at AS TEXT) FROM agent_credentials
+			WHERE agent_id = ` + profilePlaceholder(handle.Profile, 1) + ` AND generation = ` + profilePlaceholder(handle.Profile, 2)
+		if err := handle.DB.QueryRowContext(ctx, query, string(agentID), generation).Scan(&observed); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Replace(observed, " ", "T", 1), want) {
+			t.Fatalf("generation %d last_authenticated_at=%q, want %s", generation, observed, want)
+		}
 	}
 	update := `UPDATE agent_credentials SET revoked_at = ` + profilePlaceholder(handle.Profile, 1) +
 		` WHERE agent_id = ` + profilePlaceholder(handle.Profile, 2) + ` AND generation = 2`

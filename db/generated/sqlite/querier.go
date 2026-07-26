@@ -98,6 +98,7 @@ type Querier interface {
 	SetNotificationChannelEnabled(ctx context.Context, arg SetNotificationChannelEnabledParams) (int64, error)
 	SetNotificationRouteEnabled(ctx context.Context, arg SetNotificationRouteEnabledParams) (int64, error)
 	TouchAPITokenLastUsed(ctx context.Context, arg TouchAPITokenLastUsedParams) (int64, error)
+	TouchAgentCredentialAuthentication(ctx context.Context, arg TouchAgentCredentialAuthenticationParams) (int64, error)
 	UpdateAgentHeartbeat(ctx context.Context, arg UpdateAgentHeartbeatParams) (int64, error)
 	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
 	UpdateNotificationRoute(ctx context.Context, arg UpdateNotificationRouteParams) (int64, error)

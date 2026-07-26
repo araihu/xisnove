@@ -789,20 +789,36 @@ func (r *agentRepository) UpdateHeartbeat(
 	if err != nil {
 		return false, fmt.Errorf("encode heartbeat capabilities: %w", err)
 	}
+	credentialAffected, err := r.queries.TouchAgentCredentialAuthentication(
+		ctx,
+		dbpostgres.TouchAgentCredentialAuthenticationParams{
+			LastAuthenticatedAt: nullableTimeValue(lastSeenAt),
+			AgentID:             string(agentID),
+			Generation:          int64(credentialGeneration),
+		},
+	)
+	if err != nil {
+		return false, repositoryError("touch agent credential authentication", err)
+	}
+	if credentialAffected != 1 {
+		return false, nil
+	}
 	affected, err := r.queries.UpdateAgentHeartbeat(
 		ctx,
 		dbpostgres.UpdateAgentHeartbeatParams{
-			Version:              nullableString(version),
-			CredentialGeneration: int64(credentialGeneration),
-			CapabilitiesJson:     capabilitiesJSON,
-			LastSeenAt:           nullableTimeValue(lastSeenAt),
-			ID:                   string(agentID),
+			Version:          nullableString(version),
+			CapabilitiesJson: capabilitiesJSON,
+			LastSeenAt:       nullableTimeValue(lastSeenAt),
+			ID:               string(agentID),
 		},
 	)
 	if err != nil {
 		return false, repositoryError("update agent heartbeat", err)
 	}
-	return affected == 1, nil
+	if affected != 1 {
+		return false, errors.New("active agent credential references an unavailable agent")
+	}
+	return true, nil
 }
 
 func (r *healthRepository) GetLocation(
