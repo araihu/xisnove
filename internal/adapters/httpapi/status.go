@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -10,6 +11,16 @@ import (
 	"github.com/araihu/xisnove/application"
 	"github.com/araihu/xisnove/application/port"
 )
+
+func (s *Server) GetPublicStatusPage(
+	ctx context.Context,
+	_ GetPublicStatusPageRequestObject,
+) (GetPublicStatusPageResponseObject, error) {
+	if s.publicStatus == nil {
+		return nil, errors.New("public status service is not configured")
+	}
+	return getPublicStatusPage(ctx, s.publicStatus)
+}
 
 // getPublicStatusPage is the strict-operation implementation seam. Root Server
 // wiring delegates GetPublicStatusPage to this function once the service is

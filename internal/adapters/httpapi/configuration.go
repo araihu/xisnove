@@ -26,6 +26,7 @@ type ServerConfig struct {
 	Health        *application.HealthService
 	Notifications *application.NotificationAdminService
 	Management    *application.ManagementService
+	PublicStatus  *application.PublicStatusService
 }
 
 type Server struct {
@@ -41,6 +42,7 @@ type Server struct {
 	health        *application.HealthService
 	notifications *application.NotificationAdminService
 	management    *application.ManagementService
+	publicStatus  *application.PublicStatusService
 }
 
 func NewServer(config ServerConfig) *Server {
@@ -54,6 +56,7 @@ func NewServer(config ServerConfig) *Server {
 		health:        config.Health,
 		notifications: config.Notifications,
 		management:    config.Management,
+		publicStatus:  config.PublicStatus,
 	}
 }
 

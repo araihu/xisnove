@@ -121,6 +121,23 @@ func (h *Handle) Close() error {
 	return h.close()
 }
 
+// PublicStatusUnitOfWork selects the profile-specific, snapshot-consistent
+// anonymous status projection without leaking database adapters into callers.
+func (h *Handle) PublicStatusUnitOfWork() application.PublicStatusUnitOfWork {
+	switch h.Profile {
+	case ProfileSQLite:
+		return sqlitestore.NewPublicStatusUnitOfWork(h.DB)
+	case ProfileTursoLocal:
+		return tursolocal.NewPublicStatusUnitOfWork(h.DB)
+	case ProfileTursoCloud:
+		return tursocloud.NewPublicStatusUnitOfWork(h.DB)
+	case ProfilePostgres:
+		return postgresstore.NewPublicStatusUnitOfWork(h.DB)
+	default:
+		panic("opened database profile is not handled")
+	}
+}
+
 func openSQLite(ctx context.Context, config Config) (*Handle, error) {
 	db, err := sqlitestore.Open(config.URL)
 	if err != nil {

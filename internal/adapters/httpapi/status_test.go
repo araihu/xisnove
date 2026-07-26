@@ -58,7 +58,9 @@ func TestPublicStatusHandlerMapsOnlyPublishedAggregate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := getPublicStatusPage(context.Background(), service)
+	response, err := NewServer(ServerConfig{PublicStatus: service}).GetPublicStatusPage(
+		context.Background(), GetPublicStatusPageRequestObject{},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

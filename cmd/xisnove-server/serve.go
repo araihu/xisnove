@@ -127,14 +127,21 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	management := application.NewManagementService(application.ManagementServiceConfig{
 		Store: store, Cursors: cursors, Tokens: tokens, NewID: ids.NewUUID,
 	})
+	publicStatus, err := application.NewPublicStatusService(application.PublicStatusServiceConfig{
+		Store: handle.PublicStatusUnitOfWork(), Now: xisclock.Now,
+	})
+	if err != nil {
+		return fmt.Errorf("configure public status: %w", err)
+	}
 	handler, err := httpapi.NewHandler(httpapi.HandlerConfig{
 		Server: httpapi.NewServer(httpapi.ServerConfig{
 			Auth: auth, APITokens: apiTokens,
 			Configuration: application.NewConfigurationService(
 				store, xisclock.Now, ids.NewUUID,
 			),
-			Agents:     agents,
-			Management: management,
+			Agents:       agents,
+			Management:   management,
+			PublicStatus: publicStatus,
 			Lease: application.NewLeaseService(application.LeaseServiceConfig{
 				Store: store, Tokens: tokens, LeaseDuration: leaseDuration,
 				ObserveLease: leaseObserver(metrics),
