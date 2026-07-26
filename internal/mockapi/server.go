@@ -668,6 +668,11 @@ func (s *Server) applyOperatorAgent(w http.ResponseWriter, r *http.Request, key,
 			return
 		}
 	} else {
+		if credential == "" {
+			s.mu.Unlock()
+			writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
+			return
+		}
 		s.counters["agent"]++
 		agent = &mockOperatorAgent{
 			mockOperatorBinding:  mockOperatorBinding{ownerKey: key, ownerUID: uid, externalID: operatorAgentID(s.counters["agent"])},

@@ -120,6 +120,14 @@ Apply keys also distinguish bootstrap credential-bearing requests from
 credential-free reconciliation. Steady generation-one and overlap loops use
 Observe; only missing external status or a newer CR generation uses Apply.
 
+## Parent correction after fix round 5
+
+The post-bootstrap controller journey now changes and asserts a public-SDK
+managed capability, then verifies both successful `observedGeneration` and
+`Synced=True`. The public mock now matches production by rejecting a missing
+initial credential for an unbound owner while still permitting an exact bound
+owner to reconcile without retaining bootstrap plaintext.
+
 ## Fix round 4: post-bootstrap acceptance guardrails
 
 Controller fakes are strict again for unexpected observation calls; lifecycle

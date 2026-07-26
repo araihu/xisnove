@@ -37,3 +37,4 @@ Task 8: fix round 2/5 (1 addressed, 0 open — credential-free bound Agent apply
 Task 8: fix round 3/5 (1 addressed, 0 open — failed post-bootstrap Apply retries before Observe)
 Task 8: fix round 4/5 (acceptance guardrails strengthened)
 Task 8: fix round 5/5 (post-bootstrap and generation-three convergence acceptance evidence)
+Task 8: parent correction after round 5 (control-plane capability assertion, truthful Synced evidence, and mock credential-free creation parity)

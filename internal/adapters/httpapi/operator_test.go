@@ -104,7 +104,7 @@ func TestOperatorHandlerAppliesAgentAndReplaysWithoutCredential(t *testing.T) {
 		t.Fatalf("bound update=%d %s", response.Code, response.Body.String())
 	}
 	badObserve := performOperatorRequest(t, handler, http.MethodPost, "/v1/operator/agents:observe", "", operatorToken.Token, map[string]any{"owner": map[string]string{"key": "monitoring.xisnove.io/Agent/default/edge", "uid": "recreated"}, "externalId": applied.ExternalId})
-	if badObserve.Code == http.StatusOK {
+	if badObserve.Code == http.StatusOK || strings.Contains(badObserve.Body.String(), credential) {
 		t.Fatalf("recreated owner observe succeeded: %s", badObserve.Body.String())
 	}
 }

@@ -440,7 +440,7 @@ func TestAgentPostBootstrapSpecUpdateAndGenerationThreeConverge(t *testing.T) {
 	presented := int64(2)
 	remote := &fakeControlPlane{applyAgent: func(_ context.Context, req controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
 		applies++
-		if len(req.InitialCredential) != 0 || req.Spec.Workload.Image != "changed" || req.IdempotencyKey == "" || len(req.IdempotencyKey) > 200 {
+		if len(req.InitialCredential) != 0 || len(req.Spec.Capabilities) != 1 || req.Spec.Capabilities[0] != monitoringv1alpha1.AgentCapabilityTCP || req.IdempotencyKey == "" || len(req.IdempotencyKey) > 200 {
 			t.Fatalf("apply=%#v", req)
 		}
 		return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 2, PresentedCredentialGeneration: presented}, nil
@@ -465,7 +465,7 @@ func TestAgentPostBootstrapSpecUpdateAndGenerationThreeConverge(t *testing.T) {
 	stored := &monitoringv1alpha1.Agent{}
 	_ = kube.Get(context.Background(), requestFor(agent).NamespacedName, stored)
 	stored.Generation = 3
-	stored.Spec.Workload.Image = "changed"
+	stored.Spec.Capabilities = []monitoringv1alpha1.AgentCapability{monitoringv1alpha1.AgentCapabilityTCP}
 	if err := kube.Update(context.Background(), stored); err != nil {
 		t.Fatal(err)
 	}
@@ -476,6 +476,10 @@ func TestAgentPostBootstrapSpecUpdateAndGenerationThreeConverge(t *testing.T) {
 	if err := kube.Get(context.Background(), requestFor(agent).NamespacedName, stored); err != nil {
 		t.Fatal(err)
 	}
+	if stored.Status.ObservedGeneration != 3 {
+		t.Fatalf("observed generation=%d, want 3", stored.Status.ObservedGeneration)
+	}
+	assertCondition(t, stored.Status.Conditions, ConditionSynced, metav1.ConditionTrue, "Applied")
 	stored.Spec.CredentialRotation.RequestedGeneration = 3
 	stored.Generation = 4
 	if err := kube.Update(context.Background(), stored); err != nil {
