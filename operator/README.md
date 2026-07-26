@@ -6,8 +6,9 @@ Xisnove control plane through the narrow interface in
 `internal/controlplane`. It never imports server internals, SQL packages, or
 database adapters.
 
-The generated public SDK adapter is intentionally gated on the frozen API/mock
-contract. See [INTEGRATION.md](INTEGRATION.md) for the exact dependencies.
+The manager uses the generated public Go SDK through the adapter in
+`internal/controlplane/sdk`. It does not import server internals or access a
+database. See [INTEGRATION.md](INTEGRATION.md) for the exact boundary.
 
 ## Development
 
@@ -24,3 +25,23 @@ generation drift.
 The controller tests use a fake Kubernetes client and a fake control-plane
 boundary. The manifest tests structurally validate both CRDs and render the
 Helm chart to enforce the discovery RBAC boundary.
+
+## Runtime
+
+The operator requires `XISNOVE_URL`,
+`XISNOVE_PROVISIONING_CREDENTIAL_FILE`, `POD_NAMESPACE`, and a default Agent
+image through `XISNOVE_AGENT_IMAGE`. The mounted credential file is reread for
+every control-plane request so an external Secret materializer can rotate it
+without restarting the manager.
+
+Leader election uses a Lease in `POD_NAMESPACE` and is enabled by default.
+The cache watches `XISNOVE_WATCH_NAMESPACES`, falling back to `POD_NAMESPACE`.
+`--poll-interval`, `--heartbeat-stale-after`, and the per-Agent
+`spec.discovery.staleAfterSeconds` configure observation freshness. Health and
+readiness are served at `/healthz` and `/readyz`; manager shutdown is bounded
+by `--graceful-shutdown-timeout`.
+
+The Helm chart requires `controlPlane.existingSecret.name` and mounts only its
+configured key. Agent credential Secrets are controller-owned and mutable. The
+operator refuses to adopt an existing Secret not controlled by its Agent.
+Discovery ServiceAccounts never receive Secret access.

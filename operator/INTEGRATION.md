@@ -1,11 +1,10 @@
 # Frozen control-plane contract integration
 
-Status: blocked on API/mock task `019f9b9d-47d6-7b82-a556-6690a8ab9383` and
-its frozen commit SHA. This branch intentionally defines no HTTP paths and no
-copies of public API models.
+Status: integrated against the frozen public operator API and generated Go SDK.
+The operator defines no private HTTP paths and keeps no copies of public API
+models.
 
-When the frozen SHA is handed off, add one adapter under
-`operator/internal/controlplane/sdk` that imports only the generated public
+The adapter under `operator/internal/controlplane/sdk` imports only the generated public
 `github.com/araihu/xisnove/sdk` package and satisfies the existing
 `controlplane.Client` interface. Do not import root `internal/`, `domain`,
 `application`, persistence, or database packages.
@@ -55,11 +54,11 @@ When the frozen SHA is handed off, add one adapter under
 - Add SDK/mock contract tests for every mapping above, including lost status
   writes, replayed credential issuance, ownership conflicts, unavailable
   Gateway API CRDs, and candidate staleness.
-- Wire `cmd/xisnove-operator` only after the adapter compiles against the frozen
-  SDK SHA. Controller setup uses the manager's uncached `APIReader` for exact
-  credential Secret reads so RBAC does not need namespace-wide Secret
-  list/watch. Until then, the chart and controllers are contract-independent
-  foundations and must not be described as deployable end-to-end.
+- `cmd/xisnove-operator` constructs the generated SDK adapter from the external
+  control-plane URL and a file-mounted provisioning credential. Its transport
+  reloads that file for every request. Controller setup uses the manager's
+  uncached `APIReader` for exact credential Secret reads, so RBAC does not need
+  namespace-wide Secret list/watch.
 
 ## Agent runtime dependency
 
@@ -68,3 +67,12 @@ The edge chart and `Agent` controller configure the public Agent image with
 a mounted credential file. The Agent track must consume the discovery
 normalizers or provide equivalent behavior and publish complete snapshots
 through the frozen SDK. This operator branch does not modify `agent/**`.
+
+## External secret materialization seam
+
+The v1 integration surface for Vault, OpenBao, External Secrets Operator, CSI,
+or cloud secret managers is deliberately limited to materializing the
+user-supplied operator provisioning Secret referenced by
+`controlPlane.existingSecret`. The operator does not call provider APIs. Agent
+credential Secrets remain exclusively controller-owned and are never targets
+for external materialization.

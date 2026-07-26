@@ -4,8 +4,8 @@ fullnameOverride: ""
 controlPlane:
   # Existing Xisnove control-plane URL reached from the monitored cluster.
   url: ""
-  provisioningSecret:
-    # A narrowly scoped operator provisioning credential. The chart never creates it.
+  existingSecret:
+    # A narrowly scoped operator provisioning credential. The chart never creates or mutates it.
     name: ""
     key: token
 
@@ -17,6 +17,9 @@ operator:
   replicas: 1
   watchNamespaces: []
   leaderElection: true
+  pollInterval: 30s
+  heartbeatStaleAfter: 5m
+  gracefulShutdownTimeout: 30s
   resources:
     requests:
       cpu: 20m

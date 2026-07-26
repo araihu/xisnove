@@ -1,5 +1,5 @@
 {{- $controlPlaneURL := required "controlPlane.url is required" .Values.controlPlane.url -}}
-{{- $provisioningSecret := required "controlPlane.provisioningSecret.name is required" .Values.controlPlane.provisioningSecret.name -}}
+{{- $provisioningSecret := required "controlPlane.existingSecret.name is required" .Values.controlPlane.existingSecret.name -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/provisioning-secret-reference: {{ printf "%s/%s" $provisioningSecret .Values.controlPlane.provisioningSecret.key | sha256sum }}
+        checksum/provisioning-secret-reference: {{ printf "%s/%s" $provisioningSecret .Values.controlPlane.existingSecret.key | sha256sum }}
         {{- with .Values.operator.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -45,11 +45,20 @@ spec:
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
             - --leader-elect={{ .Values.operator.leaderElection }}
+            - --leader-election-namespace=$(POD_NAMESPACE)
+            - --leader-election-id={{ include "xisnove-edge.operatorServiceAccount" . }}
+            - --poll-interval={{ .Values.operator.pollInterval }}
+            - --heartbeat-stale-after={{ .Values.operator.heartbeatStaleAfter }}
+            - --graceful-shutdown-timeout={{ .Values.operator.gracefulShutdownTimeout }}
           env:
             - name: XISNOVE_URL
               value: {{ $controlPlaneURL | quote }}
             - name: XISNOVE_PROVISIONING_CREDENTIAL_FILE
-              value: /var/run/xisnove-provisioner/{{ .Values.controlPlane.provisioningSecret.key }}
+              value: /var/run/xisnove-provisioner/credential
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: XISNOVE_WATCH_NAMESPACES
               value: {{ join "," .Values.operator.watchNamespaces | quote }}
             - name: XISNOVE_AGENT_IMAGE
@@ -84,6 +93,9 @@ spec:
         - name: provisioning-credential
           secret:
             secretName: {{ $provisioningSecret }}
+            items:
+              - key: {{ .Values.controlPlane.existingSecret.key }}
+                path: credential
       {{- with .Values.operator.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

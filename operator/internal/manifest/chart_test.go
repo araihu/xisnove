@@ -28,7 +28,7 @@ func TestEdgeChartRendersReadOnlyDiscoveryAndScopedOperatorRBAC(t *testing.T) {
 	command := exec.Command(helm, "template", "edge", chart,
 		"--namespace", "monitoring",
 		"--set", "controlPlane.url=https://xisnove.example.test",
-		"--set", "controlPlane.provisioningSecret.name=xisnove-provisioner",
+		"--set", "controlPlane.existingSecret.name=xisnove-provisioner",
 		"--set", "agent.enabled=true",
 		"--set", "agent.locationID=11111111-1111-1111-1111-111111111111",
 	)
@@ -85,14 +85,87 @@ func TestEdgeChartRendersReadOnlyDiscoveryAndScopedOperatorRBAC(t *testing.T) {
 		}
 	}
 
+	leaseRole := findObject(t, objects, "Role", "edge-xisnove-edge-leader-election")
+	if leaseRole.GetNamespace() != "monitoring" {
+		t.Fatalf("leader-election Role namespace = %q", leaseRole.GetNamespace())
+	}
+	leaseRules, _, _ := unstructured.NestedSlice(leaseRole.Object, "rules")
+	if len(leaseRules) != 1 {
+		t.Fatalf("leader-election rules = %d", len(leaseRules))
+	}
+	leaseRule := leaseRules[0].(map[string]any)
+	leaseResources, _, _ := unstructured.NestedStringSlice(leaseRule, "resources")
+	leaseVerbs, _, _ := unstructured.NestedStringSlice(leaseRule, "verbs")
+	if !equalStrings(leaseResources, []string{"leases"}) || !equalStrings(leaseVerbs, []string{"create", "get", "patch", "update"}) {
+		t.Fatalf("leader-election rule resources=%v verbs=%v", leaseResources, leaseVerbs)
+	}
+
+	deployment := findObject(t, objects, "Deployment", "edge-xisnove-edge-operator")
+	containers, _, _ := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "containers")
+	operatorContainer := containers[0].(map[string]any)
+	args, _, _ := unstructured.NestedStringSlice(operatorContainer, "args")
+	for _, requiredArg := range []string{"--metrics-bind-address=:8080", "--health-probe-bind-address=:8081", "--leader-elect=true", "--poll-interval=30s", "--heartbeat-stale-after=5m"} {
+		if !contains(args, requiredArg) {
+			t.Fatalf("operator args %v do not include %q", args, requiredArg)
+		}
+	}
+	readyPath, _, _ := unstructured.NestedString(operatorContainer, "readinessProbe", "httpGet", "path")
+	healthPath, _, _ := unstructured.NestedString(operatorContainer, "livenessProbe", "httpGet", "path")
+	if readyPath != "/readyz" || healthPath != "/healthz" {
+		t.Fatalf("probe paths = ready %q health %q", readyPath, healthPath)
+	}
+	volumes, _, _ := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "volumes")
+	secretName, _, _ := unstructured.NestedString(volumes[0].(map[string]any), "secret", "secretName")
+	items, _, _ := unstructured.NestedSlice(volumes[0].(map[string]any), "secret", "items")
+	if secretName != "xisnove-provisioner" || len(items) != 1 {
+		t.Fatalf("operator credential volume secret=%q items=%v", secretName, items)
+	}
+	item := items[0].(map[string]any)
+	if item["key"] != "token" || item["path"] != "credential" {
+		t.Fatalf("operator credential item = %#v", item)
+	}
+
 	agent := findObject(t, objects, "Agent", "edge-xisnove-edge")
 	serviceAccount, _, _ := unstructured.NestedString(agent.Object, "spec", "workload", "serviceAccountName")
 	if serviceAccount != "edge-xisnove-edge-discovery" {
 		t.Fatalf("Agent ServiceAccount = %q", serviceAccount)
 	}
-	secretName, _, _ := unstructured.NestedString(agent.Object, "spec", "credentialSecretRef", "name")
-	if secretName == "" {
+	agentSecretName, _, _ := unstructured.NestedString(agent.Object, "spec", "credentialSecretRef", "name")
+	agentSecretKey, _, _ := unstructured.NestedString(agent.Object, "spec", "credentialSecretRef", "key")
+	if agentSecretName == "" {
 		t.Fatal("Agent has no credential Secret destination")
+	}
+	if agentSecretKey != "credential" {
+		t.Fatalf("Agent credential bundle key = %q", agentSecretKey)
+	}
+	discoveryStaleAfter, _, _ := unstructured.NestedInt64(agent.Object, "spec", "discovery", "staleAfterSeconds")
+	if discoveryStaleAfter != 300 {
+		t.Fatalf("Agent discovery stale threshold = %d", discoveryStaleAfter)
+	}
+}
+
+func TestEdgeChartRequiresExistingProvisioningSecret(t *testing.T) {
+	t.Parallel()
+
+	helm, err := exec.LookPath("helm")
+	if err != nil {
+		t.Skip("helm is not installed")
+	}
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate chart test")
+	}
+	chart := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../../charts/xisnove-edge"))
+	command := exec.Command(helm, "template", "edge", chart,
+		"--namespace", "monitoring",
+		"--set", "controlPlane.url=https://xisnove.example.test",
+	)
+	output, err := command.CombinedOutput()
+	if err == nil {
+		t.Fatalf("helm template unexpectedly accepted a missing existingSecret:\n%s", output)
+	}
+	if !bytes.Contains(output, []byte("controlPlane.existingSecret.name is required")) {
+		t.Fatalf("helm template error does not identify the required existingSecret:\n%s", output)
 	}
 }
 
