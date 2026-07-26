@@ -26,7 +26,11 @@ func BearerAuth(authenticate BearerAuthenticator) func(http.Handler) http.Handle
 			}
 			principal, err := authenticate(r.Context(), rawToken)
 			if err != nil {
-				writeUnauthorized(w, r)
+				if isAuthenticationError(err) {
+					writeUnauthorized(w, r)
+				} else {
+					writeProblem(w, ToProblem(err, correlationID(r)))
+				}
 				return
 			}
 			ctx := context.WithValue(r.Context(), principalContextKey{}, principal)
@@ -101,4 +105,28 @@ func (s *Server) CreateSession(
 	return CreateSession201JSONResponse{
 		Token: session.Token, ExpiresAt: session.ExpiresAt,
 	}, nil
+}
+
+func (s *Server) RevokeCurrentSession(
+	ctx context.Context,
+	_ RevokeCurrentSessionRequestObject,
+) (RevokeCurrentSessionResponseObject, error) {
+	principal, ok := PrincipalFromContext(ctx)
+	if !ok {
+		return RevokeCurrentSessiondefaultApplicationProblemPlusJSONResponse{
+			Body: Problem{
+				Type: "https://xisnove.dev/problems/unauthorized", Title: "Authentication required",
+				Status: http.StatusUnauthorized, Code: "unauthorized", CorrelationId: "unknown",
+			},
+			StatusCode: http.StatusUnauthorized,
+		}, nil
+	}
+	if err := s.auth.RevokeCurrentSession(ctx, principal); err != nil {
+		problem, status, mapped := problemFromError(err)
+		if mapped {
+			return RevokeCurrentSessiondefaultApplicationProblemPlusJSONResponse{Body: problem, StatusCode: status}, nil
+		}
+		return nil, err
+	}
+	return RevokeCurrentSession204Response{}, nil
 }

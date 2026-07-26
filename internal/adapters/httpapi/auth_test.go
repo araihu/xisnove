@@ -63,3 +63,22 @@ func TestBearerAuthRejectsMissingAuthorization(t *testing.T) {
 		t.Fatalf("Content-Type = %q", response.Header().Get("Content-Type"))
 	}
 }
+
+func TestBearerAuthDoesNotClassifyInfrastructureFailureAsInvalidCredential(t *testing.T) {
+	handler := httpapi.BearerAuth(func(
+		context.Context,
+		string,
+	) (application.Principal, error) {
+		return application.Principal{}, errors.New("store unavailable")
+	})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("protected handler was called")
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("Authorization", "Bearer credential")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body)
+	}
+}

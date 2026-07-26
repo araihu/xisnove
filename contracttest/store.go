@@ -31,6 +31,18 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("transaction rollback", func(t *testing.T) {
 		testTransactionRollback(t, factory(t))
 	})
+	t.Run("api token hash only", func(t *testing.T) {
+		testAPITokenHashOnly(t, factory(t))
+	})
+	t.Run("session revocation", func(t *testing.T) {
+		testSessionRevocation(t, factory(t))
+	})
+	t.Run("api token expiry and revocation", func(t *testing.T) {
+		testAPITokenExpiryAndRevocation(t, factory(t))
+	})
+	t.Run("token cursor ordering", func(t *testing.T) {
+		testAPITokenCursorOrdering(t, factory(t))
+	})
 	t.Run("duplicate result", func(t *testing.T) {
 		testDuplicateResult(t, factory(t))
 	})

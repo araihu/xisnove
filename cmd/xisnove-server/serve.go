@@ -113,12 +113,15 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 		Tokens: tokens, SessionDuration: 24 * time.Hour,
 		Now: xisclock.Now, NewID: ids.NewUUID,
 	})
+	apiTokens := application.NewAPITokenService(application.APITokenServiceConfig{
+		Store: store, Tokens: tokens, Now: xisclock.Now, NewID: ids.NewUUID,
+	})
 	agents := application.NewAgentService(application.AgentServiceConfig{
 		Store: store, Tokens: tokens, Now: xisclock.Now, NewID: ids.NewUUID,
 	})
 	handler, err := httpapi.NewHandler(httpapi.HandlerConfig{
 		Server: httpapi.NewServer(httpapi.ServerConfig{
-			Auth: auth,
+			Auth: auth, APITokens: apiTokens,
 			Configuration: application.NewConfigurationService(
 				store, xisclock.Now, ids.NewUUID,
 			),

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -95,6 +96,115 @@ func TestCreateSessionUsesSameErrorForUnknownEmailAndBadPassword(t *testing.T) {
 	}
 }
 
+func TestAuthenticateAPITokenRejectsExpiredAndRevoked(t *testing.T) {
+	store := newFakeStore()
+	now := time.Date(2026, 7, 26, 4, 0, 0, 0, time.UTC)
+	activeRaw, expiredRaw, revokedRaw := "active-token", "expired-token", "revoked-token"
+	revokedAt := now.Add(-time.Hour)
+	expiredAt := now.Add(-time.Minute)
+	store.apiTokens.records = []application.APITokenRecord{
+		{
+			ID: "active-id", AdminID: "admin-id", Label: "active", TokenHash: testTokenIssuer{}.Hash(activeRaw),
+			Scopes: []application.Scope{application.ScopeMonitorsRead}, CreatedAt: now.Add(-time.Hour),
+		},
+		{
+			ID: "expired-id", AdminID: "admin-id", Label: "expired", TokenHash: testTokenIssuer{}.Hash(expiredRaw),
+			Scopes: []application.Scope{application.ScopeMonitorsRead}, CreatedAt: now.Add(-time.Hour), ExpiresAt: &expiredAt,
+		},
+		{
+			ID: "revoked-id", AdminID: "admin-id", Label: "revoked", TokenHash: testTokenIssuer{}.Hash(revokedRaw),
+			Scopes: []application.Scope{application.ScopeMonitorsRead}, CreatedAt: now.Add(-time.Hour), RevokedAt: &revokedAt,
+		},
+	}
+	service := application.NewAuthService(application.AuthServiceConfig{
+		Store: store, Tokens: testTokenIssuer{}, Now: func() time.Time { return now },
+	})
+
+	principal, err := service.AuthenticateBearer(context.Background(), activeRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if principal.Kind != application.PrincipalAPIToken || principal.SubjectID != "admin-id" ||
+		principal.CredentialKind != application.CredentialAPIToken || principal.CredentialID != "active-id" ||
+		!slices.Equal(principal.Scopes, []application.Scope{application.ScopeMonitorsRead}) {
+		t.Fatalf("principal = %#v", principal)
+	}
+	if store.apiTokens.records[0].LastUsedAt == nil || !store.apiTokens.records[0].LastUsedAt.Equal(now) {
+		t.Fatal("successful API token authentication did not update last-used time")
+	}
+	for _, raw := range []string{expiredRaw, revokedRaw, "unknown-token"} {
+		if _, err := service.AuthenticateBearer(context.Background(), raw); !errors.Is(err, application.ErrInvalidCredentials) {
+			t.Errorf("AuthenticateBearer(%q) error = %v", raw, err)
+		}
+	}
+}
+
+func TestRevokeCurrentSessionInvalidatesCredential(t *testing.T) {
+	service, store := newAuthServiceForTest()
+	ctx := context.Background()
+	if err := service.BootstrapAdmin(ctx, "admin@example.com", testPassword); err != nil {
+		t.Fatal(err)
+	}
+	credential, err := service.CreateSession(ctx, "admin@example.com", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := service.AuthenticateBearer(ctx, credential.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if principal.CredentialID == "" || principal.CredentialKind != application.CredentialSession {
+		t.Fatalf("principal = %#v", principal)
+	}
+	if err := service.RevokeCurrentSession(ctx, principal); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.AuthenticateBearer(ctx, credential.Token); !errors.Is(err, application.ErrInvalidCredentials) {
+		t.Fatalf("authenticate revoked session error = %v", err)
+	}
+	if len(store.audit.records) != 1 || store.audit.records[0].Kind != "session.revoked" {
+		t.Fatalf("audit = %#v", store.audit.records)
+	}
+	if bytes.Contains(store.audit.records[0].Payload, []byte(credential.Token)) {
+		t.Fatalf("audit leaked raw session token: %s", store.audit.records[0].Payload)
+	}
+}
+
+func TestRevokeCurrentSessionAuditFailureRollsBackCredential(t *testing.T) {
+	service, store := newAuthServiceForTest()
+	ctx := context.Background()
+	if err := service.BootstrapAdmin(ctx, "admin@example.com", testPassword); err != nil {
+		t.Fatal(err)
+	}
+	credential, err := service.CreateSession(ctx, "admin@example.com", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := service.AuthenticateBearer(ctx, credential.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.audit.err = errors.New("audit unavailable")
+	if err := service.RevokeCurrentSession(ctx, principal); err == nil {
+		t.Fatal("RevokeCurrentSession() succeeded despite audit failure")
+	}
+	if _, err := service.AuthenticateBearer(ctx, credential.Token); err != nil {
+		t.Fatalf("rolled-back session is not active: %v", err)
+	}
+}
+
+func TestAuthenticateBearerDoesNotHideSessionStoreFailure(t *testing.T) {
+	store := newFakeStore()
+	store.sessions.findErr = errors.New("store unavailable")
+	service := application.NewAuthService(application.AuthServiceConfig{
+		Store: store, Tokens: testTokenIssuer{}, Now: time.Now,
+	})
+	_, err := service.AuthenticateBearer(context.Background(), "credential")
+	if err == nil || errors.Is(err, application.ErrInvalidCredentials) {
+		t.Fatalf("AuthenticateBearer() error = %v", err)
+	}
+}
+
 func newAuthServiceForTest() (*application.AuthService, *fakeStore) {
 	store := newFakeStore()
 	now := time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC)
@@ -137,20 +247,26 @@ func (testTokenIssuer) Hash(raw string) []byte {
 }
 
 type fakeStore struct {
-	mu       sync.Mutex
-	admins   *fakeAdminRepository
-	sessions *fakeSessionRepository
+	mu        sync.Mutex
+	admins    *fakeAdminRepository
+	sessions  *fakeSessionRepository
+	apiTokens *fakeAPITokenRepository
+	audit     *fakeAuditRepository
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		admins:   &fakeAdminRepository{},
-		sessions: &fakeSessionRepository{},
+		admins:    &fakeAdminRepository{},
+		sessions:  &fakeSessionRepository{},
+		apiTokens: &fakeAPITokenRepository{},
+		audit:     &fakeAuditRepository{},
 	}
 }
 
 func (s *fakeStore) Repositories() application.Repositories {
-	return application.Repositories{Admins: s.admins, Sessions: s.sessions}
+	return application.Repositories{
+		Admins: s.admins, Sessions: s.sessions, APITokens: s.apiTokens, Audit: s.audit,
+	}
 }
 
 func (s *fakeStore) View(
@@ -175,7 +291,18 @@ func (s *fakeStore) WithinTx(
 ) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return fn(s.Repositories())
+	admins := append([]application.AdminRecord(nil), s.admins.records...)
+	sessions := append([]application.SessionRecord(nil), s.sessions.records...)
+	apiTokens := append([]application.APITokenRecord(nil), s.apiTokens.records...)
+	audit := append([]application.AuditEventRecord(nil), s.audit.records...)
+	if err := fn(s.Repositories()); err != nil {
+		s.admins.records = admins
+		s.sessions.records = sessions
+		s.apiTokens.records = apiTokens
+		s.audit.records = audit
+		return err
+	}
+	return nil
 }
 
 type fakeAdminRepository struct {
@@ -205,6 +332,7 @@ func (r *fakeAdminRepository) FindByEmail(
 
 type fakeSessionRepository struct {
 	records []application.SessionRecord
+	findErr error
 }
 
 func (r *fakeSessionRepository) Create(
@@ -221,6 +349,9 @@ func (r *fakeSessionRepository) FindActiveByTokenHash(
 	hash []byte,
 	now time.Time,
 ) (application.SessionRecord, error) {
+	if r.findErr != nil {
+		return application.SessionRecord{}, r.findErr
+	}
 	for _, record := range r.records {
 		if bytes.Equal(record.TokenHash, hash) &&
 			record.ExpiresAt.After(now) &&
@@ -229,4 +360,14 @@ func (r *fakeSessionRepository) FindActiveByTokenHash(
 		}
 	}
 	return application.SessionRecord{}, application.ErrNotFound
+}
+
+func (r *fakeSessionRepository) Revoke(_ context.Context, id string, at time.Time) (bool, error) {
+	for i := range r.records {
+		if r.records[i].ID == id && r.records[i].RevokedAt == nil {
+			r.records[i].RevokedAt = &at
+			return true, nil
+		}
+	}
+	return false, nil
 }

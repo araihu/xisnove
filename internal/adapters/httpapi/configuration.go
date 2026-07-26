@@ -18,6 +18,7 @@ import (
 
 type ServerConfig struct {
 	Auth          *application.AuthService
+	APITokens     *application.APITokenService
 	Configuration *application.ConfigurationService
 	Agents        *application.AgentService
 	Lease         *application.LeaseService
@@ -31,6 +32,7 @@ type Server struct {
 	// milestone implementation slices add concrete handlers operation by operation.
 	StrictServerInterface
 	auth          *application.AuthService
+	apiTokens     *application.APITokenService
 	configuration *application.ConfigurationService
 	agents        *application.AgentService
 	lease         *application.LeaseService
@@ -42,6 +44,7 @@ type Server struct {
 func NewServer(config ServerConfig) *Server {
 	return &Server{
 		auth:          config.Auth,
+		apiTokens:     config.APITokens,
 		configuration: config.Configuration,
 		agents:        config.Agents,
 		lease:         config.Lease,

@@ -80,6 +80,7 @@ func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 	return application.Repositories{
 		Admins:               &adminRepository{queries: queries},
 		Sessions:             &sessionRepository{queries: queries},
+		APITokens:            &apiTokenRepository{queries: queries},
 		Locations:            &locationRepository{queries: queries},
 		Monitors:             &monitorRepository{queries: queries},
 		Health:               &healthRepository{queries: queries},
@@ -94,6 +95,16 @@ func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 		Audit:                &auditRepository{queries: queries},
 		Retention:            &retentionRepository{queries: queries},
 	}
+}
+
+func (r *sessionRepository) Revoke(ctx context.Context, id string, at time.Time) (bool, error) {
+	count, err := r.queries.RevokeSession(ctx, dbpostgres.RevokeSessionParams{
+		RevokedAt: nullableTimeValue(at), ID: id,
+	})
+	if err != nil {
+		return false, repositoryError("revoke session", err)
+	}
+	return count == 1, nil
 }
 
 type adminRepository struct {

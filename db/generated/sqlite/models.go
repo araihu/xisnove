@@ -37,6 +37,18 @@ type AgentEnrollmentToken struct {
 	CreatedAt  string         `json:"created_at"`
 }
 
+type ApiToken struct {
+	ID         string         `json:"id"`
+	AdminID    string         `json:"admin_id"`
+	Label      string         `json:"label"`
+	TokenHash  []byte         `json:"token_hash"`
+	ScopesJson []byte         `json:"scopes_json"`
+	CreatedAt  string         `json:"created_at"`
+	ExpiresAt  sql.NullString `json:"expires_at"`
+	LastUsedAt sql.NullString `json:"last_used_at"`
+	RevokedAt  sql.NullString `json:"revoked_at"`
+}
+
 type AuditEvent struct {
 	ID          string         `json:"id"`
 	Kind        string         `json:"kind"`

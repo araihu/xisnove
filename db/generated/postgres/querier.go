@@ -22,6 +22,7 @@ type Querier interface {
 	ClaimStaleLocationHealth(ctx context.Context, arg ClaimStaleLocationHealthParams) (int64, error)
 	ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error)
 	CountAdmins(ctx context.Context) (int64, error)
+	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) error
 	CreateAdmin(ctx context.Context, arg CreateAdminParams) error
 	CreateAgent(ctx context.Context, arg CreateAgentParams) error
 	CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgentEnrollmentTokenParams) error
@@ -38,6 +39,7 @@ type Querier interface {
 	DeleteExpiredProbeResults(ctx context.Context, arg DeleteExpiredProbeResultsParams) (int64, error)
 	DeleteFutureMaintenanceInterval(ctx context.Context, arg DeleteFutureMaintenanceIntervalParams) (int64, error)
 	EndMaintenanceInterval(ctx context.Context, arg EndMaintenanceIntervalParams) (int64, error)
+	FindActiveAPITokenByTokenHash(ctx context.Context, arg FindActiveAPITokenByTokenHashParams) (ApiToken, error)
 	FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (Agent, error)
 	FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error)
 	FindAdminByEmail(ctx context.Context, email string) (Admin, error)
@@ -58,6 +60,8 @@ type Querier interface {
 	InsertIncidentEvent(ctx context.Context, arg InsertIncidentEventParams) error
 	InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error)
 	InsertScheduledRun(ctx context.Context, arg InsertScheduledRunParams) (int64, error)
+	ListAPITokens(ctx context.Context, rowLimit int32) ([]ApiToken, error)
+	ListAPITokensAfter(ctx context.Context, arg ListAPITokensAfterParams) ([]ApiToken, error)
 	ListActiveMaintenanceIntervals(ctx context.Context, arg ListActiveMaintenanceIntervalsParams) ([]MaintenanceInterval, error)
 	ListAuditEventsByIncident(ctx context.Context, incidentID sql.NullString) ([]AuditEvent, error)
 	ListDailyUptime(ctx context.Context, arg ListDailyUptimeParams) ([]DailyUptime, error)
@@ -86,8 +90,11 @@ type Querier interface {
 	ReleaseOperationLease(ctx context.Context, arg ReleaseOperationLeaseParams) (int64, error)
 	ReplayNotificationOutbox(ctx context.Context, arg ReplayNotificationOutboxParams) (int64, error)
 	ResolveCheckRun(ctx context.Context, arg ResolveCheckRunParams) (int64, error)
+	RevokeAPIToken(ctx context.Context, arg RevokeAPITokenParams) (int64, error)
+	RevokeSession(ctx context.Context, arg RevokeSessionParams) (int64, error)
 	SetNotificationChannelEnabled(ctx context.Context, arg SetNotificationChannelEnabledParams) (int64, error)
 	SetNotificationRouteEnabled(ctx context.Context, arg SetNotificationRouteEnabledParams) (int64, error)
+	TouchAPITokenLastUsed(ctx context.Context, arg TouchAPITokenLastUsedParams) (int64, error)
 	UpdateAgentHeartbeat(ctx context.Context, arg UpdateAgentHeartbeatParams) (int64, error)
 	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
 	UpdateNotificationRoute(ctx context.Context, arg UpdateNotificationRouteParams) (int64, error)

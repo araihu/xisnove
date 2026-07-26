@@ -8,6 +8,7 @@ package dbpostgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -20,6 +21,44 @@ func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createAPIToken = `-- name: CreateAPIToken :exec
+INSERT INTO api_tokens (
+  id, admin_id, label, token_hash, scopes_json, created_at,
+  expires_at, last_used_at, revoked_at
+) VALUES (
+  $1, $2, $3, $4,
+  $5, $6, $7,
+  $8, $9
+)
+`
+
+type CreateAPITokenParams struct {
+	ID         string          `json:"id"`
+	AdminID    string          `json:"admin_id"`
+	Label      string          `json:"label"`
+	TokenHash  []byte          `json:"token_hash"`
+	ScopesJson json.RawMessage `json:"scopes_json"`
+	CreatedAt  time.Time       `json:"created_at"`
+	ExpiresAt  sql.NullTime    `json:"expires_at"`
+	LastUsedAt sql.NullTime    `json:"last_used_at"`
+	RevokedAt  sql.NullTime    `json:"revoked_at"`
+}
+
+func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) error {
+	_, err := q.db.ExecContext(ctx, createAPIToken,
+		arg.ID,
+		arg.AdminID,
+		arg.Label,
+		arg.TokenHash,
+		arg.ScopesJson,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+		arg.LastUsedAt,
+		arg.RevokedAt,
+	)
+	return err
 }
 
 const createAdmin = `-- name: CreateAdmin :exec
@@ -71,6 +110,37 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
+const findActiveAPITokenByTokenHash = `-- name: FindActiveAPITokenByTokenHash :one
+SELECT id, admin_id, label, token_hash, scopes_json, created_at,
+       expires_at, last_used_at, revoked_at
+FROM api_tokens
+WHERE token_hash = $1
+  AND revoked_at IS NULL
+  AND (expires_at IS NULL OR expires_at > $2)
+`
+
+type FindActiveAPITokenByTokenHashParams struct {
+	TokenHash []byte       `json:"token_hash"`
+	Now       sql.NullTime `json:"now"`
+}
+
+func (q *Queries) FindActiveAPITokenByTokenHash(ctx context.Context, arg FindActiveAPITokenByTokenHashParams) (ApiToken, error) {
+	row := q.db.QueryRowContext(ctx, findActiveAPITokenByTokenHash, arg.TokenHash, arg.Now)
+	var i ApiToken
+	err := row.Scan(
+		&i.ID,
+		&i.AdminID,
+		&i.Label,
+		&i.TokenHash,
+		&i.ScopesJson,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const findActiveSessionByTokenHash = `-- name: FindActiveSessionByTokenHash :one
 SELECT id, admin_id, token_hash, expires_at, revoked_at
 FROM sessions
@@ -113,4 +183,149 @@ func (q *Queries) FindAdminByEmail(ctx context.Context, email string) (Admin, er
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listAPITokens = `-- name: ListAPITokens :many
+SELECT id, admin_id, label, token_hash, scopes_json, created_at,
+       expires_at, last_used_at, revoked_at
+FROM api_tokens
+ORDER BY created_at, id
+LIMIT $1
+`
+
+func (q *Queries) ListAPITokens(ctx context.Context, rowLimit int32) ([]ApiToken, error) {
+	rows, err := q.db.QueryContext(ctx, listAPITokens, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ApiToken{}
+	for rows.Next() {
+		var i ApiToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.AdminID,
+			&i.Label,
+			&i.TokenHash,
+			&i.ScopesJson,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAPITokensAfter = `-- name: ListAPITokensAfter :many
+SELECT id, admin_id, label, token_hash, scopes_json, created_at,
+       expires_at, last_used_at, revoked_at
+FROM api_tokens
+WHERE created_at > $1
+   OR (created_at = $1 AND id > $2)
+ORDER BY created_at, id
+LIMIT $3
+`
+
+type ListAPITokensAfterParams struct {
+	CursorCreatedAt time.Time `json:"cursor_created_at"`
+	CursorID        string    `json:"cursor_id"`
+	RowLimit        int32     `json:"row_limit"`
+}
+
+func (q *Queries) ListAPITokensAfter(ctx context.Context, arg ListAPITokensAfterParams) ([]ApiToken, error) {
+	rows, err := q.db.QueryContext(ctx, listAPITokensAfter, arg.CursorCreatedAt, arg.CursorID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ApiToken{}
+	for rows.Next() {
+		var i ApiToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.AdminID,
+			&i.Label,
+			&i.TokenHash,
+			&i.ScopesJson,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeAPIToken = `-- name: RevokeAPIToken :execrows
+UPDATE api_tokens
+SET revoked_at = $1
+WHERE id = $2 AND revoked_at IS NULL
+`
+
+type RevokeAPITokenParams struct {
+	RevokedAt sql.NullTime `json:"revoked_at"`
+	ID        string       `json:"id"`
+}
+
+func (q *Queries) RevokeAPIToken(ctx context.Context, arg RevokeAPITokenParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeAPIToken, arg.RevokedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const revokeSession = `-- name: RevokeSession :execrows
+UPDATE sessions
+SET revoked_at = $1
+WHERE id = $2 AND revoked_at IS NULL
+`
+
+type RevokeSessionParams struct {
+	RevokedAt sql.NullTime `json:"revoked_at"`
+	ID        string       `json:"id"`
+}
+
+func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeSession, arg.RevokedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const touchAPITokenLastUsed = `-- name: TouchAPITokenLastUsed :execrows
+UPDATE api_tokens SET last_used_at = $1 WHERE id = $2
+`
+
+type TouchAPITokenLastUsedParams struct {
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+	ID         string       `json:"id"`
+}
+
+func (q *Queries) TouchAPITokenLastUsed(ctx context.Context, arg TouchAPITokenLastUsedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchAPITokenLastUsed, arg.LastUsedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

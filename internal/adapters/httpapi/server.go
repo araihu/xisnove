@@ -30,6 +30,10 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	authorization, err := newOperationAuthorization(spec)
+	if err != nil {
+		return nil, err
+	}
 	strict := NewStrictHandlerWithOptions(
 		config.Server,
 		nil,
@@ -46,7 +50,14 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 	)
 	api := Handler(strict)
 	api = admitAgentWork(config.AdmitWork)(api)
-	api = authenticateOperations(config.Server)(api)
+	var authenticateHuman, authenticateAgent BearerAuthenticator
+	if config.Server != nil && config.Server.auth != nil {
+		authenticateHuman = config.Server.auth.AuthenticateBearer
+	}
+	if config.Server != nil && config.Server.agents != nil {
+		authenticateAgent = config.Server.agents.Authenticate
+	}
+	api = authorization.middleware(authenticateHuman, authenticateAgent)(api)
 	api = nethttpmiddleware.OapiRequestValidatorWithOptions(
 		spec,
 		&nethttpmiddleware.Options{
@@ -118,26 +129,6 @@ func admitAgentWork(
 			}
 			defer release()
 			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-func authenticateOperations(server *Server) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost &&
-				(r.URL.Path == "/v1/sessions" ||
-					r.URL.Path == "/v1/agent-enrollments") {
-				next.ServeHTTP(w, r)
-				return
-			}
-			authenticate := server.auth.AuthenticateSession
-			if r.URL.Path == "/v1/agent/heartbeat" ||
-				r.URL.Path == "/v1/agent/results:batch" ||
-				r.URL.Path == "/v1/agent/work:lease" {
-				authenticate = server.agents.Authenticate
-			}
-			BearerAuth(authenticate)(next).ServeHTTP(w, r)
 		})
 	}
 }

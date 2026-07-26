@@ -158,6 +158,7 @@ func (s *AgentService) Authenticate(
 	}
 	return Principal{
 		Kind: PrincipalAgent, SubjectID: string(record.Agent.ID),
+		CredentialKind: CredentialAgent, CredentialID: string(record.Agent.ID),
 	}, nil
 }
 

@@ -11,7 +11,7 @@ import (
 func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 4 {
+	if migrations.LatestVersion != 5 {
 		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
 	}
 	var schema strings.Builder
@@ -57,6 +57,34 @@ func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	} {
 		if !strings.Contains(schema.String(), expected) {
 			t.Fatalf("migration family is missing %q", expected)
+		}
+	}
+}
+
+func TestHumanClientAuthSchema(t *testing.T) {
+	t.Parallel()
+
+	var schema strings.Builder
+	err := fs.WalkDir(migrations.Files, ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".sql") {
+			return err
+		}
+		content, err := migrations.Files.ReadFile(path)
+		if err == nil {
+			schema.Write(content)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"CREATE TABLE api_tokens", "token_hash BYTEA NOT NULL UNIQUE",
+		"scopes_json JSONB NOT NULL", "api_tokens_created_id",
+		"last_used_at", "revoked_at",
+	} {
+		if !strings.Contains(schema.String(), expected) {
+			t.Fatalf("human-client auth schema is missing %q", expected)
 		}
 	}
 }

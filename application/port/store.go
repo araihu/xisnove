@@ -32,6 +32,7 @@ type Store interface {
 type Repositories struct {
 	Admins               AdminRepository
 	Sessions             SessionRepository
+	APITokens            APITokenRepository
 	Locations            LocationRepository
 	Monitors             MonitorRepository
 	Health               HealthRepository
@@ -155,6 +156,7 @@ type AdminRepository interface {
 type SessionRepository interface {
 	Create(context.Context, SessionRecord) error
 	FindActiveByTokenHash(context.Context, []byte, time.Time) (SessionRecord, error)
+	Revoke(context.Context, string, time.Time) (bool, error)
 }
 
 type LocationRepository interface {

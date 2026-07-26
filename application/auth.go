@@ -2,9 +2,12 @@ package application
 
 import (
 	"context"
+	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/mail"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -35,13 +38,25 @@ type TokenIssuer interface {
 type PrincipalKind string
 
 const (
-	PrincipalAdmin PrincipalKind = "admin"
-	PrincipalAgent PrincipalKind = "agent"
+	PrincipalAdmin    PrincipalKind = "admin"
+	PrincipalAPIToken PrincipalKind = "api-token"
+	PrincipalAgent    PrincipalKind = "agent"
+)
+
+type CredentialKind string
+
+const (
+	CredentialSession  CredentialKind = "session"
+	CredentialAPIToken CredentialKind = "api-token"
+	CredentialAgent    CredentialKind = "agent"
 )
 
 type Principal struct {
-	Kind      PrincipalKind
-	SubjectID string
+	Kind           PrincipalKind
+	SubjectID      string
+	CredentialKind CredentialKind
+	CredentialID   string
+	Scopes         []Scope
 }
 
 type SessionCredential struct {
@@ -146,10 +161,16 @@ func (s *AuthService) CreateSession(
 	if err != nil {
 		return SessionCredential{}, fmt.Errorf("issue session token: %w", err)
 	}
+	computedHash := s.tokens.Hash(token.Raw)
+	if token.Raw == "" || len(token.Hash) == 0 || len(computedHash) != len(token.Hash) ||
+		subtle.ConstantTimeCompare(computedHash, token.Hash) != 1 {
+		return SessionCredential{}, errors.New("token issuer returned inconsistent credential")
+	}
 	expiresAt := s.now().UTC().Add(s.sessionDuration)
+	sessionID := s.newID()
 	err = s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
 		return repositories.Sessions.Create(ctx, SessionRecord{
-			ID:        s.newID(),
+			ID:        sessionID,
 			AdminID:   admin.ID,
 			TokenHash: token.Hash,
 			ExpiresAt: expiresAt,
@@ -184,7 +205,77 @@ func (s *AuthService) AuthenticateSession(
 		}
 		return Principal{}, fmt.Errorf("authenticate session: %w", err)
 	}
-	return Principal{Kind: PrincipalAdmin, SubjectID: session.AdminID}, nil
+	return Principal{
+		Kind: PrincipalAdmin, SubjectID: session.AdminID,
+		CredentialKind: CredentialSession, CredentialID: session.ID,
+	}, nil
+}
+
+func (s *AuthService) AuthenticateBearer(ctx context.Context, rawToken string) (Principal, error) {
+	principal, err := s.AuthenticateSession(ctx, rawToken)
+	if err == nil {
+		return principal, nil
+	}
+	if !errors.Is(err, ErrInvalidCredentials) {
+		return Principal{}, err
+	}
+	if rawToken == "" {
+		return Principal{}, ErrInvalidCredentials
+	}
+
+	now := s.now().UTC()
+	var token APITokenRecord
+	err = s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+		var findErr error
+		token, findErr = repositories.APITokens.FindActiveByTokenHash(ctx, s.tokens.Hash(rawToken), now)
+		if findErr != nil {
+			return findErr
+		}
+		if err := repositories.APITokens.TouchLastUsed(ctx, token.ID, now); err != nil {
+			return fmt.Errorf("touch API token: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return Principal{}, ErrInvalidCredentials
+		}
+		return Principal{}, fmt.Errorf("authenticate API token: %w", err)
+	}
+	return Principal{
+		Kind: PrincipalAPIToken, SubjectID: token.AdminID,
+		CredentialKind: CredentialAPIToken, CredentialID: token.ID,
+		Scopes: slices.Clone(token.Scopes),
+	}, nil
+}
+
+func (s *AuthService) RevokeCurrentSession(ctx context.Context, principal Principal) error {
+	if principal.Kind != PrincipalAdmin || principal.CredentialKind != CredentialSession || principal.CredentialID == "" {
+		return ErrInvalidCredentials
+	}
+	now := s.now().UTC()
+	payload, err := json.Marshal(struct {
+		SessionID string `json:"sessionId"`
+	}{SessionID: principal.CredentialID})
+	if err != nil {
+		return fmt.Errorf("encode session revocation audit payload: %w", err)
+	}
+	return s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+		revoked, err := repositories.Sessions.Revoke(ctx, principal.CredentialID, now)
+		if err != nil {
+			return fmt.Errorf("revoke session: %w", err)
+		}
+		if !revoked {
+			return ErrInvalidCredentials
+		}
+		if err := repositories.Audit.Append(ctx, AuditEventRecord{
+			ID: s.newID(), Kind: "session.revoked", SubjectKind: "session",
+			SubjectID: principal.CredentialID, Payload: payload, CreatedAt: now,
+		}); err != nil {
+			return fmt.Errorf("audit session revocation: %w", err)
+		}
+		return nil
+	})
 }
 
 func normalizeEmail(value string) (string, error) {

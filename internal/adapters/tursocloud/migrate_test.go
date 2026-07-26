@@ -40,11 +40,11 @@ func TestUpMigrationRejectsMissingOrEmptyUpSection(t *testing.T) {
 func TestMigrationVersion(t *testing.T) {
 	t.Parallel()
 
-	got, err := migrationVersion("00004_notifications.sql")
+	got, err := migrationVersion("00005_auth.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != 4 {
-		t.Fatalf("version = %d, want 4", got)
+	if got != 5 {
+		t.Fatalf("version = %d, want 5", got)
 	}
 }
