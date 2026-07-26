@@ -169,6 +169,35 @@ func (q *Queries) GetDiscoveryCandidateByIdentity(ctx context.Context, arg GetDi
 	return i, err
 }
 
+const getDiscoveryCandidateForUpdate = `-- name: GetDiscoveryCandidateForUpdate :one
+SELECT id, agent_id, location_id, source_kind, source_uid, namespace, name, labels_json, protocol, target, network_perspective, present, last_observed_at, promoted_monitor_id, drift_hint, created_at, updated_at FROM discovery_candidates WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetDiscoveryCandidateForUpdate(ctx context.Context, id string) (DiscoveryCandidate, error) {
+	row := q.db.QueryRowContext(ctx, getDiscoveryCandidateForUpdate, id)
+	var i DiscoveryCandidate
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.LocationID,
+		&i.SourceKind,
+		&i.SourceUid,
+		&i.Namespace,
+		&i.Name,
+		&i.LabelsJson,
+		&i.Protocol,
+		&i.Target,
+		&i.NetworkPerspective,
+		&i.Present,
+		&i.LastObservedAt,
+		&i.PromotedMonitorID,
+		&i.DriftHint,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertDiscoveryCandidate = `-- name: InsertDiscoveryCandidate :execrows
 INSERT INTO discovery_candidates (
     id, agent_id, location_id, source_kind, source_uid, namespace, name,
@@ -305,20 +334,31 @@ func (q *Queries) ListDiscoveryCandidates(ctx context.Context, arg ListDiscovery
 
 const updateDiscoveryCandidateByIdentity = `-- name: UpdateDiscoveryCandidateByIdentity :execrows
 UPDATE discovery_candidates
-SET namespace = $1, name = $2, labels_json = $3, network_perspective = $4, present = $5,
-    last_observed_at = $6, drift_hint = $7, updated_at = $8
-WHERE agent_id = $9 AND location_id = $10 AND source_kind = $11 AND source_uid = $12
-  AND protocol = $13 AND target = $14
+SET drift_hint = CASE
+        WHEN promoted_monitor_id IS NOT NULL AND (
+            name <> $1::text OR namespace <> $2::text OR
+            labels_json <> $3::jsonb OR
+            network_perspective <> $4::text
+        ) THEN 'source metadata changed after promotion'
+        ELSE drift_hint
+    END,
+    namespace = $2, name = $1,
+    labels_json = $3, network_perspective = $4,
+    present = $5, last_observed_at = $6,
+    updated_at = $7
+WHERE agent_id = $8 AND location_id = $9
+  AND source_kind = $10 AND source_uid = $11
+  AND protocol = $12 AND target = $13
+  AND last_observed_at <= $6
 `
 
 type UpdateDiscoveryCandidateByIdentityParams struct {
-	Namespace          string          `json:"namespace"`
 	Name               string          `json:"name"`
+	Namespace          string          `json:"namespace"`
 	LabelsJson         json.RawMessage `json:"labels_json"`
 	NetworkPerspective string          `json:"network_perspective"`
 	Present            bool            `json:"present"`
 	LastObservedAt     time.Time       `json:"last_observed_at"`
-	DriftHint          string          `json:"drift_hint"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 	AgentID            string          `json:"agent_id"`
 	LocationID         string          `json:"location_id"`
@@ -330,13 +370,12 @@ type UpdateDiscoveryCandidateByIdentityParams struct {
 
 func (q *Queries) UpdateDiscoveryCandidateByIdentity(ctx context.Context, arg UpdateDiscoveryCandidateByIdentityParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, updateDiscoveryCandidateByIdentity,
-		arg.Namespace,
 		arg.Name,
+		arg.Namespace,
 		arg.LabelsJson,
 		arg.NetworkPerspective,
 		arg.Present,
 		arg.LastObservedAt,
-		arg.DriftHint,
 		arg.UpdatedAt,
 		arg.AgentID,
 		arg.LocationID,

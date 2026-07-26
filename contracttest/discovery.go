@@ -3,9 +3,12 @@ package contracttest
 import (
 	"context"
 	"errors"
+	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/application"
 	"github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/domain"
 )
@@ -14,6 +17,198 @@ func RunDiscovery(t *testing.T, factory Factory) {
 	t.Helper()
 	t.Run("discovery idempotency stale and promotion", func(t *testing.T) { testDiscoveryLifecycle(t, factory(t)) })
 	t.Run("discovery transaction rollback", func(t *testing.T) { testDiscoveryRollback(t, factory(t)) })
+	t.Run("unknown tombstone is a no-op", func(t *testing.T) { testUnknownDiscoveryTombstone(t, factory(t)) })
+	t.Run("newer observation wins concurrently", func(t *testing.T) { testConcurrentDiscoveryOrdering(t, factory(t)) })
+	t.Run("promotion is concurrent and idempotent", func(t *testing.T) { testConcurrentDiscoveryPromotion(t, factory(t)) })
+	t.Run("cursor traverses every page and terminates", func(t *testing.T) { testDiscoveryCursorTraversal(t, factory(t)) })
+}
+
+func testUnknownDiscoveryTombstone(t *testing.T, unit port.UnitOfWork) {
+	t.Helper()
+	discovery := unit.(port.DiscoveryUnitOfWork)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 9, 0, 0, 0, time.UTC)
+	agentID, locationID := seedDiscoveryOwner(t, ctx, unit, now)
+	tombstone := mustDiscoveryCandidate(t, "00000000-0000-4000-8000-000000000920", agentID, locationID, false, now)
+	for index, batchID := range []string{"unknown-tombstone-1", "unknown-tombstone-2"} {
+		var ack port.DiscoveryBatchAcknowledgement
+		err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+			var err error
+			ack, err = repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{ID: batchID, AgentID: agentID, RequestHash: batchID, Candidates: []domain.DiscoveryCandidate{tombstone}, CreatedAt: now.Add(time.Duration(index) * time.Second)})
+			return err
+		})
+		if err != nil || ack != (port.DiscoveryBatchAcknowledgement{Accepted: 1}) {
+			t.Fatalf("batch %d = %#v, %v", index, ack, err)
+		}
+	}
+	err := discovery.DiscoveryView(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		_, err := repositories.Discovery.Get(ctx, tombstone.ID)
+		return err
+	})
+	if !errors.Is(err, port.ErrNotFound) {
+		t.Fatalf("unknown tombstone persisted: %v", err)
+	}
+}
+
+func testConcurrentDiscoveryOrdering(t *testing.T, unit port.UnitOfWork) {
+	t.Helper()
+	discovery := unit.(port.DiscoveryUnitOfWork)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 9, 10, 0, 0, time.UTC)
+	agentID, locationID := seedDiscoveryOwner(t, ctx, unit, now)
+	base := mustDiscoveryCandidate(t, "00000000-0000-4000-8000-000000000921", agentID, locationID, true, now)
+	applyDiscoveryBatch(t, ctx, discovery, port.DiscoveryBatch{ID: "ordering-base", AgentID: agentID, RequestHash: "ordering-base", Candidates: []domain.DiscoveryCandidate{base}, CreatedAt: now})
+	older := base.Clone()
+	older.Name = "older"
+	older.LastObservedAt = now.Add(100 * time.Microsecond)
+	older.UpdatedAt = older.LastObservedAt
+	newer := base.Clone()
+	newer.Name = "newer"
+	newer.LastObservedAt = now.Add(200 * time.Microsecond)
+	newer.UpdatedAt = newer.LastObservedAt
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for _, batch := range []port.DiscoveryBatch{
+		{ID: "ordering-older", AgentID: agentID, RequestHash: "ordering-older", Candidates: []domain.DiscoveryCandidate{older}, CreatedAt: older.LastObservedAt},
+		{ID: "ordering-newer", AgentID: agentID, RequestHash: "ordering-newer", Candidates: []domain.DiscoveryCandidate{newer}, CreatedAt: newer.LastObservedAt},
+	} {
+		batch := batch
+		go func() {
+			<-start
+			errs <- discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+				_, err := repositories.Discovery.ApplyBatch(ctx, batch)
+				return err
+			})
+		}()
+	}
+	close(start)
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := discovery.DiscoveryView(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		stored, err := repositories.Discovery.Get(ctx, base.ID)
+		if err == nil && (stored.Name != "newer" || !stored.LastObservedAt.Equal(newer.LastObservedAt)) {
+			t.Errorf("stored observation = %#v", stored)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testConcurrentDiscoveryPromotion(t *testing.T, unit port.UnitOfWork) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 9, 20, 0, 0, time.UTC)
+	agentID, locationID := seedDiscoveryOwner(t, ctx, unit, now)
+	monitorIDs := []string{"00000000-0000-4000-8000-000000000923", "00000000-0000-4000-8000-000000000924"}
+	var generated atomic.Uint32
+	service := application.NewDiscoveryService(application.DiscoveryServiceConfig{
+		Store:          unit.(port.DiscoveryUnitOfWork),
+		NewCandidateID: func() string { return "00000000-0000-4000-8000-000000000922" },
+		NewMonitorID:   func() string { return monitorIDs[int(generated.Add(1))-1] },
+		Now:            func() time.Time { return now },
+	})
+	ack, err := service.Publish(ctx, agentID, "promotion-base", []application.DiscoveryInput{{
+		LocationID: locationID, SourceKind: "service", SourceUID: "uid-1", Namespace: "default", Name: "api",
+		Labels: map[string]string{"app": "api"}, Protocol: domain.MonitorKindHTTP,
+		Target: "https://api.default.svc/health", NetworkPerspective: "cluster-a", Present: true, ObservedAt: now,
+	}})
+	if err != nil || ack != (port.DiscoveryBatchAcknowledgement{Accepted: 1, Created: 1}) {
+		t.Fatalf("publish = %#v, %v", ack, err)
+	}
+	command := application.DiscoveryPromotionCommand{
+		Name: "promoted", LocationID: locationID, RequiredLocation: true,
+		Interval: time.Minute, Timeout: 5 * time.Second, FailureThreshold: 2, RecoveryThreshold: 1,
+	}
+
+	start := make(chan struct{})
+	results := make(chan application.DiscoveryPromotion, 2)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			result, err := service.Promote(ctx, "00000000-0000-4000-8000-000000000922", command)
+			results <- result
+			errs <- err
+		}()
+	}
+	close(start)
+	var got []application.DiscoveryPromotion
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, <-results)
+	}
+	if got[0].Monitor.ID == "" || got[0].Monitor.ID != got[1].Monitor.ID || generated.Load() != 1 {
+		t.Fatalf("promotion results = %#v, generated monitor ids=%d", got, generated.Load())
+	}
+	if err := unit.View(ctx, func(ctx context.Context, repositories port.Repositories) error {
+		_, err := repositories.Monitors.Get(ctx, got[0].Monitor.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testDiscoveryCursorTraversal(t *testing.T, unit port.UnitOfWork) {
+	t.Helper()
+	discovery := unit.(port.DiscoveryUnitOfWork)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 9, 30, 0, 0, time.UTC)
+	agentID, locationID := seedDiscoveryOwner(t, ctx, unit, now)
+	ids := []domain.DiscoveryCandidateID{
+		"00000000-0000-4000-8000-000000000931", "00000000-0000-4000-8000-000000000932",
+		"00000000-0000-4000-8000-000000000933", "00000000-0000-4000-8000-000000000934",
+		"00000000-0000-4000-8000-000000000935",
+	}
+	candidates := make([]domain.DiscoveryCandidate, 0, len(ids))
+	for _, id := range ids {
+		candidate := mustDiscoveryCandidate(t, string(id), agentID, locationID, true, now)
+		candidate.SourceUID = string(id)
+		candidates = append(candidates, candidate)
+	}
+	applyDiscoveryBatch(t, ctx, discovery, port.DiscoveryBatch{ID: "cursor", AgentID: agentID, RequestHash: "cursor", Candidates: candidates, CreatedAt: now})
+
+	var got []domain.DiscoveryCandidateID
+	var after domain.DiscoveryCandidateID
+	for {
+		var page []domain.DiscoveryCandidate
+		if err := discovery.DiscoveryView(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+			var err error
+			page, err = repositories.Discovery.List(ctx, port.DiscoveryListRequest{Limit: 2, After: after})
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		if len(page) > 2 {
+			t.Fatalf("page too large: %d", len(page))
+		}
+		for _, candidate := range page {
+			got = append(got, candidate.ID)
+		}
+		after = page[len(page)-1].ID
+	}
+	if !slices.Equal(got, ids) {
+		t.Fatalf("cursor traversal = %v, want %v", got, ids)
+	}
+}
+
+func applyDiscoveryBatch(t *testing.T, ctx context.Context, discovery port.DiscoveryUnitOfWork, batch port.DiscoveryBatch) {
+	t.Helper()
+	if err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		_, err := repositories.Discovery.ApplyBatch(ctx, batch)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testDiscoveryLifecycle(t *testing.T, unit port.UnitOfWork) {

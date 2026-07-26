@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/araihu/xisnove/agent/internal/controlplane"
 )
 
 var ErrBatchTooLarge = errors.New("discovery snapshot exceeds 500 candidates")
+var ErrPartialAcknowledgement = errors.New("discovery API acknowledged only part of the submitted chunk")
 
 const (
 	MaxBatchSize   = 500
@@ -31,6 +33,65 @@ type Publisher interface {
 type Runner struct {
 	Producer  Producer
 	Publisher Publisher
+}
+
+type LoopConfig struct {
+	Enabled    bool
+	Cadence    time.Duration
+	MinBackoff time.Duration
+	MaxBackoff time.Duration
+	Wait       func(context.Context, time.Duration) error
+	OnError    func(error)
+}
+
+// Run publishes discovery snapshots on an independently enabled cadence. A
+// failed cycle is retried with bounded exponential backoff; successful cycles
+// return to the configured cadence.
+func (runner Runner) Run(ctx context.Context, config LoopConfig) error {
+	if !config.Enabled {
+		return nil
+	}
+	if config.Cadence <= 0 || config.MinBackoff <= 0 || config.MaxBackoff < config.MinBackoff {
+		return errors.New("discovery loop requires a positive cadence and bounded backoff")
+	}
+	wait := config.Wait
+	if wait == nil {
+		wait = waitFor
+	}
+	backoff := config.MinBackoff
+	for ctx.Err() == nil {
+		delay := config.Cadence
+		if err := runner.RunOnce(ctx); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			if config.OnError != nil {
+				config.OnError(err)
+			}
+			delay = backoff
+			backoff = min(backoff*2, config.MaxBackoff)
+		} else {
+			backoff = config.MinBackoff
+		}
+		if err := wait(ctx, delay); err != nil {
+			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return fmt.Errorf("wait for discovery cycle: %w", err)
+		}
+	}
+	return nil
+}
+
+func waitFor(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (runner Runner) RunOnce(ctx context.Context) error {
@@ -90,6 +151,9 @@ func (publisher APIPublisher) Publish(ctx context.Context, batch Batch) error {
 		}
 		if response.StatusCode() != http.StatusOK || response.JSON200 == nil {
 			return fmt.Errorf("discovery API returned HTTP %d", response.StatusCode())
+		}
+		if int(response.JSON200.Accepted) != end-offset {
+			return fmt.Errorf("%w: accepted %d of %d", ErrPartialAcknowledgement, response.JSON200.Accepted, end-offset)
 		}
 	}
 	return nil

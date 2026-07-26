@@ -57,6 +57,19 @@ func TestTombstoneMarksCandidateStaleWithoutDeletingPromotion(t *testing.T) {
 	}
 }
 
+func TestUnknownTombstoneIsAnIdempotentNoOp(t *testing.T) {
+	fixture := newDiscoveryFixture()
+	input := fixture.input("uid-missing", false)
+	first, err := fixture.service.Publish(context.Background(), "agent-1", "batch-missing-1", []application.DiscoveryInput{input})
+	if err != nil || first != (port.DiscoveryBatchAcknowledgement{Accepted: 1}) {
+		t.Fatalf("first = %#v, %v", first, err)
+	}
+	second, err := fixture.service.Publish(context.Background(), "agent-1", "batch-missing-2", []application.DiscoveryInput{input})
+	if err != nil || second != first || len(fixture.repository.candidates) != 0 {
+		t.Fatalf("second = %#v, %v candidates=%d", second, err, len(fixture.repository.candidates))
+	}
+}
+
 func TestPromoteCandidateCreatesMonitorAndLinksProvenanceAtomically(t *testing.T) {
 	fixture := newDiscoveryFixture()
 	if _, err := fixture.service.Publish(context.Background(), "agent-1", "batch-1", []application.DiscoveryInput{fixture.input("uid-1", true)}); err != nil {
@@ -196,8 +209,14 @@ func (r *discoveryRepository) ApplyBatch(_ context.Context, batch port.Discovery
 			}
 		}
 		if existingID == "" {
+			if !incoming.Present {
+				continue
+			}
 			r.candidates[incoming.ID] = incoming.Clone()
 			ack.Created++
+			continue
+		}
+		if incoming.LastObservedAt.Before(existing.LastObservedAt) {
 			continue
 		}
 		incoming.ID, incoming.CreatedAt, incoming.PromotedMonitorID = existing.ID, existing.CreatedAt, existing.PromotedMonitorID
@@ -218,6 +237,9 @@ func (r *discoveryRepository) Get(_ context.Context, id domain.DiscoveryCandidat
 		return domain.DiscoveryCandidate{}, port.ErrNotFound
 	}
 	return value.Clone(), nil
+}
+func (r *discoveryRepository) GetForUpdate(ctx context.Context, id domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error) {
+	return r.Get(ctx, id)
 }
 func (r *discoveryRepository) List(_ context.Context, _ port.DiscoveryListRequest) ([]domain.DiscoveryCandidate, error) {
 	result := make([]domain.DiscoveryCandidate, 0, len(r.candidates))

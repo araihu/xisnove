@@ -114,7 +114,7 @@ func (s *DiscoveryService) Promote(ctx context.Context, candidateID domain.Disco
 		if repositories.Discovery == nil || repositories.Locations == nil || repositories.Monitors == nil || repositories.Health == nil {
 			return errors.New("discovery promotion repositories are not configured")
 		}
-		candidate, err := repositories.Discovery.Get(ctx, candidateID)
+		candidate, err := repositories.Discovery.GetForUpdate(ctx, candidateID)
 		if err != nil {
 			return err
 		}

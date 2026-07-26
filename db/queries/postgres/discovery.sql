@@ -26,13 +26,28 @@ WHERE agent_id = $1 AND location_id = $2 AND source_kind = $3 AND source_uid = $
 
 -- name: UpdateDiscoveryCandidateByIdentity :execrows
 UPDATE discovery_candidates
-SET namespace = $1, name = $2, labels_json = $3, network_perspective = $4, present = $5,
-    last_observed_at = $6, drift_hint = $7, updated_at = $8
-WHERE agent_id = $9 AND location_id = $10 AND source_kind = $11 AND source_uid = $12
-  AND protocol = $13 AND target = $14;
+SET drift_hint = CASE
+        WHEN promoted_monitor_id IS NOT NULL AND (
+            name <> sqlc.arg(name)::text OR namespace <> sqlc.arg(namespace)::text OR
+            labels_json <> sqlc.arg(labels_json)::jsonb OR
+            network_perspective <> sqlc.arg(network_perspective)::text
+        ) THEN 'source metadata changed after promotion'
+        ELSE drift_hint
+    END,
+    namespace = sqlc.arg(namespace), name = sqlc.arg(name),
+    labels_json = sqlc.arg(labels_json), network_perspective = sqlc.arg(network_perspective),
+    present = sqlc.arg(present), last_observed_at = sqlc.arg(last_observed_at),
+    updated_at = sqlc.arg(updated_at)
+WHERE agent_id = sqlc.arg(agent_id) AND location_id = sqlc.arg(location_id)
+  AND source_kind = sqlc.arg(source_kind) AND source_uid = sqlc.arg(source_uid)
+  AND protocol = sqlc.arg(protocol) AND target = sqlc.arg(target)
+  AND last_observed_at <= sqlc.arg(last_observed_at);
 
 -- name: GetDiscoveryCandidate :one
 SELECT * FROM discovery_candidates WHERE id = $1;
+
+-- name: GetDiscoveryCandidateForUpdate :one
+SELECT * FROM discovery_candidates WHERE id = $1 FOR UPDATE;
 
 -- name: ListDiscoveryCandidates :many
 SELECT * FROM discovery_candidates
