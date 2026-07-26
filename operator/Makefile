@@ -13,4 +13,4 @@ test:
 
 envtest:
 	mkdir -p "$(ENVTEST_CACHE)"
-	KUBEBUILDER_ASSETS="$$(GOWORK=off go tool setup-envtest --bin-dir "$(ENVTEST_CACHE)" use 1.36.x -p path)" GOWORK=off go test -race ./internal/controller -run '^TestEnvtest'
+	KUBEBUILDER_ASSETS="$$(GOWORK=off go tool setup-envtest --bin-dir "$(ENVTEST_CACHE)" use 1.36.x -p path)" GOWORK=off go test -count=1 -race ./internal/controller -run '^TestEnvtest'

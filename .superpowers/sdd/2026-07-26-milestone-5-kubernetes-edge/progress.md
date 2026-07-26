@@ -44,3 +44,4 @@ Task 9: fix round 1/5 (6 addressed, 0 open — bounded HTTP/shutdown, mandatory 
 Task 9: fix round 2/5 (2 addressed, 0 open — typed public Helm schema and defense-in-depth template checks; review pending)
 Task 9: complete (commits 30c0afc..3023b19, independent review clean; operator race/vet/verify/build and Helm lint/adversarial render gates passed)
 Task 10: implementation complete (real envtest manager/controllers, stateful hash-only fake, Monitor/Agent lifecycle and adversarial convergence journeys; envtest discovered and fixed missing pending CRD enum; review pending)
+Task 10: fix round 1/5 (5 addressed, 0 open — uncached envtest, strict CRD paths, durable mutation fingerprints, bounded startup, Agent recreated-UID takeover/delete refusal; review pending)

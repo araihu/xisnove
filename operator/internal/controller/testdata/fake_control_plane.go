@@ -3,6 +3,7 @@ package testdata
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -21,6 +22,7 @@ type FakeControlPlane struct {
 	agents      map[string]*agentRecord
 	nextMonitor int
 	nextAgent   int
+	idempotency map[string][sha256.Size]byte
 
 	monitorFailure error
 }
@@ -60,12 +62,17 @@ type AgentSnapshot struct {
 }
 
 func NewFakeControlPlane() *FakeControlPlane {
-	return &FakeControlPlane{monitors: map[string]*monitorRecord{}, agents: map[string]*agentRecord{}}
+	return &FakeControlPlane{monitors: map[string]*monitorRecord{}, agents: map[string]*agentRecord{}, idempotency: map[string][sha256.Size]byte{}}
 }
 
 func (f *FakeControlPlane) ApplyMonitor(_ context.Context, request controlplane.ApplyMonitorRequest) (controlplane.MonitorState, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	fingerprintRequest := monitorApplyFingerprint(request)
+	replay, err := f.checkIdempotency("apply-monitor", request.IdempotencyKey, fingerprintRequest)
+	if err != nil {
+		return controlplane.MonitorState{}, err
+	}
 	if f.monitorFailure != nil {
 		return controlplane.MonitorState{}, f.monitorFailure
 	}
@@ -73,8 +80,12 @@ func (f *FakeControlPlane) ApplyMonitor(_ context.Context, request controlplane.
 		if record.owner.UID != request.Owner.UID || (request.ExternalID != "" && request.ExternalID != record.state.ExternalID) {
 			return controlplane.MonitorState{}, controlplane.ErrOwnershipConflict
 		}
+		if replay {
+			return record.state, nil
+		}
 		record.applies++
 		record.spec = *request.Spec.DeepCopy()
+		f.recordIdempotency("apply-monitor", request.IdempotencyKey, fingerprintRequest)
 		return record.state, nil
 	}
 	if request.ExternalID != "" {
@@ -87,12 +98,20 @@ func (f *FakeControlPlane) ApplyMonitor(_ context.Context, request controlplane.
 		spec:  *request.Spec.DeepCopy(), applies: 1,
 	}
 	f.monitors[request.Owner.Key] = record
+	f.recordIdempotency("apply-monitor", request.IdempotencyKey, fingerprintRequest)
 	return record.state, nil
 }
 
 func (f *FakeControlPlane) DeleteMonitor(_ context.Context, request controlplane.DeleteRemoteObjectRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	replay, err := f.checkIdempotency("delete-monitor", request.IdempotencyKey, request)
+	if err != nil {
+		return err
+	}
+	if replay {
+		return nil
+	}
 	record := f.monitors[request.Owner.Key]
 	if record == nil {
 		return controlplane.ErrNotFound
@@ -101,12 +120,18 @@ func (f *FakeControlPlane) DeleteMonitor(_ context.Context, request controlplane
 		return controlplane.ErrOwnershipConflict
 	}
 	delete(f.monitors, request.Owner.Key)
+	f.recordIdempotency("delete-monitor", request.IdempotencyKey, request)
 	return nil
 }
 
 func (f *FakeControlPlane) ApplyAgent(_ context.Context, request controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	fingerprintRequest := agentApplyFingerprint(request)
+	replay, err := f.checkIdempotency("apply-agent", request.IdempotencyKey, fingerprintRequest)
+	if err != nil {
+		return controlplane.AgentState{}, err
+	}
 	if record := f.agents[request.Owner.Key]; record != nil {
 		if record.owner.UID != request.Owner.UID || (request.ExternalID != "" && request.ExternalID != record.state.ExternalID) {
 			return controlplane.AgentState{}, controlplane.ErrOwnershipConflict
@@ -114,8 +139,12 @@ func (f *FakeControlPlane) ApplyAgent(_ context.Context, request controlplane.Ap
 		if len(request.InitialCredential) != 0 && record.credentials[1] != sha256.Sum256(request.InitialCredential) {
 			return controlplane.AgentState{}, controlplane.ErrCredentialConflict
 		}
+		if replay {
+			return record.state, nil
+		}
 		record.applies++
 		record.spec = *request.Spec.DeepCopy()
+		f.recordIdempotency("apply-agent", request.IdempotencyKey, fingerprintRequest)
 		return record.state, nil
 	}
 	if request.ExternalID != "" || len(request.InitialCredential) == 0 {
@@ -128,6 +157,7 @@ func (f *FakeControlPlane) ApplyAgent(_ context.Context, request controlplane.Ap
 		spec:  *request.Spec.DeepCopy(), credentials: map[int64][sha256.Size]byte{1: sha256.Sum256(request.InitialCredential)}, applies: 1,
 	}
 	f.agents[request.Owner.Key] = record
+	f.recordIdempotency("apply-agent", request.IdempotencyKey, fingerprintRequest)
 	return record.state, nil
 }
 
@@ -147,6 +177,14 @@ func (f *FakeControlPlane) ObserveAgent(_ context.Context, request controlplane.
 func (f *FakeControlPlane) PutAgentCredential(_ context.Context, request controlplane.PutAgentCredentialRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	fingerprintRequest := credentialFingerprint(request.Owner, request.ExternalID, request.Generation, request.Credential)
+	replay, err := f.checkIdempotency("put-agent-credential", request.IdempotencyKey, fingerprintRequest)
+	if err != nil {
+		return err
+	}
+	if replay {
+		return nil
+	}
 	record, err := f.agentFor(request.Owner, request.ExternalID)
 	if err != nil {
 		return err
@@ -160,12 +198,20 @@ func (f *FakeControlPlane) PutAgentCredential(_ context.Context, request control
 		record.state.CredentialGeneration = request.Generation
 	}
 	record.puts++
+	f.recordIdempotency("put-agent-credential", request.IdempotencyKey, fingerprintRequest)
 	return nil
 }
 
 func (f *FakeControlPlane) RevokeAgentCredential(_ context.Context, request controlplane.RevokeAgentCredentialRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	replay, err := f.checkIdempotency("revoke-agent-credential", request.IdempotencyKey, request)
+	if err != nil {
+		return err
+	}
+	if replay {
+		return nil
+	}
 	record, err := f.agentFor(request.Owner, request.ExternalID)
 	if err != nil {
 		return err
@@ -175,12 +221,20 @@ func (f *FakeControlPlane) RevokeAgentCredential(_ context.Context, request cont
 	}
 	delete(record.credentials, request.Generation)
 	record.revokes = append(record.revokes, request.Generation)
+	f.recordIdempotency("revoke-agent-credential", request.IdempotencyKey, request)
 	return nil
 }
 
 func (f *FakeControlPlane) DeleteAgent(_ context.Context, request controlplane.DeleteRemoteObjectRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	replay, err := f.checkIdempotency("delete-agent", request.IdempotencyKey, request)
+	if err != nil {
+		return err
+	}
+	if replay {
+		return nil
+	}
 	record := f.agents[request.Owner.Key]
 	if record == nil {
 		return controlplane.ErrNotFound
@@ -189,6 +243,7 @@ func (f *FakeControlPlane) DeleteAgent(_ context.Context, request controlplane.D
 		return controlplane.ErrOwnershipConflict
 	}
 	delete(f.agents, request.Owner.Key)
+	f.recordIdempotency("delete-agent", request.IdempotencyKey, request)
 	return nil
 }
 
@@ -231,6 +286,79 @@ func (f *FakeControlPlane) SeedMonitor(owner controlplane.OwnerReference, extern
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.monitors[owner.Key] = &monitorRecord{owner: owner, state: controlplane.MonitorState{ExternalID: externalID, AggregateHealth: "pending"}, applies: 1}
+}
+
+func (f *FakeControlPlane) SeedAgent(owner controlplane.OwnerReference, externalID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.agents[owner.Key] = &agentRecord{
+		owner:       owner,
+		state:       controlplane.AgentState{ExternalID: externalID, CredentialGeneration: 1},
+		credentials: map[int64][sha256.Size]byte{1: sha256.Sum256([]byte("seeded-digest-input"))},
+	}
+}
+
+func (f *FakeControlPlane) checkIdempotency(operation, key string, request any) (bool, error) {
+	if key == "" {
+		return false, errors.New("idempotency key is required")
+	}
+	digest := requestDigest(request)
+	existing, found := f.idempotency[operation+"\x00"+key]
+	if !found {
+		return false, nil
+	}
+	if existing != digest {
+		return false, errors.New("idempotency key was reused with a different request")
+	}
+	return true, nil
+}
+
+func (f *FakeControlPlane) recordIdempotency(operation, key string, request any) {
+	f.idempotency[operation+"\x00"+key] = requestDigest(request)
+}
+
+func requestDigest(request any) [sha256.Size]byte {
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		panic(fmt.Sprintf("fake control-plane request cannot be fingerprinted: %v", err))
+	}
+	return sha256.Sum256(encoded)
+}
+
+type agentApplyFingerprintValue struct {
+	Owner            controlplane.OwnerReference
+	Name             string
+	Spec             monitoringv1alpha1.AgentSpec
+	CredentialDigest [sha256.Size]byte
+	HasCredential    bool
+}
+
+func agentApplyFingerprint(request controlplane.ApplyAgentRequest) agentApplyFingerprintValue {
+	return agentApplyFingerprintValue{
+		Owner: request.Owner, Name: request.Name, Spec: request.Spec,
+		CredentialDigest: sha256.Sum256(request.InitialCredential), HasCredential: len(request.InitialCredential) != 0,
+	}
+}
+
+type monitorApplyFingerprintValue struct {
+	Owner controlplane.OwnerReference
+	Name  string
+	Spec  monitoringv1alpha1.MonitorSpec
+}
+
+func monitorApplyFingerprint(request controlplane.ApplyMonitorRequest) monitorApplyFingerprintValue {
+	return monitorApplyFingerprintValue{Owner: request.Owner, Name: request.Name, Spec: request.Spec}
+}
+
+type credentialFingerprintValue struct {
+	Owner      controlplane.OwnerReference
+	ExternalID string
+	Generation int64
+	Digest     [sha256.Size]byte
+}
+
+func credentialFingerprint(owner controlplane.OwnerReference, externalID string, generation int64, credential []byte) credentialFingerprintValue {
+	return credentialFingerprintValue{Owner: owner, ExternalID: externalID, Generation: generation, Digest: sha256.Sum256(credential)}
 }
 
 func (f *FakeControlPlane) Monitor(ownerKey string) (MonitorSnapshot, bool) {

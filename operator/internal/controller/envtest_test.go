@@ -29,11 +29,89 @@ import (
 
 const envtestTimeout = 15 * time.Second
 
+func TestEnvtestFakeControlPlaneIdempotency(t *testing.T) {
+	ctx := context.Background()
+	remote := testdata.NewFakeControlPlane()
+	monitorOwner := controlplane.OwnerReference{Key: "monitoring.xisnove.io/Monitor/default/idempotent", UID: "monitor-uid"}
+	monitorRequest := controlplane.ApplyMonitorRequest{Owner: monitorOwner, Name: "idempotent", Spec: validMonitor("idempotent").Spec, IdempotencyKey: "monitor-apply-1"}
+	monitorState, err := remote.ApplyMonitor(ctx, monitorRequest)
+	must(t, err)
+	boundMonitorReplay := monitorRequest
+	boundMonitorReplay.ExternalID = monitorState.ExternalID
+	replayedMonitor, err := remote.ApplyMonitor(ctx, boundMonitorReplay)
+	must(t, err)
+	if replayedMonitor.ExternalID != monitorState.ExternalID {
+		t.Fatal("identical Monitor replay changed the remote identity")
+	}
+	changedMonitor := monitorRequest
+	changedMonitor.Name = "changed"
+	if _, err := remote.ApplyMonitor(ctx, changedMonitor); err == nil {
+		t.Fatal("changed Monitor request reused an idempotency key")
+	}
+	if _, err := remote.ApplyMonitor(ctx, controlplane.ApplyMonitorRequest{Owner: monitorOwner, Name: "missing-key", Spec: monitorRequest.Spec}); err == nil {
+		t.Fatal("Monitor mutation accepted an empty idempotency key")
+	}
+	monitorDelete := controlplane.DeleteRemoteObjectRequest{Owner: monitorOwner, ExternalID: monitorState.ExternalID, IdempotencyKey: "monitor-delete-1"}
+	must(t, remote.DeleteMonitor(ctx, monitorDelete))
+	must(t, remote.DeleteMonitor(ctx, monitorDelete))
+	changedMonitorDelete := monitorDelete
+	changedMonitorDelete.ExternalID = "different"
+	if err := remote.DeleteMonitor(ctx, changedMonitorDelete); err == nil {
+		t.Fatal("changed Monitor delete reused an idempotency key")
+	}
+
+	agentOwner := controlplane.OwnerReference{Key: "monitoring.xisnove.io/Agent/default/idempotent", UID: "agent-uid"}
+	agentRequest := controlplane.ApplyAgentRequest{Owner: agentOwner, Name: "idempotent", Spec: validAgent("idempotent").Spec, InitialCredential: []byte("credential-one"), IdempotencyKey: "agent-apply-1"}
+	agentState, err := remote.ApplyAgent(ctx, agentRequest)
+	must(t, err)
+	boundAgentReplay := agentRequest
+	boundAgentReplay.ExternalID = agentState.ExternalID
+	replayedAgent, err := remote.ApplyAgent(ctx, boundAgentReplay)
+	must(t, err)
+	if replayedAgent.ExternalID != agentState.ExternalID {
+		t.Fatal("identical Agent replay changed the remote identity")
+	}
+	changedAgent := agentRequest
+	changedAgent.InitialCredential = []byte("credential-two")
+	if _, err := remote.ApplyAgent(ctx, changedAgent); err == nil {
+		t.Fatal("changed Agent credential reused an idempotency key")
+	}
+
+	put := controlplane.PutAgentCredentialRequest{Owner: agentOwner, ExternalID: agentState.ExternalID, Generation: 2, Credential: []byte("credential-two"), IdempotencyKey: "agent-put-2"}
+	must(t, remote.PutAgentCredential(ctx, put))
+	must(t, remote.PutAgentCredential(ctx, put))
+	changedPut := put
+	changedPut.Credential = []byte("different")
+	if err := remote.PutAgentCredential(ctx, changedPut); err == nil {
+		t.Fatal("changed credential PUT reused an idempotency key")
+	}
+	remote.SetAgentObservation(agentOwner.Key, 2, time.Now(), time.Time{})
+	revoke := controlplane.RevokeAgentCredentialRequest{Owner: agentOwner, ExternalID: agentState.ExternalID, Generation: 1, IdempotencyKey: "agent-revoke-1"}
+	must(t, remote.RevokeAgentCredential(ctx, revoke))
+	must(t, remote.RevokeAgentCredential(ctx, revoke))
+	changedRevoke := revoke
+	changedRevoke.Generation = 2
+	if err := remote.RevokeAgentCredential(ctx, changedRevoke); err == nil {
+		t.Fatal("changed credential revoke reused an idempotency key")
+	}
+	agentDelete := controlplane.DeleteRemoteObjectRequest{Owner: agentOwner, ExternalID: agentState.ExternalID, IdempotencyKey: "agent-delete-1"}
+	must(t, remote.DeleteAgent(ctx, agentDelete))
+	must(t, remote.DeleteAgent(ctx, agentDelete))
+	changedAgentDelete := agentDelete
+	changedAgentDelete.ExternalID = "different"
+	if err := remote.DeleteAgent(ctx, changedAgentDelete); err == nil {
+		t.Fatal("changed Agent delete reused an idempotency key")
+	}
+}
+
 func TestEnvtestControllerJourneys(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is set by make -C operator envtest")
 	}
-	testEnvironment := &envtest.Environment{CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "charts", "xisnove-edge", "crds")}}
+	testEnvironment := &envtest.Environment{
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "charts", "xisnove-edge", "crds")},
+		ErrorIfCRDPathMissing: true,
+	}
 	config, err := testEnvironment.Start()
 	if err != nil {
 		t.Fatalf("start envtest: %v", err)
@@ -75,9 +153,12 @@ func TestEnvtestControllerJourneys(t *testing.T) {
 			t.Error("manager did not stop")
 		}
 	})
-	if !manager.GetCache().WaitForCacheSync(ctx) {
+	startupContext, cancelStartup := context.WithTimeout(ctx, envtestTimeout)
+	defer cancelStartup()
+	if !manager.GetCache().WaitForCacheSync(startupContext) {
 		t.Fatal("manager cache did not synchronize")
 	}
+	cancelStartup()
 	kube := manager.GetClient()
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: "xisnove-envtest-"}}
 	must(t, kube.Create(ctx, namespace))
@@ -206,6 +287,48 @@ func TestEnvtestControllerJourneys(t *testing.T) {
 		eventually(t, func() bool {
 			return apierrors.IsNotFound(kube.Get(ctx, types.NamespacedName{Namespace: namespace.Name, Name: agent.Name}, &monitoringv1alpha1.Agent{}))
 		})
+	})
+
+	t.Run("recreated Agent UID cannot claim or delete orphan", func(t *testing.T) {
+		name := "agent-orphan"
+		key := ownerKey("Agent", namespace.Name, name)
+		remote.SeedAgent(controlplane.OwnerReference{Key: key, UID: "deleted-agent-uid"}, "agent-orphan-remote")
+		agent := envtestAgent(namespace.Name, name)
+		must(t, kube.Create(ctx, agent))
+		eventually(t, func() bool {
+			stored, ok := loadAgent(ctx, kube, name, namespace.Name)
+			if !ok {
+				return false
+			}
+			condition := findCondition(stored.Status.Conditions, ConditionDegraded)
+			return condition != nil && condition.Reason == "ReconcileFailed" && stored.UID != types.UID("deleted-agent-uid")
+		})
+		snapshot, _ := remote.Agent(key)
+		if snapshot.Owner.UID != "deleted-agent-uid" || snapshot.State.ExternalID != "agent-orphan-remote" {
+			t.Fatalf("orphan Agent ownership changed: %#v", snapshot)
+		}
+
+		must(t, kube.Delete(ctx, getAgent(t, ctx, kube, name, namespace.Name)))
+		eventually(t, func() bool {
+			stored, ok := loadAgent(ctx, kube, name, namespace.Name)
+			if !ok {
+				return false
+			}
+			orphan, remoteExists := remote.Agent(key)
+			return !stored.DeletionTimestamp.IsZero() && hasFinalizer(stored.Finalizers, AgentFinalizer) && remoteExists && orphan.Owner.UID == "deleted-agent-uid"
+		})
+		updateAgent(t, ctx, kube, name, namespace.Name, func(value *monitoringv1alpha1.Agent) {
+			if value.Annotations == nil {
+				value.Annotations = map[string]string{}
+			}
+			value.Annotations[ForceDeleteAnnotation] = "true"
+		})
+		eventually(t, func() bool {
+			return apierrors.IsNotFound(kube.Get(ctx, types.NamespacedName{Namespace: namespace.Name, Name: name}, &monitoringv1alpha1.Agent{}))
+		})
+		if orphan, ok := remote.Agent(key); !ok || orphan.Owner.UID != "deleted-agent-uid" {
+			t.Fatal("forced Kubernetes cleanup mutated the orphan Agent")
+		}
 	})
 
 	t.Run("agent materialization, availability, freshness, rotation, replay, and deletion", func(t *testing.T) {
