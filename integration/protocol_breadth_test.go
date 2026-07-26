@@ -79,7 +79,7 @@ func TestProtocolBreadthControlPlanePath(t *testing.T) {
 	}
 	admin := bearer(session.JSON201.Token)
 	location, err := client.CreateLocationWithResponse(
-		ctx, sdk.CreateLocationRequest{Name: "hybrid-lab"}, admin,
+		ctx, nil, sdk.CreateLocationRequest{Name: "hybrid-lab"}, admin,
 	)
 	if err != nil || location.JSON201 == nil {
 		t.Fatalf("location=%#v error=%v", location, err)
@@ -91,7 +91,7 @@ func TestProtocolBreadthControlPlanePath(t *testing.T) {
 		monitorRequest(t, "postgres", location.JSON201.Id, tcpDefinition(t)),
 		monitorRequest(t, "cluster-dns", location.JSON201.Id, dnsDefinition(t)),
 	} {
-		response, err := client.CreateMonitorWithResponse(ctx, request, admin)
+		response, err := client.CreateMonitorWithResponse(ctx, nil, request, admin)
 		if err != nil || response.JSON201 == nil {
 			t.Fatalf("monitor=%#v error=%v", response, err)
 		}
@@ -99,6 +99,7 @@ func TestProtocolBreadthControlPlanePath(t *testing.T) {
 	}
 	enrollment, err := client.CreateAgentEnrollmentTokenWithResponse(
 		ctx,
+		nil,
 		sdk.CreateAgentEnrollmentTokenRequest{
 			LocationId: location.JSON201.Id, ExpiresInSeconds: 300,
 		},

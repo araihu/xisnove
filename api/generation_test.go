@@ -19,7 +19,7 @@ func TestGeneratedAPIBindingsAreCurrent(t *testing.T) {
 	}{
 		{"control-plane strict server", "oapi-codegen-server.yaml", "../internal/adapters/httpapi/generated.gen.go"},
 		{"public SDK", "oapi-codegen-sdk.yaml", "../sdk/generated.gen.go"},
-		{"Agent subset", "oapi-codegen-agent.yaml", "../agent/internal/controlplane/generated.gen.go"},
+		{"Agent subset", "../agent/oapi-codegen.yaml", "../agent/internal/controlplane/generated.gen.go"},
 		{"full strict contract", "oapi-codegen-strict-contract.yaml", "../internal/mockapi/generated.gen.go"},
 	} {
 		fixture := fixture

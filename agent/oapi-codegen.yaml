@@ -9,4 +9,5 @@ output-options:
     - heartbeatAgent
     - leaseAgentWork
     - uploadProbeResults
+    - upsertDiscoveryCandidates
 output: generated.gen.go

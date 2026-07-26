@@ -12,16 +12,18 @@ func (s *Server) seedFixtures() {
 		ID: "00000000-0000-4100-8000-000000000001", Token: FixtureFullAPIToken,
 		Name: "fixture full access",
 		Scopes: []string{
-			"management:read", "management:write", "incidents:read",
+			"tokens:read", "tokens:write", "locations:read", "locations:write",
+			"monitors:read", "monitors:write", "agents:read", "agents:write", "incidents:read",
 			"notifications:read", "notifications:write",
-			"discovery:read", "discovery:write", "agents:enroll",
+			"maintenance:read", "maintenance:write", "discovery:read", "discovery:write", "status:read",
 		},
 	}
 	readOnly := &apiTokenRecord{
 		ID: "00000000-0000-4100-8000-000000000002", Token: FixtureReadOnlyAPIToken,
 		Name: "fixture read only",
 		Scopes: []string{
-			"management:read", "incidents:read", "notifications:read", "discovery:read",
+			"tokens:read", "locations:read", "monitors:read", "agents:read",
+			"incidents:read", "notifications:read", "maintenance:read", "discovery:read", "status:read",
 		},
 	}
 	for _, record := range []*apiTokenRecord{full, readOnly} {
@@ -166,7 +168,7 @@ func (s *Server) apiTokens(w http.ResponseWriter, r *http.Request) {
 		s.tokensByID[record.ID] = record
 		s.tokensByValue[record.Token] = record
 		s.mu.Unlock()
-		s.writeMutation(w, r, http.StatusCreated, map[string]any{
+		s.writeCredentialMutation(w, r, http.StatusCreated, map[string]any{
 			"apiToken": tokenView(record), "token": record.Token,
 		})
 	case http.MethodGet:
@@ -179,7 +181,7 @@ func (s *Server) apiTokens(w http.ResponseWriter, r *http.Request) {
 		slices.SortFunc(items, func(a, b map[string]any) int {
 			return strings.Compare(a["id"].(string), b["id"].(string))
 		})
-		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		writeJSON(w, http.StatusOK, pageEnvelope(items, ""))
 	default:
 		writeProblem(w, r, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 	}
@@ -244,7 +246,7 @@ func tokenView(record *apiTokenRecord) map[string]any {
 func (s *Server) monitorCollection(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		if !s.authorize(w, r, "management:read") {
+		if !s.authorize(w, r, "monitors:read") {
 			return
 		}
 		s.mu.Lock()
@@ -255,13 +257,9 @@ func (s *Server) monitorCollection(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, r, http.StatusBadRequest, "invalid_cursor", "Invalid page", nil)
 			return
 		}
-		page := map[string]any{"items": items[start:end]}
-		if next := nextCursor(end, len(items)); next != "" {
-			page["nextCursor"] = next
-		}
-		writeJSON(w, http.StatusOK, page)
+		writeJSON(w, http.StatusOK, pageEnvelope(items[start:end], nextCursor(end, len(items))))
 	case http.MethodPost:
-		if !s.authorize(w, r, "management:write") {
+		if !s.authorize(w, r, "monitors:write") {
 			return
 		}
 		if s.replay(w, r) {
@@ -288,9 +286,9 @@ func (s *Server) monitorCollection(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) monitor(w http.ResponseWriter, r *http.Request, monitorID string) {
-	scope := "management:read"
-	if r.Method == http.MethodPatch || r.Method == http.MethodDelete {
-		scope = "management:write"
+	scope := "monitors:read"
+	if r.Method == http.MethodPut || r.Method == http.MethodDelete {
+		scope = "monitors:write"
 	}
 	if !s.authorize(w, r, scope) {
 		return
@@ -309,7 +307,7 @@ func (s *Server) monitor(w http.ResponseWriter, r *http.Request, monitorID strin
 		item := cloneMap(s.monitors[index])
 		s.mu.Unlock()
 		writeJSON(w, http.StatusOK, item)
-	case http.MethodPatch:
+	case http.MethodPut:
 		s.mu.Unlock()
 		if s.replay(w, r) {
 			return
@@ -344,7 +342,7 @@ func (s *Server) listIncidents(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	items := slices.Clone(s.incidents)
 	s.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, pageEnvelope(items, ""))
 }
 
 func (s *Server) incident(w http.ResponseWriter, r *http.Request, remainder string) {
@@ -364,7 +362,7 @@ func (s *Server) incident(w http.ResponseWriter, r *http.Request, remainder stri
 			writeProblem(w, r, http.StatusNotFound, "incident_not_found", "Incident not found", nil)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		writeJSON(w, http.StatusOK, pageEnvelope(items, ""))
 		return
 	}
 	s.mu.Lock()
@@ -424,18 +422,18 @@ func (s *Server) listDiscoveryCandidates(w http.ResponseWriter, r *http.Request)
 	s.mu.Lock()
 	items := slices.Clone(s.candidates)
 	s.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, pageEnvelope(items, ""))
 }
 
 func (s *Server) discoveryCandidate(w http.ResponseWriter, r *http.Request, remainder string) {
-	if strings.HasSuffix(remainder, ":promote") && r.Method == http.MethodPost {
+	if strings.HasSuffix(remainder, "/promotion") && r.Method == http.MethodPost {
 		if !s.authorize(w, r, "discovery:write") {
 			return
 		}
 		if s.replay(w, r) {
 			return
 		}
-		candidateID := strings.TrimSuffix(remainder, ":promote")
+		candidateID := strings.TrimSuffix(remainder, "/promotion")
 		var input map[string]any
 		if !decodeJSON(w, r, &input) {
 			return
@@ -499,11 +497,14 @@ func (s *Server) notificationChannels(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		items := slices.Clone(s.channels)
 		s.mu.Unlock()
-		writeJSON(w, http.StatusOK, map[string]any{
-			"items": items, "limit": 50, "offset": 0,
-		})
+		page := pageEnvelope(items, "")
+		page["limit"], page["offset"] = 50, 0
+		writeJSON(w, http.StatusOK, page)
 	case http.MethodPost:
 		if !s.authorize(w, r, "notifications:write") {
+			return
+		}
+		if s.replay(w, r) {
 			return
 		}
 		var input struct {
@@ -524,7 +525,7 @@ func (s *Server) notificationChannels(w http.ResponseWriter, r *http.Request) {
 		}
 		s.channels = append(s.channels, channel)
 		s.mu.Unlock()
-		writeJSON(w, http.StatusCreated, channel)
+		s.writeMutation(w, r, http.StatusCreated, channel)
 	default:
 		writeProblem(w, r, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 	}
@@ -537,7 +538,9 @@ func (s *Server) listNotificationRoutes(w http.ResponseWriter, r *http.Request) 
 	s.mu.Lock()
 	items := slices.Clone(s.routes)
 	s.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "limit": 50, "offset": 0})
+	page := pageEnvelope(items, "")
+	page["limit"], page["offset"] = 50, 0
+	writeJSON(w, http.StatusOK, page)
 }
 
 func (s *Server) listNotificationDeliveries(w http.ResponseWriter, r *http.Request) {
@@ -547,7 +550,9 @@ func (s *Server) listNotificationDeliveries(w http.ResponseWriter, r *http.Reque
 	s.mu.Lock()
 	items := slices.Clone(s.deliveries)
 	s.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "limit": 50, "offset": 0})
+	page := pageEnvelope(items, "")
+	page["limit"], page["offset"] = 50, 0
+	writeJSON(w, http.StatusOK, page)
 }
 
 func (s *Server) publicStatus(w http.ResponseWriter, _ *http.Request) {
@@ -563,7 +568,9 @@ func (s *Server) publicStatus(w http.ResponseWriter, _ *http.Request) {
 		}
 		publicMonitors = append(publicMonitors, map[string]any{
 			"id": monitor["id"], "name": monitor["name"], "description": monitor["description"],
-			"state": state, "uptime24Hours": 99.5, "uptime30Days": 99.9,
+			"state": state, "recentUptime": []map[string]any{
+				{"date": "2026-07-25", "uptimePercentage": 99.5},
+			},
 		})
 	}
 	active := make([]map[string]any, 0, len(s.incidents))

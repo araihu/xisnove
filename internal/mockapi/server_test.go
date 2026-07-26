@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/araihu/xisnove/internal/mockapi"
@@ -40,7 +41,7 @@ func TestAPITokenScopesCanBeUpdatedAndRevoked(t *testing.T) {
 
 	response := request(t, server.URL, http.MethodPost, "/v1/api-tokens", session, map[string]any{
 		"name":   "UI read only",
-		"scopes": []string{"management:read"},
+		"scopes": []string{"monitors:read"},
 	}, map[string]string{"Idempotency-Key": "token-ui-read-1"})
 	assertStatus(t, response, http.StatusCreated)
 	created := decodeObject(t, response)
@@ -54,7 +55,7 @@ func TestAPITokenScopesCanBeUpdatedAndRevoked(t *testing.T) {
 	assertProblem(t, response, http.StatusForbidden, "insufficient_scope")
 
 	response = request(t, server.URL, http.MethodPatch, "/v1/api-tokens/"+tokenID, session, map[string]any{
-		"scopes": []string{"management:read", "management:write"},
+		"scopes": []string{"monitors:read", "monitors:write"},
 	}, map[string]string{"Idempotency-Key": "token-ui-write-1"})
 	assertStatus(t, response, http.StatusOK)
 	response = request(t, server.URL, http.MethodPost, "/v1/monitors", token, monitorInput("allowed"), nil)
@@ -74,10 +75,11 @@ func TestMonitorsAreCursorPagedAndIdempotent(t *testing.T) {
 	first := request(t, server.URL, http.MethodGet, "/v1/monitors?limit=1", session, nil, nil)
 	assertStatus(t, first, http.StatusOK)
 	firstPage := decodeObject(t, first)
-	if len(firstPage["items"].([]any)) != 1 || firstPage["nextCursor"] == "" {
+	page := firstPage["page"].(map[string]any)
+	if len(firstPage["items"].([]any)) != 1 || page["nextCursor"] == "" {
 		t.Fatalf("first page = %#v", firstPage)
 	}
-	cursor := firstPage["nextCursor"].(string)
+	cursor := page["nextCursor"].(string)
 	second := request(t, server.URL, http.MethodGet, "/v1/monitors?limit=1&cursor="+cursor, session, nil, nil)
 	assertStatus(t, second, http.StatusOK)
 	secondPage := decodeObject(t, second)
@@ -134,7 +136,7 @@ func TestIncidentsDiscoveryNotificationsAndPublicStatusFixtures(t *testing.T) {
 	assertStatus(t, catalog, http.StatusOK)
 	candidateItems := decodeObject(t, catalog)["items"].([]any)
 	candidate := candidateItems[len(candidateItems)-1].(map[string]any)
-	promotionPath := "/v1/discovery-candidates/" + candidate["id"].(string) + ":promote"
+	promotionPath := "/v1/discovery-candidates/" + candidate["id"].(string) + "/promotion"
 	promotionHeaders := map[string]string{"Idempotency-Key": "promote-demo-1"}
 	promotion := request(t, server.URL, http.MethodPost, promotionPath, session, promotionInput("promoted demo"), promotionHeaders)
 	assertStatus(t, promotion, http.StatusCreated)
@@ -162,7 +164,7 @@ func TestIncidentsDiscoveryNotificationsAndPublicStatusFixtures(t *testing.T) {
 	deliveries := request(t, server.URL, http.MethodGet, "/v1/notification-deliveries", session, nil, nil)
 	assertStatus(t, deliveries, http.StatusOK)
 
-	status := request(t, server.URL, http.MethodGet, "/v1/status", "", nil, nil)
+	status := request(t, server.URL, http.MethodGet, "/v1/status-page", "", nil, nil)
 	assertStatus(t, status, http.StatusOK)
 	public := decodeObject(t, status)
 	if public["state"] == "" || len(public["monitors"].([]any)) == 0 {
@@ -178,7 +180,7 @@ func TestStableFailureScenarioUsesRFC9457(t *testing.T) {
 		t,
 		server.URL,
 		http.MethodGet,
-		"/v1/status",
+		"/v1/status-page",
 		"",
 		nil,
 		map[string]string{"X-Xisnove-Mock-Scenario": "conflict"},
@@ -187,6 +189,184 @@ func TestStableFailureScenarioUsesRFC9457(t *testing.T) {
 	if response.Header.Get("Content-Type") != "application/problem+json" {
 		t.Fatalf("Content-Type = %q", response.Header.Get("Content-Type"))
 	}
+}
+
+func TestIdempotencyRejectsChangedRequestBody(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+	headers := map[string]string{"Idempotency-Key": "monitor-changed-body-1"}
+
+	first := request(t, server.URL, http.MethodPost, "/v1/monitors", session, monitorInput("first"), headers)
+	assertStatus(t, first, http.StatusCreated)
+	_ = readBody(t, first)
+	changed := request(t, server.URL, http.MethodPost, "/v1/monitors", session, monitorInput("changed"), headers)
+	assertProblem(t, changed, http.StatusConflict, "idempotency_key_reused")
+}
+
+func TestCredentialIssuanceDoesNotReplayPlaintext(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+	headers := map[string]string{"Idempotency-Key": "token-plaintext-once-1"}
+	body := map[string]any{"name": "automation", "scopes": []string{"monitors:read"}}
+
+	created := request(t, server.URL, http.MethodPost, "/v1/api-tokens", session, body, headers)
+	assertStatus(t, created, http.StatusCreated)
+	plaintext := decodeObject(t, created)["token"].(string)
+	replayed := request(t, server.URL, http.MethodPost, "/v1/api-tokens", session, body, headers)
+	replayedBody := readBody(t, replayed)
+	if replayed.StatusCode != http.StatusConflict || !strings.Contains(string(replayedBody), "credential_already_issued") {
+		t.Fatalf("replay status=%d body=%s", replayed.StatusCode, replayedBody)
+	}
+	if strings.Contains(string(replayedBody), plaintext) {
+		t.Fatalf("credential replay leaked plaintext %q", plaintext)
+	}
+}
+
+func TestIdempotencyKeysAreScopedToTheAuthenticatedPrincipal(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+	createdToken := request(t, server.URL, http.MethodPost, "/v1/api-tokens", session, map[string]any{
+		"name": "second writer", "scopes": []string{"monitors:write"},
+	}, map[string]string{"Idempotency-Key": "second-writer-token-1"})
+	assertStatus(t, createdToken, http.StatusCreated)
+	secondPrincipal := decodeObject(t, createdToken)["token"].(string)
+	headers := map[string]string{"Idempotency-Key": "principal-isolation-1"}
+
+	first := request(t, server.URL, http.MethodPost, "/v1/monitors", mockapi.FixtureFullAPIToken, monitorInput("principal-one"), headers)
+	assertStatus(t, first, http.StatusCreated)
+	firstID := decodeObject(t, first)["id"]
+	second := request(t, server.URL, http.MethodPost, "/v1/monitors", secondPrincipal, monitorInput("principal-two"), headers)
+	assertStatus(t, second, http.StatusCreated)
+	secondID := decodeObject(t, second)["id"]
+	if firstID == secondID {
+		t.Fatalf("principals shared idempotency result %v", firstID)
+	}
+}
+
+func TestConcurrentIdempotentMutationsCreateOneResource(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+	headers := map[string]string{"Idempotency-Key": "concurrent-monitor-create-1"}
+
+	const callers = 16
+	start := make(chan struct{})
+	ids := make(chan string, callers)
+	errors := make(chan string, callers)
+	var group sync.WaitGroup
+	for range callers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			response := request(t, server.URL, http.MethodPost, "/v1/monitors", session, monitorInput("concurrent"), headers)
+			if response.StatusCode != http.StatusCreated {
+				errors <- string(readBody(t, response))
+				return
+			}
+			ids <- decodeObject(t, response)["id"].(string)
+		}()
+	}
+	close(start)
+	group.Wait()
+	close(ids)
+	close(errors)
+	for failure := range errors {
+		t.Fatalf("concurrent mutation failed: %s", failure)
+	}
+	var first string
+	for id := range ids {
+		if first == "" {
+			first = id
+		}
+		if id != first {
+			t.Fatalf("idempotency produced IDs %s and %s", first, id)
+		}
+	}
+}
+
+func TestEveryAdvertisedOperationReachesTheStrictMockDispatcher(t *testing.T) {
+	doc, err := mockapi.GetSwagger()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for path, item := range doc.Paths.Map() {
+		for method := range item.Operations() {
+			operation := item.GetOperation(method)
+			if operation == nil || operation.OperationID == "createSession" {
+				continue
+			}
+			path := replacePathParameters(path)
+			t.Run(operation.OperationID, func(t *testing.T) {
+				server := httptest.NewServer(mockapi.NewServer().Handler())
+				defer server.Close()
+				session := login(t, server.URL)
+				token := session
+				if operation.OperationID == "heartbeatAgent" || operation.OperationID == "leaseAgentWork" ||
+					operation.OperationID == "upsertDiscoveryCandidates" || operation.OperationID == "uploadProbeResults" {
+					token = agentToken
+				}
+				if operation.OperationID == "enrollAgent" || operation.OperationID == "getPublicStatusPage" {
+					token = ""
+				}
+				var body any
+				if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
+					body = map[string]any{}
+				}
+				response := request(t, server.URL, strings.ToUpper(method), path, token, body, map[string]string{
+					"Idempotency-Key": "advertised-operation-1",
+				})
+				defer response.Body.Close()
+				if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed ||
+					response.StatusCode == http.StatusNotImplemented || response.StatusCode >= 500 {
+					t.Fatalf("%s %s status=%d body=%s", method, path, response.StatusCode, readBody(t, response))
+				}
+			})
+		}
+	}
+}
+
+func TestAgentResultUploadUsesContractAcknowledgementEnvelope(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+
+	response := request(
+		t,
+		server.URL,
+		http.MethodPost,
+		"/v1/agent/results:batch",
+		agentToken,
+		map[string]any{"results": []any{}},
+		map[string]string{"Idempotency-Key": "empty-result-batch-1"},
+	)
+	assertStatus(t, response, http.StatusOK)
+	body := decodeObject(t, response)
+	if _, ok := body["acknowledgements"]; !ok {
+		t.Fatalf("upload response = %#v, want acknowledgements", body)
+	}
+}
+
+func replacePathParameters(path string) string {
+	fixtures := map[string]string{
+		"{tokenId}":       "00000000-0000-4100-8000-000000000001",
+		"{locationId}":    "00000000-0000-4000-8000-000000000001",
+		"{monitorId}":     "00000000-0000-4200-8000-000000000101",
+		"{agentId}":       "00000000-0000-4800-8000-000000000801",
+		"{incidentId}":    "00000000-0000-4300-8000-000000000201",
+		"{candidateId}":   "00000000-0000-4400-8000-000000000401",
+		"{channelId}":     "00000000-0000-4500-8000-000000000501",
+		"{routeId}":       "00000000-0000-4600-8000-000000000601",
+		"{deliveryId}":    "00000000-0000-4700-8000-000000000701",
+		"{maintenanceId}": "00000000-0000-4900-8000-000000000901",
+	}
+	for parameter, value := range fixtures {
+		path = strings.ReplaceAll(path, parameter, value)
+	}
+	return path
 }
 
 func login(t *testing.T, baseURL string) string {

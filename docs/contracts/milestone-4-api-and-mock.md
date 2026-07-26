@@ -8,17 +8,20 @@ The contract adds:
 
 - revocation of the current administrator session;
 - create, list, get, update, and revoke operations for scoped API tokens;
-- list, get, update, and disable operations for Locations, Monitors, and Agents;
+- list and get operations for Locations, plus list, get, replace, and disable
+  operations for Monitors;
+- Agent listing, reads, revocation, and one-time credential rotation;
 - cursor-paged Incident and IncidentEvent reads;
 - bounded Agent discovery batches, an administrator catalog, and explicit
   promotion;
-- the single unauthenticated aggregate status resource at `GET /v1/status`.
+- the single unauthenticated aggregate status page at `GET /v1/status-page`,
+  including recent daily uptime history.
 
 Every operation declares `security` and `x-xisnove-scopes` explicitly.
 Protected operations fail closed. The only unauthenticated operations are
 session creation, Agent enrollment, and public status. List resources accept
-opaque `cursor` values and return `nextCursor`. New retryable Milestone 4
-mutations accept `Idempotency-Key`. Errors use `application/problem+json` with
+opaque `cursor` values and return `page.nextCursor`. Retryable mutations accept
+`Idempotency-Key`. Errors use `application/problem+json` with
 RFC 9457 members plus the stable `code` and `correlationId` extensions.
 
 ## Generated surfaces
@@ -26,15 +29,15 @@ RFC 9457 members plus the stable `code` and `correlationId` extensions.
 Run all generators from the repository root:
 
 ```sh
-go generate ./api ./internal/adapters/httpapi ./sdk
+make generate
 ```
 
 Generated artifacts are:
 
 - `sdk/generated.gen.go`: the complete public client and response models;
 - `internal/mockapi/generated.gen.go`: the complete strict server contract;
-- `internal/adapters/httpapi/generated.gen.go`: the currently implemented
-  control-plane handler subset plus its models and embedded contract;
+- `internal/adapters/httpapi/generated.gen.go`: the complete production strict
+  interface, transport models, and embedded contract;
 - `agent/internal/controlplane/generated.gen.go`: enrollment, heartbeat, work,
   results, and discovery-batch Agent client subset.
 
@@ -42,21 +45,18 @@ Generated artifacts are:
 artifact in temporary files and compares it byte-for-byte with the committed
 output.
 
-The module-local `agent/oapi-codegen.yaml` remains owned by the Agent/edge
-track and still lists the pre-discovery four-operation subset. Until that track
-adds `upsertDiscoveryCandidatesBatch`, do not run
-`cd agent && GOWORK=off go generate ./...`: it would overwrite the committed
-five-operation Agent client. The API-owned generator above is authoritative,
-and the byte-for-byte test detects this drift immediately.
+`agent/oapi-codegen.yaml` is the sole Agent generation filter. It contains only
+enrollment, heartbeat, lease, result upload, and `upsertDiscoveryCandidates`.
+Both ordinary `make generate` and isolated
+`cd agent && GOWORK=off go generate ./...` produce the same committed client.
 
-The control-plane generator temporarily lists already implemented operation IDs
-in `api/oapi-codegen-server.yaml`. This keeps the existing real handler package
-buildable without adding placeholder behavior on this parallel track. When the
-control-plane track implements the new application services and handlers, it
-should remove that compatibility filter and implement the complete strict
-interface already generated in `internal/mockapi`.
+The production and mock generators both cover the complete canonical contract.
+The production `Server` fills that strict interface operation by operation as
+the application slices land; the deterministic mock routes every advertised
+operation through generated strict request decoding.
 
-The SDK keeps the original signatures of shipped mutations. Callers add
+Formal `Idempotency-Key` parameters appear in generated mutation method
+signatures. Callers may pass a generated params value or pass `nil` and add
 authentication and retry identity through request editors:
 
 ```go
@@ -80,6 +80,10 @@ go run ./cmd/xisnove-mock -listen 0.0.0.0:9090
 
 The mock is deterministic, in-memory, has no database, makes no outbound
 requests, and contains no real secrets. Restarting it restores the fixtures.
+Idempotency entries are isolated by principal, operation, key, and canonical
+request-body hash. Reusing a key with a changed body returns
+`idempotency_key_reused`. Credential-issuing operations retain only a replay
+marker and return `credential_already_issued` instead of replaying plaintext.
 
 ### Fixture credentials
 
@@ -104,7 +108,7 @@ curl --fail-with-body \
 Read public status without a credential:
 
 ```sh
-curl --fail-with-body http://127.0.0.1:8089/v1/status
+curl --fail-with-body http://127.0.0.1:8089/v1/status-page
 ```
 
 The initial fixtures include two Monitors, one open critical Incident with one
@@ -131,7 +135,7 @@ For example:
 ```sh
 curl -i \
   -H 'X-Xisnove-Mock-Scenario: rate-limit' \
-  http://127.0.0.1:8089/v1/status
+  http://127.0.0.1:8089/v1/status-page
 ```
 
 The rate-limit fixture includes `Retry-After: 60`. Every scenario returns an
@@ -147,14 +151,14 @@ Control plane:
   and promotion, and public aggregation behind the complete strict interface;
 - replace deprecated offset pagination on older notification and maintenance
   handlers with opaque cursors, then remove the compatibility offsets;
-- remove the operation filter in `api/oapi-codegen-server.yaml` only when the
-  real `Server` implements every frozen operation.
+- implement each remaining generated strict operation on the real `Server`;
+  the interface and router are intentionally already complete.
 
 UI:
 
 - keep the administrator credential in the BFF only;
-- use `GET /v1/status` directly only for the public read model;
-- use `nextCursor` opaquely and exercise loading/error states with the stable
+- use `GET /v1/status-page` directly only for the public read model;
+- use `page.nextCursor` opaquely and exercise loading/error states with the stable
   scenario header in local development.
 
 CLI:

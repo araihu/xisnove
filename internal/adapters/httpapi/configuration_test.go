@@ -284,7 +284,7 @@ func TestCreateTCPAndDNSMonitorsRoundTripThroughSDK(t *testing.T) {
 	}
 	ctx := context.Background()
 	locationResponse, err := client.CreateLocationWithResponse(
-		ctx, sdk.CreateLocationRequest{Name: "private"},
+		ctx, nil, sdk.CreateLocationRequest{Name: "private"},
 	)
 	if err != nil || locationResponse.JSON201 == nil {
 		t.Fatalf("location response = %#v, error = %v", locationResponse, err)
@@ -299,7 +299,7 @@ func TestCreateTCPAndDNSMonitorsRoundTripThroughSDK(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	tcpResponse, err := client.CreateMonitorWithResponse(ctx, sdk.CreateMonitorRequest{
+	tcpResponse, err := client.CreateMonitorWithResponse(ctx, nil, sdk.CreateMonitorRequest{
 		Name: "postgres", LocationId: locationID, RequiredLocation: true,
 		IntervalSeconds: 60, TimeoutMillis: 5000,
 		FailureThreshold: 3, RecoveryThreshold: 2, Probe: tcp,
@@ -334,7 +334,7 @@ func TestCreateTCPAndDNSMonitorsRoundTripThroughSDK(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	dnsResponse, err := client.CreateMonitorWithResponse(ctx, sdk.CreateMonitorRequest{
+	dnsResponse, err := client.CreateMonitorWithResponse(ctx, nil, sdk.CreateMonitorRequest{
 		Name: "cluster dns", LocationId: locationID, RequiredLocation: true,
 		IntervalSeconds: 60, TimeoutMillis: 5000,
 		FailureThreshold: 3, RecoveryThreshold: 2, Probe: dns,

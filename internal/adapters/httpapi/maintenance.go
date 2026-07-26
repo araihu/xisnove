@@ -49,7 +49,9 @@ func (s *Server) ListMaintenance(ctx context.Context, request ListMaintenanceReq
 			return nil, err
 		}
 	}
-	return ListMaintenance200JSONResponse{Items: items, Limit: int32(limit), Offset: int32(offset)}, nil
+	return ListMaintenance200JSONResponse{
+		Items: items, Page: PageMetadata{}, Limit: int32(limit), Offset: int32(offset),
+	}, nil
 }
 
 func (s *Server) GetMaintenance(ctx context.Context, request GetMaintenanceRequestObject) (GetMaintenanceResponseObject, error) {

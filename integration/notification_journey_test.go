@@ -143,7 +143,7 @@ func TestNotificationJourneyTransportsRetriesResolutionAndRedaction(t *testing.T
 		t.Fatalf("session: response=%#v error=%v", session, err)
 	}
 	adminAuth := bearer(session.JSON201.Token)
-	location, err := client.CreateLocationWithResponse(ctx, sdk.CreateLocationRequest{Name: "notification edge"}, adminAuth)
+	location, err := client.CreateLocationWithResponse(ctx, nil, sdk.CreateLocationRequest{Name: "notification edge"}, adminAuth)
 	if err != nil || location.JSON201 == nil {
 		t.Fatalf("location: response=%#v error=%v", location, err)
 	}
@@ -155,7 +155,7 @@ func TestNotificationJourneyTransportsRetriesResolutionAndRedaction(t *testing.T
 		t.Fatal(err)
 	}
 	labels := map[string]string{"environment": "homelab"}
-	monitor, err := client.CreateMonitorWithResponse(ctx, sdk.CreateMonitorRequest{
+	monitor, err := client.CreateMonitorWithResponse(ctx, nil, sdk.CreateMonitorRequest{
 		Name: "router", Description: pointer("hybrid edge router"), Labels: &labels,
 		LocationId: location.JSON201.Id, RequiredLocation: true, IntervalSeconds: 60,
 		TimeoutMillis: 5000, FailureThreshold: 1, RecoveryThreshold: 1, Probe: probe,
@@ -205,7 +205,7 @@ func TestNotificationJourneyTransportsRetriesResolutionAndRedaction(t *testing.T
 	var publicBodies [][]byte
 	channelIDs := make(map[string]uuid.UUID, len(channelSpecs))
 	for index, spec := range channelSpecs {
-		created, createErr := client.CreateNotificationChannelWithResponse(ctx, sdk.CreateNotificationChannelRequest{
+		created, createErr := client.CreateNotificationChannelWithResponse(ctx, nil, sdk.CreateNotificationChannelRequest{
 			Name: spec.name, Enabled: true, Configuration: spec.configuration,
 		}, adminAuth)
 		if createErr != nil || created.JSON201 == nil {
@@ -213,7 +213,7 @@ func TestNotificationJourneyTransportsRetriesResolutionAndRedaction(t *testing.T
 		}
 		publicBodies = append(publicBodies, created.Body)
 		channelIDs[spec.name] = created.JSON201.Id
-		route, routeErr := client.CreateNotificationRouteWithResponse(ctx, sdk.NotificationRouteInput{
+		route, routeErr := client.CreateNotificationRouteWithResponse(ctx, nil, sdk.NotificationRouteInput{
 			Name: spec.name, ChannelId: created.JSON201.Id, MonitorId: &monitor.JSON201.Id,
 			Actions:    []sdk.NotificationAction{sdk.NotificationActionOpen, sdk.NotificationActionRecover},
 			Severities: []sdk.IncidentSeverity{}, LabelMatchers: map[string]string{},
@@ -226,7 +226,7 @@ func TestNotificationJourneyTransportsRetriesResolutionAndRedaction(t *testing.T
 		publicBodies = append(publicBodies, route.Body)
 	}
 
-	enrollment, err := client.CreateAgentEnrollmentTokenWithResponse(ctx, sdk.CreateAgentEnrollmentTokenRequest{
+	enrollment, err := client.CreateAgentEnrollmentTokenWithResponse(ctx, nil, sdk.CreateAgentEnrollmentTokenRequest{
 		LocationId: location.JSON201.Id, ExpiresInSeconds: 300,
 	}, adminAuth)
 	if err != nil || enrollment.JSON201 == nil {

@@ -88,7 +88,7 @@ func TestFirstObservationOpensIncidentAfterThirdFailure(t *testing.T) {
 	}
 	adminAuth := bearer(sessionResponse.JSON201.Token)
 	locationResponse, err := client.CreateLocationWithResponse(
-		ctx, sdk.CreateLocationRequest{Name: "public"}, adminAuth,
+		ctx, nil, sdk.CreateLocationRequest{Name: "public"}, adminAuth,
 	)
 	if err != nil || locationResponse.JSON201 == nil {
 		t.Fatalf("location: response=%#v error=%v", locationResponse, err)
@@ -114,6 +114,7 @@ func TestFirstObservationOpensIncidentAfterThirdFailure(t *testing.T) {
 	}
 	monitorResponse, err := client.CreateMonitorWithResponse(
 		ctx,
+		nil,
 		sdk.CreateMonitorRequest{
 			Name: "target", LocationId: locationResponse.JSON201.Id,
 			RequiredLocation: true, IntervalSeconds: 60, TimeoutMillis: 5000,
@@ -128,6 +129,7 @@ func TestFirstObservationOpensIncidentAfterThirdFailure(t *testing.T) {
 	monitorID := monitorResponse.JSON201.Id
 	enrollmentResponse, err := client.CreateAgentEnrollmentTokenWithResponse(
 		ctx,
+		nil,
 		sdk.CreateAgentEnrollmentTokenRequest{
 			LocationId: locationResponse.JSON201.Id, ExpiresInSeconds: 300,
 		},

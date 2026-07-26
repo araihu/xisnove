@@ -1,9 +1,13 @@
 package mockapi
 
 import (
+	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,18 +30,19 @@ const (
 type Server struct {
 	mu sync.Mutex
 
-	sessionActive bool
-	tokensByID    map[string]*apiTokenRecord
-	tokensByValue map[string]*apiTokenRecord
-	monitors      []map[string]any
-	incidents     []map[string]any
-	events        map[string][]map[string]any
-	candidates    []map[string]any
-	channels      []map[string]any
-	routes        []map[string]any
-	deliveries    []map[string]any
-	idempotency   map[string]storedResponse
-	counters      map[string]int
+	sessionActive    bool
+	tokensByID       map[string]*apiTokenRecord
+	tokensByValue    map[string]*apiTokenRecord
+	monitors         []map[string]any
+	incidents        []map[string]any
+	events           map[string][]map[string]any
+	candidates       []map[string]any
+	channels         []map[string]any
+	routes           []map[string]any
+	deliveries       []map[string]any
+	idempotency      map[string]storedResponse
+	idempotencyLocks map[string]*sync.Mutex
+	counters         map[string]int
 }
 
 type apiTokenRecord struct {
@@ -52,14 +57,28 @@ type storedResponse struct {
 	status      int
 	contentType string
 	body        []byte
+	requestHash string
+	credential  bool
+}
+
+type requestHashContextKey struct{}
+
+type capturedRequest struct {
+	body []byte
+	hash string
+}
+
+type strictMockDispatcher struct {
+	StrictServerInterface
 }
 
 func NewServer() *Server {
 	server := &Server{
-		tokensByID:    map[string]*apiTokenRecord{},
-		tokensByValue: map[string]*apiTokenRecord{},
-		events:        map[string][]map[string]any{},
-		idempotency:   map[string]storedResponse{},
+		tokensByID:       map[string]*apiTokenRecord{},
+		tokensByValue:    map[string]*apiTokenRecord{},
+		events:           map[string][]map[string]any{},
+		idempotency:      map[string]storedResponse{},
+		idempotencyLocks: map[string]*sync.Mutex{},
 		counters: map[string]int{
 			"token": 1000, "monitor": 2000, "candidate": 3000, "channel": 4000,
 		},
@@ -69,48 +88,107 @@ func NewServer() *Server {
 }
 
 func (s *Server) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	strict := NewStrictHandlerWithOptions(
+		&strictMockDispatcher{},
+		[]StrictMiddlewareFunc{s.dispatchStrict},
+		StrictHTTPServerOptions{
+			RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+				writeProblem(w, r, http.StatusBadRequest, "validation_failed", "Request validation failed", nil)
+			},
+			ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
+				writeProblem(w, r, http.StatusInternalServerError, "mock_response_failed", "Mock response failed", nil)
+			},
+		},
+	)
+	api := Handler(strict)
+	return captureRequestHash(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.serveScenario(w, r) {
 			return
 		}
-		s.serveHTTP(w, r)
+		api.ServeHTTP(w, r)
+	}))
+}
+
+func (s *Server) dispatchStrict(_ StrictHandlerFunc, operationID string) StrictHandlerFunc {
+	return func(_ context.Context, w http.ResponseWriter, r *http.Request, _ any) (any, error) {
+		captured, _ := r.Context().Value(requestHashContextKey{}).(capturedRequest)
+		r.Body = io.NopCloser(bytes.NewReader(captured.body))
+		unlock := s.lockIdempotency(r)
+		defer unlock()
+		s.serveHTTP(w, r, operationID)
+		return nil, nil
+	}
+}
+
+func captureRequestHash(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body == nil {
+			captured := capturedRequest{hash: hashRequestBody(nil)}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestHashContextKey{}, captured)))
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err != nil {
+			writeProblem(w, r, http.StatusRequestEntityTooLarge, "request_too_large", "Request too large", nil)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		captured := capturedRequest{body: body, hash: hashRequestBody(body)}
+		ctx := context.WithValue(r.Context(), requestHashContextKey{}, captured)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
-	switch {
-	case r.Method == http.MethodPost && r.URL.Path == "/v1/sessions":
+func hashRequestBody(body []byte) string {
+	canonical := body
+	if len(body) != 0 {
+		var value any
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.UseNumber()
+		if decoder.Decode(&value) == nil {
+			if encoded, err := json.Marshal(value); err == nil {
+				canonical = encoded
+			}
+		}
+	}
+	sum := sha256.Sum256(canonical)
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, operationID string) {
+	switch operationID {
+	case "CreateSession":
 		s.createSession(w, r)
-	case r.Method == http.MethodDelete && r.URL.Path == "/v1/sessions/current":
+	case "RevokeCurrentSession":
 		s.revokeSession(w, r)
-	case r.URL.Path == "/v1/api-tokens":
+	case "CreateAPIToken", "ListAPITokens":
 		s.apiTokens(w, r)
-	case strings.HasPrefix(r.URL.Path, "/v1/api-tokens/"):
+	case "GetAPIToken", "UpdateAPIToken", "RevokeAPIToken":
 		s.apiToken(w, r, strings.TrimPrefix(r.URL.Path, "/v1/api-tokens/"))
-	case r.URL.Path == "/v1/monitors":
+	case "CreateMonitor", "ListMonitors":
 		s.monitorCollection(w, r)
-	case strings.HasPrefix(r.URL.Path, "/v1/monitors/"):
+	case "GetMonitor", "UpdateMonitor", "DisableMonitor":
 		s.monitor(w, r, strings.TrimPrefix(r.URL.Path, "/v1/monitors/"))
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/incidents":
+	case "ListIncidents":
 		s.listIncidents(w, r)
-	case strings.HasPrefix(r.URL.Path, "/v1/incidents/"):
+	case "GetIncident", "ListIncidentEvents":
 		s.incident(w, r, strings.TrimPrefix(r.URL.Path, "/v1/incidents/"))
-	case r.Method == http.MethodPost && r.URL.Path == "/v1/agent/discovery-candidates:batch":
+	case "UpsertDiscoveryCandidates":
 		s.upsertDiscoveryCandidates(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/discovery-candidates":
+	case "ListDiscoveryCandidates":
 		s.listDiscoveryCandidates(w, r)
-	case strings.HasPrefix(r.URL.Path, "/v1/discovery-candidates/"):
+	case "GetDiscoveryCandidate", "PromoteDiscoveryCandidate":
 		s.discoveryCandidate(w, r, strings.TrimPrefix(r.URL.Path, "/v1/discovery-candidates/"))
-	case r.URL.Path == "/v1/notification-channels":
+	case "CreateNotificationChannel", "ListNotificationChannels":
 		s.notificationChannels(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/notification-routes":
+	case "ListNotificationRoutes":
 		s.listNotificationRoutes(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/notification-deliveries":
+	case "ListNotificationDeliveries":
 		s.listNotificationDeliveries(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/status":
+	case "GetPublicStatusPage":
 		s.publicStatus(w, r)
 	default:
-		writeProblem(w, r, http.StatusNotFound, "not_found", "Resource not found", nil)
+		s.serveAdvertisedOperation(w, r, operationID)
 	}
 }
 
@@ -208,27 +286,71 @@ func (s *Server) replay(w http.ResponseWriter, r *http.Request) bool {
 	if !ok {
 		return false
 	}
+	captured, _ := r.Context().Value(requestHashContextKey{}).(capturedRequest)
+	requestHash := captured.hash
+	if response.requestHash != requestHash {
+		writeProblem(w, r, http.StatusConflict, "idempotency_key_reused", "Idempotency key reused", nil)
+		return true
+	}
+	if response.credential {
+		writeProblem(w, r, http.StatusConflict, "credential_already_issued", "Credential already issued", nil)
+		return true
+	}
 	writeStored(w, response)
 	return true
 }
 
 func (s *Server) writeMutation(w http.ResponseWriter, r *http.Request, status int, value any) {
+	s.writeStoredMutation(w, r, status, value, false)
+}
+
+func (s *Server) writeCredentialMutation(w http.ResponseWriter, r *http.Request, status int, value any) {
+	s.writeStoredMutation(w, r, status, value, true)
+}
+
+func (s *Server) writeStoredMutation(w http.ResponseWriter, r *http.Request, status int, value any, credential bool) {
 	body, err := json.Marshal(value)
 	if err != nil {
 		writeProblem(w, r, http.StatusInternalServerError, "mock_encoding_failed", "Mock encoding failed", nil)
 		return
 	}
-	response := storedResponse{status: status, contentType: "application/json", body: body}
+	captured, _ := r.Context().Value(requestHashContextKey{}).(capturedRequest)
+	requestHash := captured.hash
+	response := storedResponse{
+		status: status, contentType: "application/json", body: body,
+		requestHash: requestHash, credential: credential,
+	}
 	if key := r.Header.Get("Idempotency-Key"); key != "" {
 		s.mu.Lock()
-		s.idempotency[idempotencyMapKey(r, key)] = response
+		stored := response
+		if credential {
+			stored.body = nil
+		}
+		s.idempotency[idempotencyMapKey(r, key)] = stored
 		s.mu.Unlock()
 	}
 	writeStored(w, response)
 }
 
 func idempotencyMapKey(r *http.Request, key string) string {
-	return r.Method + " " + r.URL.Path + " " + key
+	return bearerToken(r) + " " + r.Method + " " + r.URL.Path + " " + key
+}
+
+func (s *Server) lockIdempotency(r *http.Request) func() {
+	key := r.Header.Get("Idempotency-Key")
+	if key == "" {
+		return func() {}
+	}
+	mapKey := idempotencyMapKey(r, key)
+	s.mu.Lock()
+	lock := s.idempotencyLocks[mapKey]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		s.idempotencyLocks[mapKey] = lock
+	}
+	s.mu.Unlock()
+	lock.Lock()
+	return lock.Unlock
 }
 
 func writeStored(w http.ResponseWriter, response storedResponse) {
@@ -313,6 +435,14 @@ func nextCursor(end, length int) string {
 		return ""
 	}
 	return base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(end)))
+}
+
+func pageEnvelope(items any, next string) map[string]any {
+	page := map[string]any{}
+	if next != "" {
+		page["nextCursor"] = next
+	}
+	return map[string]any{"items": items, "page": page}
 }
 
 func deterministicID(kind string, sequence int) string {

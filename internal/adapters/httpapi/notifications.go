@@ -42,7 +42,9 @@ func (s *Server) ListNotificationChannels(ctx context.Context, request ListNotif
 	for index := range channels {
 		items[index] = mapNotificationChannel(channels[index])
 	}
-	return ListNotificationChannels200JSONResponse{Items: items, Limit: int32(limit), Offset: int32(offset)}, nil
+	return ListNotificationChannels200JSONResponse{
+		Items: items, Page: PageMetadata{}, Limit: int32(limit), Offset: int32(offset),
+	}, nil
 }
 
 func (s *Server) GetNotificationChannel(ctx context.Context, request GetNotificationChannelRequestObject) (GetNotificationChannelResponseObject, error) {
@@ -154,7 +156,9 @@ func (s *Server) ListNotificationRoutes(ctx context.Context, request ListNotific
 			return nil, err
 		}
 	}
-	return ListNotificationRoutes200JSONResponse{Items: items, Limit: int32(limit), Offset: int32(offset)}, nil
+	return ListNotificationRoutes200JSONResponse{
+		Items: items, Page: PageMetadata{}, Limit: int32(limit), Offset: int32(offset),
+	}, nil
 }
 
 func (s *Server) GetNotificationRoute(ctx context.Context, request GetNotificationRouteRequestObject) (GetNotificationRouteResponseObject, error) {
@@ -271,7 +275,9 @@ func (s *Server) ListNotificationDeliveries(ctx context.Context, request ListNot
 			return nil, err
 		}
 	}
-	return ListNotificationDeliveries200JSONResponse{Items: items, Limit: int32(limit), Offset: int32(offset)}, nil
+	return ListNotificationDeliveries200JSONResponse{
+		Items: items, Page: PageMetadata{}, Limit: int32(limit), Offset: int32(offset),
+	}, nil
 }
 
 func (s *Server) GetNotificationDelivery(ctx context.Context, request GetNotificationDeliveryRequestObject) (GetNotificationDeliveryResponseObject, error) {

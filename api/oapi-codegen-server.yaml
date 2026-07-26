@@ -5,35 +5,4 @@ generate:
   std-http-server: true
   strict-server: true
   embedded-spec: true
-output-options:
-  include-operation-ids:
-    - createSession
-    - createLocation
-    - createMonitor
-    - getMonitor
-    - createAgentEnrollmentToken
-    - enrollAgent
-    - heartbeatAgent
-    - leaseAgentWork
-    - uploadProbeResults
-    - getMonitorHealth
-    - getActiveMonitorIncident
-    - createNotificationChannel
-    - listNotificationChannels
-    - getNotificationChannel
-    - updateNotificationChannel
-    - disableNotificationChannel
-    - createNotificationRoute
-    - listNotificationRoutes
-    - getNotificationRoute
-    - updateNotificationRoute
-    - disableNotificationRoute
-    - listNotificationDeliveries
-    - getNotificationDelivery
-    - replayNotificationDelivery
-    - createMaintenance
-    - listMaintenance
-    - getMaintenance
-    - deleteMaintenance
-    - endMaintenance
 output: generated.gen.go

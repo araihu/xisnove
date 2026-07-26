@@ -27,6 +27,9 @@ type ServerConfig struct {
 }
 
 type Server struct {
+	// StrictServerInterface keeps the complete generated contract available while
+	// milestone implementation slices add concrete handlers operation by operation.
+	StrictServerInterface
 	auth          *application.AuthService
 	configuration *application.ConfigurationService
 	agents        *application.AgentService

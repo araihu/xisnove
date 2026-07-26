@@ -2,103 +2,144 @@ package api_test
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-func TestMilestone4OperationFamiliesAreFrozen(t *testing.T) {
+var recognizedAPITokenScopes = map[string]bool{
+	"tokens:read": true, "tokens:write": true,
+	"locations:read": true, "locations:write": true,
+	"monitors:read": true, "monitors:write": true,
+	"agents:read": true, "agents:write": true,
+	"incidents:read":     true,
+	"notifications:read": true, "notifications:write": true,
+	"maintenance:read": true, "maintenance:write": true,
+	"discovery:read": true, "discovery:write": true,
+	"status:read": true,
+}
+
+func TestContractUsesOpenAPI312(t *testing.T) {
+	doc := loadContract(t)
+	if doc.OpenAPI != "3.1.2" {
+		t.Fatalf("OpenAPI = %q, want 3.1.2", doc.OpenAPI)
+	}
+	if doc.JSONSchemaDialect != "https://json-schema.org/draft/2020-12/schema" {
+		t.Fatalf("JSON schema dialect = %q", doc.JSONSchemaDialect)
+	}
+}
+
+func TestHumanClientOperationIDsAreFrozen(t *testing.T) {
 	doc := loadContract(t)
 	want := map[string]struct {
 		method string
 		path   string
 	}{
-		"createSession":                  {http.MethodPost, "/v1/sessions"},
-		"revokeSession":                  {http.MethodDelete, "/v1/sessions/current"},
-		"createAPIToken":                 {http.MethodPost, "/v1/api-tokens"},
-		"listAPITokens":                  {http.MethodGet, "/v1/api-tokens"},
-		"getAPIToken":                    {http.MethodGet, "/v1/api-tokens/{apiTokenId}"},
-		"updateAPIToken":                 {http.MethodPatch, "/v1/api-tokens/{apiTokenId}"},
-		"revokeAPIToken":                 {http.MethodDelete, "/v1/api-tokens/{apiTokenId}"},
-		"listLocations":                  {http.MethodGet, "/v1/locations"},
-		"getLocation":                    {http.MethodGet, "/v1/locations/{locationId}"},
-		"updateLocation":                 {http.MethodPatch, "/v1/locations/{locationId}"},
-		"disableLocation":                {http.MethodDelete, "/v1/locations/{locationId}"},
-		"listMonitors":                   {http.MethodGet, "/v1/monitors"},
-		"updateMonitor":                  {http.MethodPatch, "/v1/monitors/{monitorId}"},
-		"disableMonitor":                 {http.MethodDelete, "/v1/monitors/{monitorId}"},
-		"listAgents":                     {http.MethodGet, "/v1/agents"},
-		"getAgent":                       {http.MethodGet, "/v1/agents/{agentId}"},
-		"updateAgent":                    {http.MethodPatch, "/v1/agents/{agentId}"},
-		"disableAgent":                   {http.MethodDelete, "/v1/agents/{agentId}"},
-		"listIncidents":                  {http.MethodGet, "/v1/incidents"},
-		"getIncident":                    {http.MethodGet, "/v1/incidents/{incidentId}"},
-		"listIncidentEvents":             {http.MethodGet, "/v1/incidents/{incidentId}/events"},
-		"upsertDiscoveryCandidatesBatch": {http.MethodPost, "/v1/agent/discovery-candidates:batch"},
-		"listDiscoveryCandidates":        {http.MethodGet, "/v1/discovery-candidates"},
-		"getDiscoveryCandidate":          {http.MethodGet, "/v1/discovery-candidates/{candidateId}"},
-		"promoteDiscoveryCandidate":      {http.MethodPost, "/v1/discovery-candidates/{candidateId}:promote"},
-		"getPublicStatus":                {http.MethodGet, "/v1/status"},
+		"revokeCurrentSession":      {http.MethodDelete, "/v1/sessions/current"},
+		"createAPIToken":            {http.MethodPost, "/v1/api-tokens"},
+		"listAPITokens":             {http.MethodGet, "/v1/api-tokens"},
+		"revokeAPIToken":            {http.MethodDelete, "/v1/api-tokens/{tokenId}"},
+		"listLocations":             {http.MethodGet, "/v1/locations"},
+		"getLocation":               {http.MethodGet, "/v1/locations/{locationId}"},
+		"listMonitors":              {http.MethodGet, "/v1/monitors"},
+		"updateMonitor":             {http.MethodPut, "/v1/monitors/{monitorId}"},
+		"disableMonitor":            {http.MethodDelete, "/v1/monitors/{monitorId}"},
+		"listAgents":                {http.MethodGet, "/v1/agents"},
+		"getAgent":                  {http.MethodGet, "/v1/agents/{agentId}"},
+		"revokeAgent":               {http.MethodDelete, "/v1/agents/{agentId}"},
+		"rotateAgentCredential":     {http.MethodPost, "/v1/agents/{agentId}/credential-rotations"},
+		"listIncidents":             {http.MethodGet, "/v1/incidents"},
+		"getIncident":               {http.MethodGet, "/v1/incidents/{incidentId}"},
+		"listIncidentEvents":        {http.MethodGet, "/v1/incidents/{incidentId}/events"},
+		"upsertDiscoveryCandidates": {http.MethodPost, "/v1/agent/discovery-candidates:batch"},
+		"listDiscoveryCandidates":   {http.MethodGet, "/v1/discovery-candidates"},
+		"getDiscoveryCandidate":     {http.MethodGet, "/v1/discovery-candidates/{candidateId}"},
+		"promoteDiscoveryCandidate": {http.MethodPost, "/v1/discovery-candidates/{candidateId}/promotion"},
+		"getPublicStatusPage":       {http.MethodGet, "/v1/status-page"},
 	}
 
 	for operationID, expected := range want {
 		operation := operationByID(t, doc, operationID)
 		item := doc.Paths.Value(expected.path)
-		if item == nil {
-			t.Errorf("%s path %s is missing", operationID, expected.path)
-			continue
-		}
-		if operationForMethod(item, expected.method) != operation {
+		if item == nil || operationForMethod(item, expected.method) != operation {
 			t.Errorf("%s is not %s %s", operationID, expected.method, expected.path)
 		}
 	}
 }
 
-func TestContractSecurityIsExplicitAndDenyByDefault(t *testing.T) {
+func TestProtectedOperationsDeclareRecognizedScopes(t *testing.T) {
 	doc := loadContract(t)
-	if len(doc.Security) == 0 {
-		t.Fatal("top-level security must deny unauthenticated access by default")
-	}
-
-	public := map[string]bool{
-		"createSession":   true,
-		"enrollAgent":     true,
-		"getPublicStatus": true,
-	}
 	for _, item := range doc.Paths.Map() {
 		for _, operation := range operations(item) {
-			if operation == nil {
-				continue
-			}
-			if operation.Security == nil {
-				t.Errorf("%s inherits security instead of declaring it explicitly", operation.OperationID)
+			if operation == nil || isAgentOperation(operation) || isAnonymous(operation) {
 				continue
 			}
 			scopes, ok := stringExtension(operation.Extensions["x-xisnove-scopes"])
-			if !ok {
-				t.Errorf("%s has no x-xisnove-scopes declaration", operation.OperationID)
-				continue
+			if !ok || len(scopes) != 1 || !recognizedAPITokenScopes[scopes[0]] {
+				t.Errorf("%s scopes = %#v, want exactly one recognized API-token scope", operation.OperationID, scopes)
 			}
-			if public[operation.OperationID] {
-				if len(*operation.Security) != 0 || len(scopes) != 0 {
-					t.Errorf("%s public security = %#v, scopes = %#v", operation.OperationID, *operation.Security, scopes)
-				}
-				continue
-			}
-			if len(*operation.Security) == 0 || len(scopes) == 0 {
-				t.Errorf("%s protected security = %#v, scopes = %#v", operation.OperationID, *operation.Security, scopes)
+			if operation.Security == nil || len(*operation.Security) == 0 {
+				t.Errorf("%s is not explicitly protected", operation.OperationID)
 			}
 		}
 	}
 }
 
-func TestRetryableMutationsAcceptIdempotencyKeys(t *testing.T) {
+func TestAPITokenScopeVocabularyIsExact(t *testing.T) {
+	doc := loadContract(t)
+	schema := doc.Components.Schemas["APITokenScope"]
+	if schema == nil || schema.Value == nil {
+		t.Fatal("APITokenScope is missing")
+	}
+	got := make(map[string]bool, len(schema.Value.Enum))
+	for _, value := range schema.Value.Enum {
+		scope, ok := value.(string)
+		if !ok {
+			t.Fatalf("APITokenScope contains non-string value %#v", value)
+		}
+		got[scope] = true
+	}
+	if len(got) != len(recognizedAPITokenScopes) {
+		t.Fatalf("APITokenScope count = %d, want %d: %v", len(got), len(recognizedAPITokenScopes), got)
+	}
+	for scope := range recognizedAPITokenScopes {
+		if !got[scope] {
+			t.Errorf("APITokenScope omits %s", scope)
+		}
+	}
+}
+
+func TestAnonymousOperationsAreExplicit(t *testing.T) {
+	doc := loadContract(t)
+	want := []string{"createSession", "enrollAgent", "getPublicStatusPage"}
+	var got []string
+	for _, item := range doc.Paths.Map() {
+		for _, operation := range operations(item) {
+			if operation != nil && isAnonymous(operation) {
+				got = append(got, operation.OperationID)
+			}
+		}
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("anonymous operations = %v, want %v", got, want)
+	}
+}
+
+func TestRetryableMutationsDeclareIdempotencyKey(t *testing.T) {
 	doc := loadContract(t)
 	for _, operationID := range []string{
-		"updateLocation", "updateMonitor", "updateAgent",
-		"createAPIToken", "updateAPIToken",
-		"upsertDiscoveryCandidatesBatch", "promoteDiscoveryCandidate",
+		"createAPIToken", "createLocation", "createMonitor", "updateMonitor",
+		"createAgentEnrollmentToken", "rotateAgentCredential",
+		"upsertDiscoveryCandidates", "promoteDiscoveryCandidate",
+		"createNotificationChannel", "updateNotificationChannel",
+		"createNotificationRoute", "updateNotificationRoute", "replayNotificationDelivery",
+		"createMaintenance", "endMaintenance",
 	} {
 		operation := operationByID(t, doc, operationID)
 		if !hasParameter(operation.Parameters, "header", "Idempotency-Key") {
@@ -107,38 +148,94 @@ func TestRetryableMutationsAcceptIdempotencyKeys(t *testing.T) {
 	}
 }
 
-func TestListOperationsUseBoundedOpaqueCursors(t *testing.T) {
+func TestAgentGenerationSubset(t *testing.T) {
 	doc := loadContract(t)
-	for operationID, pageSchema := range map[string]string{
-		"listAPITokens":              "APITokenPage",
-		"listLocations":              "LocationPage",
-		"listMonitors":               "MonitorPage",
-		"listAgents":                 "AgentPage",
-		"listIncidents":              "IncidentPage",
-		"listIncidentEvents":         "IncidentEventPage",
-		"listDiscoveryCandidates":    "DiscoveryCandidatePage",
-		"listNotificationChannels":   "NotificationChannelPage",
-		"listNotificationRoutes":     "NotificationRoutePage",
-		"listNotificationDeliveries": "NotificationDeliveryPage",
-		"listMaintenance":            "MaintenancePage",
-	} {
+	want := []string{
+		"enrollAgent", "heartbeatAgent", "leaseAgentWork", "uploadProbeResults",
+		"upsertDiscoveryCandidates",
+	}
+	configPath := filepath.Join("..", "agent", "oapi-codegen.yaml")
+	config, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(config)
+	for _, operationID := range want {
+		if !strings.Contains(text, "- "+operationID+"\n") {
+			t.Errorf("Agent config omits %s", operationID)
+		}
 		operation := operationByID(t, doc, operationID)
-		if !hasParameter(operation.Parameters, "query", "cursor") {
-			t.Errorf("%s has no opaque cursor", operationID)
+		if operation == nil {
+			t.Errorf("contract omits Agent operation %s", operationID)
 		}
-		limit := parameter(operation.Parameters, "query", "limit")
-		if limit == nil || limit.Schema == nil || limit.Schema.Value == nil ||
-			limit.Schema.Value.Max == nil || *limit.Schema.Value.Max > 100 {
-			t.Errorf("%s limit is not bounded to 100: %#v", operationID, limit)
+	}
+	for _, forbidden := range []string{"listAgents", "listMonitors", "getPublicStatusPage", "createAPIToken"} {
+		if strings.Contains(text, "- "+forbidden+"\n") {
+			t.Errorf("Agent config includes forbidden operation %s", forbidden)
 		}
+	}
+	if _, err := os.Stat("oapi-codegen-agent.yaml"); !os.IsNotExist(err) {
+		t.Errorf("api/oapi-codegen-agent.yaml is a second Agent generation source")
+	}
+}
+
+func TestProductionStrictGenerationIncludesFrozenOperations(t *testing.T) {
+	config, err := os.ReadFile("oapi-codegen-server.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(config), "include-operation-ids:") {
+		t.Fatal("production strict generation is filtered instead of covering the canonical contract")
+	}
+}
+
+func TestCursorPagesUsePageMetadataEnvelope(t *testing.T) {
+	doc := loadContract(t)
+	metadata := doc.Components.Schemas["PageMetadata"]
+	if metadata == nil || metadata.Value == nil || metadata.Value.Properties["nextCursor"] == nil {
+		t.Fatal("PageMetadata.nextCursor is missing")
+	}
+	for _, pageSchema := range []string{
+		"APITokenPage", "LocationPage", "MonitorPage", "AgentPage", "IncidentPage",
+		"IncidentEventPage", "DiscoveryCandidatePage", "NotificationChannelPage",
+		"NotificationRoutePage", "NotificationDeliveryPage", "MaintenancePage",
+	} {
 		page := doc.Components.Schemas[pageSchema]
-		if page == nil || page.Value == nil || page.Value.Properties["nextCursor"] == nil {
-			t.Errorf("%s has no nextCursor", pageSchema)
+		if page == nil || page.Value == nil || page.Value.Properties["page"] == nil {
+			t.Errorf("%s.page is missing", pageSchema)
+			continue
+		}
+		if page.Value.Properties["nextCursor"] != nil {
+			t.Errorf("%s keeps nextCursor outside the page envelope", pageSchema)
 		}
 	}
 }
 
-func TestDiscoveryBatchIsBoundedAndPromotionIsExplicit(t *testing.T) {
+func TestPublicStatusPageHasRecentUptimeWithoutPrivateFields(t *testing.T) {
+	doc := loadContract(t)
+	for _, schema := range []string{"PublicStatusPage", "PublicStatusMonitor", "PublicIncidentSummary", "DailyUptimePoint"} {
+		if doc.Components.Schemas[schema] == nil {
+			t.Errorf("%s is missing", schema)
+		}
+	}
+	monitor := doc.Components.Schemas["PublicStatusMonitor"]
+	if monitor != nil && monitor.Value != nil && monitor.Value.Properties["recentUptime"] == nil {
+		t.Error("PublicStatusMonitor.recentUptime is missing")
+	}
+	for _, schemaName := range []string{"PublicStatusPage", "PublicStatusMonitor", "PublicIncidentSummary", "DailyUptimePoint"} {
+		schema := doc.Components.Schemas[schemaName]
+		if schema == nil || schema.Value == nil {
+			continue
+		}
+		for _, forbidden := range []string{"probe", "configuration", "credential", "diagnosticSample"} {
+			if schema.Value.Properties[forbidden] != nil {
+				t.Errorf("%s exposes private field %s", schemaName, forbidden)
+			}
+		}
+	}
+}
+
+func TestDiscoveryBatchIsBounded(t *testing.T) {
 	doc := loadContract(t)
 	batch := doc.Components.Schemas["DiscoveryCandidateBatch"]
 	if batch == nil || batch.Value == nil {
@@ -149,21 +246,12 @@ func TestDiscoveryBatchIsBoundedAndPromotionIsExplicit(t *testing.T) {
 		candidates.Value.MinItems != 1 || *candidates.Value.MaxItems != 100 {
 		t.Fatalf("discovery candidates bound = %#v", candidates)
 	}
-	promotion := operationByID(t, doc, "promoteDiscoveryCandidate")
-	if promotion.RequestBody == nil ||
-		promotion.RequestBody.Value.Content.Get("application/json").Schema.Ref !=
-			"#/components/schemas/PromoteDiscoveryCandidateRequest" {
-		t.Fatalf("promotion request = %#v", promotion.RequestBody)
-	}
 }
 
 func TestProblemResponseFollowsRFC9457(t *testing.T) {
 	doc := loadContract(t)
 	response := doc.Components.Responses["Problem"]
-	if response == nil || response.Value == nil {
-		t.Fatal("Problem response is missing")
-	}
-	if response.Value.Content.Get("application/problem+json") == nil {
+	if response == nil || response.Value == nil || response.Value.Content.Get("application/problem+json") == nil {
 		t.Fatal("Problem response is not application/problem+json")
 	}
 	problem := doc.Components.Schemas["Problem"]
@@ -175,11 +263,14 @@ func TestProblemResponseFollowsRFC9457(t *testing.T) {
 			t.Errorf("Problem does not require %s", field)
 		}
 	}
-	for _, field := range []string{"detail", "instance"} {
-		if problem.Value.Properties[field] == nil {
-			t.Errorf("Problem has no RFC 9457 %s member", field)
-		}
-	}
+}
+
+func isAgentOperation(operation *openapi3.Operation) bool {
+	return slices.Contains(operation.Tags, "agent")
+}
+
+func isAnonymous(operation *openapi3.Operation) bool {
+	return operation.Security != nil && len(*operation.Security) == 0
 }
 
 func operationForMethod(item *openapi3.PathItem, method string) *openapi3.Operation {

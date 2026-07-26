@@ -290,16 +290,16 @@ type DNSProbeDefinitionKind string
 // DNSProbeDefinitionRecordType defines model for DNSProbeDefinition.RecordType.
 type DNSProbeDefinitionRecordType string
 
-// DiscoveryBatchAcknowledgement defines model for DiscoveryBatchAcknowledgement.
-type DiscoveryBatchAcknowledgement struct {
-	Accepted int32 `json:"accepted"`
-	Created  int32 `json:"created"`
-	Updated  int32 `json:"updated"`
-}
-
 // DiscoveryCandidateBatch defines model for DiscoveryCandidateBatch.
 type DiscoveryCandidateBatch struct {
 	Candidates []DiscoveryCandidateInput `json:"candidates"`
+}
+
+// DiscoveryCandidateBatchAcknowledgement defines model for DiscoveryCandidateBatchAcknowledgement.
+type DiscoveryCandidateBatchAcknowledgement struct {
+	Accepted int32 `json:"accepted"`
+	Created  int32 `json:"created"`
+	Updated  int32 `json:"updated"`
 }
 
 // DiscoveryCandidateInput defines model for DiscoveryCandidateInput.
@@ -491,8 +491,8 @@ type NotificationDeliveryID = openapi_types.UUID
 // NotificationRouteID defines model for NotificationRouteID.
 type NotificationRouteID = openapi_types.UUID
 
-// UpsertDiscoveryCandidatesBatchParams defines parameters for UpsertDiscoveryCandidatesBatch.
-type UpsertDiscoveryCandidatesBatchParams struct {
+// UpsertDiscoveryCandidatesParams defines parameters for UpsertDiscoveryCandidates.
+type UpsertDiscoveryCandidatesParams struct {
 	// IdempotencyKey Caller-generated key that makes a retry return the original mutation result.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
@@ -500,8 +500,8 @@ type UpsertDiscoveryCandidatesBatchParams struct {
 // EnrollAgentJSONRequestBody defines body for EnrollAgent for application/json ContentType.
 type EnrollAgentJSONRequestBody = EnrollAgentRequest
 
-// UpsertDiscoveryCandidatesBatchJSONRequestBody defines body for UpsertDiscoveryCandidatesBatch for application/json ContentType.
-type UpsertDiscoveryCandidatesBatchJSONRequestBody = DiscoveryCandidateBatch
+// UpsertDiscoveryCandidatesJSONRequestBody defines body for UpsertDiscoveryCandidates for application/json ContentType.
+type UpsertDiscoveryCandidatesJSONRequestBody = DiscoveryCandidateBatch
 
 // HeartbeatAgentJSONRequestBody defines body for HeartbeatAgent for application/json ContentType.
 type HeartbeatAgentJSONRequestBody = AgentHeartbeat
@@ -731,19 +731,19 @@ type ClientInterface interface {
 	// Takes a body of the `application/json` content type.
 	EnrollAgent(ctx context.Context, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpsertDiscoveryCandidatesBatchWithBody Idempotently upsert a bounded discovery candidate batch
+	// UpsertDiscoveryCandidatesWithBody Idempotently upsert a bounded discovery candidate batch
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-	UpsertDiscoveryCandidatesBatchWithBody(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+	UpsertDiscoveryCandidatesWithBody(ctx context.Context, params *UpsertDiscoveryCandidatesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpsertDiscoveryCandidatesBatch Idempotently upsert a bounded discovery candidate batch
+	// UpsertDiscoveryCandidates Idempotently upsert a bounded discovery candidate batch
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-	UpsertDiscoveryCandidatesBatch(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, body UpsertDiscoveryCandidatesBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+	UpsertDiscoveryCandidates(ctx context.Context, params *UpsertDiscoveryCandidatesParams, body UpsertDiscoveryCandidatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// HeartbeatAgentWithBody performs a POST /v1/agent/heartbeat (the `HeartbeatAgent` operationId) request,
 	// with any type of body and a specified content type.
@@ -798,13 +798,13 @@ func (c *Client) EnrollAgent(ctx context.Context, body EnrollAgentJSONRequestBod
 	return c.Client.Do(req)
 }
 
-// UpsertDiscoveryCandidatesBatchWithBody Idempotently upsert a bounded discovery candidate batch
+// UpsertDiscoveryCandidatesWithBody Idempotently upsert a bounded discovery candidate batch
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-func (c *Client) UpsertDiscoveryCandidatesBatchWithBody(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpsertDiscoveryCandidatesBatchRequestWithBody(c.Server, params, contentType, body)
+// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+func (c *Client) UpsertDiscoveryCandidatesWithBody(ctx context.Context, params *UpsertDiscoveryCandidatesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpsertDiscoveryCandidatesRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -815,13 +815,13 @@ func (c *Client) UpsertDiscoveryCandidatesBatchWithBody(ctx context.Context, par
 	return c.Client.Do(req)
 }
 
-// UpsertDiscoveryCandidatesBatch Idempotently upsert a bounded discovery candidate batch
+// UpsertDiscoveryCandidates Idempotently upsert a bounded discovery candidate batch
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-func (c *Client) UpsertDiscoveryCandidatesBatch(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, body UpsertDiscoveryCandidatesBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpsertDiscoveryCandidatesBatchRequest(c.Server, params, body)
+// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+func (c *Client) UpsertDiscoveryCandidates(ctx context.Context, params *UpsertDiscoveryCandidatesParams, body UpsertDiscoveryCandidatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpsertDiscoveryCandidatesRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -956,19 +956,19 @@ func NewEnrollAgentRequestWithBody(server string, contentType string, body io.Re
 	return req, nil
 }
 
-// NewUpsertDiscoveryCandidatesBatchRequest calls the generic UpsertDiscoveryCandidatesBatch builder with application/json body
-func NewUpsertDiscoveryCandidatesBatchRequest(server string, params *UpsertDiscoveryCandidatesBatchParams, body UpsertDiscoveryCandidatesBatchJSONRequestBody) (*http.Request, error) {
+// NewUpsertDiscoveryCandidatesRequest calls the generic UpsertDiscoveryCandidates builder with application/json body
+func NewUpsertDiscoveryCandidatesRequest(server string, params *UpsertDiscoveryCandidatesParams, body UpsertDiscoveryCandidatesJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpsertDiscoveryCandidatesBatchRequestWithBody(server, params, "application/json", bodyReader)
+	return NewUpsertDiscoveryCandidatesRequestWithBody(server, params, "application/json", bodyReader)
 }
 
-// NewUpsertDiscoveryCandidatesBatchRequestWithBody constructs an http.Request for the UpsertDiscoveryCandidatesBatch method, with any body, and a specified content type
-func NewUpsertDiscoveryCandidatesBatchRequestWithBody(server string, params *UpsertDiscoveryCandidatesBatchParams, contentType string, body io.Reader) (*http.Request, error) {
+// NewUpsertDiscoveryCandidatesRequestWithBody constructs an http.Request for the UpsertDiscoveryCandidates method, with any body, and a specified content type
+func NewUpsertDiscoveryCandidatesRequestWithBody(server string, params *UpsertDiscoveryCandidatesParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1185,19 +1185,19 @@ type ClientWithResponsesInterface interface {
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	EnrollAgentWithResponse(ctx context.Context, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error)
 
-	// UpsertDiscoveryCandidatesBatchWithBodyWithResponse Idempotently upsert a bounded discovery candidate batch
+	// UpsertDiscoveryCandidatesWithBodyWithResponse Idempotently upsert a bounded discovery candidate batch
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-	UpsertDiscoveryCandidatesBatchWithBodyWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesBatchResponse, error)
+	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+	UpsertDiscoveryCandidatesWithBodyWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesResponse, error)
 
-	// UpsertDiscoveryCandidatesBatchWithResponse Idempotently upsert a bounded discovery candidate batch
+	// UpsertDiscoveryCandidatesWithResponse Idempotently upsert a bounded discovery candidate batch
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-	UpsertDiscoveryCandidatesBatchWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, body UpsertDiscoveryCandidatesBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesBatchResponse, error)
+	// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+	UpsertDiscoveryCandidatesWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesParams, body UpsertDiscoveryCandidatesJSONRequestBody, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesResponse, error)
 
 	// HeartbeatAgentWithBodyWithResponse performs a POST /v1/agent/heartbeat (the `HeartbeatAgent` operationId) request,
 	// with any type of body and a specified content type.
@@ -1278,32 +1278,32 @@ func (r EnrollAgentResponse) ContentType() string {
 	return ""
 }
 
-type UpsertDiscoveryCandidatesBatchResponse struct {
+type UpsertDiscoveryCandidatesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *DiscoveryBatchAcknowledgement
+	JSON200 *DiscoveryCandidateBatchAcknowledgement
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r UpsertDiscoveryCandidatesBatchResponse) GetJSON200() *DiscoveryBatchAcknowledgement {
+func (r UpsertDiscoveryCandidatesResponse) GetJSON200() *DiscoveryCandidateBatchAcknowledgement {
 	return r.JSON200
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r UpsertDiscoveryCandidatesBatchResponse) GetApplicationproblemJSONDefault() *Problem {
+func (r UpsertDiscoveryCandidatesResponse) GetApplicationproblemJSONDefault() *Problem {
 	return r.ApplicationproblemJSONDefault
 }
 
 // GetBody returns the raw response body bytes
-func (r UpsertDiscoveryCandidatesBatchResponse) GetBody() []byte {
+func (r UpsertDiscoveryCandidatesResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r UpsertDiscoveryCandidatesBatchResponse) Status() string {
+func (r UpsertDiscoveryCandidatesResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1311,7 +1311,7 @@ func (r UpsertDiscoveryCandidatesBatchResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r UpsertDiscoveryCandidatesBatchResponse) StatusCode() int {
+func (r UpsertDiscoveryCandidatesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1319,7 +1319,7 @@ func (r UpsertDiscoveryCandidatesBatchResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r UpsertDiscoveryCandidatesBatchResponse) ContentType() string {
+func (r UpsertDiscoveryCandidatesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -1485,30 +1485,30 @@ func (c *ClientWithResponses) EnrollAgentWithResponse(ctx context.Context, body 
 	return ParseEnrollAgentResponse(rsp)
 }
 
-// UpsertDiscoveryCandidatesBatchWithBodyWithResponse Idempotently upsert a bounded discovery candidate batch
+// UpsertDiscoveryCandidatesWithBodyWithResponse Idempotently upsert a bounded discovery candidate batch
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-func (c *ClientWithResponses) UpsertDiscoveryCandidatesBatchWithBodyWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesBatchResponse, error) {
-	rsp, err := c.UpsertDiscoveryCandidatesBatchWithBody(ctx, params, contentType, body, reqEditors...)
+// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+func (c *ClientWithResponses) UpsertDiscoveryCandidatesWithBodyWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesResponse, error) {
+	rsp, err := c.UpsertDiscoveryCandidatesWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseUpsertDiscoveryCandidatesBatchResponse(rsp)
+	return ParseUpsertDiscoveryCandidatesResponse(rsp)
 }
 
-// UpsertDiscoveryCandidatesBatchWithResponse Idempotently upsert a bounded discovery candidate batch
+// UpsertDiscoveryCandidatesWithResponse Idempotently upsert a bounded discovery candidate batch
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidatesBatch` operationId).
-func (c *ClientWithResponses) UpsertDiscoveryCandidatesBatchWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesBatchParams, body UpsertDiscoveryCandidatesBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesBatchResponse, error) {
-	rsp, err := c.UpsertDiscoveryCandidatesBatch(ctx, params, body, reqEditors...)
+// Corresponds with POST /v1/agent/discovery-candidates:batch (the `UpsertDiscoveryCandidates` operationId).
+func (c *ClientWithResponses) UpsertDiscoveryCandidatesWithResponse(ctx context.Context, params *UpsertDiscoveryCandidatesParams, body UpsertDiscoveryCandidatesJSONRequestBody, reqEditors ...RequestEditorFn) (*UpsertDiscoveryCandidatesResponse, error) {
+	rsp, err := c.UpsertDiscoveryCandidates(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseUpsertDiscoveryCandidatesBatchResponse(rsp)
+	return ParseUpsertDiscoveryCandidatesResponse(rsp)
 }
 
 // HeartbeatAgentWithBodyWithResponse performs a POST /v1/agent/heartbeat (the `HeartbeatAgent` operationId) request,
@@ -1610,22 +1610,22 @@ func ParseEnrollAgentResponse(rsp *http.Response) (*EnrollAgentResponse, error) 
 	return response, nil
 }
 
-// ParseUpsertDiscoveryCandidatesBatchResponse parses an HTTP response from a UpsertDiscoveryCandidatesBatchWithResponse call
-func ParseUpsertDiscoveryCandidatesBatchResponse(rsp *http.Response) (*UpsertDiscoveryCandidatesBatchResponse, error) {
+// ParseUpsertDiscoveryCandidatesResponse parses an HTTP response from a UpsertDiscoveryCandidatesWithResponse call
+func ParseUpsertDiscoveryCandidatesResponse(rsp *http.Response) (*UpsertDiscoveryCandidatesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &UpsertDiscoveryCandidatesBatchResponse{
+	response := &UpsertDiscoveryCandidatesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest DiscoveryBatchAcknowledgement
+		var dest DiscoveryCandidateBatchAcknowledgement
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
