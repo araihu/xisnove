@@ -1,27 +1,17 @@
 # UI integration handoff
 
-## Frozen API and mock dependency
+## Frozen API and SDK dependency
 
-The API/mock track is active in Codex task
-`019f9b9d-47d6-7b82-a556-6690a8ab9383`. This branch was built from
-`codex/milestone-3-notifications` at `4fbe157` and deliberately contains no
-control-plane URL, endpoint path, generated SDK import, or copied API model.
+The UI module consumes `github.com/araihu/xisnove/sdk` from immutable root
+module commit `07467ccf39e67c5cd7a68878db8c2023318e6189`. Its `go.mod` records the
+corresponding pseudo-version, and release checks run with `GOWORK=off` so a
+local checkout cannot silently replace that dependency.
 
-The next UI slice is blocked on a coordinator handoff containing all of:
-
-1. the published frozen API/mock commit SHA;
-2. the generated SDK module/import path and its client construction contract;
-3. the mock server's supported startup command and base-URL output;
-4. the generated authentication/session and public-status operations and
-   RFC 9457 response types; and
-5. the command that proves the mock matches the frozen OpenAPI document.
-
-After that handoff, implement an adapter under `ui/internal/controlplane/`
-that satisfies the existing narrow interface with generated SDK calls. Extend
-the interface only for workflows backed by frozen generated types. Then add an
-API-base-URL setting to `ui/cmd/server`, point the browser harness's running UI
-at the mock, and cover successful/error/timeout status rendering. Do not add a
-hand-written HTTP client or parallel request/response structs.
+`ui/internal/controlplane.SDKClient` constructs the generated response client
+with the production HTTP transport. Authentication, revocation, aggregate
+public status, cursor monitor pages, and health enrichment all use generated
+operations and types. The UI adds presentation models only; it has no copied
+wire model or handwritten endpoint client.
 
 ## Requested global integration changes
 

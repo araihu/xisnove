@@ -7,17 +7,18 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/web"
+	"github.com/google/uuid"
 )
-
-var errSDKAdapterPending = errors.New("generated SDK adapter has not been handed off")
 
 type config struct {
 	addr            string
@@ -85,17 +86,44 @@ func loadConfig(getenv func(string) string) (config, error) {
 	if err != nil {
 		return config{}, fmt.Errorf("parse XISNOVE_UI_DEV_FAKE: %w", err)
 	}
-	if !devFake {
-		return config{}, fmt.Errorf("%w; set XISNOVE_UI_DEV_FAKE=true only for contract-independent development", errSDKAdapterPending)
+	if devFake {
+		email := getenv("XISNOVE_UI_DEV_ADMIN_EMAIL")
+		password := getenv("XISNOVE_UI_DEV_ADMIN_PASSWORD")
+		session := getenv("XISNOVE_UI_DEV_SESSION")
+		if email == "" || password == "" || session == "" {
+			return config{}, errors.New("development fake requires explicit email, password, and session values")
+		}
+		cfg.controlPlane = developmentFake(email, password, session)
+		return cfg, nil
 	}
-	username := getenv("XISNOVE_UI_DEV_ADMIN_USERNAME")
-	password := getenv("XISNOVE_UI_DEV_ADMIN_PASSWORD")
-	session := getenv("XISNOVE_UI_DEV_SESSION")
-	if username == "" || password == "" || session == "" {
-		return config{}, errors.New("development fake requires explicit username, password, and session values")
+	baseURL := getenv("XISNOVE_UI_API_BASE_URL")
+	parsed, err := url.ParseRequestURI(baseURL)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return config{}, errors.New("XISNOVE_UI_API_BASE_URL must be an absolute http or https URL")
 	}
-	cfg.controlPlane = controlplane.NewFake(username, password, session)
+	client, err := controlplane.NewSDKClient(baseURL, &http.Client{Timeout: cfg.requestTimeout})
+	if err != nil {
+		return config{}, err
+	}
+	cfg.controlPlane = client
 	return cfg, nil
+}
+
+func developmentFake(email, password, session string) *controlplane.Fake {
+	fake := controlplane.NewFake(email, password, session)
+	dnsID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
+	wanID := uuid.MustParse("10000000-0000-4000-8000-000000000002")
+	fake.Monitors = []sdk.Monitor{
+		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability from the control plane", Kind: sdk.MonitorKindDns, Enabled: true, Public: true},
+		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", Kind: sdk.MonitorKindHttp, Enabled: true, Public: true},
+	}
+	fake.Health[dnsID] = sdk.MonitorHealth{MonitorId: dnsID, State: sdk.Up}
+	fake.Health[wanID] = sdk.MonitorHealth{MonitorId: wanID, State: sdk.Unknown}
+	fake.PublicStatus = sdk.PublicStatusPage{GeneratedAt: time.Now().UTC(), State: sdk.Degraded, Monitors: []sdk.PublicStatusMonitor{
+		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability", State: sdk.Up},
+		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", State: sdk.Unknown},
+	}}
+	return fake
 }
 
 func decodeSecret(value string) ([]byte, error) {

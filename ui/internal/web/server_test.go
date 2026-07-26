@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
+	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
@@ -74,7 +78,7 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 	loginCSRF, loginCSRFCookie := getLoginCSRF(t, handler)
 
 	loginForm := url.Values{
-		"username": {testUsername},
+		"email":    {testUsername},
 		"password": {testPassword},
 		"_csrf":    {loginCSRF},
 	}
@@ -84,7 +88,7 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 	loginRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(loginRecorder, loginRequest)
 
-	if loginRecorder.Code != http.StatusSeeOther || loginRecorder.Header().Get("Location") != "/" {
+	if loginRecorder.Code != http.StatusSeeOther || loginRecorder.Header().Get("Location") != "/monitors" {
 		t.Fatalf("login response = %d Location %q", loginRecorder.Code, loginRecorder.Header().Get("Location"))
 	}
 	sessionCookie := cookieNamed(t, loginRecorder.Result().Cookies(), "__Host-xisnove-session")
@@ -92,7 +96,7 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 		t.Fatalf("session cookie lost security flags: %#v", sessionCookie)
 	}
 
-	dashboardRequest := httptest.NewRequest(http.MethodGet, "https://ui.example.test/", nil)
+	dashboardRequest := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors", nil)
 	dashboardRequest.AddCookie(sessionCookie)
 	dashboardRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(dashboardRecorder, dashboardRequest)
@@ -100,7 +104,7 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 		t.Fatalf("dashboard status = %d", dashboardRecorder.Code)
 	}
 	dashboard := dashboardRecorder.Body.String()
-	for _, want := range []string{"<nav", `href="/status"`, `action="/logout"`, `name="_csrf"`} {
+	for _, want := range []string{"<nav", `id="main-content"`, `action="/logout"`, `name="_csrf"`, "No monitors yet"} {
 		if !strings.Contains(dashboard, want) {
 			t.Errorf("dashboard missing %q", want)
 		}
@@ -155,6 +159,66 @@ func TestPublicStatusRendersFullPageOrHTMXFragment(t *testing.T) {
 	}
 }
 
+func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
+	client := controlplane.NewFake(testUsername, testPassword, testCredential)
+	monitorID := uuid.New()
+	client.Monitors = []sdk.Monitor{{Id: monitorID, Name: "Home DNS", Description: "Resolver", Kind: sdk.MonitorKindDns, Enabled: true}}
+	client.HealthErrors[monitorID] = errors.New("health backend unavailable")
+	handler, _ := newTestHandler(t, client, time.Second)
+	sessionCookie := loginSession(t, handler)
+
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors?q=dns&selected="+monitorID.String(), nil)
+	request.Header.Set("HX-Request", "true")
+	request.AddCookie(sessionCookie)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{`id="monitor-content"`, `value="dns"`, "Home DNS (selected)", "UNKNOWN", "Some health is unavailable", `hx-target="#main-content"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("monitor fragment missing %q", want)
+		}
+	}
+	if strings.Contains(body, "<html") || strings.Contains(body, testCredential) {
+		t.Fatal("fragment included shell or bearer")
+	}
+}
+
+func TestMonitorHTMXFailureSwapsScopedRetryWithOriginalQuery(t *testing.T) {
+	client := controlplane.NewFake(testUsername, testPassword, testCredential)
+	client.MonitorError = errors.New("database offline")
+	handler, _ := newTestHandler(t, client, time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors?q=router", nil)
+	request.Header.Set("HX-Request", "true")
+	request.AddCookie(loginSession(t, handler))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || recorder.Header().Get("X-Xisnove-Response-Status") != "502" {
+		t.Fatalf("response = %d headers %#v", recorder.Code, recorder.Header())
+	}
+	for _, want := range []string{"Monitors unavailable", `/monitors?q=router`, "Retry"} {
+		if !strings.Contains(recorder.Body.String(), want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+}
+
+func TestPublicStatusHTMXFailureIsExplicitlySwappable(t *testing.T) {
+	client := controlplane.NewFake(testUsername, testPassword, testCredential)
+	client.PublicError = context.DeadlineExceeded
+	handler, _ := newTestHandler(t, client, time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/status", nil)
+	request.Header.Set("HX-Request", "true")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || recorder.Header().Get("X-Xisnove-Response-Status") != "504" || !strings.Contains(recorder.Body.String(), "Public status timed out") {
+		t.Fatalf("response = %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestMethodProblemUsesRFC9457ShapeAndCorrelation(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
 	request := httptest.NewRequest(http.MethodPost, "https://ui.example.test/status", nil)
@@ -196,7 +260,7 @@ func TestLoginTimeoutIsPresentedWithoutLoggingCredentialsOrQuery(t *testing.T) {
 	handler, logs := newTestHandler(t, client, 5*time.Millisecond)
 	loginCSRF, loginCSRFCookie := getLoginCSRF(t, handler)
 	form := url.Values{
-		"username": {testUsername},
+		"email":    {testUsername},
 		"password": {testPassword},
 		"_csrf":    {loginCSRF},
 	}
@@ -270,6 +334,21 @@ func getLoginCSRF(t *testing.T, handler http.Handler) (string, *http.Cookie) {
 	return csrfFromBody(t, recorder.Body.String()), cookieNamed(t, recorder.Result().Cookies(), "__Host-xisnove-login-csrf")
 }
 
+func loginSession(t *testing.T, handler http.Handler) *http.Cookie {
+	t.Helper()
+	csrf, csrfCookie := getLoginCSRF(t, handler)
+	form := url.Values{"email": {testUsername}, "password": {testPassword}, "_csrf": {csrf}}
+	request := httptest.NewRequest(http.MethodPost, "https://ui.example.test/login", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(csrfCookie)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("login = %d %s", recorder.Code, recorder.Body.String())
+	}
+	return cookieNamed(t, recorder.Result().Cookies(), "__Host-xisnove-session")
+}
+
 func csrfFromBody(t *testing.T, body string) string {
 	t.Helper()
 	match := csrfValuePattern.FindStringSubmatch(body)
@@ -298,3 +377,15 @@ func (blockingClient) ExchangeAdministratorCredentials(ctx context.Context, _, _
 }
 
 func (blockingClient) RevokeSession(context.Context, string) error { return nil }
+func (blockingClient) GetPublicStatusPage(ctx context.Context) (sdk.PublicStatusPage, error) {
+	<-ctx.Done()
+	return sdk.PublicStatusPage{}, ctx.Err()
+}
+func (blockingClient) ListMonitors(ctx context.Context, _, _ string, _ int32) (sdk.Page[sdk.Monitor], error) {
+	<-ctx.Done()
+	return sdk.Page[sdk.Monitor]{}, ctx.Err()
+}
+func (blockingClient) GetMonitorHealth(ctx context.Context, _ string, _ openapi_types.UUID) (sdk.MonitorHealth, error) {
+	<-ctx.Done()
+	return sdk.MonitorHealth{}, ctx.Err()
+}

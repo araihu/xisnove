@@ -1,13 +1,14 @@
 # Xisnove UI BFF
 
 `ui/` is a separate Go module for Xisnove's server-rendered Goshtoso BFF. It
-depends on exactly `github.com/araihu/goshtoso v0.0.12` and accesses the
-control plane only through `internal/controlplane.Client`. No root database,
+accesses the control plane only through `internal/controlplane.Client` backed
+by the public generated Go SDK. No root database,
 sqlc, domain, application, or server-internal package is imported.
 
-The frozen generated-SDK adapter is intentionally pending. Until its commit is
-handed off, the runnable server requires an explicit development fake and does
-not accept an API base URL or invent any endpoint.
+The SDK dependency is pinned to frozen Xisnove commit `07467ccf39e67c5cd7a68878db8c2023318e6189`.
+Goshtoso is pinned to immutable guidance commit
+`5d2e74e4c693ffb17a7443b8b77ed195f815cd05`; see the documented v0.0.12
+exception in [`../docs/ui/goshtoso-snags.md`](../docs/ui/goshtoso-snags.md).
 
 ## Development
 
@@ -18,14 +19,21 @@ disable Secure cookies only for local plain HTTP:
 export XISNOVE_UI_COOKIE_SECRET="$(openssl rand -base64 32)"
 export XISNOVE_UI_COOKIE_SECURE=false
 export XISNOVE_UI_DEV_FAKE=true
-export XISNOVE_UI_DEV_ADMIN_USERNAME='<local value>'
+export XISNOVE_UI_DEV_ADMIN_EMAIL='admin@example.test'
 export XISNOVE_UI_DEV_ADMIN_PASSWORD='<local value>'
 export XISNOVE_UI_DEV_SESSION='<local opaque value>'
 go run ./cmd/server
 ```
 
 Production defaults to Secure cookies. Put TLS at the BFF or its trusted
-reverse proxy and do not enable the development fake.
+reverse proxy, do not enable the development fake, and configure:
+
+```bash
+export XISNOVE_UI_API_BASE_URL='https://xisnove-control-plane.example.test'
+export XISNOVE_UI_REQUEST_TIMEOUT='5s'
+```
+
+The timeout bounds both the BFF request context and SDK HTTP transport.
 
 ## Commands
 

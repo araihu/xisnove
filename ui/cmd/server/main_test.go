@@ -3,20 +3,36 @@ package main
 import (
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 )
 
-func TestLoadConfigRequiresExplicitDevelopmentFakeUntilSDKHandoff(t *testing.T) {
+func TestLoadConfigRequiresProductionAPIBaseURL(t *testing.T) {
 	env := testEnv(map[string]string{
 		"XISNOVE_UI_COOKIE_SECRET": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
 	})
 
 	_, err := loadConfig(env)
-	if err == nil || !errors.Is(err, errSDKAdapterPending) {
-		t.Fatalf("load config error = %v, want SDK adapter pending", err)
+	if err == nil || !strings.Contains(err.Error(), "XISNOVE_UI_API_BASE_URL") {
+		t.Fatalf("load config error = %v, want API base URL validation", err)
+	}
+}
+
+func TestLoadConfigBuildsProductionSDKClient(t *testing.T) {
+	env := testEnv(map[string]string{
+		"XISNOVE_UI_COOKIE_SECRET":   base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_API_BASE_URL":    "https://control.example.test",
+		"XISNOVE_UI_REQUEST_TIMEOUT": "2s",
+	})
+	cfg, err := loadConfig(env)
+	if err != nil {
+		t.Fatalf("load production config: %v", err)
+	}
+	if cfg.controlPlane == nil || cfg.requestTimeout != 2*time.Second {
+		t.Fatalf("production config = %#v", cfg)
 	}
 }
 
@@ -24,7 +40,7 @@ func TestLoadConfigUsesSecureBoundedDefaultsAndServerSideFake(t *testing.T) {
 	env := testEnv(map[string]string{
 		"XISNOVE_UI_COOKIE_SECRET":      base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
 		"XISNOVE_UI_DEV_FAKE":           "true",
-		"XISNOVE_UI_DEV_ADMIN_USERNAME": "local-admin",
+		"XISNOVE_UI_DEV_ADMIN_EMAIL":    "local-admin@example.test",
 		"XISNOVE_UI_DEV_ADMIN_PASSWORD": "server-side-password",
 		"XISNOVE_UI_DEV_SESSION":        "server-side-session",
 	})
@@ -36,11 +52,11 @@ func TestLoadConfigUsesSecureBoundedDefaultsAndServerSideFake(t *testing.T) {
 	if cfg.addr != "127.0.0.1:8081" || !cfg.cookieSecure || cfg.requestTimeout != 5*time.Second {
 		t.Fatalf("defaults = addr %q secure %t timeout %v", cfg.addr, cfg.cookieSecure, cfg.requestTimeout)
 	}
-	credential, err := cfg.controlPlane.ExchangeAdministratorCredentials(t.Context(), "local-admin", "server-side-password")
+	credential, err := cfg.controlPlane.ExchangeAdministratorCredentials(t.Context(), "local-admin@example.test", "server-side-password")
 	if err != nil || credential != "server-side-session" {
 		t.Fatalf("configured fake exchange = %q, %v", credential, err)
 	}
-	if _, err := cfg.controlPlane.ExchangeAdministratorCredentials(t.Context(), "local-admin", "wrong"); !errors.Is(err, controlplane.ErrInvalidCredentials) {
+	if _, err := cfg.controlPlane.ExchangeAdministratorCredentials(t.Context(), "local-admin@example.test", "wrong"); !errors.Is(err, controlplane.ErrInvalidCredentials) {
 		t.Fatalf("wrong password error = %v", err)
 	}
 }
@@ -52,7 +68,7 @@ func TestLoadConfigAllowsExplicitInsecureCookieForLocalHTTP(t *testing.T) {
 		"XISNOVE_UI_REQUEST_TIMEOUT":    "750ms",
 		"XISNOVE_UI_ADDR":               "127.0.0.1:0",
 		"XISNOVE_UI_DEV_FAKE":           "true",
-		"XISNOVE_UI_DEV_ADMIN_USERNAME": "local-admin",
+		"XISNOVE_UI_DEV_ADMIN_EMAIL":    "local-admin@example.test",
 		"XISNOVE_UI_DEV_ADMIN_PASSWORD": "server-side-password",
 		"XISNOVE_UI_DEV_SESSION":        "server-side-session",
 	})

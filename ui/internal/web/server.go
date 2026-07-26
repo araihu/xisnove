@@ -12,11 +12,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso/assets"
+	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/security"
 	"github.com/araihu/xisnove/ui/internal/view"
@@ -70,7 +72,7 @@ func New(cfg Config) (http.Handler, error) {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/assets/", assets.Handler())
+	mux.Handle("GET /assets/", assets.Handler())
 	mux.HandleFunc("/", s.route)
 
 	var handler http.Handler = mux
@@ -90,7 +92,13 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 			s.methodNotAllowed(w, r, http.MethodGet)
 			return
 		}
-		s.dashboard(w, r)
+		http.Redirect(w, r, "/monitors", http.StatusSeeOther)
+	case "/monitors":
+		if r.Method != http.MethodGet {
+			s.methodNotAllowed(w, r, http.MethodGet)
+			return
+		}
+		s.monitors(w, r)
 	case "/login":
 		s.login(w, r)
 	case "/logout":
@@ -147,7 +155,7 @@ func (s *server) loginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	credential, err := s.controlPlane.ExchangeAdministratorCredentials(
 		r.Context(),
-		r.PostForm.Get("username"),
+		r.PostForm.Get("email"),
 		r.PostForm.Get("password"),
 	)
 	if err != nil {
@@ -159,7 +167,7 @@ func (s *server) loginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cookies.SetSession(w, credential)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/monitors", http.StatusSeeOther)
 }
 
 func (s *server) loginError(w http.ResponseWriter, r *http.Request, err error) {
@@ -190,14 +198,30 @@ func (s *server) loginError(w http.ResponseWriter, r *http.Request, err error) {
 	s.writeProblem(w, r, upstreamProblem())
 }
 
-func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
+func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 	credential, ok := s.cookies.Session(r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		s.redirectLogin(w, r)
+		return
+	}
+	page, err := s.controlPlane.ListMonitors(r.Context(), credential, r.URL.Query().Get("cursor"), 25)
+	if err != nil {
+		s.monitorFailure(w, r, credential, err)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query != "" {
+		page.Items = filterMonitors(page.Items, query)
+	}
+	health, failures, unauthorized := s.enrichMonitorHealth(r.Context(), credential, page.Items)
+	if unauthorized {
+		s.cookies.ClearSession(w)
+		s.redirectLogin(w, r)
 		return
 	}
 	csrfToken := s.cookies.SessionCSRF(credential)
-	s.renderAdaptive(w, r, http.StatusOK, view.ShellPage(csrfToken), view.DashboardContent())
+	data := view.MonitorList{Monitors: page.Items, Health: health, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures}
+	s.renderAdaptive(w, r, http.StatusOK, view.MonitorPage(csrfToken, data), view.MonitorContent(data))
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +256,108 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) publicStatus(w http.ResponseWriter, r *http.Request) {
-	s.renderAdaptive(w, r, http.StatusOK, view.StatusPage(), view.StatusContent())
+	status, err := s.controlPlane.GetPublicStatusPage(r.Context())
+	if err != nil {
+		problem := view.Problem{Title: "Public status unavailable", Detail: "The latest public status could not be loaded. Existing navigation remains available; retry shortly.", Code: "public_status_unavailable", CorrelationID: correlationID(r.Context()), RetryURL: "/status"}
+		code := http.StatusBadGateway
+		if errors.Is(err, context.DeadlineExceeded) {
+			code = http.StatusGatewayTimeout
+			problem.Title = "Public status timed out"
+		}
+		s.renderStateFailure(w, r, code, view.StatusErrorPage(problem), view.PublicStatusError(problem))
+		return
+	}
+	s.renderAdaptive(w, r, http.StatusOK, view.StatusPage(status), view.StatusContent(status))
+}
+
+func (s *server) monitorFailure(w http.ResponseWriter, r *http.Request, credential string, err error) {
+	if errors.Is(err, controlplane.ErrUnauthorized) || isAPIStatus(err, http.StatusUnauthorized) {
+		s.cookies.ClearSession(w)
+		s.redirectLogin(w, r)
+		return
+	}
+	problem := view.Problem{Title: "Monitors unavailable", Detail: "The monitor list could not be loaded. Your search is preserved in the URL; retry shortly.", Code: "monitors_unavailable", CorrelationID: correlationID(r.Context()), RetryURL: r.URL.RequestURI()}
+	code := http.StatusBadGateway
+	if errors.Is(err, context.DeadlineExceeded) {
+		code = http.StatusGatewayTimeout
+		problem.Title = "Monitor request timed out"
+	}
+	csrfToken := s.cookies.SessionCSRF(credential)
+	s.renderStateFailure(w, r, code, view.MonitorErrorPage(csrfToken, problem), view.MonitorErrorContent(problem))
+}
+
+func (s *server) renderStateFailure(w http.ResponseWriter, r *http.Request, status int, full, fragment templ.Component) {
+	if isHTMX(r) {
+		w.Header().Set("X-Xisnove-Response-Status", fmt.Sprint(status))
+		s.renderAdaptive(w, r, http.StatusOK, full, fragment)
+		return
+	}
+	s.renderAdaptive(w, r, status, full, fragment)
+}
+
+func (s *server) redirectLogin(w http.ResponseWriter, r *http.Request) {
+	if isHTMX(r) {
+		w.Header().Set("HX-Redirect", "/login")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func filterMonitors(monitors []sdk.Monitor, query string) []sdk.Monitor {
+	needle := strings.ToLower(query)
+	filtered := make([]sdk.Monitor, 0, len(monitors))
+	for _, monitor := range monitors {
+		if strings.Contains(strings.ToLower(monitor.Name), needle) || strings.Contains(strings.ToLower(monitor.Description), needle) || strings.Contains(strings.ToLower(string(monitor.Kind)), needle) {
+			filtered = append(filtered, monitor)
+		}
+	}
+	return filtered
+}
+
+func (s *server) enrichMonitorHealth(ctx context.Context, credential string, monitors []sdk.Monitor) (map[string]sdk.HealthState, int, bool) {
+	const parallelism = 4
+	health := make(map[string]sdk.HealthState, len(monitors))
+	sem := make(chan struct{}, parallelism)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	failures := 0
+	unauthorized := false
+	for _, monitor := range monitors {
+		monitor := monitor
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				mu.Lock()
+				failures++
+				mu.Unlock()
+				return
+			}
+			defer func() { <-sem }()
+			value, err := s.controlPlane.GetMonitorHealth(ctx, credential, monitor.Id)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				health[monitor.Id.String()] = sdk.Unknown
+				failures++
+				if errors.Is(err, controlplane.ErrUnauthorized) || isAPIStatus(err, http.StatusUnauthorized) {
+					unauthorized = true
+				}
+				return
+			}
+			health[monitor.Id.String()] = value.State
+		}()
+	}
+	wg.Wait()
+	return health, failures, unauthorized
+}
+
+func isAPIStatus(err error, status int) bool {
+	var apiError *sdk.APIError
+	return errors.As(err, &apiError) && apiError.StatusCode == status
 }
 
 func (s *server) methodNotAllowed(w http.ResponseWriter, r *http.Request, allowed ...string) {
