@@ -55,6 +55,15 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 		}
 		return port.DiscoveryBatchAcknowledgement{Accepted: int(stored.Accepted), Created: int(stored.CreatedCount), Updated: int(stored.UpdatedCount)}, nil
 	}
+	if batch.Complete {
+		fenced, err := r.queries.FenceAgentLastCompleteDiscovery(ctx, dbsqlite.FenceAgentLastCompleteDiscoveryParams{CompletedAt: nullableTimeValue(batch.CompletedAt), AgentID: string(batch.AgentID)})
+		if err != nil {
+			return port.DiscoveryBatchAcknowledgement{}, repositoryError("fence complete discovery", err)
+		}
+		if fenced != 1 {
+			return port.DiscoveryBatchAcknowledgement{}, port.ErrConflict
+		}
+	}
 	ack := port.DiscoveryBatchAcknowledgement{Accepted: len(batch.Candidates)}
 	for _, candidate := range batch.Candidates {
 		if !candidate.Present {
@@ -86,9 +95,6 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 	if batch.Complete {
 		if _, err := r.queries.MarkAbsentDiscoveryCandidates(ctx, dbsqlite.MarkAbsentDiscoveryCandidatesParams{UpdatedAt: formatDiscoveryTime(batch.CreatedAt), AgentID: string(batch.AgentID), LastObservedAt: formatDiscoveryTime(batch.CompletedAt)}); err != nil {
 			return port.DiscoveryBatchAcknowledgement{}, repositoryError("mark absent discovery candidates", err)
-		}
-		if _, err := r.queries.RecordAgentLastCompleteDiscovery(ctx, dbsqlite.RecordAgentLastCompleteDiscoveryParams{CompletedAt: nullableTimeValue(batch.CompletedAt), AgentID: string(batch.AgentID)}); err != nil {
-			return port.DiscoveryBatchAcknowledgement{}, repositoryError("record complete discovery", err)
 		}
 	}
 	completed, err := r.queries.CompleteDiscoveryBatch(ctx, dbsqlite.CompleteDiscoveryBatchParams{

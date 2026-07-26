@@ -17,11 +17,11 @@ SET present = FALSE, updated_at = sqlc.arg(updated_at)
 WHERE agent_id = sqlc.arg(agent_id) AND present = TRUE
   AND last_observed_at < sqlc.arg(completed_at);
 
--- name: RecordAgentLastCompleteDiscovery :execrows
+-- name: FenceAgentLastCompleteDiscovery :execrows
 UPDATE agents
 SET last_complete_discovery_at = sqlc.arg(completed_at)
 WHERE id = sqlc.arg(agent_id) AND (
-    last_complete_discovery_at IS NULL OR last_complete_discovery_at < sqlc.arg(completed_at)
+    last_complete_discovery_at IS NULL OR last_complete_discovery_at <= sqlc.arg(completed_at)
 );
 
 -- name: GetAgentLastCompleteDiscovery :one

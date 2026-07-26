@@ -9,24 +9,29 @@ import (
 )
 
 func TestOperatorEdgeStorage(t *testing.T) {
-	for _, profile := range []database.Profile{
-		database.ProfileSQLite,
-		database.ProfileTursoLocal,
-		database.ProfilePostgres,
-		database.ProfileTursoCloud,
+	for _, test := range []struct {
+		name    string
+		profile database.Profile
+	}{
+		{name: "SQLite", profile: database.ProfileSQLite},
+		{name: "TursoLocal", profile: database.ProfileTursoLocal},
+		{name: "Postgres", profile: database.ProfilePostgres},
+		{name: "TursoCloud", profile: database.ProfileTursoCloud},
 	} {
-		profile := profile
-		t.Run(string(profile), func(t *testing.T) {
-			var harness *storageHarness
-			switch profile {
-			case database.ProfileSQLite, database.ProfileTursoLocal:
-				harness = newFileStorageHarness(t, profile)
-			case database.ProfilePostgres:
-				harness = newPostgresStorageHarness(t)
-			case database.ProfileTursoCloud:
-				harness = newTursoCloudStorageHarness(t)
-			}
-			contracttest.RunOperatorEdge(t, func(*testing.T) port.UnitOfWork { return harness.primary.Store })
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			contracttest.RunDiscovery(t, func(t *testing.T) port.UnitOfWork {
+				var harness *storageHarness
+				switch test.profile {
+				case database.ProfileSQLite, database.ProfileTursoLocal:
+					harness = newFileStorageHarness(t, test.profile)
+				case database.ProfilePostgres:
+					harness = newPostgresStorageHarness(t)
+				case database.ProfileTursoCloud:
+					harness = newTursoCloudStorageHarness(t)
+				}
+				return harness.primary.Store
+			})
 		})
 	}
 }

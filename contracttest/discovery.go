@@ -95,6 +95,43 @@ func testCompleteDiscoverySnapshots(t *testing.T, unit port.UnitOfWork) {
 	}); err != nil {
 		t.Fatalf("empty complete: %v", err)
 	}
+	staleObservedAt := completed.Add(30 * time.Second)
+	stalePresent := present.Clone()
+	stalePresent.Name = "stale-resurrection"
+	stalePresent.Present = true
+	stalePresent.LastObservedAt = staleObservedAt
+	stalePresent.UpdatedAt = staleObservedAt
+	staleErr := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		_, err := repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{
+			ID: "out-of-order-complete", AgentID: agentID, RequestHash: "out-of-order-complete",
+			Candidates: []domain.DiscoveryCandidate{stalePresent}, Complete: true,
+			CompletedAt: staleObservedAt, CreatedAt: completed.Add(3 * time.Minute),
+		})
+		return err
+	})
+	if !errors.Is(staleErr, port.ErrConflict) {
+		t.Errorf("out-of-order complete error = %v, want conflict", staleErr)
+	}
+	if err := discovery.DiscoveryView(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		stored, err := repositories.Discovery.Get(ctx, present.ID)
+		if err != nil {
+			return err
+		}
+		if stored.Present || stored.Name == "stale-resurrection" || !stored.LastObservedAt.Equal(completed) {
+			t.Errorf("out-of-order complete mutated candidate = %#v", stored)
+		}
+		agent, err := repositories.Agents.Get(ctx, agentID)
+		if err != nil {
+			return err
+		}
+		latest := completed.Add(time.Minute)
+		if agent.LastCompleteDiscoveryAt == nil || !agent.LastCompleteDiscoveryAt.Equal(latest) {
+			t.Errorf("out-of-order complete mutated freshness = %v, want %v", agent.LastCompleteDiscoveryAt, latest)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
 		_, err := repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{ID: "complete-current", AgentID: agentID, RequestHash: "complete-current", Candidates: []domain.DiscoveryCandidate{present}, Complete: false, CreatedAt: completed})
 		return err

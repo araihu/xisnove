@@ -42,6 +42,7 @@ type Querier interface {
 	DeleteExpiredProbeResults(ctx context.Context, arg DeleteExpiredProbeResultsParams) (int64, error)
 	DeleteFutureMaintenanceInterval(ctx context.Context, arg DeleteFutureMaintenanceIntervalParams) (int64, error)
 	EndMaintenanceInterval(ctx context.Context, arg EndMaintenanceIntervalParams) (int64, error)
+	FenceAgentLastCompleteDiscovery(ctx context.Context, arg FenceAgentLastCompleteDiscoveryParams) (int64, error)
 	FindActiveAPITokenByTokenHash(ctx context.Context, arg FindActiveAPITokenByTokenHashParams) (ApiToken, error)
 	FindActiveAgentByCredentialHash(ctx context.Context, credentialHash []byte) (FindActiveAgentByCredentialHashRow, error)
 	FindActiveSessionByTokenHash(ctx context.Context, arg FindActiveSessionByTokenHashParams) (Session, error)
@@ -122,7 +123,6 @@ type Querier interface {
 	MarkNotificationSuppressed(ctx context.Context, arg MarkNotificationSuppressedParams) (int64, error)
 	OpenIncident(ctx context.Context, arg OpenIncidentParams) error
 	PutIdempotencyRecord(ctx context.Context, arg PutIdempotencyRecordParams) (int64, error)
-	RecordAgentLastCompleteDiscovery(ctx context.Context, arg RecordAgentLastCompleteDiscoveryParams) (int64, error)
 	RecoverIncident(ctx context.Context, arg RecoverIncidentParams) (int64, error)
 	ReleaseEndedMaintenanceClaim(ctx context.Context, arg ReleaseEndedMaintenanceClaimParams) (int64, error)
 	ReleaseNotificationClaim(ctx context.Context, arg ReleaseNotificationClaimParams) (int64, error)

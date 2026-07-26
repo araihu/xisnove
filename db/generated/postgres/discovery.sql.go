@@ -72,6 +72,27 @@ func (q *Queries) CreateDiscoveryBatch(ctx context.Context, arg CreateDiscoveryB
 	return result.RowsAffected()
 }
 
+const fenceAgentLastCompleteDiscovery = `-- name: FenceAgentLastCompleteDiscovery :execrows
+UPDATE agents
+SET last_complete_discovery_at = $1
+WHERE id = $2 AND (
+    last_complete_discovery_at IS NULL OR last_complete_discovery_at <= $1
+)
+`
+
+type FenceAgentLastCompleteDiscoveryParams struct {
+	CompletedAt sql.NullTime `json:"completed_at"`
+	AgentID     string       `json:"agent_id"`
+}
+
+func (q *Queries) FenceAgentLastCompleteDiscovery(ctx context.Context, arg FenceAgentLastCompleteDiscoveryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, fenceAgentLastCompleteDiscovery, arg.CompletedAt, arg.AgentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAgentLastCompleteDiscovery = `-- name: GetAgentLastCompleteDiscovery :one
 SELECT last_complete_discovery_at
 FROM agents
@@ -372,27 +393,6 @@ type MarkAbsentDiscoveryCandidatesParams struct {
 
 func (q *Queries) MarkAbsentDiscoveryCandidates(ctx context.Context, arg MarkAbsentDiscoveryCandidatesParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, markAbsentDiscoveryCandidates, arg.UpdatedAt, arg.AgentID, arg.CompletedAt)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const recordAgentLastCompleteDiscovery = `-- name: RecordAgentLastCompleteDiscovery :execrows
-UPDATE agents
-SET last_complete_discovery_at = $1
-WHERE id = $2 AND (
-    last_complete_discovery_at IS NULL OR last_complete_discovery_at < $1
-)
-`
-
-type RecordAgentLastCompleteDiscoveryParams struct {
-	CompletedAt sql.NullTime `json:"completed_at"`
-	AgentID     string       `json:"agent_id"`
-}
-
-func (q *Queries) RecordAgentLastCompleteDiscovery(ctx context.Context, arg RecordAgentLastCompleteDiscoveryParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, recordAgentLastCompleteDiscovery, arg.CompletedAt, arg.AgentID)
 	if err != nil {
 		return 0, err
 	}
