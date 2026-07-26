@@ -107,7 +107,12 @@ func (s *Server) PromoteDiscoveryCandidate(
 	ctx context.Context,
 	request PromoteDiscoveryCandidateRequestObject,
 ) (PromoteDiscoveryCandidateResponseObject, error) {
-	if _, err := requiredIdempotencyKey(request.Params.IdempotencyKey); err != nil {
+	principal, err := managementPrincipal(ctx)
+	if err != nil {
+		return promoteDiscoveryProblem(err)
+	}
+	key, err := requiredIdempotencyKey(request.Params.IdempotencyKey)
+	if err != nil {
 		return promoteDiscoveryProblem(err)
 	}
 	if request.Body == nil {
@@ -118,7 +123,7 @@ func (s *Server) PromoteDiscoveryCandidate(
 		body.RecoveryThreshold <= 0 || body.RecoveryThreshold > math.MaxUint16 {
 		return promoteDiscoveryProblem(invalidMonitorError())
 	}
-	promotion, err := s.discovery.Promote(ctx, domain.DiscoveryCandidateID(request.CandidateId.String()), application.DiscoveryPromotionCommand{
+	promotion, err := s.discovery.PromoteIdempotently(ctx, principal, key, domain.DiscoveryCandidateID(request.CandidateId.String()), application.DiscoveryPromotionCommand{
 		Name: body.Name, Description: pointerValue(body.Description), Labels: mapPointerValue(body.Labels),
 		Public: body.Public, LocationID: domain.LocationID(body.LocationId.String()),
 		RequiredLocation: body.RequiredLocation, Interval: time.Duration(body.IntervalSeconds) * time.Second,

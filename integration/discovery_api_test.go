@@ -59,7 +59,7 @@ func runDiscoveryAPIJourney(t *testing.T, harness *storageHarness) {
 		Store: store, Cursors: cursors, Tokens: tokens, NewID: ids.NewUUID,
 	})
 	discovery := application.NewDiscoveryService(application.DiscoveryServiceConfig{
-		Store: harness.primary.DiscoveryUnitOfWork(), NewCandidateID: ids.NewUUID,
+		Store: harness.primary.DiscoveryUnitOfWork(), IdempotencyStore: store, NewCandidateID: ids.NewUUID,
 		NewMonitorID: ids.NewUUID, Now: func() time.Time { return now }, Cursors: cursors,
 	})
 	handler, err := httpapi.NewHandler(httpapi.HandlerConfig{
@@ -111,6 +111,15 @@ func runDiscoveryAPIJourney(t *testing.T, harness *storageHarness) {
 		Protocol: sdk.DiscoveryCandidateInputProtocolHttp, Target: "https://status-api.monitoring.svc/ready",
 		NetworkPerspective: "cluster:kube-prod", Present: true, ObservedAt: observedAt,
 	}
+	duplicateKey := sdk.IdempotencyKey("discovery-duplicate-snapshot")
+	duplicate, err := client.UpsertDiscoveryCandidatesWithResponse(ctx,
+		&sdk.UpsertDiscoveryCandidatesParams{IdempotencyKey: &duplicateKey},
+		sdk.DiscoveryCandidateBatch{Candidates: []sdk.DiscoveryCandidateInput{input, input}}, agentAuth,
+	)
+	if err != nil || duplicate.ApplicationproblemJSONDefault == nil || duplicate.StatusCode() != 400 ||
+		duplicate.ApplicationproblemJSONDefault.Code != "validation_failed" {
+		t.Fatalf("duplicate discovery identity was not rejected: response=%#v err=%v", duplicate, err)
+	}
 	uploadKey := sdk.IdempotencyKey("discovery-snapshot-1")
 	uploaded, err := client.UpsertDiscoveryCandidatesWithResponse(ctx,
 		&sdk.UpsertDiscoveryCandidatesParams{IdempotencyKey: &uploadKey},
@@ -160,6 +169,42 @@ func runDiscoveryAPIJourney(t *testing.T, harness *storageHarness) {
 	if err != nil || replayed.JSON201 == nil || replayed.JSON201.Monitor.Id != monitorID ||
 		replayed.JSON201.Candidate.PromotedMonitorId == nil || *replayed.JSON201.Candidate.PromotedMonitorId != monitorID {
 		t.Fatalf("repeat promotion was not idempotent: response=%#v err=%v", replayed, err)
+	}
+	changedPromotion := promotionRequest
+	changedPromotion.Name = "Changed body must conflict"
+	changedReplay, err := client.PromoteDiscoveryCandidateWithResponse(ctx, candidate.Id,
+		&sdk.PromoteDiscoveryCandidateParams{IdempotencyKey: &promotionKey}, changedPromotion, adminAuth,
+	)
+	if err != nil || changedReplay.ApplicationproblemJSONDefault == nil || changedReplay.StatusCode() != 409 ||
+		changedReplay.ApplicationproblemJSONDefault.Code != "idempotency_key_reused" {
+		t.Fatalf("changed promotion replay did not conflict: response=%#v err=%v", changedReplay, err)
+	}
+	secondInput := input
+	secondInput.SourceUid = "uid-route-456"
+	secondInput.Name = "second-status-api"
+	secondInput.Target = "https://second-status-api.monitoring.svc/ready"
+	secondUploadKey := sdk.IdempotencyKey("discovery-snapshot-second-candidate")
+	secondUpload, err := client.UpsertDiscoveryCandidatesWithResponse(ctx,
+		&sdk.UpsertDiscoveryCandidatesParams{IdempotencyKey: &secondUploadKey},
+		sdk.DiscoveryCandidateBatch{Candidates: []sdk.DiscoveryCandidateInput{secondInput}}, agentAuth,
+	)
+	if err != nil || secondUpload.JSON200 == nil || secondUpload.JSON200.Created != 1 {
+		t.Fatalf("upload second discovery candidate response=%#v err=%v", secondUpload, err)
+	}
+	allCandidates, err := client.ListDiscoveryCandidatesWithResponse(ctx, nil, adminAuth)
+	if err != nil || allCandidates.JSON200 == nil || len(allCandidates.JSON200.Items) != 2 {
+		t.Fatalf("list two discovery candidates response=%#v err=%v", allCandidates, err)
+	}
+	secondCandidateID := allCandidates.JSON200.Items[0].Id
+	if secondCandidateID == candidate.Id {
+		secondCandidateID = allCandidates.JSON200.Items[1].Id
+	}
+	crossCandidateReplay, err := client.PromoteDiscoveryCandidateWithResponse(ctx, secondCandidateID,
+		&sdk.PromoteDiscoveryCandidateParams{IdempotencyKey: &promotionKey}, promotionRequest, adminAuth,
+	)
+	if err != nil || crossCandidateReplay.ApplicationproblemJSONDefault == nil ||
+		crossCandidateReplay.StatusCode() != 409 || crossCandidateReplay.ApplicationproblemJSONDefault.Code != "idempotency_key_reused" {
+		t.Fatalf("cross-candidate idempotency replay did not conflict: response=%#v err=%v", crossCandidateReplay, err)
 	}
 
 	tombstone := input

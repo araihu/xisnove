@@ -50,6 +50,7 @@ type Repositories struct {
 	Retention            RetentionRepository
 	Management           ManagementQueryRepository
 	ManagementCommands   ManagementCommandRepository
+	Discovery            DiscoveryRepository
 }
 
 type AdminRecord struct {

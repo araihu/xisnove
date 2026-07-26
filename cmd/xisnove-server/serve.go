@@ -134,7 +134,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 		return fmt.Errorf("configure public status: %w", err)
 	}
 	discovery := application.NewDiscoveryService(application.DiscoveryServiceConfig{
-		Store: handle.DiscoveryUnitOfWork(), NewCandidateID: ids.NewUUID,
+		Store: handle.DiscoveryUnitOfWork(), IdempotencyStore: store, NewCandidateID: ids.NewUUID,
 		NewMonitorID: ids.NewUUID, Now: xisclock.Now, Cursors: cursors,
 	})
 	handler, err := httpapi.NewHandler(httpapi.HandlerConfig{

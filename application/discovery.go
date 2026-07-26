@@ -47,24 +47,26 @@ type DiscoveryPromotion struct {
 }
 
 type DiscoveryServiceConfig struct {
-	Store          port.DiscoveryUnitOfWork
-	NewCandidateID func() string
-	NewMonitorID   func() string
-	Now            func() time.Time
-	Cursors        AudienceCursorCodec
+	Store            port.DiscoveryUnitOfWork
+	IdempotencyStore port.UnitOfWork
+	NewCandidateID   func() string
+	NewMonitorID     func() string
+	Now              func() time.Time
+	Cursors          AudienceCursorCodec
 }
 
 type DiscoveryService struct {
-	store          port.DiscoveryUnitOfWork
-	newCandidateID func() string
-	newMonitorID   func() string
-	now            func() time.Time
-	cursors        AudienceCursorCodec
+	store            port.DiscoveryUnitOfWork
+	idempotencyStore port.UnitOfWork
+	newCandidateID   func() string
+	newMonitorID     func() string
+	now              func() time.Time
+	cursors          AudienceCursorCodec
 }
 
 func NewDiscoveryService(config DiscoveryServiceConfig) *DiscoveryService {
 	return &DiscoveryService{
-		store: config.Store, newCandidateID: config.NewCandidateID,
+		store: config.Store, idempotencyStore: config.IdempotencyStore, newCandidateID: config.NewCandidateID,
 		newMonitorID: config.NewMonitorID, now: config.Now, cursors: config.Cursors,
 	}
 }
@@ -88,6 +90,7 @@ func (s *DiscoveryService) Publish(ctx context.Context, agentID domain.AgentID, 
 		return port.DiscoveryBatchAcknowledgement{}, fmt.Errorf("fingerprint discovery batch: %w", err)
 	}
 	candidates := make([]domain.DiscoveryCandidate, len(inputs))
+	identities := make(map[domain.DiscoveryIdentity]int, len(inputs))
 	for index, input := range inputs {
 		candidate, err := domain.NewDiscoveryCandidate(domain.NewDiscoveryCandidateParams{
 			ID: domain.DiscoveryCandidateID(s.newCandidateID()), AgentID: agentID, LocationID: input.LocationID,
@@ -98,6 +101,12 @@ func (s *DiscoveryService) Publish(ctx context.Context, agentID domain.AgentID, 
 		if err != nil {
 			return port.DiscoveryBatchAcknowledgement{}, &ValidationError{Fields: map[string]string{fmt.Sprintf("candidates[%d]", index): "contains invalid discovery identity"}}
 		}
+		if previous, duplicate := identities[candidate.Identity()]; duplicate {
+			return port.DiscoveryBatchAcknowledgement{}, &ValidationError{Fields: map[string]string{
+				fmt.Sprintf("candidates[%d]", index): fmt.Sprintf("duplicates candidates[%d]", previous),
+			}}
+		}
+		identities[candidate.Identity()] = index
 		candidates[index] = candidate
 	}
 	var acknowledgement port.DiscoveryBatchAcknowledgement
@@ -118,77 +127,157 @@ func (s *DiscoveryService) Promote(ctx context.Context, candidateID domain.Disco
 	}
 	var result DiscoveryPromotion
 	err := s.store.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
-		if repositories.Discovery == nil || repositories.Locations == nil || repositories.Monitors == nil || repositories.Health == nil {
-			return errors.New("discovery promotion repositories are not configured")
-		}
-		candidate, err := repositories.Discovery.GetForUpdate(ctx, candidateID)
-		if err != nil {
-			return err
-		}
-		if candidate.PromotedMonitorID != nil {
-			monitor, err := repositories.Monitors.Get(ctx, *candidate.PromotedMonitorID)
-			if err != nil {
-				return err
-			}
-			assignment, err := repositories.Monitors.GetAssignment(ctx, monitor.ID)
-			if err != nil {
-				return err
-			}
-			result = DiscoveryPromotion{Candidate: candidate.Clone(), Monitor: ConfiguredMonitor{Monitor: monitor, LocationID: assignment.LocationID, RequiredLocation: assignment.Required}}
-			return nil
-		}
-		if !candidate.Present {
-			return &ValidationError{Fields: map[string]string{"candidate": "stale candidate cannot be promoted"}}
-		}
-		if command.LocationID != candidate.LocationID {
-			return &ValidationError{Fields: map[string]string{"locationId": "must match candidate location"}}
-		}
-		if _, err := repositories.Locations.Get(ctx, command.LocationID); err != nil {
-			return err
-		}
-		probe, err := discoveryProbe(candidate)
-		if err != nil {
-			return &ValidationError{Fields: map[string]string{"candidate": "target cannot be promoted"}}
-		}
-		now := s.now().UTC()
-		monitor, err := newConfiguredMonitor(domain.MonitorID(s.newMonitorID()), CreateMonitorCommand{
-			Name: command.Name, Description: command.Description, Labels: command.Labels, DisplayOrder: command.DisplayOrder,
-			Public: command.Public, LocationID: command.LocationID, RequiredLocation: command.RequiredLocation,
-			Interval: command.Interval, Timeout: command.Timeout, FailureThreshold: command.FailureThreshold,
-			RecoveryThreshold: command.RecoveryThreshold, Probe: probe,
-		}, now)
-		if err != nil {
-			return &ValidationError{Fields: map[string]string{"monitor": "contains invalid configuration"}}
-		}
-		if err := repositories.Monitors.Create(ctx, monitor); err != nil {
-			return err
-		}
-		assignment := port.MonitorLocation{MonitorID: monitor.ID, LocationID: command.LocationID, Required: command.RequiredLocation}
-		if err := repositories.Monitors.AssignLocation(ctx, assignment); err != nil {
-			return err
-		}
-		if err := repositories.Health.UpsertLocation(ctx, domain.LocationHealth{MonitorID: monitor.ID, LocationID: command.LocationID, State: domain.HealthPending, LastTransitionAt: now}); err != nil {
-			return err
-		}
-		if err := repositories.Health.UpsertMonitor(ctx, domain.MonitorHealth{MonitorID: monitor.ID, State: domain.HealthPending, LastTransitionAt: now}); err != nil {
-			return err
-		}
-		linked, err := repositories.Discovery.LinkPromotion(ctx, candidate.ID, monitor.ID, now)
-		if err != nil {
-			return err
-		}
-		if !linked {
-			return port.ErrConflict
-		}
-		candidate.PromotedMonitorID = &monitor.ID
-		candidate.UpdatedAt = now
-		result = DiscoveryPromotion{Candidate: candidate.Clone(), Monitor: ConfiguredMonitor{Monitor: monitor, LocationID: command.LocationID, RequiredLocation: command.RequiredLocation}}
-		return nil
+		var err error
+		result, err = s.promoteWithRepositories(ctx, repositories, candidateID, command)
+		return err
 	})
 	if err != nil {
 		return DiscoveryPromotion{}, fmt.Errorf("promote discovery candidate: %w", err)
 	}
 	return result, nil
+}
+
+func (s *DiscoveryService) PromoteIdempotently(
+	ctx context.Context,
+	principal Principal,
+	idempotencyKey string,
+	candidateID domain.DiscoveryCandidateID,
+	command DiscoveryPromotionCommand,
+) (DiscoveryPromotion, error) {
+	if s == nil || s.idempotencyStore == nil || s.newMonitorID == nil || s.now == nil {
+		return DiscoveryPromotion{}, errors.New("idempotent discovery promotion is not configured")
+	}
+	if err := authorizeManagementMutation("promoteDiscoveryCandidate", principal); err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	service := NewIdempotencyService[DiscoveryPromotion](s.idempotencyStore)
+	result, err := service.Execute(ctx, IdempotencyRequest{
+		Principal: principal, OperationID: "promoteDiscoveryCandidate", Key: idempotencyKey,
+		Request: struct {
+			CandidateID domain.DiscoveryCandidateID
+			Command     DiscoveryPromotionCommand
+		}{candidateID, command},
+		ResourceKind: "discovery-promotion",
+	}, func(ctx context.Context, repositories Repositories) (string, DiscoveryPromotion, error) {
+		promotion, err := s.promoteWithRepositories(ctx, discoveryRepositories(repositories), candidateID, command)
+		return string(candidateID), promotion, err
+	}, func(ctx context.Context, repositories Repositories, resourceID string) (DiscoveryPromotion, error) {
+		return loadDiscoveryPromotion(ctx, discoveryRepositories(repositories), domain.DiscoveryCandidateID(resourceID))
+	})
+	if err != nil {
+		return DiscoveryPromotion{}, fmt.Errorf("promote discovery candidate idempotently: %w", err)
+	}
+	return result, nil
+}
+
+func discoveryRepositories(repositories Repositories) port.DiscoveryRepositories {
+	return port.DiscoveryRepositories{
+		Discovery: repositories.Discovery, Locations: repositories.Locations,
+		Monitors: repositories.Monitors, Health: repositories.Health,
+	}
+}
+
+func (s *DiscoveryService) promoteWithRepositories(
+	ctx context.Context,
+	repositories port.DiscoveryRepositories,
+	candidateID domain.DiscoveryCandidateID,
+	command DiscoveryPromotionCommand,
+) (DiscoveryPromotion, error) {
+	if repositories.Discovery == nil || repositories.Locations == nil || repositories.Monitors == nil || repositories.Health == nil {
+		return DiscoveryPromotion{}, errors.New("discovery promotion repositories are not configured")
+	}
+	candidate, err := repositories.Discovery.GetForUpdate(ctx, candidateID)
+	if err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	if candidate.PromotedMonitorID != nil {
+		return loadDiscoveryPromotionForCandidate(ctx, repositories, candidate)
+	}
+	if !candidate.Present {
+		return DiscoveryPromotion{}, &ValidationError{Fields: map[string]string{"candidate": "stale candidate cannot be promoted"}}
+	}
+	if command.LocationID != candidate.LocationID {
+		return DiscoveryPromotion{}, &ValidationError{Fields: map[string]string{"locationId": "must match candidate location"}}
+	}
+	if _, err := repositories.Locations.Get(ctx, command.LocationID); err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	probe, err := discoveryProbe(candidate)
+	if err != nil {
+		return DiscoveryPromotion{}, &ValidationError{Fields: map[string]string{"candidate": "target cannot be promoted"}}
+	}
+	now := s.now().UTC()
+	monitorID := domain.MonitorID(s.newMonitorID())
+	monitor, err := newConfiguredMonitor(monitorID, CreateMonitorCommand{
+		Name: command.Name, Description: command.Description, Labels: command.Labels, DisplayOrder: command.DisplayOrder,
+		Public: command.Public, LocationID: command.LocationID, RequiredLocation: command.RequiredLocation,
+		Interval: command.Interval, Timeout: command.Timeout, FailureThreshold: command.FailureThreshold,
+		RecoveryThreshold: command.RecoveryThreshold, Probe: probe,
+	}, now)
+	if err != nil {
+		return DiscoveryPromotion{}, &ValidationError{Fields: map[string]string{"monitor": "contains invalid configuration"}}
+	}
+	if err := repositories.Monitors.Create(ctx, monitor); err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	assignment := port.MonitorLocation{MonitorID: monitor.ID, LocationID: command.LocationID, Required: command.RequiredLocation}
+	if err := repositories.Monitors.AssignLocation(ctx, assignment); err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	if err := repositories.Health.UpsertLocation(ctx, domain.LocationHealth{MonitorID: monitor.ID, LocationID: command.LocationID, State: domain.HealthPending, LastTransitionAt: now}); err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	if err := repositories.Health.UpsertMonitor(ctx, domain.MonitorHealth{MonitorID: monitor.ID, State: domain.HealthPending, LastTransitionAt: now}); err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	linked, err := repositories.Discovery.LinkPromotion(ctx, candidate.ID, monitor.ID, now)
+	if err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	if !linked {
+		return DiscoveryPromotion{}, port.ErrConflict
+	}
+	candidate.PromotedMonitorID = &monitor.ID
+	candidate.UpdatedAt = now
+	return DiscoveryPromotion{Candidate: candidate.Clone(), Monitor: ConfiguredMonitor{
+		Monitor: monitor, LocationID: command.LocationID, RequiredLocation: command.RequiredLocation,
+	}}, nil
+}
+
+func loadDiscoveryPromotion(
+	ctx context.Context,
+	repositories port.DiscoveryRepositories,
+	candidateID domain.DiscoveryCandidateID,
+) (DiscoveryPromotion, error) {
+	if repositories.Discovery == nil {
+		return DiscoveryPromotion{}, errors.New("discovery repository is not configured")
+	}
+	candidate, err := repositories.Discovery.Get(ctx, candidateID)
+	if err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	return loadDiscoveryPromotionForCandidate(ctx, repositories, candidate)
+}
+
+func loadDiscoveryPromotionForCandidate(
+	ctx context.Context,
+	repositories port.DiscoveryRepositories,
+	candidate domain.DiscoveryCandidate,
+) (DiscoveryPromotion, error) {
+	if candidate.PromotedMonitorID == nil {
+		return DiscoveryPromotion{}, port.ErrNotFound
+	}
+	monitor, err := repositories.Monitors.Get(ctx, *candidate.PromotedMonitorID)
+	if err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	assignment, err := repositories.Monitors.GetAssignment(ctx, monitor.ID)
+	if err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	return DiscoveryPromotion{Candidate: candidate.Clone(), Monitor: ConfiguredMonitor{
+		Monitor: monitor, LocationID: assignment.LocationID, RequiredLocation: assignment.Required,
+	}}, nil
 }
 
 func (s *DiscoveryService) Get(ctx context.Context, id domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error) {

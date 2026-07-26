@@ -36,6 +36,19 @@ func TestUpsertDiscoveryBatchIsBoundedAndIdempotent(t *testing.T) {
 	if _, err := fixture.service.Publish(context.Background(), "agent-1", "batch-2", oversized); !errors.Is(err, application.ErrDiscoveryBatchTooLarge) {
 		t.Fatalf("oversized error = %v", err)
 	}
+	duplicate := fixture.input("uid-duplicate", true)
+	duplicateWithDifferentMetadata := duplicate
+	duplicateWithDifferentMetadata.Name = "payload-order-must-not-win"
+	if _, err := fixture.service.Publish(context.Background(), "agent-1", "batch-duplicates", []application.DiscoveryInput{
+		duplicate, duplicateWithDifferentMetadata,
+	}); err == nil {
+		t.Fatal("duplicate stable discovery identity was accepted")
+	} else {
+		var validation *application.ValidationError
+		if !errors.As(err, &validation) || validation.Fields["candidates[1]"] == "" {
+			t.Fatalf("duplicate identity error = %#v", err)
+		}
+	}
 }
 
 func TestTombstoneMarksCandidateStaleWithoutDeletingPromotion(t *testing.T) {

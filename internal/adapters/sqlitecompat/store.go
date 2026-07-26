@@ -127,6 +127,7 @@ func newRepositories(queries *dbsqlite.Queries) application.Repositories {
 		Retention:            &retentionRepository{queries: queries},
 		Management:           management,
 		ManagementCommands:   management,
+		Discovery:            &discoveryRepository{queries: queries},
 	}
 }
 

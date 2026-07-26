@@ -110,6 +110,7 @@ func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 		Retention:            &retentionRepository{queries: queries},
 		Management:           management,
 		ManagementCommands:   management,
+		Discovery:            &discoveryRepository{queries: queries},
 	}
 }
 
