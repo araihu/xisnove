@@ -4,7 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -195,6 +198,188 @@ func TestOperatorMonitorOwnerOnlyDeleteReplaysAndRejectsChangedRequest(t *testin
 	if err := service.DeleteMonitor(context.Background(), recreated); !errors.Is(err, ErrConflict) {
 		t.Fatalf("recreated UID deleting old monitor = %v, want conflict", err)
 	}
+}
+
+func TestConcurrentOperatorCredentialPUTResolvesWinningIdempotencyRecord(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		credentials [2]string
+		wantReused  int
+	}{
+		{name: "identical request", credentials: [2]string{"concurrent-credential-012345678901234567890", "concurrent-credential-012345678901234567890"}},
+		{name: "changed hash", credentials: [2]string{"concurrent-credential-a-0123456789012345678", "concurrent-credential-b-0123456789012345678"}, wantReused: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for iteration := range 8 {
+				t.Run(fmt.Sprintf("iteration-%d", iteration), func(t *testing.T) {
+					base := newOperatorTestStore(t)
+					service, owner, agentID := seedOperatorAgent(t, base)
+					barrier := newOperatorCredentialBarrierStore(base)
+					service.Store = barrier
+					start := make(chan struct{})
+					errorsByCall := make(chan error, 2)
+					for index := range 2 {
+						index := index
+						go func() {
+							<-start
+							errorsByCall <- service.PutAgentCredential(context.Background(), PutOperatorCredential{
+								Owner: owner, AgentID: agentID, Generation: 2,
+								Credential: test.credentials[index], IdempotencyKey: "concurrent-put-key",
+							})
+						}()
+					}
+					close(start)
+					reused, succeeded := 0, 0
+					for range 2 {
+						err := <-errorsByCall
+						switch {
+						case err == nil:
+							succeeded++
+						case errors.Is(err, ErrIdempotencyKeyReused):
+							reused++
+						default:
+							t.Fatalf("concurrent PUT error = %v", err)
+						}
+					}
+					if reused != test.wantReused || succeeded != 2-test.wantReused {
+						t.Fatalf("concurrent results: succeeded=%d reused=%d", succeeded, reused)
+					}
+					if barrier.forcedLosers.Load() != 1 {
+						t.Fatalf("forced CAS losers = %d, want one", barrier.forcedLosers.Load())
+					}
+				})
+			}
+		})
+	}
+}
+
+func seedOperatorAgent(t *testing.T, store UnitOfWork) (OperatorService, port.ExternalOwner, domain.AgentID) {
+	t.Helper()
+	now := time.Date(2026, 7, 26, 17, 0, 0, 0, time.UTC)
+	locationID := domain.LocationID("00000000-0000-4000-8000-000000000003")
+	if err := store.Transact(context.Background(), func(ctx context.Context, repositories Repositories) error {
+		location, err := domain.NewLocation(locationID, "concurrent-edge", now)
+		if err != nil {
+			return err
+		}
+		return repositories.Locations.Create(ctx, location)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := OperatorService{Store: store, Credentials: operatorTestHasher{}}
+	owner := port.ExternalOwner{Key: "default/concurrent-edge", UID: "concurrent-uid"}
+	state, err := service.ApplyAgent(context.Background(), ApplyOperatorAgent{
+		Owner: owner, Name: "concurrent-edge", LocationID: locationID, Enabled: true,
+		Capabilities:      []domain.AgentCapability{domain.CapabilityHTTP},
+		InitialCredential: OperatorInitialCredential{Generation: 1, Credential: "initial-concurrent-credential-01234567890123"},
+		IdempotencyKey:    "concurrent-agent-apply",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return service, owner, state.ExternalID
+}
+
+type operatorCredentialBarrierStore struct {
+	unit            UnitOfWork
+	arrivals        atomic.Int32
+	forcedLosers    atomic.Int32
+	bothArrived     chan struct{}
+	winnerCommitted chan struct{}
+	arrivedOnce     sync.Once
+	committedOnce   sync.Once
+}
+
+func newOperatorCredentialBarrierStore(unit UnitOfWork) *operatorCredentialBarrierStore {
+	return &operatorCredentialBarrierStore{unit: unit, bothArrived: make(chan struct{}), winnerCommitted: make(chan struct{})}
+}
+
+func (s *operatorCredentialBarrierStore) View(ctx context.Context, callback func(context.Context, Repositories) error) error {
+	return s.unit.View(ctx, callback)
+}
+
+func (s *operatorCredentialBarrierStore) Transact(ctx context.Context, callback func(context.Context, Repositories) error) error {
+	role := s.arrivals.Add(1)
+	if role == 2 {
+		s.arrivedOnce.Do(func() { close(s.bothArrived) })
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.bothArrived:
+	}
+	if role == 2 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-s.winnerCommitted:
+		}
+	}
+	err := s.unit.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+		if role != 2 {
+			return callback(ctx, repositories)
+		}
+		wrapped := repositories
+		wrapped.Idempotency = &operatorStaleIdempotencyRepository{IdempotencyRepository: repositories.Idempotency}
+		wrapped.Management = &operatorStaleAgentRepository{ManagementQueryRepository: repositories.Management}
+		wrapped.ManagementCommands = &operatorCredentialBarrierCommands{
+			ManagementCommandRepository: repositories.ManagementCommands, store: s,
+		}
+		return callback(ctx, wrapped)
+	})
+	if role == 1 {
+		s.committedOnce.Do(func() { close(s.winnerCommitted) })
+	}
+	return err
+}
+
+type operatorStaleIdempotencyRepository struct {
+	port.IdempotencyRepository
+	hidden bool
+}
+
+func (r *operatorStaleIdempotencyRepository) Get(
+	ctx context.Context,
+	principal string,
+	operation string,
+	key string,
+	now time.Time,
+) (port.IdempotencyRecord, error) {
+	if !r.hidden {
+		r.hidden = true
+		return port.IdempotencyRecord{}, port.ErrNotFound
+	}
+	return r.IdempotencyRepository.Get(ctx, principal, operation, key, now)
+}
+
+type operatorStaleAgentRepository struct {
+	port.ManagementQueryRepository
+	stale bool
+}
+
+func (r *operatorStaleAgentRepository) GetAgent(ctx context.Context, id domain.AgentID) (domain.Agent, error) {
+	agent, err := r.ManagementQueryRepository.GetAgent(ctx, id)
+	if err == nil && !r.stale {
+		r.stale = true
+		agent.CredentialGeneration = 1
+	}
+	return agent, err
+}
+
+type operatorCredentialBarrierCommands struct {
+	port.ManagementCommandRepository
+	store *operatorCredentialBarrierStore
+}
+
+func (r *operatorCredentialBarrierCommands) CreateAgentCredentialGeneration(
+	ctx context.Context,
+	command port.CreateAgentCredentialGenerationCommand,
+) (bool, error) {
+	created, err := r.ManagementCommandRepository.CreateAgentCredentialGeneration(ctx, command)
+	if err == nil && !created {
+		r.store.forcedLosers.Add(1)
+	}
+	return created, err
 }
 
 func newOperatorTestStore(t *testing.T) Store {

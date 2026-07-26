@@ -190,17 +190,20 @@ func (s OperatorService) DeleteMonitor(ctx context.Context, request DeleteOperat
 	if err := validateOperatorKey(request.IdempotencyKey); err != nil {
 		return err
 	}
-	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
+	mutation := operatorMutation{
+		Owner: request.Owner, OperationID: "deleteOperatorMonitor", Key: request.IdempotencyKey,
+		ResourceKind: operatorMonitorKind, ResourceID: string(request.ExternalID),
+		Request: struct {
+			Owner      port.ExternalOwner
+			ExternalID domain.MonitorID
+		}{request.Owner, request.ExternalID},
+	}
+	resolve := func(ctx context.Context, repositories Repositories) error {
+		return resolveOperatorMutation(ctx, repositories, mutation)
+	}
+	return transactOperatorMutation(ctx, s.Store, resolve, func(ctx context.Context, repositories Repositories) error {
 		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil || repositories.Idempotency == nil {
 			return errors.New("operator monitor repositories are not configured")
-		}
-		mutation := operatorMutation{
-			Owner: request.Owner, OperationID: "deleteOperatorMonitor", Key: request.IdempotencyKey,
-			ResourceKind: operatorMonitorKind, ResourceID: string(request.ExternalID),
-			Request: struct {
-				Owner      port.ExternalOwner
-				ExternalID domain.MonitorID
-			}{request.Owner, request.ExternalID},
 		}
 		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
 		if err != nil || replayed {
@@ -247,7 +250,30 @@ func (s OperatorService) ApplyAgent(ctx context.Context, request ApplyOperatorAg
 	}
 	resourceID := domain.AgentID(uuid.NewString())
 	var result OperatorAgentState
-	err := s.Store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+	resolve := func(ctx context.Context, repositories Repositories) error {
+		hash := slices.Clone(s.Credentials.Hash(request.InitialCredential.Credential))
+		defer clearBytes(hash)
+		fingerprint, err := CanonicalRequestFingerprint(operatorAgentApplyFingerprint(request, hash))
+		if err != nil {
+			return err
+		}
+		now, err := operatorDatabaseNow(ctx, repositories)
+		if err != nil {
+			return err
+		}
+		record, err := repositories.Idempotency.Get(
+			ctx, operatorPrincipal(request.Owner).CredentialID, "applyOperatorAgent", request.IdempotencyKey, now,
+		)
+		if err != nil {
+			return err
+		}
+		if record.RequestHash != fingerprint || record.ResourceKind != operatorAgentKind {
+			return ErrIdempotencyKeyReused
+		}
+		result, err = operatorAgentState(ctx, repositories, domain.AgentID(record.ResourceID))
+		return err
+	}
+	err := transactOperatorMutation(ctx, s.Store, resolve, func(ctx context.Context, repositories Repositories) error {
 		if err := requireOperatorAgentRepositories(repositories); err != nil {
 			return err
 		}
@@ -255,15 +281,7 @@ func (s OperatorService) ApplyAgent(ctx context.Context, request ApplyOperatorAg
 		// is retained if resource creation, binding, or idempotency rolls back.
 		hash := slices.Clone(s.Credentials.Hash(request.InitialCredential.Credential))
 		defer clearBytes(hash)
-		fingerprint, err := CanonicalRequestFingerprint(struct {
-			Owner          port.ExternalOwner
-			Name           string
-			LocationID     domain.LocationID
-			Enabled        bool
-			Capabilities   []domain.AgentCapability
-			Generation     uint64
-			CredentialHash []byte
-		}{request.Owner, request.Name, request.LocationID, request.Enabled, request.Capabilities, request.InitialCredential.Generation, hash})
+		fingerprint, err := CanonicalRequestFingerprint(operatorAgentApplyFingerprint(request, hash))
 		if err != nil {
 			return err
 		}
@@ -362,22 +380,18 @@ func (s OperatorService) PutAgentCredential(ctx context.Context, request PutOper
 	if err := validateOperatorCredential(request.Credential); err != nil {
 		return err
 	}
-	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
+	resolve := func(ctx context.Context, repositories Repositories) error {
+		hash := slices.Clone(s.Credentials.Hash(request.Credential))
+		defer clearBytes(hash)
+		return resolveOperatorMutation(ctx, repositories, operatorCredentialPUTMutation(request, hash))
+	}
+	return transactOperatorMutation(ctx, s.Store, resolve, func(ctx context.Context, repositories Repositories) error {
 		if err := requireOperatorAgentRepositories(repositories); err != nil {
 			return err
 		}
 		hash := slices.Clone(s.Credentials.Hash(request.Credential))
 		defer clearBytes(hash)
-		mutation := operatorMutation{
-			Owner: request.Owner, OperationID: "putOperatorAgentCredential", Key: request.IdempotencyKey,
-			ResourceKind: "agent-credential", ResourceID: string(request.AgentID),
-			Request: struct {
-				Owner          port.ExternalOwner
-				AgentID        domain.AgentID
-				Generation     uint64
-				CredentialHash []byte
-			}{request.Owner, request.AgentID, request.Generation, hash},
-		}
+		mutation := operatorCredentialPUTMutation(request, hash)
 		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
 		if err != nil || replayed {
 			return err
@@ -427,18 +441,21 @@ func (s OperatorService) RevokeAgentCredential(ctx context.Context, request Revo
 	if err := validateOperatorKey(request.IdempotencyKey); err != nil {
 		return err
 	}
-	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
+	mutation := operatorMutation{
+		Owner: request.Owner, OperationID: "revokeOperatorAgentCredential", Key: request.IdempotencyKey,
+		ResourceKind: "agent-credential", ResourceID: string(request.AgentID),
+		Request: struct {
+			Owner      port.ExternalOwner
+			AgentID    domain.AgentID
+			Generation uint64
+		}{request.Owner, request.AgentID, request.Generation},
+	}
+	resolve := func(ctx context.Context, repositories Repositories) error {
+		return resolveOperatorMutation(ctx, repositories, mutation)
+	}
+	return transactOperatorMutation(ctx, s.Store, resolve, func(ctx context.Context, repositories Repositories) error {
 		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil || repositories.Idempotency == nil {
 			return errors.New("operator credential repositories are not configured")
-		}
-		mutation := operatorMutation{
-			Owner: request.Owner, OperationID: "revokeOperatorAgentCredential", Key: request.IdempotencyKey,
-			ResourceKind: "agent-credential", ResourceID: string(request.AgentID),
-			Request: struct {
-				Owner      port.ExternalOwner
-				AgentID    domain.AgentID
-				Generation uint64
-			}{request.Owner, request.AgentID, request.Generation},
 		}
 		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
 		if err != nil || replayed {
@@ -476,17 +493,20 @@ func (s OperatorService) DeleteAgent(ctx context.Context, request DeleteOperator
 	if err := validateOperatorKey(request.IdempotencyKey); err != nil {
 		return err
 	}
-	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
+	mutation := operatorMutation{
+		Owner: request.Owner, OperationID: "deleteOperatorAgent", Key: request.IdempotencyKey,
+		ResourceKind: operatorAgentKind, ResourceID: string(request.ExternalID),
+		Request: struct {
+			Owner      port.ExternalOwner
+			ExternalID domain.AgentID
+		}{request.Owner, request.ExternalID},
+	}
+	resolve := func(ctx context.Context, repositories Repositories) error {
+		return resolveOperatorMutation(ctx, repositories, mutation)
+	}
+	return transactOperatorMutation(ctx, s.Store, resolve, func(ctx context.Context, repositories Repositories) error {
 		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil || repositories.Idempotency == nil {
 			return errors.New("operator agent repositories are not configured")
-		}
-		mutation := operatorMutation{
-			Owner: request.Owner, OperationID: "deleteOperatorAgent", Key: request.IdempotencyKey,
-			ResourceKind: operatorAgentKind, ResourceID: string(request.ExternalID),
-			Request: struct {
-				Owner      port.ExternalOwner
-				ExternalID domain.AgentID
-			}{request.Owner, request.ExternalID},
 		}
 		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
 		if err != nil || replayed {
@@ -569,6 +589,31 @@ type operatorMutation struct {
 	Request      any
 }
 
+func operatorAgentApplyFingerprint(request ApplyOperatorAgent, hash []byte) any {
+	return struct {
+		Owner          port.ExternalOwner
+		Name           string
+		LocationID     domain.LocationID
+		Enabled        bool
+		Capabilities   []domain.AgentCapability
+		Generation     uint64
+		CredentialHash []byte
+	}{request.Owner, request.Name, request.LocationID, request.Enabled, request.Capabilities, request.InitialCredential.Generation, hash}
+}
+
+func operatorCredentialPUTMutation(request PutOperatorCredential, hash []byte) operatorMutation {
+	return operatorMutation{
+		Owner: request.Owner, OperationID: "putOperatorAgentCredential", Key: request.IdempotencyKey,
+		ResourceKind: "agent-credential", ResourceID: string(request.AgentID),
+		Request: struct {
+			Owner          port.ExternalOwner
+			AgentID        domain.AgentID
+			Generation     uint64
+			CredentialHash []byte
+		}{request.Owner, request.AgentID, request.Generation, hash},
+	}
+}
+
 func beginOperatorMutation(ctx context.Context, repositories Repositories, mutation operatorMutation) (bool, time.Time, error) {
 	if repositories.Idempotency == nil {
 		return false, time.Time{}, errors.New("operator idempotency repository is not configured")
@@ -610,9 +655,31 @@ func finishOperatorMutation(ctx context.Context, repositories Repositories, muta
 	return err
 }
 
+func resolveOperatorMutation(ctx context.Context, repositories Repositories, mutation operatorMutation) error {
+	fingerprint, err := CanonicalRequestFingerprint(mutation.Request)
+	if err != nil {
+		return err
+	}
+	now, err := operatorDatabaseNow(ctx, repositories)
+	if err != nil {
+		return err
+	}
+	record, err := repositories.Idempotency.Get(
+		ctx, operatorPrincipal(mutation.Owner).CredentialID, mutation.OperationID, mutation.Key, now,
+	)
+	if err != nil {
+		return err
+	}
+	if record.RequestHash != fingerprint || record.ResourceKind != mutation.ResourceKind || record.ResourceID != mutation.ResourceID {
+		return ErrIdempotencyKeyReused
+	}
+	return nil
+}
+
 func transactOperatorMutation(
 	ctx context.Context,
 	store port.UnitOfWork,
+	resolveConflict func(context.Context, Repositories) error,
 	mutation func(context.Context, Repositories) error,
 ) error {
 	for attempt := 0; attempt < idempotencyMaxAttempts; attempt++ {
@@ -620,6 +687,12 @@ func transactOperatorMutation(
 			return err
 		}
 		err := store.Transact(ctx, mutation)
+		if errors.Is(err, ErrConflict) && resolveConflict != nil {
+			resolveErr := store.View(ctx, resolveConflict)
+			if resolveErr == nil || !errors.Is(resolveErr, ErrNotFound) {
+				return resolveErr
+			}
+		}
 		if !errors.Is(err, ErrRetryableTransaction) || attempt == idempotencyMaxAttempts-1 {
 			return err
 		}
