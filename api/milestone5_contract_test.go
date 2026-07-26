@@ -57,11 +57,19 @@ func TestOperatorAgentObservationIsOwnerProvenAndReadOnly(t *testing.T) {
 	doc := loadContract(t)
 	operation := operationByID(t, doc, "observeOperatorAgent")
 	item := doc.Paths.Value("/v1/operator/agents:observe")
-	if item == nil || item.Post != operation { t.Fatal("observe operation is not POST /v1/operator/agents:observe") }
-	if parameter(operation.Parameters, "header", "Idempotency-Key") != nil { t.Fatal("observation must not require idempotency") }
-	if operation.Security == nil || len(*operation.Security) != 1 || (*operation.Security)[0]["apiTokenBearer"] == nil { t.Fatal("observation must require provisioning API token") }
+	if item == nil || item.Post != operation {
+		t.Fatal("observe operation is not POST /v1/operator/agents:observe")
+	}
+	if parameter(operation.Parameters, "header", "Idempotency-Key") != nil {
+		t.Fatal("observation must not require idempotency")
+	}
+	if operation.Security == nil || len(*operation.Security) != 1 || (*operation.Security)[0]["apiTokenBearer"] == nil {
+		t.Fatal("observation must require provisioning API token")
+	}
 	request := requiredSchema(t, doc, "ObserveOperatorAgentRequest")
-	if !slices.Contains(request.Required, "owner") || request.Properties["owner"].Ref != "#/components/schemas/ExternalOwner" { t.Fatal("observation must require owner") }
+	if !slices.Contains(request.Required, "owner") || request.Properties["owner"].Ref != "#/components/schemas/ExternalOwner" {
+		t.Fatal("observation must require owner")
+	}
 }
 
 func TestOperatorOwnerAndCredentialSchemasProtectReconciliation(t *testing.T) {
@@ -90,8 +98,8 @@ func TestOperatorOwnerAndCredentialSchemasProtectReconciliation(t *testing.T) {
 	}
 	apply := requiredSchema(t, doc, "ApplyOperatorAgentRequest")
 	initial := apply.Properties["initialCredential"]
-	if initial == nil || initial.Ref != "#/components/schemas/OperatorInitialCredential" || !slices.Contains(apply.Required, "initialCredential") {
-		t.Fatalf("ApplyOperatorAgentRequest must require initialCredential: %#v", initial)
+	if initial == nil || initial.Ref != "#/components/schemas/OperatorInitialCredential" || slices.Contains(apply.Required, "initialCredential") {
+		t.Fatalf("ApplyOperatorAgentRequest must permit an omitted initialCredential: %#v", initial)
 	}
 	for _, name := range []string{"OperatorInitialCredential", "PutOperatorAgentCredentialRequest"} {
 		schema := requiredSchema(t, doc, name)

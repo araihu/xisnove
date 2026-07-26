@@ -705,12 +705,12 @@ type AlertmanagerChannelConfigurationInputKind string
 
 // ApplyOperatorAgentRequest defines model for ApplyOperatorAgentRequest.
 type ApplyOperatorAgentRequest struct {
-	Capabilities      []AgentCapability         `json:"capabilities"`
-	Enabled           bool                      `json:"enabled"`
-	InitialCredential OperatorInitialCredential `json:"initialCredential"`
-	LocationId        openapi_types.UUID        `json:"locationId"`
-	Name              string                    `json:"name"`
-	Owner             ExternalOwner             `json:"owner"`
+	Capabilities      []AgentCapability          `json:"capabilities"`
+	Enabled           bool                       `json:"enabled"`
+	InitialCredential *OperatorInitialCredential `json:"initialCredential,omitempty"`
+	LocationId        openapi_types.UUID         `json:"locationId"`
+	Name              string                     `json:"name"`
+	Owner             ExternalOwner              `json:"owner"`
 }
 
 // ApplyOperatorMonitorRequest defines model for ApplyOperatorMonitorRequest.

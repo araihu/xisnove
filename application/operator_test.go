@@ -44,7 +44,7 @@ func TestOperatorAgentApplyReplaysHashOnlyAndGuardsCredentialRevocation(t *testi
 		Owner: port.ExternalOwner{Key: "default/edge", UID: "uid-1"}, Name: "edge-agent",
 		LocationID: "00000000-0000-4000-8000-000000000001", Enabled: true,
 		Capabilities:      []domain.AgentCapability{domain.CapabilityHTTP},
-		InitialCredential: OperatorInitialCredential{Generation: 1, Credential: "initial-credential-01234567890123456789"},
+		InitialCredential: &OperatorInitialCredential{Generation: 1, Credential: "initial-credential-01234567890123456789"},
 		IdempotencyKey:    "operator-agent-apply-1",
 	}
 	first, err := service.ApplyAgent(context.Background(), request)
@@ -79,6 +79,19 @@ func TestOperatorAgentApplyReplaysHashOnlyAndGuardsCredentialRevocation(t *testi
 	}
 	if string(first.ExternalID) == request.InitialCredential.Credential {
 		t.Fatal("plaintext credential reached metadata response")
+	}
+	withoutInitial := request
+	withoutInitial.InitialCredential = nil
+	withoutInitial.Name = "edge-agent-updated"
+	withoutInitial.IdempotencyKey = "operator-agent-apply-update"
+	if updated, err := service.ApplyAgent(context.Background(), withoutInitial); err != nil || updated.ExternalID != first.ExternalID {
+		t.Fatalf("credential-free bound apply = %#v, %v", updated, err)
+	}
+	newOwner := withoutInitial
+	newOwner.Owner = port.ExternalOwner{Key: "default/new-edge", UID: "uid-new"}
+	newOwner.IdempotencyKey = "operator-agent-apply-missing-initial"
+	if _, err := service.ApplyAgent(context.Background(), newOwner); err == nil {
+		t.Fatal("creation without initial credential succeeded")
 	}
 	put := PutOperatorCredential{
 		Owner: request.Owner, AgentID: first.ExternalID, Generation: 2,
@@ -278,7 +291,7 @@ func seedOperatorAgent(t *testing.T, store UnitOfWork) (OperatorService, port.Ex
 	state, err := service.ApplyAgent(context.Background(), ApplyOperatorAgent{
 		Owner: owner, Name: "concurrent-edge", LocationID: locationID, Enabled: true,
 		Capabilities:      []domain.AgentCapability{domain.CapabilityHTTP},
-		InitialCredential: OperatorInitialCredential{Generation: 1, Credential: "initial-concurrent-credential-01234567890123"},
+		InitialCredential: &OperatorInitialCredential{Generation: 1, Credential: "initial-concurrent-credential-01234567890123"},
 		IdempotencyKey:    "concurrent-agent-apply",
 	})
 	if err != nil {

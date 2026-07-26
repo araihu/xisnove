@@ -91,13 +91,17 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (
 	// Keep that first bundle unmounted during overlap so retries can observe the
 	// replacement heartbeat, but never regenerate it after a write crash.
 	initial := initialBundle(current, secret)
-	if initial != nil {
+	if initial != nil || agent.Status.ExternalID == "" || agent.Status.ObservedGeneration < agent.Generation {
+		credential := []byte(nil)
+		if initial != nil {
+			credential = []byte(initial.Credential)
+		}
 		state, err = r.ControlPlane.ApplyAgent(ctx, controlplane.ApplyAgentRequest{
 			Owner:             ownerFor(agent, "Agent"),
 			ExternalID:        agent.Status.ExternalID,
 			Name:              agent.Name,
 			Spec:              *agent.Spec.DeepCopy(),
-			InitialCredential: []byte(initial.Credential),
+			InitialCredential: credential,
 			IdempotencyKey:    applyIdempotencyKey(agent),
 		})
 		if err != nil {

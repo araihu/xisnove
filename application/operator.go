@@ -61,7 +61,7 @@ type ApplyOperatorAgent struct {
 	LocationID        domain.LocationID
 	Enabled           bool
 	Capabilities      []domain.AgentCapability
-	InitialCredential OperatorInitialCredential
+	InitialCredential *OperatorInitialCredential
 	IdempotencyKey    string
 }
 
@@ -248,16 +248,13 @@ func (s OperatorService) ApplyAgent(ctx context.Context, request ApplyOperatorAg
 	if err := validateOperatorKey(request.IdempotencyKey); err != nil {
 		return OperatorAgentState{}, err
 	}
-	if request.InitialCredential.Generation != 1 {
-		return OperatorAgentState{}, validationField("initialCredential.generation", "must equal one")
-	}
-	if err := validateOperatorCredential(request.InitialCredential.Credential); err != nil {
-		return OperatorAgentState{}, err
-	}
 	resourceID := domain.AgentID(uuid.NewString())
 	var result OperatorAgentState
 	resolve := func(ctx context.Context, repositories Repositories) error {
-		hash := slices.Clone(s.Credentials.Hash(request.InitialCredential.Credential))
+		hash, hashErr := s.initialCredentialHash(request)
+		if hashErr != nil {
+			return hashErr
+		}
 		defer clearBytes(hash)
 		fingerprint, err := CanonicalRequestFingerprint(operatorAgentApplyFingerprint(request, hash))
 		if err != nil {
@@ -285,7 +282,10 @@ func (s OperatorService) ApplyAgent(ctx context.Context, request ApplyOperatorAg
 		}
 		// Keep hashing in this transaction: neither a raw credential nor its hash
 		// is retained if resource creation, binding, or idempotency rolls back.
-		hash := slices.Clone(s.Credentials.Hash(request.InitialCredential.Credential))
+		hash, hashErr := s.initialCredentialHash(request)
+		if hashErr != nil {
+			return hashErr
+		}
 		defer clearBytes(hash)
 		fingerprint, err := CanonicalRequestFingerprint(operatorAgentApplyFingerprint(request, hash))
 		if err != nil {
@@ -315,15 +315,20 @@ func (s OperatorService) ApplyAgent(ctx context.Context, request ApplyOperatorAg
 			id = domain.AgentID(binding.ResourceID)
 		}
 		if resolveErr == nil {
+			if hash == nil {
+				// A bound owner may reconcile desired fields without retaining
+				// generation-one plaintext after rotation.
+			} else {
+				initial, credentialErr := repositories.ManagementCommands.GetAgentCredentialGeneration(ctx, id, 1)
+				if credentialErr != nil || subtle.ConstantTimeCompare(initial.CredentialHash, hash) != 1 {
+					return ErrConflict
+				}
+			}
 			agent, getErr := repositories.Management.GetAgent(ctx, id)
 			if getErr != nil {
 				return getErr
 			}
 			if agent.RevokedAt != nil {
-				return ErrConflict
-			}
-			initial, credentialErr := repositories.ManagementCommands.GetAgentCredentialGeneration(ctx, id, 1)
-			if credentialErr != nil || subtle.ConstantTimeCompare(initial.CredentialHash, hash) != 1 {
 				return ErrConflict
 			}
 			agent.Name, agent.LocationID, agent.Capabilities, agent.UpdatedAt = strings.TrimSpace(request.Name), request.LocationID, slices.Clone(request.Capabilities), now
@@ -338,6 +343,9 @@ func (s OperatorService) ApplyAgent(ctx context.Context, request ApplyOperatorAg
 				return ErrConflict
 			}
 		} else {
+			if hash == nil {
+				return validationField("initialCredential", "is required when creating an agent")
+			}
 			if !request.Enabled {
 				return validationField("enabled", "must be true when creating an agent")
 			}
@@ -633,7 +641,26 @@ func operatorAgentApplyFingerprint(request ApplyOperatorAgent, hash []byte) any 
 		Capabilities   []domain.AgentCapability
 		Generation     uint64
 		CredentialHash []byte
-	}{request.Owner, request.Name, request.LocationID, request.Enabled, request.Capabilities, request.InitialCredential.Generation, hash}
+	}{request.Owner, request.Name, request.LocationID, request.Enabled, request.Capabilities, initialCredentialGeneration(request.InitialCredential), hash}
+}
+
+func initialCredentialGeneration(credential *OperatorInitialCredential) uint64 {
+	if credential == nil {
+		return 0
+	}
+	return credential.Generation
+}
+func (s OperatorService) initialCredentialHash(request ApplyOperatorAgent) ([]byte, error) {
+	if request.InitialCredential == nil {
+		return nil, nil
+	}
+	if request.InitialCredential.Generation != 1 {
+		return nil, validationField("initialCredential.generation", "must equal one")
+	}
+	if err := validateOperatorCredential(request.InitialCredential.Credential); err != nil {
+		return nil, err
+	}
+	return slices.Clone(s.Credentials.Hash(request.InitialCredential.Credential)), nil
 }
 
 func operatorCredentialPUTMutation(request PutOperatorCredential, hash []byte) operatorMutation {

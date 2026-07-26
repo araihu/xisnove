@@ -361,6 +361,19 @@ func TestBoundMessagePreservesUTF8(t *testing.T) {
 	}
 }
 
+func TestApplyIdempotencyKeyTracksGenerationAndIsBounded(t *testing.T) {
+	t.Parallel()
+	agent := validAgent(strings.Repeat("a", 253))
+	agent.Namespace = strings.Repeat("b", 63)
+	agent.Generation = 1
+	first := applyIdempotencyKey(agent)
+	agent.Generation = 2
+	second := applyIdempotencyKey(agent)
+	if first == second || len(first) > 200 || len(second) > 200 {
+		t.Fatalf("keys first=%q second=%q", first, second)
+	}
+}
+
 func agentScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	scheme := testScheme(t)

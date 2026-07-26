@@ -51,8 +51,15 @@ func (s *Server) DeleteOperatorMonitor(ctx context.Context, request DeleteOperat
 }
 
 func (s *Server) ApplyOperatorAgent(ctx context.Context, request ApplyOperatorAgentRequestObject) (ApplyOperatorAgentResponseObject, error) {
-	if request.Body == nil || request.Body.InitialCredential.Credential == nil {
+	if request.Body == nil {
 		return applyOperatorAgentProblem(requiredBodyError())
+	}
+	var initial *application.OperatorInitialCredential
+	if request.Body.InitialCredential != nil {
+		if request.Body.InitialCredential.Credential == nil {
+			return applyOperatorAgentProblem(requiredBodyError())
+		}
+		initial = &application.OperatorInitialCredential{Generation: uint64(request.Body.InitialCredential.Generation), Credential: *request.Body.InitialCredential.Credential}
 	}
 	capabilities := make([]domain.AgentCapability, len(request.Body.Capabilities))
 	for i, capability := range request.Body.Capabilities {
@@ -61,11 +68,9 @@ func (s *Server) ApplyOperatorAgent(ctx context.Context, request ApplyOperatorAg
 	state, err := s.operator.ApplyAgent(ctx, application.ApplyOperatorAgent{
 		Owner: operatorOwner(request.Body.Owner), Name: request.Body.Name,
 		LocationID: domain.LocationID(request.Body.LocationId.String()), Enabled: request.Body.Enabled,
-		Capabilities: capabilities,
-		InitialCredential: application.OperatorInitialCredential{
-			Generation: uint64(request.Body.InitialCredential.Generation), Credential: *request.Body.InitialCredential.Credential,
-		},
-		IdempotencyKey: string(request.Params.IdempotencyKey),
+		Capabilities:      capabilities,
+		InitialCredential: initial,
+		IdempotencyKey:    string(request.Params.IdempotencyKey),
 	})
 	if err != nil {
 		return applyOperatorAgentProblem(err)

@@ -1635,7 +1635,7 @@ components:
     ApplyOperatorAgentRequest:
       type: object
       additionalProperties: false
-      required: [owner, name, locationId, enabled, capabilities, initialCredential]
+      required: [owner, name, locationId, enabled, capabilities]
       properties:
         owner: {$ref: '#/components/schemas/ExternalOwner'}
         name: {type: string, minLength: 1, maxLength: 120}

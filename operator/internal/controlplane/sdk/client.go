@@ -109,19 +109,20 @@ func (c *Client) ApplyAgent(ctx context.Context, request controlplane.ApplyAgent
 	if err != nil {
 		return controlplane.AgentState{}, errors.New("control plane agent location ID is invalid")
 	}
-	credential := string(request.InitialCredential)
+	var initial *publicsdk.OperatorInitialCredential
+	if len(request.InitialCredential) != 0 {
+		credential := string(request.InitialCredential)
+		initial = &publicsdk.OperatorInitialCredential{Generation: 1, Credential: &credential}
+	}
 	response, err := c.client.ApplyOperatorAgentWithResponse(ctx,
 		&publicsdk.ApplyOperatorAgentParams{IdempotencyKey: request.IdempotencyKey},
 		publicsdk.ApplyOperatorAgentRequest{
-			Owner:        owner(request.Owner),
-			Name:         request.Name,
-			LocationId:   locationID,
-			Enabled:      true,
-			Capabilities: capabilities(request.Spec.Capabilities),
-			InitialCredential: publicsdk.OperatorInitialCredential{
-				Generation: 1,
-				Credential: &credential,
-			},
+			Owner:             owner(request.Owner),
+			Name:              request.Name,
+			LocationId:        locationID,
+			Enabled:           true,
+			Capabilities:      capabilities(request.Spec.Capabilities),
+			InitialCredential: initial,
 		},
 		publicsdk.WithIdempotencyKey(request.IdempotencyKey),
 	)

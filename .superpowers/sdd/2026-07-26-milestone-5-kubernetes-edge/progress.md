@@ -33,3 +33,4 @@ Task 4: minor (deferred): unexpected internal UUID parse errors flow to strict r
 Task 4: fix round 1/5 (1 addressed, 0 open — validator diagnostics sanitized and leak-tested; commits 918af39..b084dc1)
 Task 4: complete (commits 630843e..b084dc1, review clean; 1 deferred minor)
 Task 8: fix round 1/5 (6 addressed, 0 open — owner-proven observation, generation-aware and bounded reconciliation keys, presented-generation revoke fence, UTF-8 status bounds)
+Task 8: fix round 2/5 (1 addressed, 0 open — credential-free bound Agent apply after bootstrap)

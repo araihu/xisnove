@@ -97,3 +97,13 @@ latter alone permits revoke. Apply keys include object generation, all
 controller keys are compact digest values below 200 bytes, and Monitor
 apply/delete keys are deterministic. UTF-8 condition truncation is bounded to
 256 bytes. Root generation, focused race tests, and operator verification pass.
+
+## Fix round 2: reconcile after bootstrap
+
+`initialCredential` is optional in the public apply request only. The
+application still rejects creation without a valid generation-one credential;
+an existing exact owner/UID binding may update desired fields without retained
+plaintext and still checks a supplied generation-one hash. The controller uses
+apply for bootstrap, lost status, or a newer Kubernetes generation, and uses
+observation for steady polling. This preserves generation-aware idempotency
+while allowing post-rotation desired-state reconciliation.
