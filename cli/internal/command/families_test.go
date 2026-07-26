@@ -88,7 +88,7 @@ func TestRemoteFamilyCommandTopologyCoversFrozenSDKWorkflows(t *testing.T) {
 		{parent: []string{"auth", "token"}, commands: []string{"list", "get", "create", "update", "revoke"}},
 		{parent: []string{"monitor"}, commands: []string{"list", "get", "create", "update", "disable", "health", "incident"}},
 		{parent: []string{"location"}, commands: []string{"list", "get", "create", "update", "disable"}},
-		{parent: []string{"agent"}, commands: []string{"list", "get", "update", "disable", "enrollment-token"}},
+		{parent: []string{"agent"}, commands: []string{"list", "get", "update", "revoke", "rotate-credential", "revoke-generation", "enrollment-token"}},
 		{parent: []string{"incident"}, commands: []string{"list", "get", "events"}},
 		{parent: []string{"discovery"}, commands: []string{"list", "get", "promote"}},
 		{parent: []string{"notification", "channel"}, commands: []string{"list", "get", "create", "update", "disable"}},

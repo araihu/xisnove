@@ -50,7 +50,7 @@ func newAPITokenListCommand(runtime Runtime) *cobra.Command {
 				return responseProblem(response)
 			}
 			page := response.JSON200
-			next := cursorValue(page.NextCursor)
+			next := cursorValue(page.Page.NextCursor)
 			rows := make([][]string, 0, len(page.Items))
 			for index := range page.Items {
 				rows = append(rows, apiTokenRow(&page.Items[index], next))
@@ -231,7 +231,7 @@ func newLogoutCommand(runtime Runtime) *cobra.Command {
 			if err := requireWritableCredential(profile.Credential, "logout"); err != nil {
 				return err
 			}
-			response, err := client.RevokeSessionWithResponse(cmd.Context())
+			response, err := client.RevokeCurrentSessionWithResponse(cmd.Context())
 			if err != nil {
 				return remoteFailure("revoke administrator session", err)
 			}

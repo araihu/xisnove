@@ -18,7 +18,7 @@ func newStatusCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open profile", err)
 			}
-			response, err := client.GetPublicStatusWithResponse(cmd.Context())
+			response, err := client.GetPublicStatusPageWithResponse(cmd.Context())
 			if err != nil {
 				return remoteFailure("get public status", err)
 			}

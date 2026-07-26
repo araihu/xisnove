@@ -52,7 +52,7 @@ func newMaintenanceCreateCommand(runtime Runtime) *cobra.Command {
 			if err := input.DecodeFile(file, runtime.Stdin, &body); err != nil {
 				return problem.Usage(err.Error())
 			}
-			_, editors, err := mutationEditors(runtime, key)
+			resolved, editors, err := mutationEditors(runtime, key)
 			if err != nil {
 				return err
 			}
@@ -60,7 +60,7 @@ func newMaintenanceCreateCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.CreateMaintenanceWithResponse(cmd.Context(), body, editors...)
+			response, err := client.CreateMaintenanceWithResponse(cmd.Context(), &sdk.CreateMaintenanceParams{IdempotencyKey: &resolved}, body, editors...)
 			if err != nil {
 				return remoteFailure("create maintenance", err)
 			}
@@ -83,7 +83,7 @@ func newMaintenanceEndCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, editors, err := mutationEditors(runtime, key)
+			resolved, editors, err := mutationEditors(runtime, key)
 			if err != nil {
 				return err
 			}
@@ -91,7 +91,7 @@ func newMaintenanceEndCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.EndMaintenanceWithResponse(cmd.Context(), id, editors...)
+			response, err := client.EndMaintenanceWithResponse(cmd.Context(), id, &sdk.EndMaintenanceParams{IdempotencyKey: &resolved}, editors...)
 			if err != nil {
 				return remoteFailure("end maintenance", err)
 			}
@@ -162,7 +162,7 @@ func newMaintenanceListCommand(runtime Runtime) *cobra.Command {
 				return responseProblem(response)
 			}
 			page := response.JSON200
-			next := cursorValue(page.NextCursor)
+			next := cursorValue(page.Page.NextCursor)
 			rows := make([][]string, 0, len(page.Items))
 			for _, item := range page.Items {
 				rows = append(rows, []string{item.Id.String(), item.MonitorId.String(), item.Reason, timeValue(item.StartsAt), optionalTime(item.EndsAt), next})

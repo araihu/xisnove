@@ -48,7 +48,7 @@ func (sdkProbeFamily) Command(runtime command.Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			response, err := client.GetPublicStatusWithResponse(cmd.Context())
+			response, err := client.GetPublicStatusPageWithResponse(cmd.Context())
 			if err != nil {
 				return err
 			}

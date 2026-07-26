@@ -65,7 +65,7 @@ func newIncidentEventsCommand(runtime Runtime) *cobra.Command {
 				return responseProblem(response)
 			}
 			page := response.JSON200
-			next := cursorValue(page.NextCursor)
+			next := cursorValue(page.Page.NextCursor)
 			rows := make([][]string, 0, len(page.Items))
 			for _, event := range page.Items {
 				rows = append(rows, []string{event.Id.String(), string(event.Action), string(event.PreviousState), string(event.State), string(event.Severity), timeValue(event.OccurredAt), next})
@@ -114,7 +114,7 @@ func newIncidentListCommand(runtime Runtime) *cobra.Command {
 				return responseProblem(response)
 			}
 			page := response.JSON200
-			next := cursorValue(page.NextCursor)
+			next := cursorValue(page.Page.NextCursor)
 			rows := make([][]string, 0, len(page.Items))
 			for _, incident := range page.Items {
 				rows = append(rows, []string{incident.Id.String(), incident.MonitorId.String(), string(incident.State), string(incident.Severity), timeValue(incident.OpenedAt), next})

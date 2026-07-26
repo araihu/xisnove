@@ -27,7 +27,10 @@ func TestFromHTTPReturnsTypedRFC9457ProblemWithExtensions(t *testing.T) {
 	if typed.Type != "https://xisnove.dev/problems/validation" || typed.Status != 422 || typed.Code != "validation_failed" {
 		t.Fatalf("problem = %#v", typed)
 	}
-	if got := typed.Error(); got != "Validation failed: request fields are invalid (correlation corr-123)" {
+	if typed.Detail != "" || typed.Instance != "" {
+		t.Fatalf("remote problem retained unsafe fields: %#v", typed)
+	}
+	if got := typed.Error(); got != "Validation failed (correlation corr-123)" {
 		t.Fatalf("Error() = %q", got)
 	}
 	if got := typed.ExitCode(); got != 2 {

@@ -17,7 +17,7 @@ import (
 	"github.com/araihu/xisnove/sdk"
 )
 
-const frozenMockPackage = "github.com/araihu/xisnove/cmd/xisnove-mock@v0.0.0-20260725235705-def0e9efefe0"
+const frozenMockPackage = "github.com/araihu/xisnove/cmd/xisnove-mock@v0.0.0-20260726121002-9741fed1ef08"
 
 func TestFrozenMockHumanJourney(t *testing.T) {
 	baseURL, stop := startFrozenMock(t)
@@ -44,7 +44,7 @@ func TestFrozenMockHumanJourney(t *testing.T) {
 
 	if exit, stdout, stderr := run("", "--output", "json", "monitor", "list", "--limit", "1"); exit != 0 {
 		t.Fatalf("monitor list exit = %d, stderr = %s", exit, stderr)
-	} else if !strings.Contains(stdout, "homelab router") || !strings.Contains(stdout, "nextCursor") {
+	} else if !strings.Contains(stdout, "homelab router") || !strings.Contains(stdout, `"page"`) {
 		t.Fatalf("monitor list stdout = %s", stdout)
 	}
 
@@ -138,7 +138,7 @@ func startFrozenMock(t *testing.T) (string, func()) {
 	client := &http.Client{Timeout: 500 * time.Millisecond}
 	deadline := time.Now().Add(45 * time.Second)
 	for {
-		response, requestErr := client.Get(baseURL + "/v1/status")
+		response, requestErr := client.Get(baseURL + "/v1/status-page")
 		if requestErr == nil {
 			response.Body.Close()
 			break
@@ -162,5 +162,5 @@ func startFrozenMock(t *testing.T) (string, func()) {
 
 func Example_frozenMockPackage() {
 	fmt.Println(frozenMockPackage)
-	// Output: github.com/araihu/xisnove/cmd/xisnove-mock@v0.0.0-20260725235705-def0e9efefe0
+	// Output: github.com/araihu/xisnove/cmd/xisnove-mock@v0.0.0-20260726121002-9741fed1ef08
 }

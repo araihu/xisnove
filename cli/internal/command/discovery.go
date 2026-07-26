@@ -80,7 +80,7 @@ func newDiscoveryPromoteCommand(runtime Runtime) *cobra.Command {
 }
 
 func renderCandidate(runtime Runtime, candidate *sdk.DiscoveryCandidate) error {
-	return renderRemote(runtime, candidate, output.Table{Headers: []string{"ID", "NAME", "KIND", "STATE", "TARGET", "LOCATION ID"}, Rows: [][]string{{candidate.Id.String(), candidate.Name, string(candidate.Kind), string(candidate.State), candidate.Target, candidate.LocationId.String()}}})
+	return renderRemote(runtime, candidate, output.Table{Headers: []string{"ID", "NAME", "PROTOCOL", "STATE", "TARGET", "LOCATION ID"}, Rows: [][]string{{candidate.Id.String(), candidate.Name, string(candidate.Protocol), string(candidate.State), candidate.Target, candidate.LocationId.String()}}})
 }
 
 func newDiscoveryListCommand(runtime Runtime) *cobra.Command {
@@ -115,10 +115,10 @@ func newDiscoveryListCommand(runtime Runtime) *cobra.Command {
 				return responseProblem(response)
 			}
 			page := response.JSON200
-			next := cursorValue(page.NextCursor)
+			next := cursorValue(page.Page.NextCursor)
 			rows := make([][]string, 0, len(page.Items))
 			for _, candidate := range page.Items {
-				rows = append(rows, []string{candidate.Id.String(), candidate.Name, string(candidate.Kind), string(candidate.State), candidate.Target, candidate.LocationId.String(), next})
+				rows = append(rows, []string{candidate.Id.String(), candidate.Name, string(candidate.Protocol), string(candidate.State), candidate.Target, candidate.LocationId.String(), next})
 			}
 			return renderRemote(runtime, page, output.Table{Headers: []string{"ID", "NAME", "KIND", "STATE", "TARGET", "LOCATION ID", "NEXT CURSOR"}, Rows: rows})
 		},

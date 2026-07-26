@@ -52,7 +52,7 @@ func newLocationCreateCommand(runtime Runtime) *cobra.Command {
 			if err := input.DecodeFile(file, runtime.Stdin, &body); err != nil {
 				return problem.Usage(err.Error())
 			}
-			_, editors, err := mutationEditors(runtime, idempotencyKey)
+			resolved, editors, err := mutationEditors(runtime, idempotencyKey)
 			if err != nil {
 				return err
 			}
@@ -60,7 +60,7 @@ func newLocationCreateCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.CreateLocationWithResponse(cmd.Context(), body, editors...)
+			response, err := client.CreateLocationWithResponse(cmd.Context(), &sdk.CreateLocationParams{IdempotencyKey: &resolved}, body, editors...)
 			if err != nil {
 				return remoteFailure("create location", err)
 			}
@@ -171,7 +171,7 @@ func newLocationListCommand(runtime Runtime) *cobra.Command {
 				return responseProblem(response)
 			}
 			page := response.JSON200
-			next := cursorValue(page.NextCursor)
+			next := cursorValue(page.Page.NextCursor)
 			rows := make([][]string, 0, len(page.Items))
 			for _, location := range page.Items {
 				rows = append(rows, []string{location.Id.String(), location.Name, optionalBool(location.Enabled), optionalTime(location.UpdatedAt), next})

@@ -71,7 +71,7 @@ func TestMonitorListUsesBearerAndOpaqueCursor(t *testing.T) {
     "probe":{"body":"","bodyContains":[],"bodyDoesNotContain":[],"expectedStatus":[{"maximum":299,"minimum":200}],"followRedirects":true,"headers":{},"kind":"http","method":"GET","url":"https://example.test/health"},
     "public":true,"recoveryThreshold":2,"requiredLocation":true,"timeoutMillis":5000,"updatedAt":"2026-07-25T10:00:00Z"
   }],
-  "nextCursor":"opaque-next"
+  "page":{"nextCursor":"opaque-next"}
 }`))
 	}))
 	defer server.Close()
@@ -295,6 +295,111 @@ func TestAuthLogoutRevokesThenDeletesWritableCredential(t *testing.T) {
 	}
 	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
 		t.Fatalf("token file still exists: %v", err)
+	}
+}
+
+func TestAgentCredentialLifecycleUsesSDKAndNeverPrintsSecret(t *testing.T) {
+	const (
+		agentID = "00000000-0000-4000-8000-000000000301"
+		secret  = "agent-secret-value"
+	)
+	requests := make([]string, 0, 3)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get("Authorization"); got != "Bearer mock-token" {
+			t.Errorf("Authorization = %q", got)
+		}
+		requests = append(requests, request.Method+" "+request.URL.Path+" "+request.Header.Get("Idempotency-Key"))
+		switch request.Method + " " + request.URL.Path {
+		case http.MethodPost + " /v1/agents/" + agentID + "/credential-rotations":
+			writer.Header().Set("Content-Type", "application/json")
+			writer.WriteHeader(http.StatusCreated)
+			_, _ = writer.Write([]byte(`{"agentId":"` + agentID + `","credential":"` + secret + `","credentialGeneration":2}`))
+		case http.MethodDelete + " /v1/agents/" + agentID + "/credentials/1",
+			http.MethodDelete + " /v1/agents/" + agentID:
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	configPath := writeRemoteTestProfile(t, server.URL)
+	credentialPath := filepath.Join(t.TempDir(), "rotated-agent.token")
+	var stdout, stderr bytes.Buffer
+	runner := command.Runner{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Credentials: credential.Resolver{LookupEnv: func(string) (string, bool) {
+			return "mock-token", true
+		}},
+	}
+
+	run := func(args ...string) {
+		t.Helper()
+		if exit := runner.Run(context.Background(), append([]string{"--config", configPath}, args...)); exit != 0 {
+			t.Fatalf("Run(%q) exit = %d, stderr = %s", args, exit, stderr.String())
+		}
+	}
+	run("agent", "rotate-credential", agentID, "--store-file", credentialPath, "--idempotency-key", "rotate-1")
+	run("agent", "revoke-generation", agentID, "1", "--idempotency-key", "revoke-generation-1")
+	run("agent", "revoke", agentID, "--idempotency-key", "revoke-agent-1")
+
+	stored, err := os.ReadFile(credentialPath)
+	if err != nil {
+		t.Fatalf("ReadFile(rotated credential) error = %v", err)
+	}
+	if string(stored) != secret+"\n" {
+		t.Fatalf("stored rotated credential = %q", stored)
+	}
+	info, err := os.Stat(credentialPath)
+	if err != nil {
+		t.Fatalf("Stat(rotated credential) error = %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("rotated credential mode = %#o, want 0600", info.Mode().Perm())
+	}
+	if strings.Contains(stdout.String(), secret) || strings.Contains(stderr.String(), secret) {
+		t.Fatalf("credential leaked: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "00000000-0000-4000-8000-000000000301  2") {
+		t.Fatalf("rotation output = %q, want agent and generation", stdout.String())
+	}
+	wantRequests := []string{
+		"POST /v1/agents/" + agentID + "/credential-rotations rotate-1",
+		"DELETE /v1/agents/" + agentID + "/credentials/1 revoke-generation-1",
+		"DELETE /v1/agents/" + agentID + " revoke-agent-1",
+	}
+	if strings.Join(requests, "\n") != strings.Join(wantRequests, "\n") {
+		t.Fatalf("requests = %#v, want %#v", requests, wantRequests)
+	}
+}
+
+func TestAgentRotateCredentialRejectsMissingSecret(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusCreated)
+		_, _ = writer.Write([]byte(`{"agentId":"00000000-0000-4000-8000-000000000301","credentialGeneration":2}`))
+	}))
+	defer server.Close()
+	configPath := writeRemoteTestProfile(t, server.URL)
+	credentialPath := filepath.Join(t.TempDir(), "missing.token")
+	var stdout, stderr bytes.Buffer
+	runner := command.Runner{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Credentials: credential.Resolver{LookupEnv: func(string) (string, bool) {
+			return "mock-token", true
+		}},
+	}
+	exit := runner.Run(context.Background(), []string{"--config", configPath, "agent", "rotate-credential", "00000000-0000-4000-8000-000000000301", "--store-file", credentialPath})
+	if exit != 1 {
+		t.Fatalf("Run() exit = %d, stderr = %s", exit, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "rotated Agent credential is missing") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if _, err := os.Stat(credentialPath); !os.IsNotExist(err) {
+		t.Fatalf("credential file exists after invalid response: %v", err)
 	}
 }
 

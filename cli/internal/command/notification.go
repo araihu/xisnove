@@ -58,7 +58,7 @@ func newNotificationChannelCreateCommand(runtime Runtime) *cobra.Command {
 			if err := input.DecodeFile(file, runtime.Stdin, &body); err != nil {
 				return problem.Usage(err.Error())
 			}
-			_, editors, err := mutationEditors(runtime, key)
+			resolved, editors, err := mutationEditors(runtime, key)
 			if err != nil {
 				return err
 			}
@@ -66,7 +66,7 @@ func newNotificationChannelCreateCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.CreateNotificationChannelWithResponse(cmd.Context(), body, editors...)
+			response, err := client.CreateNotificationChannelWithResponse(cmd.Context(), &sdk.CreateNotificationChannelParams{IdempotencyKey: &resolved}, body, editors...)
 			if err != nil {
 				return remoteFailure("create notification channel", err)
 			}
@@ -96,7 +96,7 @@ func newNotificationChannelUpdateCommand(runtime Runtime) *cobra.Command {
 			if err := input.DecodeFile(file, runtime.Stdin, &body); err != nil {
 				return problem.Usage(err.Error())
 			}
-			_, editors, err := mutationEditors(runtime, key)
+			resolved, editors, err := mutationEditors(runtime, key)
 			if err != nil {
 				return err
 			}
@@ -104,7 +104,7 @@ func newNotificationChannelUpdateCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.UpdateNotificationChannelWithResponse(cmd.Context(), id, body, editors...)
+			response, err := client.UpdateNotificationChannelWithResponse(cmd.Context(), id, &sdk.UpdateNotificationChannelParams{IdempotencyKey: &resolved}, body, editors...)
 			if err != nil {
 				return remoteFailure("update notification channel", err)
 			}
@@ -138,7 +138,7 @@ func newNotificationChannelListCommand(runtime Runtime) *cobra.Command {
 			return nil, output.Table{}, responseProblem(response)
 		}
 		page := response.JSON200
-		next := cursorValue(page.NextCursor)
+		next := cursorValue(page.Page.NextCursor)
 		rows := make([][]string, 0, len(page.Items))
 		for _, item := range page.Items {
 			rows = append(rows, []string{item.Id.String(), item.Name, string(item.Kind), boolValue(item.Enabled), next})
@@ -157,7 +157,7 @@ func newNotificationRouteListCommand(runtime Runtime) *cobra.Command {
 			return nil, output.Table{}, responseProblem(response)
 		}
 		page := response.JSON200
-		next := cursorValue(page.NextCursor)
+		next := cursorValue(page.Page.NextCursor)
 		rows := make([][]string, 0, len(page.Items))
 		for _, item := range page.Items {
 			rows = append(rows, []string{item.Id.String(), item.Name, item.ChannelId.String(), boolValue(item.Enabled), int32Value(item.Precedence), next})
@@ -202,7 +202,7 @@ func newNotificationRouteCreateCommand(runtime Runtime) *cobra.Command {
 			if err := input.DecodeFile(file, runtime.Stdin, &body); err != nil {
 				return problem.Usage(err.Error())
 			}
-			_, editors, err := mutationEditors(runtime, key)
+			resolved, editors, err := mutationEditors(runtime, key)
 			if err != nil {
 				return err
 			}
@@ -210,7 +210,7 @@ func newNotificationRouteCreateCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.CreateNotificationRouteWithResponse(cmd.Context(), body, editors...)
+			response, err := client.CreateNotificationRouteWithResponse(cmd.Context(), &sdk.CreateNotificationRouteParams{IdempotencyKey: &resolved}, body, editors...)
 			if err != nil {
 				return remoteFailure("create notification route", err)
 			}
@@ -240,7 +240,7 @@ func newNotificationRouteUpdateCommand(runtime Runtime) *cobra.Command {
 			if err := input.DecodeFile(file, runtime.Stdin, &body); err != nil {
 				return problem.Usage(err.Error())
 			}
-			_, editors, err := mutationEditors(runtime, key)
+			resolved, editors, err := mutationEditors(runtime, key)
 			if err != nil {
 				return err
 			}
@@ -248,7 +248,7 @@ func newNotificationRouteUpdateCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.UpdateNotificationRouteWithResponse(cmd.Context(), id, body, editors...)
+			response, err := client.UpdateNotificationRouteWithResponse(cmd.Context(), id, &sdk.UpdateNotificationRouteParams{IdempotencyKey: &resolved}, body, editors...)
 			if err != nil {
 				return remoteFailure("update notification route", err)
 			}
@@ -282,7 +282,7 @@ func newNotificationDeliveryListCommand(runtime Runtime) *cobra.Command {
 			return nil, output.Table{}, responseProblem(response)
 		}
 		page := response.JSON200
-		next := cursorValue(page.NextCursor)
+		next := cursorValue(page.Page.NextCursor)
 		rows := make([][]string, 0, len(page.Items))
 		for _, item := range page.Items {
 			rows = append(rows, []string{item.Id.String(), string(item.State), item.ChannelId.String(), item.RouteId.String(), int32Value(item.AttemptCount), next})
@@ -325,7 +325,7 @@ func newNotificationDeliveryReplayCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, editors, err := mutationEditors(runtime, key)
+			resolved, editors, err := mutationEditors(runtime, key)
 			if err != nil {
 				return err
 			}
@@ -333,7 +333,7 @@ func newNotificationDeliveryReplayCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.ReplayNotificationDeliveryWithResponse(cmd.Context(), id, editors...)
+			response, err := client.ReplayNotificationDeliveryWithResponse(cmd.Context(), id, &sdk.ReplayNotificationDeliveryParams{IdempotencyKey: &resolved}, editors...)
 			if err != nil {
 				return remoteFailure("replay notification delivery", err)
 			}

@@ -64,7 +64,7 @@ func newMonitorCreateCommand(runtime Runtime) *cobra.Command {
 			if err := input.DecodeFile(file, runtime.Stdin, &body); err != nil {
 				return problem.Usage(err.Error())
 			}
-			_, editors, err := mutationEditors(runtime, idempotencyKey)
+			resolved, editors, err := mutationEditors(runtime, idempotencyKey)
 			if err != nil {
 				return err
 			}
@@ -72,7 +72,7 @@ func newMonitorCreateCommand(runtime Runtime) *cobra.Command {
 			if err != nil {
 				return localFailure("open authenticated profile", err)
 			}
-			response, err := client.CreateMonitorWithResponse(cmd.Context(), body, editors...)
+			response, err := client.CreateMonitorWithResponse(cmd.Context(), &sdk.CreateMonitorParams{IdempotencyKey: &resolved}, body, editors...)
 			if err != nil {
 				return remoteFailure("create monitor", err)
 			}
@@ -255,7 +255,7 @@ func newMonitorListCommand(runtime Runtime) *cobra.Command {
 				return responseProblem(response)
 			}
 			page := response.JSON200
-			nextCursor := cursorValue(page.NextCursor)
+			nextCursor := cursorValue(page.Page.NextCursor)
 			rows := make([][]string, 0, len(page.Items))
 			for _, monitor := range page.Items {
 				rows = append(rows, []string{

@@ -1,9 +1,11 @@
 package problem
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/araihu/xisnove/sdk"
 )
 
 type FieldError struct {
@@ -52,14 +54,29 @@ func (e *Error) ExitCode() int {
 }
 
 func FromHTTP(status int, body []byte) *Error {
-	problem := &Error{}
-	if len(body) == 0 || json.Unmarshal(body, problem) != nil {
+	response := &http.Response{StatusCode: status, Header: make(http.Header)}
+	err := sdk.ErrorFromResponse(response, body)
+	var apiError *sdk.APIError
+	if !errors.As(err, &apiError) {
 		return fallback(status)
 	}
-	problem.Status = status
-	if problem.Type == "" {
-		problem.Type = "about:blank"
+	remote := apiError.Problem
+	problem := &Error{
+		Type:          remote.Type,
+		Title:         remote.Title,
+		Status:        apiError.StatusCode,
+		Code:          remote.Code,
+		CorrelationID: remote.CorrelationId,
 	}
+	if remote.FieldErrors != nil {
+		problem.FieldErrors = make([]FieldError, 0, len(*remote.FieldErrors))
+		for _, field := range *remote.FieldErrors {
+			problem.FieldErrors = append(problem.FieldErrors, FieldError{Field: field.Field, Message: field.Message})
+		}
+	}
+	// Detail and instance are deliberately excluded. The SDK owns the remote
+	// error allowlist so provider diagnostics or credentials cannot reach CLI
+	// output through a nominal RFC 9457 response.
 	if problem.Title == "" {
 		problem.Title = http.StatusText(status)
 	}

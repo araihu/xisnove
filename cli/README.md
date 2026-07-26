@@ -66,7 +66,7 @@ The generated SDK backs these command families:
 - `auth login|logout|token ...`
 - `monitor list|get|create|update|disable|health|incident`
 - `location list|get|create|update|disable`
-- `agent list|get|update|disable|enrollment-token`
+- `agent list|get|update|revoke|rotate-credential|revoke-generation|enrollment-token`
 - `incident list|get|events`
 - `discovery list|get|promote`
 - `notification channel|route|delivery ...`

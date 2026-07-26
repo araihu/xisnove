@@ -12,15 +12,18 @@ retention publishes daily uptime aggregates. Structured logs, bounded metrics,
 optional tracing, readiness, and ordered shutdown provide the operations
 surface for a self-hosted installation.
 
-This is intentionally smaller than the full v1 roadmap. Kubernetes discovery
-and CRDs, recurring maintenance, UI, CLI, and release packaging remain future
-milestones.
+The repository also contains separately buildable UI/BFF and CLI modules. The
+UI consumes the public generated SDK and never accesses storage directly; the
+CLI provides profile, authentication, monitor, location, Agent, incident,
+discovery, notification, maintenance, and public-status workflows through that
+same SDK. Kubernetes discovery and CRDs, recurring maintenance, and release
+packaging remain future milestones.
 
 The public contract is [api/openapi.yaml](api/openapi.yaml). Root code contains
 the control plane, public Go SDK, and importable Open Core surface in `domain`,
 `application`, `application/port`, and `contracttest`; self-hosted adapters stay
-internal. `agent/` is an independently buildable Go module that knows the
-control plane only through its generated API client.
+internal. `agent/`, `cli/`, and `ui/` are independently buildable Go modules
+that know the control plane only through its generated API client.
 
 - [v1 architecture](docs/superpowers/specs/2026-07-24-xisnove-v1-design.md)
 - [Open Core extension surface](docs/architecture/open-core.md)
@@ -42,6 +45,8 @@ Quick verification:
 make check
 make storage-check
 make operations-check
+make cli-check
+make cli-workspace-check
 ```
 
 `make storage-check` uses SQLite and local Turso directly. PostgreSQL uses the
