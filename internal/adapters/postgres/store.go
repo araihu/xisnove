@@ -20,6 +20,18 @@ type store struct {
 	db *sql.DB
 }
 
+func classifyTransactionError(err error) error {
+	if err == nil || errors.Is(err, application.ErrRetryableTransaction) {
+		return err
+	}
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) &&
+		(postgresErr.Code == "40001" || postgresErr.Code == "40P01") {
+		return fmt.Errorf("%w: %w", application.ErrRetryableTransaction, err)
+	}
+	return err
+}
+
 func NewStore(db *sql.DB) application.Store {
 	return &store{db: db}
 }
@@ -57,7 +69,7 @@ func (s *store) transact(
 ) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return fmt.Errorf("begin transaction: %w", classifyTransactionError(err))
 	}
 	committed := false
 	defer func() {
@@ -67,10 +79,10 @@ func (s *store) transact(
 	}()
 
 	if err := fn(newRepositories(dbpostgres.New(s.db).WithTx(tx))); err != nil {
-		return err
+		return classifyTransactionError(err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+		return fmt.Errorf("commit transaction: %w", classifyTransactionError(err))
 	}
 	committed = true
 	return nil
@@ -1280,6 +1292,9 @@ func repositoryError(operation string, err error) error {
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, application.ErrNotFound)
+	}
+	if classified := classifyTransactionError(err); errors.Is(classified, application.ErrRetryableTransaction) {
+		return fmt.Errorf("%s: %w", operation, classified)
 	}
 	var postgresErr *pgconn.PgError
 	if errors.As(err, &postgresErr) &&

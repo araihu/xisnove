@@ -22,6 +22,33 @@ type store struct {
 	db *sql.DB
 }
 
+func classifyTransactionError(err error) error {
+	if err == nil || errors.Is(err, application.ErrRetryableTransaction) {
+		return err
+	}
+	var sqliteErr *modernsqlite.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.Code() & 0xff {
+		case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED:
+			return fmt.Errorf("%w: %w", application.ErrRetryableTransaction, err)
+		}
+	}
+	if errors.Is(err, turso.ErrTursoBusy) || hasCanonicalTursoStaleSnapshot(err) {
+		return fmt.Errorf("%w: %w", application.ErrRetryableTransaction, err)
+	}
+	return err
+}
+
+func hasCanonicalTursoStaleSnapshot(err error) bool {
+	const message = "turso: error: database snapshot is stale, rollback and retry the transaction"
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if current.Error() == message {
+			return true
+		}
+	}
+	return false
+}
+
 func NewStore(db *sql.DB) application.Store {
 	return &store{db: db}
 }
@@ -59,7 +86,7 @@ func (s *store) transact(
 ) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return fmt.Errorf("begin transaction: %w", classifyTransactionError(err))
 	}
 	committed := false
 	defer func() {
@@ -69,10 +96,10 @@ func (s *store) transact(
 	}()
 
 	if err := fn(newRepositories(dbsqlite.New(s.db).WithTx(tx))); err != nil {
-		return err
+		return classifyTransactionError(err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+		return fmt.Errorf("commit transaction: %w", classifyTransactionError(err))
 	}
 	committed = true
 	return nil
@@ -1283,6 +1310,9 @@ func repositoryError(operation string, err error) error {
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, application.ErrNotFound)
+	}
+	if classified := classifyTransactionError(err); errors.Is(classified, application.ErrRetryableTransaction) {
+		return fmt.Errorf("%s: %w", operation, classified)
 	}
 	var sqliteErr *modernsqlite.Error
 	if errors.As(err, &sqliteErr) &&
