@@ -463,8 +463,10 @@ func advertisedOperationRequest(operationID string) any {
 		return map[string]any{"name": "updated contract token"}
 	case "CreateLocation", "UpdateLocation":
 		return map[string]any{"name": "contract location"}
-	case "CreateMonitor", "UpdateMonitor":
+	case "CreateMonitor":
 		return monitorInput("contract-monitor")
+	case "UpdateMonitor":
+		return updateMonitorInput("contract-monitor")
 	case "CreateAgentEnrollmentToken":
 		return map[string]any{
 			"locationId": "00000000-0000-4000-8000-000000000001", "expiresInSeconds": 600,
@@ -577,6 +579,16 @@ func monitorInput(name string) map[string]any {
 			"followRedirects": false,
 		},
 	}
+}
+
+func updateMonitorInput(name string) map[string]any {
+	input := monitorInput(name)
+	input["description"] = "contract monitor"
+	input["labels"] = map[string]string{}
+	input["displayOrder"] = 0
+	input["public"] = false
+	input["enabled"] = true
+	return input
 }
 
 func promotionInput(name string) map[string]any {

@@ -104,6 +104,27 @@ func TestAgentCredentialRotationIsOverlapSafeAndIndividuallyRevocable(t *testing
 	}
 }
 
+func TestUpdateMonitorIsACompleteReplacement(t *testing.T) {
+	doc := loadContract(t)
+	schema := doc.Components.Schemas["UpdateMonitorRequest"]
+	if schema == nil || schema.Value == nil {
+		t.Fatal("UpdateMonitorRequest is missing")
+	}
+	want := []string{
+		"name", "description", "labels", "displayOrder", "public", "enabled",
+		"intervalSeconds", "timeoutMillis", "failureThreshold", "recoveryThreshold",
+		"locationId", "requiredLocation", "probe",
+	}
+	for _, property := range want {
+		if !slices.Contains(schema.Value.Required, property) {
+			t.Errorf("UpdateMonitorRequest does not require %s", property)
+		}
+	}
+	if len(schema.Value.Required) != len(want) {
+		t.Errorf("UpdateMonitorRequest required = %v, want exactly %v", schema.Value.Required, want)
+	}
+}
+
 func TestLegacyPageMetadataAcceptsSharedMaximum(t *testing.T) {
 	doc := loadContract(t)
 	for _, name := range []string{"NotificationChannelPage", "NotificationRoutePage", "NotificationDeliveryPage", "MaintenancePage"} {

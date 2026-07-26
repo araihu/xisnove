@@ -1265,7 +1265,20 @@ components:
     UpdateMonitorRequest:
       type: object
       additionalProperties: false
-      minProperties: 1
+      required:
+        - name
+        - description
+        - labels
+        - displayOrder
+        - public
+        - enabled
+        - intervalSeconds
+        - timeoutMillis
+        - failureThreshold
+        - recoveryThreshold
+        - locationId
+        - requiredLocation
+        - probe
       properties:
         name: {type: string, minLength: 1, maxLength: 200}
         description: {type: string, maxLength: 2048}

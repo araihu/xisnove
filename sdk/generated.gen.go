@@ -1348,19 +1348,19 @@ type UpdateLocationRequest struct {
 
 // UpdateMonitorRequest defines model for UpdateMonitorRequest.
 type UpdateMonitorRequest struct {
-	Description       *string             `json:"description,omitempty"`
-	DisplayOrder      *int32              `json:"displayOrder,omitempty"`
-	Enabled           *bool               `json:"enabled,omitempty"`
-	FailureThreshold  *int32              `json:"failureThreshold,omitempty"`
-	IntervalSeconds   *int32              `json:"intervalSeconds,omitempty"`
-	Labels            *map[string]string  `json:"labels,omitempty"`
-	LocationId        *openapi_types.UUID `json:"locationId,omitempty"`
-	Name              *string             `json:"name,omitempty"`
-	Probe             *ProbeDefinition    `json:"probe,omitempty"`
-	Public            *bool               `json:"public,omitempty"`
-	RecoveryThreshold *int32              `json:"recoveryThreshold,omitempty"`
-	RequiredLocation  *bool               `json:"requiredLocation,omitempty"`
-	TimeoutMillis     *int32              `json:"timeoutMillis,omitempty"`
+	Description       string             `json:"description"`
+	DisplayOrder      int32              `json:"displayOrder"`
+	Enabled           bool               `json:"enabled"`
+	FailureThreshold  int32              `json:"failureThreshold"`
+	IntervalSeconds   int32              `json:"intervalSeconds"`
+	Labels            map[string]string  `json:"labels"`
+	LocationId        openapi_types.UUID `json:"locationId"`
+	Name              string             `json:"name"`
+	Probe             ProbeDefinition    `json:"probe"`
+	Public            bool               `json:"public"`
+	RecoveryThreshold int32              `json:"recoveryThreshold"`
+	RequiredLocation  bool               `json:"requiredLocation"`
+	TimeoutMillis     int32              `json:"timeoutMillis"`
 }
 
 // UpdateNotificationChannelRequest defines model for UpdateNotificationChannelRequest.
