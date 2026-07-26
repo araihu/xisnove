@@ -168,6 +168,10 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
 		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
 	}
+	const wantCSP = "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+	if got := recorder.Header().Get("Content-Security-Policy"); got != wantCSP {
+		t.Fatalf("Content-Security-Policy = %q, want %q", got, wantCSP)
+	}
 }
 
 func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
@@ -226,11 +230,14 @@ func TestMonitorSearchWalksPastEmptyPageAndPreservesOpaqueState(t *testing.T) {
 
 func TestMonitorSearchEmptyWindowStillOffersOpaqueContinuation(t *testing.T) {
 	client := controlplane.NewFake(testUsername, testPassword, testCredential)
-	for index := 0; index < 126; index++ {
+	for index := 0; index < 151; index++ {
 		client.Monitors = append(client.Monitors, sdk.Monitor{Id: uuid.New(), Name: fmt.Sprintf("HTTP monitor %03d", index), Kind: sdk.MonitorKindHttp, Enabled: true})
 	}
+	matchID := client.Monitors[30].Id
+	client.Monitors[30].Name = "Remote DNS"
+	client.Monitors[30].Kind = sdk.MonitorKindDns
 	handler, _ := newTestHandler(t, client, time.Second)
-	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors?q=dns&selected=kept", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors?cursor=offset%3A25&q=dns&selected=kept", nil)
 	request.Header.Set("HX-Request", "true")
 	request.AddCookie(loginSession(t, handler))
 	recorder := httptest.NewRecorder()
@@ -238,9 +245,49 @@ func TestMonitorSearchEmptyWindowStillOffersOpaqueContinuation(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 
 	body := recorder.Body.String()
-	for _, want := range []string{"No matching monitors", "Next page", "cursor=offset%3A100", "q=dns", "selected=kept"} {
+	for _, want := range []string{
+		"Remote DNS",
+		"Next page",
+		`href="/monitors?cursor=offset%3A25&amp;q=dns&amp;selected=kept"`,
+		`href="/monitors?cursor=offset%3A125&amp;q=dns&amp;selected=kept"`,
+		`href="/monitors?cursor=offset%3A25&amp;q=dns&amp;selected=` + matchID.String() + `"`,
+	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("continuation response missing %q", want)
+			t.Errorf("stateful continuation response missing %q", want)
+		}
+	}
+}
+
+type repeatedCursorClient struct {
+	*controlplane.Fake
+	calls int
+}
+
+func (c *repeatedCursorClient) ListMonitors(ctx context.Context, credential, cursor string, limit int32) (sdk.Page[sdk.Monitor], error) {
+	c.calls++
+	return sdk.Page[sdk.Monitor]{NextCursor: cursor}, nil
+}
+
+func TestMonitorSearchRejectsRepeatedOpaqueCursor(t *testing.T) {
+	client := &repeatedCursorClient{Fake: controlplane.NewFake(testUsername, testPassword, testCredential)}
+	handler, _ := newTestHandler(t, client, time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors?cursor=opaque-cycle&q=dns&selected=kept", nil)
+	request.Header.Set("HX-Request", "true")
+	request.AddCookie(loginSession(t, handler))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK || recorder.Header().Get("X-Xisnove-Response-Status") != "502" {
+		t.Fatalf("response = %d headers %#v", recorder.Code, recorder.Header())
+	}
+	if client.calls != 1 {
+		t.Fatalf("ListMonitors calls = %d, want 1 before repeated cursor rejection", client.calls)
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{"Monitors unavailable", "cursor=opaque-cycle", "q=dns", "selected=kept"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("repeated-cursor response missing %q", want)
 		}
 	}
 }
