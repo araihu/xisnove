@@ -144,14 +144,38 @@ func TestPublicStatusUnknownAndPendingAreStable(t *testing.T) {
 
 func TestPublicStatusValidatesHistoryDaysAndWrapsStorageErrors(t *testing.T) {
 	if _, err := application.NewPublicStatusService(application.PublicStatusServiceConfig{
-		Store: &publicStatusStore{}, HistoryDays: 367,
+		Store: &publicStatusStore{}, HistoryDays: 91,
 	}); err == nil {
-		t.Fatal("HistoryDays 367 was accepted")
+		t.Fatal("HistoryDays 91 was accepted")
+	}
+	if _, err := application.NewPublicStatusService(application.PublicStatusServiceConfig{
+		Store: &publicStatusStore{}, HistoryDays: 90,
+	}); err != nil {
+		t.Fatalf("HistoryDays 90 was rejected: %v", err)
 	}
 	stop := errors.New("storage unavailable: secret detail")
 	service := newPublicStatusService(t, &publicStatusStore{err: stop}, 30)
 	if _, err := service.Get(context.Background()); !errors.Is(err, stop) {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestPublicStatusDefaultsToThirtyDays(t *testing.T) {
+	repository := &publicStatusRepository{monitors: []port.PublicMonitorProjection{{
+		ID: publicStatusMonitor1, Name: "edge", State: domain.HealthUp,
+	}}}
+	service, err := application.NewPublicStatusService(application.PublicStatusServiceConfig{
+		Store: &publicStatusStore{repository: repository},
+		Now:   func() time.Time { return publicStatusNow },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Get(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC); !repository.start.Equal(want) {
+		t.Fatalf("default uptime start = %s, want %s", repository.start, want)
 	}
 }
 

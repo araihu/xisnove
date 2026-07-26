@@ -12,7 +12,7 @@ import (
 
 const (
 	defaultPublicStatusHistoryDays = 30
-	maxPublicStatusHistoryDays     = 366
+	maxPublicStatusHistoryDays     = 90
 )
 
 type PublicIncidentSummary struct {
