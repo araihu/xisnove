@@ -106,7 +106,7 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 		if s.replay(w, r) {
 			return
 		}
-		s.writeMutation(w, r, http.StatusAccepted, map[string]any{})
+		s.writeEmptyMutation(w, r, http.StatusAccepted)
 	case "ListMaintenance":
 		page := pageEnvelope([]any{maintenanceFixture()}, "")
 		page["limit"], page["offset"] = 50, 0

@@ -88,6 +88,10 @@ func NewServer() *Server {
 }
 
 func (s *Server) Handler() http.Handler {
+	spec, err := GetSwagger()
+	if err != nil {
+		panic(fmt.Sprintf("load embedded OpenAPI contract: %v", err))
+	}
 	strict := NewStrictHandlerWithOptions(
 		&strictMockDispatcher{},
 		[]StrictMiddlewareFunc{s.dispatchStrict},
@@ -101,12 +105,17 @@ func (s *Server) Handler() http.Handler {
 		},
 	)
 	api := Handler(strict)
-	return captureRequestHash(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	dispatch := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.serveScenario(w, r) {
 			return
 		}
 		api.ServeHTTP(w, r)
-	}))
+	})
+	conforming, err := newOpenAPIConformanceHandler(spec, dispatch)
+	if err != nil {
+		panic(fmt.Sprintf("create OpenAPI-conforming mock handler: %v", err))
+	}
+	return captureRequestHash(conforming)
 }
 
 func (s *Server) dispatchStrict(_ StrictHandlerFunc, operationID string) StrictHandlerFunc {
@@ -239,6 +248,9 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, scope string)
 	if token == FixtureSessionToken && s.sessionActive {
 		return true
 	}
+	if token == FixtureFullAPIToken {
+		return true
+	}
 	if token == FixtureAgentToken && strings.HasPrefix(scope, "agent:") {
 		return true
 	}
@@ -308,6 +320,17 @@ func (s *Server) writeCredentialMutation(w http.ResponseWriter, r *http.Request,
 	s.writeStoredMutation(w, r, status, value, true)
 }
 
+func (s *Server) writeEmptyMutation(w http.ResponseWriter, r *http.Request, status int) {
+	captured, _ := r.Context().Value(requestHashContextKey{}).(capturedRequest)
+	response := storedResponse{status: status, requestHash: captured.hash}
+	if key := r.Header.Get("Idempotency-Key"); key != "" {
+		s.mu.Lock()
+		s.idempotency[idempotencyMapKey(r, key)] = response
+		s.mu.Unlock()
+	}
+	writeStored(w, response)
+}
+
 func (s *Server) writeStoredMutation(w http.ResponseWriter, r *http.Request, status int, value any, credential bool) {
 	body, err := json.Marshal(value)
 	if err != nil {
@@ -354,7 +377,9 @@ func (s *Server) lockIdempotency(r *http.Request) func() {
 }
 
 func writeStored(w http.ResponseWriter, response storedResponse) {
-	w.Header().Set("Content-Type", response.contentType)
+	if response.contentType != "" {
+		w.Header().Set("Content-Type", response.contentType)
+	}
 	w.WriteHeader(response.status)
 	_, _ = w.Write(response.body)
 }

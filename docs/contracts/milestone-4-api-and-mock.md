@@ -53,7 +53,11 @@ Both ordinary `make generate` and isolated
 The production and mock generators both cover the complete canonical contract.
 The production `Server` fills that strict interface operation by operation as
 the application slices land; the deterministic mock routes every advertised
-operation through generated strict request decoding.
+operation through generated strict request decoding. The mock also validates
+the complete HTTP request against the embedded OpenAPI document, buffers the
+handwritten deterministic response, and validates its status, media type, and
+body schema before releasing it to the caller. A nonconforming fixture is
+replaced by an RFC 9457 `mock_response_failed` response.
 
 Formal `Idempotency-Key` parameters appear in generated mutation method
 signatures. Callers may pass a generated params value or pass `nil` and add

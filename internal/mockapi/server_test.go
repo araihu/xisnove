@@ -191,6 +191,31 @@ func TestStableFailureScenarioUsesRFC9457(t *testing.T) {
 	}
 }
 
+func TestOpenAPIRequestValidationRejectsMissingRequiredFields(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+
+	response := request(t, server.URL, http.MethodPost, "/v1/sessions", "", map[string]any{}, nil)
+	assertProblem(t, response, http.StatusBadRequest, "validation_failed")
+}
+
+func TestOpenAPIRequestValidationRejectsUndeclaredBody(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+
+	response := request(
+		t,
+		server.URL,
+		http.MethodPost,
+		"/v1/agents/00000000-0000-4800-8000-000000000801/credential-rotations",
+		session,
+		map[string]any{},
+		map[string]string{"Idempotency-Key": "unexpected-rotation-body-1"},
+	)
+	assertProblem(t, response, http.StatusBadRequest, "validation_failed")
+}
+
 func TestIdempotencyRejectsChangedRequestBody(t *testing.T) {
 	server := httptest.NewServer(mockapi.NewServer().Handler())
 	defer server.Close()
@@ -297,7 +322,7 @@ func TestEveryAdvertisedOperationReachesTheStrictMockDispatcher(t *testing.T) {
 	for path, item := range doc.Paths.Map() {
 		for method := range item.Operations() {
 			operation := item.GetOperation(method)
-			if operation == nil || operation.OperationID == "createSession" {
+			if operation == nil || operation.OperationID == "CreateSession" {
 				continue
 			}
 			path := replacePathParameters(path)
@@ -306,24 +331,20 @@ func TestEveryAdvertisedOperationReachesTheStrictMockDispatcher(t *testing.T) {
 				defer server.Close()
 				session := login(t, server.URL)
 				token := session
-				if operation.OperationID == "heartbeatAgent" || operation.OperationID == "leaseAgentWork" ||
-					operation.OperationID == "upsertDiscoveryCandidates" || operation.OperationID == "uploadProbeResults" {
+				if operation.OperationID == "HeartbeatAgent" || operation.OperationID == "LeaseAgentWork" ||
+					operation.OperationID == "UpsertDiscoveryCandidates" || operation.OperationID == "UploadProbeResults" {
 					token = agentToken
 				}
-				if operation.OperationID == "enrollAgent" || operation.OperationID == "getPublicStatusPage" {
+				if operation.OperationID == "EnrollAgent" || operation.OperationID == "GetPublicStatusPage" {
 					token = ""
 				}
-				var body any
-				if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
-					body = map[string]any{}
-				}
+				body := advertisedOperationRequest(operation.OperationID)
 				response := request(t, server.URL, strings.ToUpper(method), path, token, body, map[string]string{
 					"Idempotency-Key": "advertised-operation-1",
 				})
 				defer response.Body.Close()
-				if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed ||
-					response.StatusCode == http.StatusNotImplemented || response.StatusCode >= 500 {
-					t.Fatalf("%s %s status=%d body=%s", method, path, response.StatusCode, readBody(t, response))
+				if want := advertisedSuccessStatus(operation.OperationID); response.StatusCode != want {
+					t.Fatalf("%s %s status=%d want=%d body=%s", method, path, response.StatusCode, want, readBody(t, response))
 				}
 			})
 		}
@@ -340,13 +361,107 @@ func TestAgentResultUploadUsesContractAcknowledgementEnvelope(t *testing.T) {
 		http.MethodPost,
 		"/v1/agent/results:batch",
 		agentToken,
-		map[string]any{"results": []any{}},
+		map[string]any{"results": []any{probeResultInput()}},
 		map[string]string{"Idempotency-Key": "empty-result-batch-1"},
 	)
 	assertStatus(t, response, http.StatusOK)
 	body := decodeObject(t, response)
 	if _, ok := body["acknowledgements"]; !ok {
 		t.Fatalf("upload response = %#v, want acknowledgements", body)
+	}
+}
+
+func TestNotificationReplayIsIdempotentAndHasNoResponseBody(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+	headers := map[string]string{"Idempotency-Key": "notification-replay-1"}
+	path := "/v1/notification-deliveries/00000000-0000-4700-8000-000000000701/replay"
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		response := request(t, server.URL, http.MethodPost, path, session, nil, headers)
+		body := readBody(t, response)
+		if response.StatusCode != http.StatusAccepted || len(body) != 0 {
+			t.Fatalf("attempt %d status=%d body=%q", attempt, response.StatusCode, body)
+		}
+	}
+}
+
+func advertisedOperationRequest(operationID string) any {
+	switch operationID {
+	case "CreateAPIToken":
+		return map[string]any{"name": "contract token", "scopes": []string{"monitors:read"}}
+	case "UpdateAPIToken":
+		return map[string]any{"name": "updated contract token"}
+	case "CreateLocation", "UpdateLocation":
+		return map[string]any{"name": "contract location"}
+	case "CreateMonitor", "UpdateMonitor":
+		return monitorInput("contract-monitor")
+	case "CreateAgentEnrollmentToken":
+		return map[string]any{
+			"locationId": "00000000-0000-4000-8000-000000000001", "expiresInSeconds": 600,
+		}
+	case "EnrollAgent":
+		return map[string]any{
+			"token": "xisnove_mock_enrollment_0000000000000000000001",
+			"name":  "contract agent", "capabilities": []string{"http"},
+		}
+	case "HeartbeatAgent":
+		return map[string]any{
+			"version": "v0.4.0", "credentialGeneration": 1, "capabilities": []string{"http"},
+		}
+	case "LeaseAgentWork":
+		return map[string]any{"waitSeconds": 0, "capabilities": []string{"http"}}
+	case "UploadProbeResults":
+		return map[string]any{"results": []any{probeResultInput()}}
+	case "UpdateAgent":
+		return map[string]any{"name": "updated contract agent"}
+	case "UpsertDiscoveryCandidates":
+		return map[string]any{"candidates": []any{map[string]any{
+			"externalId": "service/default/contract", "kind": "http", "name": "contract",
+			"target": "https://contract.example.test/health", "labels": map[string]string{},
+			"observedAt": "2026-07-25T12:00:00Z",
+		}}}
+	case "PromoteDiscoveryCandidate":
+		return promotionInput("contract promotion")
+	case "CreateNotificationChannel", "UpdateNotificationChannel":
+		return map[string]any{
+			"name": "contract channel", "enabled": true,
+			"configuration": map[string]any{
+				"kind": "alertmanager", "endpoint": "https://alerts.example.test/api/v2/alerts",
+			},
+		}
+	case "CreateNotificationRoute", "UpdateNotificationRoute":
+		return map[string]any{
+			"name": "contract route", "channelId": "00000000-0000-4500-8000-000000000501",
+			"labelMatchers": map[string]string{}, "actions": []string{"open"},
+			"severities": []string{"critical"}, "template": "{{ .MonitorName }} is {{ .State }}",
+			"enabled": true, "precedence": 10,
+		}
+	case "CreateMaintenance":
+		return map[string]any{
+			"monitorId": "00000000-0000-4200-8000-000000000101",
+			"startsAt":  "2026-07-25T13:00:00Z", "reason": "contract maintenance",
+		}
+	default:
+		return nil
+	}
+}
+
+func advertisedSuccessStatus(operationID string) int {
+	switch operationID {
+	case "RevokeCurrentSession", "RevokeAPIToken", "DisableLocation", "DisableMonitor",
+		"HeartbeatAgent", "LeaseAgentWork", "RevokeAgent", "DisableNotificationChannel",
+		"DisableNotificationRoute", "DeleteMaintenance":
+		return http.StatusNoContent
+	case "CreateAPIToken", "CreateLocation", "CreateMonitor", "CreateAgentEnrollmentToken",
+		"EnrollAgent", "RotateAgentCredential", "PromoteDiscoveryCandidate",
+		"CreateNotificationChannel", "CreateNotificationRoute", "CreateMaintenance":
+		return http.StatusCreated
+	case "ReplayNotificationDelivery":
+		return http.StatusAccepted
+	default:
+		return http.StatusOK
 	}
 }
 
@@ -401,6 +516,17 @@ func promotionInput(name string) map[string]any {
 		"failureThreshold": 3, "recoveryThreshold": 2,
 		"locationId":       "00000000-0000-4000-8000-000000000001",
 		"requiredLocation": true, "public": true,
+	}
+}
+
+func probeResultInput() map[string]any {
+	return map[string]any{
+		"resultId":   "00000000-0000-4a00-8000-000000000001",
+		"runId":      "00000000-0000-4a00-8000-000000000002",
+		"leaseToken": "xisnove_mock_lease_000000000000000000000001",
+		"startedAt":  "2026-07-25T12:00:00Z", "finishedAt": "2026-07-25T12:00:01Z",
+		"outcome": "passed", "latencyMillis": 100, "observedStatus": 200,
+		"bodyAssertionPassed": true, "errorCode": "", "diagnosticSample": "ok",
 	}
 }
 
