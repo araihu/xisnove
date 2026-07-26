@@ -22,8 +22,13 @@ state images at both widths: invalid and timed-out login; monitor loading,
 empty, filtered-empty, upstream error and partial/unknown; and public empty,
 unknown, up, degraded with active incident, upstream error and timeout. These
 are browser-visible captures driven through the BFF and controlled API
-responses, not source-only assertions. The final evidence is exactly 50 PNGs
+responses, not source-only assertions. The final evidence is exactly 50
+PNG-encoded files
 under `/Users/guilhermecastro/.codex/visualizations/2026/07/24/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-m4a-final`.
+The browser harness requests lossless encoding, rejects bytes without the
+eight-byte PNG signature before writing, and re-reads every `.png` artifact at
+the end of the run. The final evidence was also checked with the system `file`
+utility rather than trusting filename extensions.
 
 The smoke verifies direct navigation, HTMX navigation, Back restoration of
 content/title/focus/scroll, no unexpected console errors, the AppShell skip
@@ -57,6 +62,11 @@ login, populated monitors, loading, partial health, status and active-incident
 captures across both themes and modes. It found no clipping, stale loading
 content, lost hierarchy or unreadable semantic state in those representatives;
 this is visual inspection, not an assistive-technology session.
+
+Public status results intentionally do not inherit the 16 rem minimum height
+used by monitor result/loading surfaces. Their grid aligns content at the start,
+and browser geometry checks require empty, unknown and success alerts to remain
+compact and top-aligned at both acceptance widths.
 
 Application CSS uses Xisnove-owned selectors and Goshtoso semantic custom
 properties. It does not assume arbitrary utilities exist in embedded CSS;

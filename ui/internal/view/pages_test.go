@@ -25,8 +25,12 @@ func TestStatusContentAnnouncesHTMXRefreshes(t *testing.T) {
 	if err := StatusContent(sdk.PublicStatusPage{State: sdk.Unknown}).Render(t.Context(), &rendered); err != nil {
 		t.Fatalf("render status content: %v", err)
 	}
-	if !strings.Contains(rendered.String(), `aria-live="polite"`) || !strings.Contains(rendered.String(), `class="xis-status-results`) {
+	body := rendered.String()
+	if !strings.Contains(body, `aria-live="polite"`) || !strings.Contains(body, `class="xis-status-results xis-stack"`) {
 		t.Fatalf("status content is not a polite live region: %s", rendered.String())
+	}
+	if strings.Contains(body, `class="xis-status-results xis-results-surface`) {
+		t.Fatalf("status results must not inherit the monitor result minimum height: %s", body)
 	}
 }
 

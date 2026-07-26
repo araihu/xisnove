@@ -82,6 +82,7 @@ templ Document(title string, content templ.Component) {
 				.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }
 				.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
 				.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+				.xis-status-results { align-content: start; align-items: start; min-height: 0; }
 				.xis-password { width: 100%; }
 				.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 				.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
@@ -277,7 +278,7 @@ templ StatusContent(data sdk.PublicStatusPage) {
 			<a class="xis-native-link" href="/status" hx-get="/status" hx-target="#status-content" hx-swap="outerHTML" hx-indicator="#status-loading">Refresh</a>
 		</div>
 		<div id="status-loading" class="htmx-indicator xis-skeleton xis-results-surface" aria-live="polite">@skeleton.Skeleton(skeleton.Config{Label: "Refreshing public status", Count: 3, RootClass: "min-h-64"})</div>
-		<div class="xis-status-results xis-results-surface xis-stack">
+		<div class="xis-status-results xis-stack">
 			@alert.Alert(alert.Config{Title: publicStatusTitle(data.State), Description: "Generated " + formattedTime(data.GeneratedAt) + ".", Tone: healthTone(data.State), RootClass: healthStateClass(data.State)})
 			if len(data.Monitors) == 0 {
 				@emptystate.EmptyState(emptystate.Config{Title: "No public monitors", Description: "Public monitors will appear here after they are configured."})

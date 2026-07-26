@@ -91,3 +91,9 @@ consumer that expects password semantics to remain safe without Alpine.
     `NavClass`. The keyboard suite caught both missing indicators before the
     override. A public link-class option would avoid this consumer CSS escape
     hatch.
+11. **Screenshot quality is an encoding selector, not only a compression
+    setting.** Chromedp's `FullScreenshot` follows the DevTools API: values
+    below 100 produce JPEG bytes. The first acceptance run used quality 90 but
+    wrote `.png` filenames. Xisnove now requests 100, validates the PNG magic
+    bytes before every write and scans the whole evidence directory after the
+    run. This was harness misuse, not a Goshtoso defect.

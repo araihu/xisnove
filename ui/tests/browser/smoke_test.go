@@ -3,6 +3,7 @@
 package browser_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -272,6 +273,9 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/status"), chromedp.WaitVisible("#status-content")); err != nil {
 			t.Fatalf("state %s: %v", state, err)
 		}
+		if state == "public-empty" || state == "public-unknown" || state == "public-up" {
+			assertCompactStatusAlert(t, ctx, state)
+		}
 		captureState(t, ctx, screenshotDir, state, "#status-content")
 	}
 	scenario.Store("success")
@@ -293,6 +297,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			t.Errorf("API calls %#v missing %q", calls, want)
 		}
 	}
+	assertPNGArtifacts(t, screenshotDir)
 	t.Logf("browser matrix and integrated SDK routes passed; screenshots: %s", screenshotDir)
 }
 
@@ -366,12 +371,10 @@ func captureState(t *testing.T, ctx context.Context, dir, name, readySelector st
 			t.Fatalf("capture %s: %s is not visibly rendered", name, readySelector)
 		}
 		assertP1Accessibility(t, ctx)
-		if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 90)); err != nil {
+		if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 100)); err != nil {
 			t.Fatalf("capture %s: %v", name, err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("state-%s-%d.png", name, width)), screenshot, 0o644); err != nil {
-			t.Fatal(err)
-		}
+		writePNGArtifact(t, filepath.Join(dir, fmt.Sprintf("state-%s-%d.png", name, width)), screenshot)
 	}
 }
 
@@ -402,7 +405,7 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 					t.Fatalf("capture %s: %v", name, err)
 				}
 				assertP1Accessibility(t, ctx)
-				if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 90)); err != nil {
+				if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 100)); err != nil {
 					t.Fatalf("capture %s: %v", name, err)
 				}
 				if overflow {
@@ -411,11 +414,52 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 				if !applied {
 					t.Fatalf("%s theme/mode markers did not settle", name)
 				}
-				if err := os.WriteFile(filepath.Join(dir, name), screenshot, 0o644); err != nil {
-					t.Fatal(err)
-				}
+				writePNGArtifact(t, filepath.Join(dir, name), screenshot)
 			}
 		}
+	}
+}
+
+var pngSignature = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+
+func writePNGArtifact(t *testing.T, path string, screenshot []byte) {
+	t.Helper()
+	if !bytes.HasPrefix(screenshot, pngSignature) {
+		t.Fatalf("screenshot %s is not PNG encoded", filepath.Base(path))
+	}
+	if err := os.WriteFile(path, screenshot, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertPNGArtifacts(t *testing.T, dir string) {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(dir, "*.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("browser run produced no PNG artifacts")
+	}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.HasPrefix(data, pngSignature) {
+			t.Fatalf("artifact %s does not begin with the PNG signature", filepath.Base(path))
+		}
+	}
+}
+
+func assertCompactStatusAlert(t *testing.T, ctx context.Context, state string) {
+	t.Helper()
+	var geometry struct{ AlertHeight, ResultHeight, TopDelta float64 }
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const results=document.querySelector('.xis-status-results'),alert=results?.querySelector('[role="alert"]'),rr=results?.getBoundingClientRect(),ar=alert?.getBoundingClientRect();return {alertHeight:ar?.height||0,resultHeight:rr?.height||0,topDelta:Math.abs((ar?.top||0)-(rr?.top||0))}})()`, &geometry)); err != nil {
+		t.Fatalf("%s status geometry: %v", state, err)
+	}
+	if geometry.AlertHeight <= 0 || geometry.AlertHeight >= 160 || geometry.TopDelta >= 2 || geometry.ResultHeight < geometry.AlertHeight {
+		t.Fatalf("%s status alert is not compact and top-aligned: %#v", state, geometry)
 	}
 }
 
