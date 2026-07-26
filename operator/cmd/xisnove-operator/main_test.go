@@ -53,6 +53,9 @@ func TestParseConfigUsesNamespacedSecureRuntimeDefaults(t *testing.T) {
 	if config.gracefulShutdownTimeout != 30*time.Second {
 		t.Fatalf("graceful shutdown timeout = %s", config.gracefulShutdownTimeout)
 	}
+	if config.requestTimeout != 15*time.Second {
+		t.Fatalf("control-plane request timeout = %s", config.requestTimeout)
+	}
 }
 
 func TestParseConfigRejectsMissingCredentialFile(t *testing.T) {
@@ -69,6 +72,76 @@ func TestParseConfigRejectsMissingCredentialFile(t *testing.T) {
 	})
 	if !errors.Is(err, errCredentialFileRequired) {
 		t.Fatalf("parseConfig error = %v", err)
+	}
+}
+
+func TestParseConfigRejectsUnboundedRuntimeValues(t *testing.T) {
+	t.Parallel()
+
+	environment := func(key string) string {
+		switch key {
+		case "XISNOVE_URL":
+			return "https://control.example.test"
+		case "XISNOVE_PROVISIONING_CREDENTIAL_FILE":
+			return "/var/run/xisnove-provisioner/credential"
+		case "POD_NAMESPACE":
+			return "monitoring"
+		default:
+			return ""
+		}
+	}
+	for _, arguments := range [][]string{
+		{"--request-timeout=0s"},
+		{"--request-timeout=-1s"},
+		{"--graceful-shutdown-timeout=0s"},
+		{"--graceful-shutdown-timeout=-1s"},
+	} {
+		if _, err := parseConfig(arguments, environment); !errors.Is(err, errPositiveDurationRequired) {
+			t.Fatalf("parseConfig(%v) error = %v", arguments, err)
+		}
+	}
+}
+
+func TestParseConfigRejectsEmptyWatchScopeWhenLeaderElectionIsDisabled(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseConfig([]string{"--leader-elect=false"}, func(key string) string {
+		switch key {
+		case "XISNOVE_URL":
+			return "https://control.example.test"
+		case "XISNOVE_PROVISIONING_CREDENTIAL_FILE":
+			return "/var/run/xisnove-provisioner/credential"
+		default:
+			return ""
+		}
+	})
+	if !errors.Is(err, errWatchNamespaceRequired) {
+		t.Fatalf("parseConfig error = %v", err)
+	}
+}
+
+func TestParseConfigAcceptsRequestTimeoutFromEnvironment(t *testing.T) {
+	t.Parallel()
+
+	config, err := parseConfig(nil, func(key string) string {
+		switch key {
+		case "XISNOVE_URL":
+			return "https://control.example.test"
+		case "XISNOVE_PROVISIONING_CREDENTIAL_FILE":
+			return "/var/run/xisnove-provisioner/credential"
+		case "POD_NAMESPACE":
+			return "monitoring"
+		case "XISNOVE_REQUEST_TIMEOUT":
+			return "7s"
+		default:
+			return ""
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.requestTimeout != 7*time.Second {
+		t.Fatalf("request timeout = %s", config.requestTimeout)
 	}
 }
 
@@ -176,31 +249,96 @@ func TestCredentialFileDoerReloadsAndReplacesAuthorization(t *testing.T) {
 	}
 }
 
+func TestControlPlaneHTTPClientUsesConfiguredPositiveTimeout(t *testing.T) {
+	t.Parallel()
+
+	client := newControlPlaneHTTPClient(9 * time.Second)
+	if client == http.DefaultClient {
+		t.Fatal("control-plane requests use http.DefaultClient")
+	}
+	if client.Timeout != 9*time.Second {
+		t.Fatalf("HTTP timeout = %s", client.Timeout)
+	}
+}
+
 func TestRegisterHealthChecksAddsLivenessAndReadiness(t *testing.T) {
 	t.Parallel()
 
 	registrar := &recordingHealthRegistrar{}
-	if err := registerHealthChecks(registrar); err != nil {
+	syncer := &stubCacheSyncer{synced: true}
+	if err := registerHealthChecks(registrar, syncer); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(registrar.health, []string{"ping"}) || !reflect.DeepEqual(registrar.ready, []string{"ping"}) {
+	if !reflect.DeepEqual(registrar.health, []string{"ping"}) || !reflect.DeepEqual(registrar.ready, []string{"cache"}) {
 		t.Fatalf("registered checks = health %v ready %v", registrar.health, registrar.ready)
+	}
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://operator/readyz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registrar.readyChecks[0](request); err != nil {
+		t.Fatalf("ready checker rejected synchronized cache: %v", err)
+	}
+}
+
+func TestCacheReadinessFailsWhenCacheHasNotSynchronized(t *testing.T) {
+	t.Parallel()
+
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://operator/readyz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cacheReadyz(&stubCacheSyncer{synced: false})(request); err == nil {
+		t.Fatal("readiness unexpectedly passed before cache synchronization")
+	}
+}
+
+func TestCacheReadinessUsesRequestCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://operator/readyz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncer := &contextAwareCacheSyncer{}
+	if err := cacheReadyz(syncer)(request); err == nil {
+		t.Fatal("readiness unexpectedly passed for a canceled request")
+	}
+	if !syncer.sawCancellation {
+		t.Fatal("readiness did not pass the request context to cache synchronization")
 	}
 }
 
 type recordingHealthRegistrar struct {
-	health []string
-	ready  []string
+	health       []string
+	ready        []string
+	healthChecks []healthz.Checker
+	readyChecks  []healthz.Checker
 }
 
-func (r *recordingHealthRegistrar) AddHealthzCheck(name string, _ healthz.Checker) error {
+func (r *recordingHealthRegistrar) AddHealthzCheck(name string, checker healthz.Checker) error {
 	r.health = append(r.health, name)
+	r.healthChecks = append(r.healthChecks, checker)
 	return nil
 }
 
-func (r *recordingHealthRegistrar) AddReadyzCheck(name string, _ healthz.Checker) error {
+func (r *recordingHealthRegistrar) AddReadyzCheck(name string, checker healthz.Checker) error {
 	r.ready = append(r.ready, name)
+	r.readyChecks = append(r.readyChecks, checker)
 	return nil
+}
+
+type stubCacheSyncer struct{ synced bool }
+
+func (s *stubCacheSyncer) WaitForCacheSync(context.Context) bool { return s.synced }
+
+type contextAwareCacheSyncer struct{ sawCancellation bool }
+
+func (s *contextAwareCacheSyncer) WaitForCacheSync(ctx context.Context) bool {
+	s.sawCancellation = ctx.Err() != nil
+	return false
 }
 
 type recordingDoer struct {

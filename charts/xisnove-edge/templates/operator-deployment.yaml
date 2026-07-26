@@ -1,5 +1,14 @@
 {{- $controlPlaneURL := required "controlPlane.url is required" .Values.controlPlane.url -}}
 {{- $provisioningSecret := required "controlPlane.existingSecret.name is required" .Values.controlPlane.existingSecret.name -}}
+{{- $provisioningSecretKey := required "controlPlane.existingSecret.key is required" .Values.controlPlane.existingSecret.key -}}
+{{- if and (gt (int .Values.operator.replicas) 1) (not .Values.operator.leaderElection) -}}
+{{- fail "leader election is required when operator.replicas is greater than 1" -}}
+{{- end -}}
+{{- $gracefulShutdown := int .Values.operator.gracefulShutdownTimeoutSeconds -}}
+{{- $terminationGracePeriod := int .Values.operator.terminationGracePeriodSeconds -}}
+{{- if or (le $gracefulShutdown 0) (le $terminationGracePeriod $gracefulShutdown) -}}
+{{- fail "operator.terminationGracePeriodSeconds must be greater than operator.gracefulShutdownTimeoutSeconds, and both must be positive" -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,7 +27,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/provisioning-secret-reference: {{ printf "%s/%s" $provisioningSecret .Values.controlPlane.existingSecret.key | sha256sum }}
+        checksum/provisioning-secret-reference: {{ printf "%s/%s" $provisioningSecret $provisioningSecretKey | sha256sum }}
         {{- with .Values.operator.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -27,6 +36,7 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: operator
     spec:
+      terminationGracePeriodSeconds: {{ $terminationGracePeriod }}
       serviceAccountName: {{ include "xisnove-edge.operatorServiceAccount" . }}
       automountServiceAccountToken: true
       securityContext:
@@ -49,7 +59,8 @@ spec:
             - --leader-election-id={{ include "xisnove-edge.operatorServiceAccount" . }}
             - --poll-interval={{ .Values.operator.pollInterval }}
             - --heartbeat-stale-after={{ .Values.operator.heartbeatStaleAfter }}
-            - --graceful-shutdown-timeout={{ .Values.operator.gracefulShutdownTimeout }}
+            - --request-timeout={{ .Values.operator.requestTimeout }}
+            - --graceful-shutdown-timeout={{ $gracefulShutdown }}s
           env:
             - name: XISNOVE_URL
               value: {{ $controlPlaneURL | quote }}
@@ -94,7 +105,7 @@ spec:
           secret:
             secretName: {{ $provisioningSecret }}
             items:
-              - key: {{ .Values.controlPlane.existingSecret.key }}
+              - key: {{ $provisioningSecretKey }}
                 path: credential
       {{- with .Values.operator.nodeSelector }}
       nodeSelector:

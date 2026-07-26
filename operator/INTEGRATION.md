@@ -56,7 +56,8 @@ The adapter under `operator/internal/controlplane/sdk` imports only the generate
   Gateway API CRDs, and candidate staleness.
 - `cmd/xisnove-operator` constructs the generated SDK adapter from the external
   control-plane URL and a file-mounted provisioning credential. Its transport
-  reloads that file for every request. Controller setup uses the manager's
+  reloads that file for every request through a dedicated, positive-timeout
+  HTTP client. Controller setup uses the manager's
   uncached `APIReader` for exact credential Secret reads, so RBAC does not need
   namespace-wide Secret list/watch.
 

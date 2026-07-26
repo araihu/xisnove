@@ -19,7 +19,9 @@ operator:
   leaderElection: true
   pollInterval: 30s
   heartbeatStaleAfter: 5m
-  gracefulShutdownTimeout: 30s
+  requestTimeout: 15s
+  gracefulShutdownTimeoutSeconds: 30
+  terminationGracePeriodSeconds: 45
   resources:
     requests:
       cpu: 20m

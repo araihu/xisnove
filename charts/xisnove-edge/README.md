@@ -30,3 +30,10 @@ and owned by their `Agent` resources; do not pre-create them. Vault Agent,
 OpenBao Agent, CSI drivers, or External Secrets Operator may materialize the
 operator provisioning Secret, but the v1 operator has no provider-specific
 secret-manager integration.
+
+Control-plane calls are bounded by `operator.requestTimeout` (`15s` by
+default). Manager shutdown uses `operator.gracefulShutdownTimeoutSeconds`; the
+pod's `operator.terminationGracePeriodSeconds` must be positive and strictly
+larger so Kubernetes does not terminate the process before controller-runtime
+finishes. The chart rejects more than one operator replica when leader election
+is disabled.

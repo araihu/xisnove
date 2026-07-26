@@ -32,14 +32,18 @@ The operator requires `XISNOVE_URL`,
 `XISNOVE_PROVISIONING_CREDENTIAL_FILE`, `POD_NAMESPACE`, and a default Agent
 image through `XISNOVE_AGENT_IMAGE`. The mounted credential file is reread for
 every control-plane request so an external Secret materializer can rotate it
-without restarting the manager.
+without restarting the manager. Requests use a dedicated HTTP client bounded by
+`--request-timeout` or `XISNOVE_REQUEST_TIMEOUT` (`15s` by default).
 
 Leader election uses a Lease in `POD_NAMESPACE` and is enabled by default.
-The cache watches `XISNOVE_WATCH_NAMESPACES`, falling back to `POD_NAMESPACE`.
+The cache watches `XISNOVE_WATCH_NAMESPACES`, falling back to `POD_NAMESPACE`;
+startup fails instead of silently watching every namespace when both are empty.
 `--poll-interval`, `--heartbeat-stale-after`, and the per-Agent
 `spec.discovery.staleAfterSeconds` configure observation freshness. Health and
-readiness are served at `/healthz` and `/readyz`; manager shutdown is bounded
-by `--graceful-shutdown-timeout`.
+readiness are served at `/healthz` and `/readyz`; readiness remains false until
+the manager cache synchronizes. Manager shutdown requires a positive
+`--graceful-shutdown-timeout`. In Helm, the pod termination grace period must
+strictly exceed that timeout.
 
 The Helm chart requires `controlPlane.existingSecret.name` and mounts only its
 configured key. Agent credential Secrets are controller-owned and mutable. The

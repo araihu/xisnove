@@ -104,7 +104,7 @@ func TestEdgeChartRendersReadOnlyDiscoveryAndScopedOperatorRBAC(t *testing.T) {
 	containers, _, _ := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "containers")
 	operatorContainer := containers[0].(map[string]any)
 	args, _, _ := unstructured.NestedStringSlice(operatorContainer, "args")
-	for _, requiredArg := range []string{"--metrics-bind-address=:8080", "--health-probe-bind-address=:8081", "--leader-elect=true", "--poll-interval=30s", "--heartbeat-stale-after=5m"} {
+	for _, requiredArg := range []string{"--metrics-bind-address=:8080", "--health-probe-bind-address=:8081", "--leader-elect=true", "--poll-interval=30s", "--heartbeat-stale-after=5m", "--request-timeout=15s", "--graceful-shutdown-timeout=30s"} {
 		if !contains(args, requiredArg) {
 			t.Fatalf("operator args %v do not include %q", args, requiredArg)
 		}
@@ -113,6 +113,10 @@ func TestEdgeChartRendersReadOnlyDiscoveryAndScopedOperatorRBAC(t *testing.T) {
 	healthPath, _, _ := unstructured.NestedString(operatorContainer, "livenessProbe", "httpGet", "path")
 	if readyPath != "/readyz" || healthPath != "/healthz" {
 		t.Fatalf("probe paths = ready %q health %q", readyPath, healthPath)
+	}
+	terminationGracePeriod, _, _ := unstructured.NestedInt64(deployment.Object, "spec", "template", "spec", "terminationGracePeriodSeconds")
+	if terminationGracePeriod != 45 {
+		t.Fatalf("termination grace period = %d", terminationGracePeriod)
 	}
 	volumes, _, _ := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "volumes")
 	secretName, _, _ := unstructured.NestedString(volumes[0].(map[string]any), "secret", "secretName")
@@ -167,6 +171,99 @@ func TestEdgeChartRequiresExistingProvisioningSecret(t *testing.T) {
 	if !bytes.Contains(output, []byte("controlPlane.existingSecret.name is required")) {
 		t.Fatalf("helm template error does not identify the required existingSecret:\n%s", output)
 	}
+}
+
+func TestEdgeChartRequiresExistingProvisioningSecretKey(t *testing.T) {
+	t.Parallel()
+
+	output, err := renderEdgeChart(t,
+		"--set", "controlPlane.url=https://xisnove.example.test",
+		"--set", "controlPlane.existingSecret.name=xisnove-provisioner",
+		"--set", "controlPlane.existingSecret.key=",
+	)
+	if err == nil {
+		t.Fatalf("helm template unexpectedly accepted an empty existingSecret key:\n%s", output)
+	}
+	if !bytes.Contains(output, []byte("controlPlane.existingSecret.key is required")) {
+		t.Fatalf("helm template error does not identify the required existingSecret key:\n%s", output)
+	}
+}
+
+func TestEdgeChartRejectsActiveActiveWithoutLeaderElection(t *testing.T) {
+	t.Parallel()
+
+	valid := [][]string{
+		{"--set", "operator.replicas=1", "--set", "operator.leaderElection=false"},
+		{"--set", "operator.replicas=2", "--set", "operator.leaderElection=true"},
+	}
+	for _, arguments := range valid {
+		arguments = append(requiredChartValues(), arguments...)
+		if output, err := renderEdgeChart(t, arguments...); err != nil {
+			t.Fatalf("valid manager topology %v failed: %v\n%s", arguments, err, output)
+		}
+	}
+
+	arguments := append(requiredChartValues(), "--set", "operator.replicas=2", "--set", "operator.leaderElection=false")
+	output, err := renderEdgeChart(t, arguments...)
+	if err == nil {
+		t.Fatalf("helm template accepted two active managers without leader election:\n%s", output)
+	}
+	if !bytes.Contains(output, []byte("leader election is required when operator.replicas is greater than 1")) {
+		t.Fatalf("unexpected active-active validation error:\n%s", output)
+	}
+}
+
+func TestEdgeChartRejectsUnsafeShutdownBudget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		graceful  string
+		podBudget string
+	}{
+		{name: "equal", graceful: "30", podBudget: "30"},
+		{name: "lower", graceful: "30", podBudget: "29"},
+		{name: "negative graceful", graceful: "-1", podBudget: "45"},
+		{name: "negative pod budget", graceful: "30", podBudget: "-1"},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			arguments := append(requiredChartValues(),
+				"--set", "operator.gracefulShutdownTimeoutSeconds="+test.graceful,
+				"--set", "operator.terminationGracePeriodSeconds="+test.podBudget,
+			)
+			output, err := renderEdgeChart(t, arguments...)
+			if err == nil {
+				t.Fatalf("helm template accepted unsafe shutdown budget:\n%s", output)
+			}
+			if !bytes.Contains(output, []byte("operator.terminationGracePeriodSeconds must be greater than operator.gracefulShutdownTimeoutSeconds, and both must be positive")) {
+				t.Fatalf("unexpected shutdown validation error:\n%s", output)
+			}
+		})
+	}
+}
+
+func requiredChartValues() []string {
+	return []string{
+		"--set", "controlPlane.url=https://xisnove.example.test",
+		"--set", "controlPlane.existingSecret.name=xisnove-provisioner",
+	}
+}
+
+func renderEdgeChart(t *testing.T, arguments ...string) ([]byte, error) {
+	t.Helper()
+	helm, err := exec.LookPath("helm")
+	if err != nil {
+		t.Skip("helm is not installed")
+	}
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate chart test")
+	}
+	chart := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../../charts/xisnove-edge"))
+	base := []string{"template", "edge", chart, "--namespace", "monitoring"}
+	return exec.Command(helm, append(base, arguments...)...).CombinedOutput()
 }
 
 func decodeObjects(t *testing.T, manifest []byte) []*unstructured.Unstructured {

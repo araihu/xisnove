@@ -40,3 +40,4 @@ Task 8: fix round 5/5 (post-bootstrap and generation-three convergence acceptanc
 Task 8: parent correction after round 5 (control-plane capability assertion, truthful Synced evidence, and mock credential-free creation parity)
 Task 8: complete (commits b084dc1..6a50813, independent review clean; full make check passed with Colima, Vacuum 309 warnings and 0 errors)
 Task 9: implementation complete (manager, generated-SDK credential reload, namespaced Lease/cache, probes, least-privilege Helm/RBAC, existingSecret docs; review pending)
+Task 9: fix round 1/5 (6 addressed, 0 open — bounded HTTP/shutdown, mandatory namespace, active-active guard, required Secret key, cache-aware readiness; review pending)

@@ -27,14 +27,17 @@ import (
 )
 
 var (
-	errControlPlaneURLRequired = errors.New("control plane URL is required")
-	errCredentialFileRequired  = errors.New("provisioning credential file is required")
-	errNamespaceRequired       = errors.New("operator namespace is required when leader election is enabled")
+	errControlPlaneURLRequired  = errors.New("control plane URL is required")
+	errCredentialFileRequired   = errors.New("provisioning credential file is required")
+	errNamespaceRequired        = errors.New("operator namespace is required when leader election is enabled")
+	errWatchNamespaceRequired   = errors.New("at least one watch namespace is required")
+	errPositiveDurationRequired = errors.New("request, poll, heartbeat, and graceful-shutdown durations must be positive")
 )
 
 type runtimeConfig struct {
 	controlPlaneURL         string
 	credentialFile          string
+	requestTimeout          time.Duration
 	watchNamespaces         []string
 	agentImage              string
 	pollInterval            time.Duration
@@ -55,6 +58,10 @@ type controllerSetups struct {
 type healthRegistrar interface {
 	AddHealthzCheck(string, healthz.Checker) error
 	AddReadyzCheck(string, healthz.Checker) error
+}
+
+type cacheSyncer interface {
+	WaitForCacheSync(context.Context) bool
 }
 
 type credentialFileDoer struct {
@@ -92,7 +99,7 @@ func run(ctx context.Context, config runtimeConfig) error {
 	if err != nil {
 		return err
 	}
-	doer := &credentialFileDoer{path: config.credentialFile, next: http.DefaultClient}
+	doer := &credentialFileDoer{path: config.credentialFile, next: newControlPlaneHTTPClient(config.requestTimeout)}
 	remote, err := controlplanesdk.New(config.controlPlaneURL, credential, controlplanesdk.WithHTTPClient(doer))
 	if err != nil {
 		return fmt.Errorf("create control-plane SDK adapter: %w", err)
@@ -103,7 +110,7 @@ func run(ctx context.Context, config runtimeConfig) error {
 	}); err != nil {
 		return err
 	}
-	if err := registerHealthChecks(manager); err != nil {
+	if err := registerHealthChecks(manager, manager.GetCache()); err != nil {
 		return err
 	}
 	if err := manager.Start(ctx); err != nil {
@@ -112,14 +119,23 @@ func run(ctx context.Context, config runtimeConfig) error {
 	return nil
 }
 
-func registerHealthChecks(registrar healthRegistrar) error {
+func registerHealthChecks(registrar healthRegistrar, cache cacheSyncer) error {
 	if err := registrar.AddHealthzCheck("ping", healthz.Ping); err != nil {
 		return fmt.Errorf("register health check: %w", err)
 	}
-	if err := registrar.AddReadyzCheck("ping", healthz.Ping); err != nil {
+	if err := registrar.AddReadyzCheck("cache", cacheReadyz(cache)); err != nil {
 		return fmt.Errorf("register readiness check: %w", err)
 	}
 	return nil
+}
+
+func cacheReadyz(cache cacheSyncer) healthz.Checker {
+	return func(request *http.Request) error {
+		if !cache.WaitForCacheSync(request.Context()) {
+			return errors.New("manager cache is not synchronized")
+		}
+		return nil
+	}
 }
 
 func parseConfig(arguments []string, getenv func(string) string) (runtimeConfig, error) {
@@ -129,6 +145,14 @@ func parseConfig(arguments []string, getenv func(string) string) (runtimeConfig,
 	if strings.TrimSpace(watchNamespaces) == "" {
 		watchNamespaces = operatorNamespace
 	}
+	requestTimeout := 15 * time.Second
+	if raw := strings.TrimSpace(getenv("XISNOVE_REQUEST_TIMEOUT")); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return runtimeConfig{}, fmt.Errorf("parse XISNOVE_REQUEST_TIMEOUT: %w", err)
+		}
+		requestTimeout = parsed
+	}
 
 	flags := flag.NewFlagSet("xisnove-operator", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -136,6 +160,7 @@ func parseConfig(arguments []string, getenv func(string) string) (runtimeConfig,
 	flags.StringVar(&config.credentialFile, "provisioning-credential-file", getenv("XISNOVE_PROVISIONING_CREDENTIAL_FILE"), "mounted provisioning credential file")
 	flags.StringVar(&watchNamespaces, "watch-namespaces", watchNamespaces, "comma-separated namespaces watched by the operator")
 	flags.StringVar(&config.agentImage, "agent-image", getenv("XISNOVE_AGENT_IMAGE"), "default Agent image")
+	flags.DurationVar(&config.requestTimeout, "request-timeout", requestTimeout, "control-plane HTTP request timeout")
 	flags.DurationVar(&config.pollInterval, "poll-interval", 30*time.Second, "remote observation polling interval")
 	flags.DurationVar(&config.heartbeatStaleAfter, "heartbeat-stale-after", 5*time.Minute, "Agent heartbeat staleness threshold")
 	flags.StringVar(&config.metricsBindAddress, "metrics-bind-address", ":8080", "metrics server bind address")
@@ -157,13 +182,20 @@ func parseConfig(arguments []string, getenv func(string) string) (runtimeConfig,
 	if config.credentialFile == "" {
 		return runtimeConfig{}, errCredentialFileRequired
 	}
+	if len(config.watchNamespaces) == 0 {
+		return runtimeConfig{}, errWatchNamespaceRequired
+	}
 	if config.leaderElection && strings.TrimSpace(config.leaderElectionNamespace) == "" {
 		return runtimeConfig{}, errNamespaceRequired
 	}
-	if config.pollInterval <= 0 || config.heartbeatStaleAfter <= 0 || config.gracefulShutdownTimeout == 0 {
-		return runtimeConfig{}, errors.New("poll, heartbeat, and graceful-shutdown durations must be non-zero and poll/heartbeat must be positive")
+	if config.requestTimeout <= 0 || config.pollInterval <= 0 || config.heartbeatStaleAfter <= 0 || config.gracefulShutdownTimeout <= 0 {
+		return runtimeConfig{}, errPositiveDurationRequired
 	}
 	return config, nil
+}
+
+func newControlPlaneHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout}
 }
 
 func buildManagerOptions(config runtimeConfig, scheme *runtime.Scheme) ctrl.Options {
