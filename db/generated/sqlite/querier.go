@@ -66,6 +66,7 @@ type Querier interface {
 	GetNotificationOutbox(ctx context.Context, id string) (NotificationOutbox, error)
 	GetNotificationRoute(ctx context.Context, id string) (NotificationRoute, error)
 	GetOperatorResource(ctx context.Context, arg GetOperatorResourceParams) (OperatorResource, error)
+	GetPresentedAgentCredentialGeneration(ctx context.Context, agentID string) (int64, error)
 	GetProbeResultByID(ctx context.Context, id string) (ProbeResult, error)
 	GetProbeResultByRun(ctx context.Context, runID string) (ProbeResult, error)
 	InsertDiscoveryCandidate(ctx context.Context, arg InsertDiscoveryCandidateParams) (int64, error)

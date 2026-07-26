@@ -860,6 +860,24 @@ hint.
 Operator downtime pauses reconciliation but does not stop the control plane,
 existing agents, monitors, or notification workers.
 
+The control plane is deployed outside the monitored cluster: a cloud service,
+external VPS, or separate Kubernetes cluster. The edge operator and Agent use
+only the public HTTP/OpenAPI SDK. Kubernetes stores desired state and bounded
+status, not results, incidents, alerts, or notification deliveries; the edge
+operator creates no operational Jobs or additional operational CRDs.
+
+Discovery publishes a complete snapshot even when its observation set is
+empty. That empty complete snapshot is the authoritative absence signal for
+its scope. Partial snapshots may report a completion timestamp but never mark
+missing candidates absent. Promotion remains explicit and a stale or missing
+source never deletes the promoted Monitor.
+
+Credential rotation keeps the previous generation valid across operator
+crashes, Agent restarts, and API partitions. Revocation is permitted only after
+the relational control plane records a heartbeat authenticated by the new
+generation. Recreated Kubernetes objects receive a new UID-derived owner key
+and must never adopt or delete the previous object's remote resource.
+
 ## UI BFF and Goshtoso
 
 The `xisnove-ui` module is a separate server-rendered BFF:
@@ -1041,8 +1059,13 @@ workers between claim and commit to prove lease recovery.
 - controller unit tests with fake SDK boundaries;
 - `envtest` reconciliation, status, ownership, and finalizer tests;
 - kind end-to-end tests for CRD installation, RBAC, discovery, Agent workload
-  creation, Secret materialization, overlap-safe rotation, and network loss;
+  creation, Secret materialization, overlap-safe rotation, network loss,
+  independent process restarts, and recreated-UID ownership refusal;
 - assertions that the discovery ServiceAccount cannot read Secrets;
+- complete-empty snapshot and explicit-promotion assertions through the public
+  generated Go SDK;
+- assertions that the operator creates no Alert, Incident, result, delivery,
+  or notification CRDs or Jobs;
 - assertions that candidate deletion never deletes a promoted Monitor.
 
 ### UI and system

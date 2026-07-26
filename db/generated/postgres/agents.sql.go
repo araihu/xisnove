@@ -216,6 +216,25 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 	return i, err
 }
 
+const getPresentedAgentCredentialGeneration = `-- name: GetPresentedAgentCredentialGeneration :one
+SELECT COALESCE((
+  SELECT generation
+  FROM agent_credentials
+  WHERE agent_id = $1
+    AND revoked_at IS NULL
+    AND last_authenticated_at IS NOT NULL
+  ORDER BY last_authenticated_at DESC, generation DESC
+  LIMIT 1
+), 0)::BIGINT AS presented_credential_generation
+`
+
+func (q *Queries) GetPresentedAgentCredentialGeneration(ctx context.Context, agentID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getPresentedAgentCredentialGeneration, agentID)
+	var presented_credential_generation int64
+	err := row.Scan(&presented_credential_generation)
+	return presented_credential_generation, err
+}
+
 const touchAgentCredentialAuthentication = `-- name: TouchAgentCredentialAuthentication :execrows
 UPDATE agent_credentials
 SET last_authenticated_at = $1

@@ -3,10 +3,12 @@ package contracttest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/araihu/xisnove/application/port"
+	"github.com/araihu/xisnove/domain"
 )
 
 // RunOperatorEdge proves that external ownership is UID-scoped. In particular,
@@ -16,6 +18,100 @@ func RunOperatorEdge(t *testing.T, factory Factory) {
 	t.Run("operator ownership survives replay, tombstones, and recreation", func(t *testing.T) {
 		testOperatorOwnership(t, factory(t))
 	})
+	t.Run("agent reads latest authenticated active credential generation", func(t *testing.T) {
+		testPresentedAgentCredentialGeneration(t, factory(t))
+	})
+}
+
+func testPresentedAgentCredentialGeneration(t *testing.T, unit port.UnitOfWork) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 26, 12, 30, 0, 0, time.UTC)
+	locationID := domain.LocationID("00000000-0000-4000-8000-000000000951")
+	location, err := domain.NewLocation(locationID, "credential-edge", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentID := domain.AgentID("00000000-0000-4000-8000-000000000952")
+	agent, err := domain.NewAgent(domain.NewAgentParams{ID: agentID, LocationID: locationID, Name: "credential-edge", Capabilities: []domain.AgentCapability{domain.CapabilityHTTP}, CredentialGeneration: 1, CreatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := unit.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+		if err := repositories.Locations.Create(ctx, location); err != nil {
+			return err
+		}
+		return repositories.Agents.Create(ctx, port.AgentRecord{Agent: agent, CredentialHash: []byte("generation-1")})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	readPresented := func() uint64 {
+		t.Helper()
+		var presented uint64
+		if err := unit.View(ctx, func(ctx context.Context, repositories port.Repositories) error {
+			record, err := repositories.Agents.Get(ctx, agentID)
+			presented = record.PresentedCredentialGeneration
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return presented
+	}
+	heartbeat := func(generation uint64) {
+		t.Helper()
+		if err := unit.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+			updated, err := repositories.Agents.UpdateHeartbeat(ctx, agentID, generation, "contract", []domain.AgentCapability{domain.CapabilityHTTP}, now.Add(time.Duration(generation)*time.Minute))
+			if err == nil && !updated {
+				return errors.New("heartbeat did not update")
+			}
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	createGeneration := func(expected, generation uint64) {
+		t.Helper()
+		if err := unit.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+			created, err := repositories.ManagementCommands.CreateAgentCredentialGeneration(ctx, port.CreateAgentCredentialGenerationCommand{
+				ExpectedCurrentGeneration: expected,
+				Credential:                port.AgentCredentialRecord{AgentID: agentID, Generation: generation, CredentialHash: []byte(fmt.Sprintf("generation-%d", generation)), CreatedAt: now.Add(time.Duration(generation) * time.Second)},
+			})
+			if err == nil && !created {
+				return errors.New("credential generation compare-and-set did not apply")
+			}
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revoke := func(generation uint64) {
+		t.Helper()
+		if err := unit.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+			outcome, err := repositories.ManagementCommands.RevokeAgentCredentialGeneration(ctx, agentID, generation, now.Add(time.Duration(generation+10)*time.Minute))
+			if err == nil && outcome != port.CredentialGenerationRevoked {
+				return fmt.Errorf("revoke generation %d outcome = %s", generation, outcome)
+			}
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	createGeneration(1, 2)
+	heartbeat(2)
+	if got := readPresented(); got != 2 {
+		t.Fatalf("presented generation = %d, want 2", got)
+	}
+	revoke(1)
+	createGeneration(2, 3)
+	if got := readPresented(); got != 2 {
+		t.Fatalf("unseen generation became presented: %d, want 2", got)
+	}
+	heartbeat(3)
+	revoke(2)
+	if got := readPresented(); got != 3 {
+		t.Fatalf("revoked generation displaced current presentation: %d, want 3", got)
+	}
 }
 
 func testOperatorOwnership(t *testing.T, unit port.UnitOfWork) {

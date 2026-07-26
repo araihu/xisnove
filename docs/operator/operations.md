@@ -3,6 +3,12 @@
 The contract-independent chart is under `charts/xisnove-edge`. Full deployment
 must wait for the frozen SDK adapter recorded in `operator/INTEGRATION.md`.
 
+The edge installation is intentionally not the monitoring control plane. Run
+the relational control plane on an external VPS, cloud service, or separate
+cluster, then configure the operator and Agent with its public API URL. The
+kind acceptance journey enforces this topology with a SQLite-backed server in
+a separate Docker container and only the operator and Agent inside Kubernetes.
+
 ## Secret inputs
 
 The chart requires an existing Secret containing a narrowly scoped operator
@@ -35,6 +41,10 @@ Scheduled rotation is intentionally absent in v1. To rotate, increment
 
 Retries use a stable generation-specific idempotency key. A crash between
 remote issuance and Secret update must return the same generation on replay.
+The previous credential is revoked only after the server reports a heartbeat
+authenticated by the new generation. Operator or Agent restarts and API
+partitions may lengthen the overlap, but cannot move revocation ahead of that
+fence.
 
 ## Stale discovery
 
@@ -53,3 +63,19 @@ kubectl annotate monitor NAME monitoring.xisnove.io/force-delete=true
 
 The same annotation applies to `Agent`. Force removal can leave a remote
 orphan and should be reserved for disaster recovery.
+
+## Reproducible edge verification
+
+Run the complete black-box journey with pinned images and local tools:
+
+```sh
+make kind-edge-e2e
+```
+
+The harness installs the chart with Helm and drives the public generated Go
+SDK plus `kubectl`. It verifies discovery, explicit promotion, Secret RBAC,
+interrupted credential rotation, network loss, independent process restarts,
+and recreated-UID ownership refusal. Successful runs delete their exact kind
+cluster, external server container, SQLite volume, images, and temporary
+credential files. Failure artifacts contain workload resources, logs, and
+Secret names/types/key names only; Secret values are never serialized.

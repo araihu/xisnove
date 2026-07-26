@@ -161,9 +161,14 @@ func TestManagerOptionsUseNamespacedCacheLeaseProbesAndGracefulShutdown(t *testi
 	if !options.LeaderElection || options.LeaderElectionResourceLock != "leases" || options.LeaderElectionNamespace != "monitoring" {
 		t.Fatalf("leader election options = enabled %v lock %q namespace %q", options.LeaderElection, options.LeaderElectionResourceLock, options.LeaderElectionNamespace)
 	}
-	if options.HealthProbeBindAddress != ":8081" || options.ReadinessEndpointName != "readyz" || options.LivenessEndpointName != "healthz" {
+	if options.HealthProbeBindAddress != ":8081" || options.ReadinessEndpointName != "/readyz" || options.LivenessEndpointName != "/healthz" {
 		t.Fatalf("health options = %#v", options)
 	}
+	// controller-runtime registers these values directly with http.ServeMux;
+	// missing leading slashes panic only when a real manager starts.
+	mux := http.NewServeMux()
+	mux.Handle(options.ReadinessEndpointName, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	mux.Handle(options.LivenessEndpointName, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	if options.GracefulShutdownTimeout == nil || *options.GracefulShutdownTimeout != 45*time.Second {
 		t.Fatalf("graceful shutdown = %v", options.GracefulShutdownTimeout)
 	}

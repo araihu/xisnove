@@ -1,0 +1,12 @@
+FROM golang:1.26.5-alpine3.23@sha256:622e56dbc11a8cfe87cafa2331e9a201877271cbff918af53d3be315f3da88cc AS build
+WORKDIR /src/agent
+COPY agent/go.mod agent/go.sum ./
+RUN GOWORK=off go mod download
+COPY agent/ .
+RUN GOWORK=off CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/xisnove-agent ./cmd/xisnove-agent
+
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
+RUN addgroup -S xisnove && adduser -S -G xisnove xisnove
+COPY --from=build /out/xisnove-agent /usr/local/bin/xisnove-agent
+USER 100:101
+ENTRYPOINT ["/usr/local/bin/xisnove-agent"]

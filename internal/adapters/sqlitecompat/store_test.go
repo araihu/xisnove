@@ -33,8 +33,9 @@ func TestTransactionErrorMarksWrappedTursoRetryableFailures(t *testing.T) {
 		"turso: error: database snapshot is stale, rollback and retry the transaction",
 	)
 	for name, cause := range map[string]error{
-		"busy":           turso.ErrTursoBusy,
-		"stale snapshot": canonicalStaleSnapshot,
+		"busy":            turso.ErrTursoBusy,
+		"stale snapshot":  canonicalStaleSnapshot,
+		"database locked": errors.New("failed to execute SQL:\nSQLite error: database is locked"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			wrapped := fmt.Errorf("execute statement: %w", cause)
@@ -56,6 +57,12 @@ func TestTransactionErrorRejectsSimilarTursoMessagesAndConstraints(t *testing.T)
 		),
 		"stale snapshot suffix": errors.New(
 			"turso: error: database snapshot is stale, rollback and retry the transaction later",
+		),
+		"prefixed database locked": errors.New(
+			"proxy: failed to execute SQL:\nSQLite error: database is locked",
+		),
+		"database locked suffix": errors.New(
+			"failed to execute SQL:\nSQLite error: database is locked later",
 		),
 		"constraint": turso.ErrTursoConstraint,
 	} {

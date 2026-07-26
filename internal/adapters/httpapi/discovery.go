@@ -48,7 +48,9 @@ func (s *Server) UpsertDiscoveryCandidates(
 			ObservedAt: candidate.ObservedAt,
 		}
 	}
-	acknowledgement, err := s.discovery.Publish(ctx, agent.ID, key, inputs)
+	acknowledgement, err := s.discovery.PublishSnapshot(
+		ctx, agent.ID, key, request.Body.Complete, request.Body.CompletedAt, inputs,
+	)
 	if err != nil {
 		return upsertDiscoveryProblem(err)
 	}

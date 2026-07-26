@@ -752,7 +752,16 @@ func (r *agentRepository) Get(
 	if err != nil {
 		return application.AgentRecord{}, repositoryError("get agent", err)
 	}
-	return mapAgent(record)
+	mapped, err := mapAgent(record)
+	if err != nil {
+		return application.AgentRecord{}, err
+	}
+	presented, err := r.queries.GetPresentedAgentCredentialGeneration(ctx, string(agentID))
+	if err != nil {
+		return application.AgentRecord{}, repositoryError("get presented agent credential generation", err)
+	}
+	mapped.PresentedCredentialGeneration = uint64(presented)
+	return mapped, nil
 }
 
 func (r *agentRepository) FindActiveByCredentialHash(

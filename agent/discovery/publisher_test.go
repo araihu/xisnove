@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -231,6 +232,32 @@ func TestAPIPublisherSendsCompletionFields(t *testing.T) {
 	publisher := discovery.APIPublisher{Client: client, Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "credential", Generation: 1}}}
 	if err := publisher.Publish(context.Background(), discovery.Batch{ID: "empty", Complete: true, CompletedAt: completedAt}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAPIPublisherReportsOnlyBoundedProblemIdentity(t *testing.T) {
+	detail := "must-not-be-logged credential=secret"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/problem+json")
+		response.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(response).Encode(controlplane.Problem{
+			Code: "discovery_snapshot_stale", Title: "Discovery snapshot is stale",
+			Detail: &detail, Status: http.StatusConflict,
+			Type: "about:blank", CorrelationId: "correlation",
+		})
+	}))
+	t.Cleanup(server.Close)
+	client, err := controlplane.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := discovery.APIPublisher{Client: client, Credentials: fixedCredentials{bundle: credentials.Bundle{Credential: "secret", Generation: 1}}}
+	err = publisher.Publish(context.Background(), discovery.Batch{ID: "empty", Complete: true, CompletedAt: time.Now().UTC()})
+	if err == nil || err.Error() != "discovery API returned HTTP 409 (discovery_snapshot_stale: Discovery snapshot is stale)" {
+		t.Fatalf("error = %q", err)
+	}
+	if strings.Contains(err.Error(), "must-not-be-logged") || strings.Contains(err.Error(), "credential") || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("error exposed problem detail or credential: %q", err)
 	}
 }
 

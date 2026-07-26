@@ -113,6 +113,32 @@ jobs:
       - name: Vet standalone operator module
         run: GOWORK=off go -C operator vet ./...
 
+  kubernetes-edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            go.sum
+            agent/go.sum
+            operator/go.sum
+      - name: Install pinned kind and Helm clients
+        run: |
+          go install sigs.k8s.io/kind@v0.31.0
+          go install helm.sh/helm/v3/cmd/helm@v3.16.4
+      - name: Install checksum-verified kubectl
+        env:
+          KUBECTL_VERSION: v1.35.4
+        run: |
+          curl --fail --location --silent --show-error --output kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl --fail --location --silent --show-error --output kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+          printf '%s  %s\n' "$(cat kubectl.sha256)" kubectl | sha256sum --check
+          install -m 0755 kubectl "$(go env GOPATH)/bin/kubectl"
+      - name: Run external-control-plane Kubernetes edge journey
+        run: make kind-edge-e2e
+
   cli:
     runs-on: ubuntu-latest
     steps:

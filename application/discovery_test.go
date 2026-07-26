@@ -63,6 +63,15 @@ func TestPublishDiscoverySnapshotAllowsEmptyCompleteButRejectsEmptyPartial(t *te
 	}
 }
 
+func TestPublishPartialSnapshotAcceptsContractRequiredCompletedAtWithoutAbsenceClaim(t *testing.T) {
+	fixture := newDiscoveryFixture()
+	completedAt := time.Date(2026, 7, 26, 12, 5, 0, 0, time.UTC)
+	ack, err := fixture.service.PublishSnapshot(context.Background(), "agent-1", "partial", false, completedAt, []application.DiscoveryInput{fixture.input("uid-1", true)})
+	if err != nil || ack != (port.DiscoveryBatchAcknowledgement{Accepted: 1, Created: 1}) {
+		t.Fatalf("partial snapshot = %#v, %v", ack, err)
+	}
+}
+
 func TestTombstoneMarksCandidateStaleWithoutDeletingPromotion(t *testing.T) {
 	fixture := newDiscoveryFixture()
 	input := fixture.input("uid-1", true)
@@ -137,6 +146,22 @@ func TestPromoteCandidateReplaysExistingMonitor(t *testing.T) {
 	second, err := fixture.service.Promote(context.Background(), candidate.ID, command)
 	if err != nil || second.Monitor.ID != first.Monitor.ID || len(fixture.monitors.monitors) != 1 {
 		t.Fatalf("replay = %#v, %v monitors=%d", second, err, len(fixture.monitors.monitors))
+	}
+}
+
+func TestPromoteCandidateRetriesAConcurrentTransactionAbort(t *testing.T) {
+	fixture := newDiscoveryFixture()
+	if _, err := fixture.service.Publish(context.Background(), "agent-1", "batch-1", []application.DiscoveryInput{fixture.input("uid-1", true)}); err != nil {
+		t.Fatal(err)
+	}
+	fixture.store.transactionErrors = []error{port.ErrRetryableTransaction}
+	candidate := fixture.repository.onlyCandidate()
+	promotion, err := fixture.service.Promote(context.Background(), candidate.ID, application.DiscoveryPromotionCommand{
+		Name: "api", LocationID: "location-1", RequiredLocation: true,
+		Interval: time.Minute, Timeout: 5 * time.Second, FailureThreshold: 2, RecoveryThreshold: 1,
+	})
+	if err != nil || promotion.Monitor.ID != "monitor-1" || fixture.store.transactions != 3 {
+		t.Fatalf("promotion = %#v, %v transactions=%d", promotion, err, fixture.store.transactions)
 	}
 }
 
@@ -240,8 +265,9 @@ func sequenceIDs(values ...string) func() string {
 }
 
 type discoveryStore struct {
-	repositories port.DiscoveryRepositories
-	transactions int
+	repositories      port.DiscoveryRepositories
+	transactions      int
+	transactionErrors []error
 }
 
 func (s *discoveryStore) DiscoveryView(ctx context.Context, fn func(context.Context, port.DiscoveryRepositories) error) error {
@@ -249,6 +275,11 @@ func (s *discoveryStore) DiscoveryView(ctx context.Context, fn func(context.Cont
 }
 func (s *discoveryStore) DiscoveryTransact(ctx context.Context, fn func(context.Context, port.DiscoveryRepositories) error) error {
 	s.transactions++
+	if len(s.transactionErrors) > 0 {
+		err := s.transactionErrors[0]
+		s.transactionErrors = s.transactionErrors[1:]
+		return err
+	}
 	return fn(ctx, s.repositories)
 }
 

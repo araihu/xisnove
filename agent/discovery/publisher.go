@@ -218,6 +218,9 @@ func (publisher APIPublisher) Publish(ctx context.Context, batch Batch) error {
 		return err
 	}
 	if response.StatusCode() != http.StatusOK || response.JSON200 == nil {
+		if problem := response.ApplicationproblemJSONDefault; problem != nil {
+			return fmt.Errorf("discovery API returned HTTP %d (%s: %s)", response.StatusCode(), problem.Code, problem.Title)
+		}
 		return fmt.Errorf("discovery API returned HTTP %d", response.StatusCode())
 	}
 	if int(response.JSON200.Accepted) != len(batch.Candidates) {

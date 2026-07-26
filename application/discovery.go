@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/araihu/xisnove/application/port"
@@ -62,6 +63,13 @@ type DiscoveryService struct {
 	newMonitorID     func() string
 	now              func() time.Time
 	cursors          AudienceCursorCodec
+	promotionGatesMu sync.Mutex
+	promotionGates   map[domain.DiscoveryCandidateID]*discoveryPromotionGate
+}
+
+type discoveryPromotionGate struct {
+	semaphore chan struct{}
+	users     int
 }
 
 func NewDiscoveryService(config DiscoveryServiceConfig) *DiscoveryService {
@@ -98,7 +106,7 @@ func (s *DiscoveryService) PublishSnapshot(
 	if complete && completedAt.IsZero() {
 		return port.DiscoveryBatchAcknowledgement{}, &ValidationError{Fields: map[string]string{"completedAt": "is required for a complete snapshot"}}
 	}
-	if !complete && (!completedAt.IsZero() || len(inputs) == 0) {
+	if !complete && len(inputs) == 0 {
 		return port.DiscoveryBatchAcknowledgement{}, port.ErrConflict
 	}
 	if len(inputs) > MaxDiscoveryBatchSize {
@@ -152,16 +160,32 @@ func (s *DiscoveryService) Promote(ctx context.Context, candidateID domain.Disco
 	if s == nil || s.store == nil || s.newMonitorID == nil || s.now == nil {
 		return DiscoveryPromotion{}, errors.New("discovery service is not configured")
 	}
-	var result DiscoveryPromotion
-	err := s.store.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
-		var err error
-		result, err = s.promoteWithRepositories(ctx, repositories, candidateID, command)
-		return err
-	})
+	release, err := s.acquirePromotionGate(ctx, candidateID)
 	if err != nil {
-		return DiscoveryPromotion{}, fmt.Errorf("promote discovery candidate: %w", err)
+		return DiscoveryPromotion{}, err
 	}
-	return result, nil
+	defer release()
+	for attempt := 0; attempt < idempotencyMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return DiscoveryPromotion{}, err
+		}
+		var result DiscoveryPromotion
+		err := s.store.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+			var err error
+			result, err = s.promoteWithRepositories(ctx, repositories, candidateID, command)
+			return err
+		})
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, ErrRetryableTransaction) || attempt == idempotencyMaxAttempts-1 {
+			return DiscoveryPromotion{}, fmt.Errorf("promote discovery candidate: %w", err)
+		}
+		if err := waitForIdempotencyRetry(ctx); err != nil {
+			return DiscoveryPromotion{}, fmt.Errorf("promote discovery candidate: %w", err)
+		}
+	}
+	return DiscoveryPromotion{}, errors.New("discovery promotion retry attempts exhausted")
 }
 
 func (s *DiscoveryService) PromoteIdempotently(
@@ -177,6 +201,11 @@ func (s *DiscoveryService) PromoteIdempotently(
 	if err := authorizeManagementMutation("promoteDiscoveryCandidate", principal); err != nil {
 		return DiscoveryPromotion{}, err
 	}
+	release, err := s.acquirePromotionGate(ctx, candidateID)
+	if err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	defer release()
 	service := NewIdempotencyService[DiscoveryPromotion](s.idempotencyStore)
 	result, err := service.Execute(ctx, IdempotencyRequest{
 		Principal: principal, OperationID: "promoteDiscoveryCandidate", Key: idempotencyKey,
@@ -195,6 +224,46 @@ func (s *DiscoveryService) PromoteIdempotently(
 		return DiscoveryPromotion{}, fmt.Errorf("promote discovery candidate idempotently: %w", err)
 	}
 	return result, nil
+}
+
+// acquirePromotionGate coalesces same-process contention so optimistic SQLite
+// transactions usually avoid allocating throwaway monitor IDs. It is not a
+// distributed lock: durable candidate/link constraints and transaction retry
+// remain the cross-replica correctness boundary, where an extra discarded UUID
+// allocation is harmless.
+func (s *DiscoveryService) acquirePromotionGate(ctx context.Context, candidateID domain.DiscoveryCandidateID) (func(), error) {
+	s.promotionGatesMu.Lock()
+	if s.promotionGates == nil {
+		s.promotionGates = make(map[domain.DiscoveryCandidateID]*discoveryPromotionGate)
+	}
+	gate := s.promotionGates[candidateID]
+	if gate == nil {
+		gate = &discoveryPromotionGate{semaphore: make(chan struct{}, 1)}
+		gate.semaphore <- struct{}{}
+		s.promotionGates[candidateID] = gate
+	}
+	gate.users++
+	s.promotionGatesMu.Unlock()
+
+	select {
+	case <-ctx.Done():
+		s.releasePromotionGateUser(candidateID, gate)
+		return nil, ctx.Err()
+	case <-gate.semaphore:
+	}
+	return func() {
+		gate.semaphore <- struct{}{}
+		s.releasePromotionGateUser(candidateID, gate)
+	}, nil
+}
+
+func (s *DiscoveryService) releasePromotionGateUser(candidateID domain.DiscoveryCandidateID, gate *discoveryPromotionGate) {
+	s.promotionGatesMu.Lock()
+	gate.users--
+	if gate.users == 0 {
+		delete(s.promotionGates, candidateID)
+	}
+	s.promotionGatesMu.Unlock()
 }
 
 func discoveryRepositories(repositories Repositories) port.DiscoveryRepositories {

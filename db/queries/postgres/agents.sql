@@ -48,6 +48,17 @@ SELECT *
 FROM agents
 WHERE id = sqlc.arg(id);
 
+-- name: GetPresentedAgentCredentialGeneration :one
+SELECT COALESCE((
+  SELECT generation
+  FROM agent_credentials
+  WHERE agent_id = sqlc.arg(agent_id)
+    AND revoked_at IS NULL
+    AND last_authenticated_at IS NOT NULL
+  ORDER BY last_authenticated_at DESC, generation DESC
+  LIMIT 1
+), 0)::BIGINT AS presented_credential_generation;
+
 -- name: UpdateAgentHeartbeat :execrows
 UPDATE agents
 SET version = sqlc.arg(version),

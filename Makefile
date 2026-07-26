@@ -1,4 +1,4 @@
-.PHONY: generate generated-check test module-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke check
+.PHONY: generate generated-check test module-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke kind-edge-e2e check
 
 generate:
 	go generate ./...
@@ -49,5 +49,8 @@ ui-check:
 
 ui-browser-smoke:
 	GOWORK=off $(MAKE) -C ui browser-smoke
+
+kind-edge-e2e:
+	bash scripts/kind-edge-e2e.sh
 
 check: generated-check module-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check

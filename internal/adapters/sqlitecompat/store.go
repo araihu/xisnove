@@ -33,10 +33,20 @@ func classifyTransactionError(err error) error {
 			return fmt.Errorf("%w: %w", application.ErrRetryableTransaction, err)
 		}
 	}
-	if errors.Is(err, turso.ErrTursoBusy) || hasCanonicalTursoStaleSnapshot(err) {
+	if errors.Is(err, turso.ErrTursoBusy) || hasCanonicalTursoStaleSnapshot(err) || hasCanonicalTursoDatabaseLocked(err) {
 		return fmt.Errorf("%w: %w", application.ErrRetryableTransaction, err)
 	}
 	return err
+}
+
+func hasCanonicalTursoDatabaseLocked(err error) bool {
+	const message = "failed to execute SQL:\nSQLite error: database is locked"
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if current.Error() == message {
+			return true
+		}
+	}
+	return false
 }
 
 func hasCanonicalTursoStaleSnapshot(err error) bool {
@@ -769,7 +779,16 @@ func (r *agentRepository) Get(
 	if err != nil {
 		return application.AgentRecord{}, repositoryError("get agent", err)
 	}
-	return mapAgent(record)
+	mapped, err := mapAgent(record)
+	if err != nil {
+		return application.AgentRecord{}, err
+	}
+	presented, err := r.queries.GetPresentedAgentCredentialGeneration(ctx, string(agentID))
+	if err != nil {
+		return application.AgentRecord{}, repositoryError("get presented agent credential generation", err)
+	}
+	mapped.PresentedCredentialGeneration = uint64(presented)
+	return mapped, nil
 }
 
 func (r *agentRepository) FindActiveByCredentialHash(

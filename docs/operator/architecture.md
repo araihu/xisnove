@@ -52,3 +52,18 @@ protocol, and target. Only a successful complete snapshot may mark a missing
 candidate stale. Staleness retains the catalog record and source provenance;
 it does not delete a promoted Monitor. Promotion is always a separate explicit
 control-plane action.
+
+A complete snapshot with zero observations is valid and is the authoritative
+way to mark every previously present candidate in scope absent. A partial
+snapshot may carry `completedAt` for its observation window, but can never
+infer absence. The Agent reports bounded structured API problems and never
+copies response bodies into logs or status.
+
+## Runtime state boundary
+
+Kubernetes contains desired state, bounded conditions, operator-owned Agent
+credentials, and Agent Deployments. Alert/Incident/result/notification state
+remains relational; the operator creates neither operational CRDs nor Jobs.
+The public HTTP/OpenAPI SDK is the sole production integration boundary. A
+gRPC transport remains a possible later optimization and is not part of the
+v1 edge contract.

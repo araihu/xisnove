@@ -79,3 +79,14 @@ TURSO_GROUP='xisnove-ci' \
 The test binary never parses `.env`. Load a local environment file in the
 calling shell, and never commit or copy it into a worktree. See [managed Turso
 Cloud](turso-cloud.md) for workflow and credential details.
+
+## Operator-edge credential fence
+
+Every relational profile also exposes the latest non-revoked credential
+generation that has actually authenticated an Agent heartbeat. Merely staging
+a newer credential must not advance this presented generation. The operator
+uses that read model as the revocation fence: it keeps the previous generation
+valid until the new one is observed, then revokes only the previous generation.
+The shared operator-edge conformance journey proves this overlap and restart-
+safe ordering for SQLite, local Turso, PostgreSQL, and the opt-in managed Turso
+profile.

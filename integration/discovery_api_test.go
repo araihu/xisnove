@@ -104,6 +104,15 @@ func runDiscoveryAPIJourney(t *testing.T, harness *storageHarness) {
 		t.Fatalf("enroll agent response=%#v err=%v", enrolled, err)
 	}
 	agentAuth := bearer(enrolled.JSON201.Credential)
+	emptyCompletedAt := now.Add(-2 * time.Minute)
+	emptyKey := sdk.IdempotencyKey("discovery-empty-complete-snapshot")
+	empty, err := client.UpsertDiscoveryCandidatesWithResponse(ctx,
+		&sdk.UpsertDiscoveryCandidatesParams{IdempotencyKey: &emptyKey},
+		sdk.DiscoveryCandidateBatch{Candidates: []sdk.DiscoveryCandidateInput{}, Complete: true, CompletedAt: emptyCompletedAt}, agentAuth,
+	)
+	if err != nil || empty.JSON200 == nil || empty.JSON200.Accepted != 0 || empty.JSON200.Created != 0 || empty.JSON200.Updated != 0 {
+		t.Fatalf("publish empty complete discovery snapshot response=%#v err=%v", empty, err)
+	}
 	observedAt := now.Add(-time.Minute)
 	input := sdk.DiscoveryCandidateInput{
 		SourceKind: "httproute", SourceUid: "uid-route-123", Namespace: "monitoring", Name: "status-api",
@@ -123,7 +132,7 @@ func runDiscoveryAPIJourney(t *testing.T, harness *storageHarness) {
 	uploadKey := sdk.IdempotencyKey("discovery-snapshot-1")
 	uploaded, err := client.UpsertDiscoveryCandidatesWithResponse(ctx,
 		&sdk.UpsertDiscoveryCandidatesParams{IdempotencyKey: &uploadKey},
-		sdk.DiscoveryCandidateBatch{Candidates: []sdk.DiscoveryCandidateInput{input}}, agentAuth,
+		sdk.DiscoveryCandidateBatch{Candidates: []sdk.DiscoveryCandidateInput{input}, Complete: false, CompletedAt: observedAt}, agentAuth,
 	)
 	if err != nil || uploaded.JSON200 == nil || uploaded.JSON200.Accepted != 1 ||
 		uploaded.JSON200.Created != 1 || uploaded.JSON200.Updated != 0 {
