@@ -3,6 +3,7 @@ package contracttest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ func RunPublicStatus(t *testing.T, factory PublicStatusFactory) {
 			pendingID  = domain.MonitorID("00000000-0000-4000-8000-000000000202")
 			unknownID  = domain.MonitorID("00000000-0000-4000-8000-000000000203")
 			incidentID = domain.IncidentID("00000000-0000-4000-8000-000000000204")
+			bulkCount  = 999
 		)
 		makeMonitor := func(id domain.MonitorID, name, description string, order int32, public bool) domain.Monitor {
 			t.Helper()
@@ -46,6 +48,14 @@ func RunPublicStatus(t *testing.T, factory PublicStatusFactory) {
 				makeMonitor(pendingID, "pending", "public pending", 10, true),
 			} {
 				if err := repositories.Monitors.Create(ctx, monitor); err != nil {
+					return err
+				}
+			}
+			for index := 0; index < bulkCount; index++ {
+				id := domain.MonitorID(fmt.Sprintf("10000000-0000-4000-8000-%012d", index))
+				if err := repositories.Monitors.Create(ctx, makeMonitor(
+					id, fmt.Sprintf("bulk-%04d", index), "public bulk monitor", int32(100+index), true,
+				)); err != nil {
 					return err
 				}
 			}
@@ -93,8 +103,11 @@ func RunPublicStatus(t *testing.T, factory PublicStatusFactory) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(monitors) != 2 || monitors[0].ID != pendingID || monitors[1].ID != unknownID {
+		if len(monitors) != 1001 || monitors[0].ID != pendingID || monitors[1].ID != unknownID {
 			t.Fatalf("ordered public monitors = %#v", monitors)
+		}
+		if want := domain.MonitorID("10000000-0000-4000-8000-000000000998"); monitors[len(monitors)-1].ID != want {
+			t.Fatalf("last public monitor = %q, want %q", monitors[len(monitors)-1].ID, want)
 		}
 		if monitors[0].State != domain.HealthPending || !monitors[0].LastTransitionAt.IsZero() {
 			t.Fatalf("missing health projection = %#v", monitors[0])
@@ -122,7 +135,7 @@ func RunPublicStatus(t *testing.T, factory PublicStatusFactory) {
 			if err != nil {
 				return err
 			}
-			if len(rows) != 2 {
+			if len(rows) != 1001 {
 				t.Fatalf("rows after aborted view = %#v", rows)
 			}
 			return nil

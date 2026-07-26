@@ -15,5 +15,4 @@ FROM monitors m
 LEFT JOIN monitor_health mh ON mh.monitor_id = m.id
 LEFT JOIN incidents i ON i.monitor_id = m.id AND i.recovered_at IS NULL
 WHERE m.public = TRUE
-ORDER BY m.display_order ASC, m.id ASC
-LIMIT 1000;
+ORDER BY m.display_order ASC, m.id ASC;
