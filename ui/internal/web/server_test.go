@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -184,6 +185,53 @@ func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
 	}
 	if strings.Contains(body, "<html") || strings.Contains(body, testCredential) {
 		t.Fatal("fragment included shell or bearer")
+	}
+}
+
+func TestMonitorSearchWalksPastEmptyPageAndPreservesOpaqueState(t *testing.T) {
+	client := controlplane.NewFake(testUsername, testPassword, testCredential)
+	for index := 0; index < 25; index++ {
+		client.Monitors = append(client.Monitors, sdk.Monitor{Id: uuid.New(), Name: fmt.Sprintf("HTTP monitor %02d", index), Kind: sdk.MonitorKindHttp, Enabled: true})
+	}
+	matchID := uuid.New()
+	client.Monitors = append(client.Monitors, sdk.Monitor{Id: matchID, Name: "Remote DNS", Kind: sdk.MonitorKindDns, Enabled: true})
+	handler, _ := newTestHandler(t, client, time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors?q=dns&selected=kept", nil)
+	request.Header.Set("HX-Request", "true")
+	request.AddCookie(loginSession(t, handler))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{"Remote DNS", "across 2 API page(s)", "bounded to 4 pages", "q=dns", "selected=" + matchID.String()} {
+		if !strings.Contains(body, want) {
+			t.Errorf("search response missing %q", want)
+		}
+	}
+}
+
+func TestMonitorSearchEmptyWindowStillOffersOpaqueContinuation(t *testing.T) {
+	client := controlplane.NewFake(testUsername, testPassword, testCredential)
+	for index := 0; index < 126; index++ {
+		client.Monitors = append(client.Monitors, sdk.Monitor{Id: uuid.New(), Name: fmt.Sprintf("HTTP monitor %03d", index), Kind: sdk.MonitorKindHttp, Enabled: true})
+	}
+	handler, _ := newTestHandler(t, client, time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors?q=dns&selected=kept", nil)
+	request.Header.Set("HX-Request", "true")
+	request.AddCookie(loginSession(t, handler))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	for _, want := range []string{"No matching monitors", "Next page", "cursor=offset%3A100", "q=dns", "selected=kept"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("continuation response missing %q", want)
+		}
 	}
 }
 

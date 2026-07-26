@@ -27,10 +27,12 @@ import (
 type MonitorList struct {
 	Monitors []sdk.Monitor
 	Health map[string]sdk.HealthState
+	Cursor string
 	NextCursor string
 	Query string
 	Selected string
 	HealthFailures int
+	SearchPages int
 }
 
 type Problem struct {
@@ -57,9 +59,9 @@ templ Document(title string, content templ.Component) {
 				.dark .xis-brand { color: var(--color-on-surface-dark-strong); }
 				.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; }
 				.xis-stack { display: grid; gap: var(--xis-gap); }
-				.xis-theme-controls { display: flex; align-items: end; gap: .5rem; }
+				.xis-theme-controls { display: flex; align-items: end; gap: .5rem; min-width: 0; }
 				.xis-field { display: grid; gap: .25rem; font-size: .875rem; }
-				.xis-select, .xis-input { min-height: 2.75rem; border: 1px solid var(--color-outline); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }
+				.xis-select, .xis-input { min-height: 2.75rem; min-width: 0; max-width: 100%; border: 1px solid var(--color-outline-strong, var(--color-outline)); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }
 				.dark .xis-select, .dark .xis-input { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }
 				.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
 				.xis-results { display: grid; gap: 1rem; min-height: 16rem; }
@@ -70,12 +72,28 @@ templ Document(title string, content templ.Component) {
 				.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
 				.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 				.xis-password { width: 100%; }
-				.xis-skeleton { min-height: 12rem; }
-				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-public-row { grid-template-columns: 1fr; } }
+				.xis-skeleton { display: none; min-height: 12rem; }
+				.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
+				.xis-mobile-nav { display: none; }
+				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-public-row { grid-template-columns: 1fr; } .xis-mobile-nav { display: block; } }
 			</style>
 		</head>
 		<body>
 			@content
+			<script>
+				document.addEventListener("htmx:afterSwap", function (event) {
+					const main = document.getElementById("main-content");
+					if (!main || !(event.detail.target === main || main.contains(event.detail.target))) return;
+					main.scrollTop = 0;
+					main.focus({preventScroll: true});
+					const heading = main.querySelector("h1");
+					if (heading) document.title = heading.textContent.trim() + " · Xisnove";
+				});
+				document.addEventListener("htmx:historyRestore", function () {
+					const main = document.getElementById("main-content");
+					if (main) main.focus({preventScroll: true});
+				});
+			</script>
 		</body>
 	</html>
 }
@@ -154,9 +172,23 @@ templ Shell(csrfToken string, content templ.Component) {
 
 templ TopBar(csrfToken string) {
 	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/monitors", Actions: []navbar.ActionItem{
+		{Content: MobileNavigation(), Position: navbar.ActionLeft},
 		{Content: ThemeControls(), Position: navbar.ActionRight},
 		{Content: LogoutForm(csrfToken), Position: navbar.ActionRight},
 	}})
+}
+
+templ MobileNavigation() {
+	<div class="xis-mobile-nav" x-on:keydown.escape.window="const trigger = $el.querySelector('button[aria-controls][aria-expanded=true]'); if (trigger) { trigger.click(); trigger.focus(); }">
+		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-monitoring", TriggerLabel: "Open monitoring navigation", Sidebar: sidebar.Config{
+			DisableSkipLink: true,
+			SectionsTitle: "Monitoring",
+			Sections: []sidebar.Section{{Items: []sidebar.Item{
+				{ID: "mobile-nav-monitors", Label: "Monitors", Href: "/monitors", Active: true, LinkAttrs: templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"}},
+				{ID: "mobile-nav-status", Label: "Public status", Href: "/status"},
+			}}},
+		}})
+	</div>
 }
 
 templ MonitorPage(csrfToken string, data MonitorList) { @ShellPage("Monitors", csrfToken, MonitorContent(data)) }
@@ -190,9 +222,9 @@ templ MonitorContent(data MonitorList) {
 				}
 			} else {
 				<div class="xis-table-scroll">@table.Table(monitorTable(data))</div>
-				if data.NextCursor != "" {
-					@NextPage(data)
-				}
+			}
+			if data.NextCursor != "" {
+				@NextPage(data)
 			}
 		</div>
 	</section>
@@ -208,7 +240,7 @@ templ MonitorSearch(query string) {
 }
 
 templ MonitorRefresh(data MonitorList) {
-	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, "", data.Selected)) } hx-get={ monitorURL(data.Query, "", data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Refresh</a>
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.Cursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Refresh</a>
 }
 
 templ ClearSearch() { @link.Link("/monitors", link.WithAppearance(link.AppearanceButton), link.WithAttrs(templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"})) { Clear search } }
@@ -217,7 +249,7 @@ templ NextPage(data MonitorList) {
 	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.NextCursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Next page</a>
 }
 
-templ MonitorActions(id string) { @link.Link("/monitors?selected=" + url.QueryEscape(id), link.WithSize(link.SizeSmall), link.WithAttrs(templ.Attributes{"aria-label": "Select monitor " + id, "hx-get": "/monitors?selected=" + url.QueryEscape(id), "hx-target": "#main-content", "hx-push-url": "true"})) { Select } }
+templ MonitorActions(data MonitorList, id string) { @link.Link(monitorURL(data.Query, data.Cursor, id), link.WithSize(link.SizeSmall), link.WithAttrs(templ.Attributes{"aria-label": "Select monitor " + id, "hx-get": monitorURL(data.Query, data.Cursor, id), "hx-target": "#main-content", "hx-push-url": "true"})) { Select } }
 
 templ StatusPage(data sdk.PublicStatusPage) { @Document("Public status", PublicStatusShell(data)) }
 templ StatusErrorPage(problem Problem) { @Document("Public status", PublicStatusErrorShell(problem)) }
@@ -275,7 +307,7 @@ templ ProblemContent(problem Problem) {
 }
 
 func monitorDescription(data MonitorList) string {
-	if data.Query != "" { return fmt.Sprintf("%d result(s) for %q.", len(data.Monitors), data.Query) }
+	if data.Query != "" { return fmt.Sprintf("%d result(s) for %q across %d API page(s). Search is bounded to 4 pages at a time; continue when offered.", len(data.Monitors), data.Query, data.SearchPages) }
 	return fmt.Sprintf("%d monitor(s) in this page. Health is enriched with bounded control-plane requests.", len(data.Monitors))
 }
 
@@ -296,7 +328,7 @@ func monitorTable(data MonitorList) table.Config {
 		if state == "" { state = sdk.Unknown }
 		name := monitor.Name
 		if data.Selected == id { name += " (selected)" }
-		rows = append(rows, table.Row{ID: id, Link: "/monitors?selected=" + url.QueryEscape(id), LinkMode: table.LinkFull, Actions: MonitorActions(id), Cells: map[string]table.Cell{
+		rows = append(rows, table.Row{ID: id, Link: monitorURL(data.Query, data.Cursor, id), LinkMode: table.LinkFull, Actions: MonitorActions(data, id), Cells: map[string]table.Cell{
 			"name": {Text: name, Description: id}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
 		}})
 	}

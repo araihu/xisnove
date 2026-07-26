@@ -24,7 +24,11 @@ import (
 	"github.com/araihu/xisnove/ui/internal/view"
 )
 
-const maxFormBytes = 64 << 10
+const (
+	maxFormBytes      = 64 << 10
+	monitorPageSize   = int32(25)
+	maxSearchPageWalk = 4
+)
 
 type Config struct {
 	ControlPlane   controlplane.Client
@@ -204,14 +208,12 @@ func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 		s.redirectLogin(w, r)
 		return
 	}
-	page, err := s.controlPlane.ListMonitors(r.Context(), credential, r.URL.Query().Get("cursor"), 25)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	currentCursor := r.URL.Query().Get("cursor")
+	page, searchedPages, err := s.listMonitorMatches(r.Context(), credential, currentCursor, query)
 	if err != nil {
 		s.monitorFailure(w, r, credential, err)
 		return
-	}
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	if query != "" {
-		page.Items = filterMonitors(page.Items, query)
 	}
 	health, failures, unauthorized := s.enrichMonitorHealth(r.Context(), credential, page.Items)
 	if unauthorized {
@@ -220,8 +222,39 @@ func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	csrfToken := s.cookies.SessionCSRF(credential)
-	data := view.MonitorList{Monitors: page.Items, Health: health, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures}
+	data := view.MonitorList{Monitors: page.Items, Health: health, Cursor: currentCursor, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures, SearchPages: searchedPages}
 	s.renderAdaptive(w, r, http.StatusOK, view.MonitorPage(csrfToken, data), view.MonitorContent(data))
+}
+
+// listMonitorMatches walks a bounded number of control-plane pages without
+// inspecting or manufacturing opaque cursors. A remaining cursor is returned
+// so the user can continue the search from exactly where this window stopped.
+func (s *server) listMonitorMatches(ctx context.Context, credential, cursor, query string) (sdk.Page[sdk.Monitor], int, error) {
+	if query == "" {
+		page, err := s.controlPlane.ListMonitors(ctx, credential, cursor, monitorPageSize)
+		return page, 1, err
+	}
+
+	result := sdk.Page[sdk.Monitor]{}
+	next := cursor
+	seen := map[string]struct{}{}
+	for pages := 1; pages <= maxSearchPageWalk; pages++ {
+		if _, duplicate := seen[next]; duplicate {
+			return result, pages - 1, fmt.Errorf("monitor pagination returned a repeated cursor")
+		}
+		seen[next] = struct{}{}
+		page, err := s.controlPlane.ListMonitors(ctx, credential, next, monitorPageSize)
+		if err != nil {
+			return sdk.Page[sdk.Monitor]{}, pages - 1, err
+		}
+		result.Items = append(result.Items, filterMonitors(page.Items, query)...)
+		result.NextCursor = page.NextCursor
+		if page.NextCursor == "" || pages == maxSearchPageWalk {
+			return result, pages, nil
+		}
+		next = page.NextCursor
+	}
+	return result, maxSearchPageWalk, nil
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {
