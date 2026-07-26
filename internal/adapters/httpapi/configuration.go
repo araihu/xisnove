@@ -25,6 +25,7 @@ type ServerConfig struct {
 	Results       *application.ResultService
 	Health        *application.HealthService
 	Notifications *application.NotificationAdminService
+	Management    *application.ManagementService
 }
 
 type Server struct {
@@ -39,6 +40,7 @@ type Server struct {
 	results       *application.ResultService
 	health        *application.HealthService
 	notifications *application.NotificationAdminService
+	management    *application.ManagementService
 }
 
 func NewServer(config ServerConfig) *Server {
@@ -51,6 +53,7 @@ func NewServer(config ServerConfig) *Server {
 		results:       config.Results,
 		health:        config.Health,
 		notifications: config.Notifications,
+		management:    config.Management,
 	}
 }
 
@@ -143,10 +146,13 @@ func (s *Server) GetMonitor(
 	ctx context.Context,
 	request GetMonitorRequestObject,
 ) (GetMonitorResponseObject, error) {
-	monitor, err := s.configuration.GetMonitor(
-		ctx,
-		domain.MonitorID(request.MonitorId.String()),
-	)
+	var monitor application.ConfiguredMonitor
+	var err error
+	if s.management != nil {
+		monitor, err = s.management.GetMonitor(ctx, domain.MonitorID(request.MonitorId.String()))
+	} else {
+		monitor, err = s.configuration.GetMonitor(ctx, domain.MonitorID(request.MonitorId.String()))
+	}
 	if err != nil {
 		response, ok := getMonitorProblem(err)
 		if ok {
@@ -166,7 +172,10 @@ func mapLocation(location domain.Location) (Location, error) {
 	if err != nil {
 		return Location{}, fmt.Errorf("map location ID: %w", err)
 	}
-	return Location{Id: id, Name: location.Name, CreatedAt: location.CreatedAt}, nil
+	return Location{
+		Id: id, Name: location.Name, Enabled: &location.Enabled,
+		CreatedAt: location.CreatedAt, UpdatedAt: &location.UpdatedAt,
+	}, nil
 }
 
 func mapMonitor(configured application.ConfiguredMonitor) (Monitor, error) {
