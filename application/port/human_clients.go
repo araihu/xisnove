@@ -72,6 +72,42 @@ type Page[T any] struct {
 	NextCursor string
 }
 
+const (
+	DefaultPageLimit = 50
+	MaxPageLimit     = 200
+)
+
+func NormalizePageLimit(limit int) int {
+	if limit <= 0 {
+		return DefaultPageLimit
+	}
+	if limit > MaxPageLimit {
+		return MaxPageLimit
+	}
+	return limit
+}
+
+type IdempotencyRecord struct {
+	PrincipalID  string
+	OperationID  string
+	Key          string
+	RequestHash  string
+	ResourceKind string
+	ResourceID   string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+}
+
+type IdempotencyRepository interface {
+	Get(context.Context, string, string, string, time.Time) (IdempotencyRecord, error)
+	// Create atomically inserts a record, replaces the same identity only when
+	// its stored expiry is at or before record.CreatedAt, and otherwise returns
+	// ErrConflict. CreatedAt is authoritative database time supplied by the
+	// caller's transaction.
+	Create(context.Context, IdempotencyRecord) error
+	DeleteExpired(context.Context, time.Time, int) (int64, error)
+}
+
 type APITokenRecord struct {
 	ID         string
 	AdminID    string

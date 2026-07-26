@@ -18,6 +18,7 @@ type Scope = port.Scope
 type PageRequest = port.PageRequest
 type Page[T any] = port.Page[T]
 type APITokenRecord = port.APITokenRecord
+type IdempotencyRecord = port.IdempotencyRecord
 type MonitorLocation = port.MonitorLocation
 type EnrollmentTokenRecord = port.EnrollmentTokenRecord
 type AgentRecord = port.AgentRecord
@@ -42,6 +43,7 @@ type OperationLeaseRecord = port.OperationLeaseRecord
 type AdminRepository = port.AdminRepository
 type SessionRepository = port.SessionRepository
 type APITokenRepository = port.APITokenRepository
+type IdempotencyRepository = port.IdempotencyRepository
 type LocationRepository = port.LocationRepository
 type MonitorRepository = port.MonitorRepository
 type HealthRepository = port.HealthRepository
@@ -57,6 +59,8 @@ type AuditRepository = port.AuditRepository
 type RetentionRepository = port.RetentionRepository
 
 const (
+	DefaultPageLimit                    = port.DefaultPageLimit
+	MaxPageLimit                        = port.MaxPageLimit
 	ScopeTokensRead                     = port.ScopeTokensRead
 	ScopeTokensWrite                    = port.ScopeTokensWrite
 	ScopeLocationsRead                  = port.ScopeLocationsRead
@@ -78,3 +82,7 @@ const (
 	NotificationAttemptPermanentFailure = port.NotificationAttemptPermanentFailure
 	NotificationAttemptAbandoned        = port.NotificationAttemptAbandoned
 )
+
+func NormalizePageLimit(limit int) int {
+	return port.NormalizePageLimit(limit)
+}

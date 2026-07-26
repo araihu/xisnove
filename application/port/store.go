@@ -33,6 +33,7 @@ type Repositories struct {
 	Admins               AdminRepository
 	Sessions             SessionRepository
 	APITokens            APITokenRepository
+	Idempotency          IdempotencyRepository
 	Locations            LocationRepository
 	Monitors             MonitorRepository
 	Health               HealthRepository
