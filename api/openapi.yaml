@@ -1632,7 +1632,7 @@ components:
       additionalProperties: false
       required: [generation, credential]
       properties:
-        generation: {type: integer, format: int64, minimum: 1}
+        generation: {type: integer, format: int64, minimum: 1, maximum: 1}
         credential:
           type: string
           minLength: 32

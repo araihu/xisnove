@@ -93,6 +93,11 @@ func TestOperatorOwnerAndCredentialSchemasProtectReconciliation(t *testing.T) {
 	if !slices.Contains(initialCredential.Required, "generation") || initialCredential.Properties["generation"] == nil {
 		t.Error("OperatorInitialCredential must require generation")
 	}
+	generation := initialCredential.Properties["generation"]
+	if generation.Value == nil || generation.Value.Min == nil || generation.Value.Max == nil ||
+		*generation.Value.Min != 1 || *generation.Value.Max != 1 {
+		t.Errorf("OperatorInitialCredential.generation must be exactly 1: %#v", generation)
+	}
 	for _, response := range []string{"OperatorMonitorApplyResult", "OperatorAgentApplyResult"} {
 		schema := requiredSchema(t, doc, response)
 		if schema.Properties["credential"] != nil || schema.Properties["initialCredential"] != nil {

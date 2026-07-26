@@ -486,6 +486,19 @@ func TestOperatorMockReplaysOwnedApplyAndRejectsOwnershipAndHashConflicts(t *tes
 	assertProblem(t, conflict, http.StatusConflict, "operator_credential_hash_conflict")
 }
 
+func TestOperatorMockRejectsNonInitialAgentCredentialGeneration(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	response := request(t, server.URL, http.MethodPost, "/v1/operator/agents:apply", mockapi.FixtureFullAPIToken,
+		map[string]any{
+			"owner": map[string]any{"key": "monitoring.xisnove.io/Agent/default/edge", "uid": "agent-uid-generation-2"},
+			"name": "operator edge", "locationId": "00000000-0000-4000-8000-000000000001",
+			"enabled": true, "capabilities": []string{"http"},
+			"initialCredential": map[string]any{"generation": 2, "credential": "xisnove_mock_operator_initial_credential_0002"},
+		}, map[string]string{"Idempotency-Key": "operator-agent-generation-2"})
+	assertProblem(t, response, http.StatusBadRequest, "validation_failed")
+}
+
 func TestDiscoveryMockAcceptsAnEmptyCompleteSnapshot(t *testing.T) {
 	server := httptest.NewServer(mockapi.NewServer().Handler())
 	defer server.Close()

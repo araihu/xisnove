@@ -582,7 +582,7 @@ func (s *Server) operatorMutation(w http.ResponseWriter, r *http.Request, operat
 	case "ApplyOperatorAgent":
 		credential := nestedString(input, "initialCredential", "credential")
 		generation, validGeneration := nestedInt64(input, "initialCredential", "generation")
-		if credential == "" || !validGeneration {
+		if credential == "" || !validGeneration || generation != 1 {
 			writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
 			return
 		}
