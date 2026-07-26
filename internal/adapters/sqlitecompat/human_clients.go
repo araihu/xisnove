@@ -100,6 +100,10 @@ func mapSQLiteAPIToken(record dbsqlite.ApiToken) (application.APITokenRecord, er
 		}
 		return application.APITokenRecord{}, fmt.Errorf("map API token scopes: %w", err)
 	}
+	scopes, err := application.NormalizeScopes(scopes)
+	if err != nil {
+		return application.APITokenRecord{}, fmt.Errorf("map API token scopes: %w", err)
+	}
 	createdAt, err := parseTime(record.CreatedAt)
 	if err != nil {
 		return application.APITokenRecord{}, fmt.Errorf("map API token creation: %w", err)

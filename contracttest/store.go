@@ -43,6 +43,12 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("token cursor ordering", func(t *testing.T) {
 		testAPITokenCursorOrdering(t, factory(t))
 	})
+	t.Run("human credential database clock skew", func(t *testing.T) {
+		testHumanCredentialDatabaseClockSkew(t, factory(t))
+	})
+	t.Run("concurrent duplicate api token hash", func(t *testing.T) {
+		testConcurrentDuplicateAPITokenHash(t, factory(t))
+	})
 	t.Run("duplicate result", func(t *testing.T) {
 		testDuplicateResult(t, factory(t))
 	})

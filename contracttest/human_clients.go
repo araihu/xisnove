@@ -3,10 +3,14 @@ package contracttest
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	appservice "github.com/araihu/xisnove/application"
 	application "github.com/araihu/xisnove/application/port"
 )
 
@@ -162,4 +166,148 @@ func testAPITokenCursorOrdering(t *testing.T, store application.UnitOfWork) {
 		}
 		return nil
 	})
+}
+
+func testHumanCredentialDatabaseClockSkew(t *testing.T, store application.UnitOfWork) {
+	seedHumanClientAdmin(t, store)
+	ctx := context.Background()
+	var databaseNow time.Time
+	view(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		var err error
+		databaseNow, err = repositories.Runs.DatabaseNow(ctx)
+		return err
+	})
+	ids := newHumanClientIDs()
+	tokens := contractTokenIssuer{}
+	auth := appservice.NewAuthService(appservice.AuthServiceConfig{
+		Store: store, Passwords: contractPasswordHasher{}, Tokens: tokens,
+		SessionDuration: time.Hour, Now: func() time.Time { return time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC) },
+		NewID: ids,
+	})
+	session, err := auth.CreateSession(ctx, "auth-contract@example.com", "password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.ExpiresAt.Before(databaseNow.Add(59*time.Minute)) || session.ExpiresAt.After(databaseNow.Add(61*time.Minute)) {
+		t.Fatalf("session expiry = %s, want database time + 1h near %s", session.ExpiresAt, databaseNow.Add(time.Hour))
+	}
+	principal, err := auth.AuthenticateBearer(ctx, session.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apiTokens := appservice.NewAPITokenService(appservice.APITokenServiceConfig{
+		Store: store, Tokens: tokens,
+		Now: func() time.Time { return time.Date(2200, 1, 1, 0, 0, 0, 0, time.UTC) }, NewID: ids,
+	})
+	expiresAt := databaseNow.Add(2 * time.Hour)
+	credential, err := apiTokens.Create(ctx, principal, appservice.CreateAPITokenCommand{
+		Label: "clock-skew", Scopes: []appservice.Scope{appservice.ScopeMonitorsRead}, ExpiresAt: &expiresAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credential.Record.CreatedAt.Before(databaseNow.Add(-time.Second)) || credential.Record.CreatedAt.After(databaseNow.Add(time.Minute)) {
+		t.Fatalf("API token CreatedAt = %s, want database time near %s", credential.Record.CreatedAt, databaseNow)
+	}
+	if _, err := auth.AuthenticateBearer(ctx, credential.Token); err != nil {
+		t.Fatal(err)
+	}
+	page, err := apiTokens.List(ctx, principal, appservice.PageRequest{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lastUsedAt *time.Time
+	for _, record := range page.Items {
+		if record.ID == credential.Record.ID {
+			lastUsedAt = record.LastUsedAt
+		}
+	}
+	if lastUsedAt == nil || lastUsedAt.Before(databaseNow.Add(-time.Second)) || lastUsedAt.After(databaseNow.Add(time.Minute)) {
+		t.Fatalf("LastUsedAt = %v, want database time near %s", lastUsedAt, databaseNow)
+	}
+
+	expiredAt := databaseNow.Add(-time.Second)
+	expiredHash := tokens.Hash("expired-under-skew")
+	transact(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		return repositories.APITokens.Create(ctx, application.APITokenRecord{
+			ID: ids(), AdminID: humanClientAdminID, Label: "expired", TokenHash: expiredHash,
+			Scopes: []application.Scope{application.ScopeMonitorsRead}, CreatedAt: databaseNow.Add(-time.Hour), ExpiresAt: &expiredAt,
+		})
+	})
+	if _, err := auth.AuthenticateBearer(ctx, "expired-under-skew"); !errors.Is(err, appservice.ErrInvalidCredentials) {
+		t.Fatalf("expired token authentication error = %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func testConcurrentDuplicateAPITokenHash(t *testing.T, store application.UnitOfWork) {
+	seedHumanClientAdmin(t, store)
+	ctx := context.Background()
+	var databaseNow time.Time
+	view(t, ctx, store, func(ctx context.Context, repositories application.Repositories) error {
+		var err error
+		databaseNow, err = repositories.Runs.DatabaseNow(ctx)
+		return err
+	})
+	start := make(chan struct{})
+	errorsByWriter := make(chan error, 2)
+	for i, id := range []string{
+		"00000000-0000-4000-8000-000000000120",
+		"00000000-0000-4000-8000-000000000121",
+	} {
+		go func(i int, id string) {
+			<-start
+			errorsByWriter <- store.Transact(ctx, func(ctx context.Context, repositories application.Repositories) error {
+				return repositories.APITokens.Create(ctx, application.APITokenRecord{
+					ID: id, AdminID: humanClientAdminID, Label: fmt.Sprintf("writer-%d", i),
+					TokenHash: []byte("same-concurrent-token-hash"),
+					Scopes:    []application.Scope{application.ScopeTokensRead}, CreatedAt: databaseNow,
+				})
+			})
+		}(i, id)
+	}
+	close(start)
+	var successes, conflicts int
+	for range 2 {
+		err := <-errorsByWriter
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, application.ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("concurrent Create() error = %v, want nil or ErrConflict", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent duplicate results = %d successes, %d conflicts", successes, conflicts)
+	}
+}
+
+type contractPasswordHasher struct{}
+
+func (contractPasswordHasher) Hash(password string) (string, error) {
+	return "contract:" + password, nil
+}
+func (contractPasswordHasher) Verify(_ string, password string) bool { return password == "password" }
+
+type contractTokenIssuer struct{}
+
+func (contractTokenIssuer) New() (appservice.IssuedToken, error) {
+	raw := fmt.Sprintf("contract-token-%d", contractTokenSequence.Add(1))
+	hash := sha256.Sum256([]byte(raw))
+	return appservice.IssuedToken{Raw: raw, Hash: hash[:]}, nil
+}
+func (contractTokenIssuer) Hash(raw string) []byte {
+	hash := sha256.Sum256([]byte(raw))
+	return hash[:]
+}
+
+var contractTokenSequence atomic.Uint64
+
+func newHumanClientIDs() func() string {
+	var sequence atomic.Uint64
+	return func() string {
+		return fmt.Sprintf("30000000-0000-4000-8000-%012d", sequence.Add(1))
+	}
 }

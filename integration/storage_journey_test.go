@@ -35,10 +35,9 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	ids := &matrixIDs{}
 	tokens := &matrixTokens{}
 	passwords := matrixPasswords{}
-	authNow := storageMatrixNow
 	auth := application.NewAuthService(application.AuthServiceConfig{
 		Store: primary.Store, Passwords: passwords, Tokens: tokens,
-		SessionDuration: time.Hour, Now: func() time.Time { return authNow },
+		SessionDuration: 250 * time.Millisecond, Now: func() time.Time { return storageMatrixNow },
 		NewID: ids.New,
 	})
 	if err := auth.BootstrapAdmin(ctx, "Admin@Example.com", storageMatrixPassword); err != nil {
@@ -55,11 +54,20 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	if principal.Kind != application.PrincipalAdmin || principal.SubjectID == "" {
 		t.Fatalf("unexpected administrator principal: %#v", principal)
 	}
-	authNow = session.ExpiresAt.Add(500 * time.Millisecond)
-	if _, err := auth.AuthenticateSession(ctx, session.Token); !errors.Is(err, application.ErrInvalidCredentials) {
-		t.Fatalf("session remained active past fractional expiry boundary: %v", err)
+	expiryDeadline := time.Now().Add(3 * time.Second)
+	for {
+		_, err := auth.AuthenticateSession(ctx, session.Token)
+		if errors.Is(err, application.ErrInvalidCredentials) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("authenticate session near fractional expiry boundary: %v", err)
+		}
+		if time.Now().After(expiryDeadline) {
+			t.Fatal("session remained active past fractional expiry boundary")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
-	authNow = storageMatrixNow
 
 	configuration := application.NewConfigurationService(
 		primary.Store,

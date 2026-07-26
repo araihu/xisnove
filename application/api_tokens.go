@@ -7,47 +7,19 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"time"
 
+	"github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/domain"
 )
 
 var (
-	ErrInvalidScopes = errors.New("invalid API token scopes")
 	ErrInvalidExpiry = errors.New("API token expiry must be in the future")
 	ErrForbidden     = errors.New("forbidden")
 )
 
-var recognizedScopes = map[Scope]struct{}{
-	ScopeTokensRead: {}, ScopeTokensWrite: {},
-	ScopeLocationsRead: {}, ScopeLocationsWrite: {},
-	ScopeMonitorsRead: {}, ScopeMonitorsWrite: {},
-	ScopeAgentsRead: {}, ScopeAgentsWrite: {},
-	ScopeIncidentsRead:     {},
-	ScopeNotificationsRead: {}, ScopeNotificationsWrite: {},
-	ScopeMaintenanceRead: {}, ScopeMaintenanceWrite: {},
-	ScopeDiscoveryRead: {}, ScopeDiscoveryWrite: {},
-	ScopeStatusRead: {},
-}
-
 func NormalizeScopes(scopes []Scope) ([]Scope, error) {
-	if len(scopes) == 0 {
-		return nil, ErrInvalidScopes
-	}
-	normalized := slices.Clone(scopes)
-	seen := make(map[Scope]struct{}, len(normalized))
-	for _, scope := range normalized {
-		if _, ok := recognizedScopes[scope]; !ok {
-			return nil, ErrInvalidScopes
-		}
-		if _, duplicate := seen[scope]; duplicate {
-			return nil, ErrInvalidScopes
-		}
-		seen[scope] = struct{}{}
-	}
-	sort.Slice(normalized, func(i, j int) bool { return normalized[i] < normalized[j] })
-	return normalized, nil
+	return port.NormalizeScopes(scopes)
 }
 
 type CreateAPITokenCommand struct {
@@ -71,12 +43,11 @@ type APITokenServiceConfig struct {
 type APITokenService struct {
 	store  UnitOfWork
 	tokens TokenIssuer
-	now    func() time.Time
 	newID  func() string
 }
 
 func NewAPITokenService(config APITokenServiceConfig) *APITokenService {
-	return &APITokenService{store: config.Store, tokens: config.Tokens, now: config.Now, newID: config.NewID}
+	return &APITokenService{store: config.Store, tokens: config.Tokens, newID: config.NewID}
 }
 
 func (s *APITokenService) Create(
@@ -95,10 +66,6 @@ func (s *APITokenService) Create(
 	if err != nil {
 		return APITokenCredential{}, err
 	}
-	now := s.now().UTC()
-	if command.ExpiresAt != nil && !command.ExpiresAt.After(now) {
-		return APITokenCredential{}, ErrInvalidExpiry
-	}
 	issued, err := s.tokens.New()
 	if err != nil {
 		return APITokenCredential{}, fmt.Errorf("issue API token: %w", err)
@@ -110,7 +77,7 @@ func (s *APITokenService) Create(
 	}
 	record := APITokenRecord{
 		ID: s.newID(), AdminID: principal.SubjectID, Label: label,
-		TokenHash: slices.Clone(issued.Hash), Scopes: scopes, CreatedAt: now,
+		TokenHash: slices.Clone(issued.Hash), Scopes: scopes,
 		ExpiresAt: cloneTime(command.ExpiresAt),
 	}
 	payload, err := json.Marshal(struct {
@@ -121,12 +88,21 @@ func (s *APITokenService) Create(
 		return APITokenCredential{}, fmt.Errorf("encode API token audit payload: %w", err)
 	}
 	err = s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+		databaseNow, err := repositories.Runs.DatabaseNow(ctx)
+		if err != nil {
+			return fmt.Errorf("read database time for API token creation: %w", err)
+		}
+		databaseNow = databaseNow.UTC()
+		if record.ExpiresAt != nil && !record.ExpiresAt.After(databaseNow) {
+			return ErrInvalidExpiry
+		}
+		record.CreatedAt = databaseNow
 		if err := repositories.APITokens.Create(ctx, record); err != nil {
 			return fmt.Errorf("create API token: %w", err)
 		}
 		if err := repositories.Audit.Append(ctx, AuditEventRecord{
 			ID: s.newID(), Kind: "api-token.created", SubjectKind: "api-token",
-			SubjectID: record.ID, Payload: payload, CreatedAt: now,
+			SubjectID: record.ID, Payload: payload, CreatedAt: databaseNow,
 		}); err != nil {
 			return fmt.Errorf("audit API token creation: %w", err)
 		}
@@ -166,7 +142,6 @@ func (s *APITokenService) Revoke(ctx context.Context, principal Principal, id st
 	if principal.Kind != PrincipalAdmin || principal.SubjectID == "" {
 		return ErrForbidden
 	}
-	now := s.now().UTC()
 	payload, err := json.Marshal(struct {
 		TokenID string `json:"tokenId"`
 	}{TokenID: id})
@@ -174,7 +149,12 @@ func (s *APITokenService) Revoke(ctx context.Context, principal Principal, id st
 		return fmt.Errorf("encode API token revocation audit payload: %w", err)
 	}
 	return s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
-		revoked, err := repositories.APITokens.Revoke(ctx, id, now)
+		databaseNow, err := repositories.Runs.DatabaseNow(ctx)
+		if err != nil {
+			return fmt.Errorf("read database time for API token revocation: %w", err)
+		}
+		databaseNow = databaseNow.UTC()
+		revoked, err := repositories.APITokens.Revoke(ctx, id, databaseNow)
 		if err != nil {
 			return fmt.Errorf("revoke API token: %w", err)
 		}
@@ -183,7 +163,7 @@ func (s *APITokenService) Revoke(ctx context.Context, principal Principal, id st
 		}
 		if err := repositories.Audit.Append(ctx, AuditEventRecord{
 			ID: s.newID(), Kind: "api-token.revoked", SubjectKind: "api-token",
-			SubjectID: id, Payload: payload, CreatedAt: now,
+			SubjectID: id, Payload: payload, CreatedAt: databaseNow,
 		}); err != nil {
 			return fmt.Errorf("audit API token revocation: %w", err)
 		}

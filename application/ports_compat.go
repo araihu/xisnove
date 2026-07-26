@@ -7,6 +7,7 @@ import "github.com/araihu/xisnove/application/port"
 // should name application/port types directly.
 var ErrNotFound = port.ErrNotFound
 var ErrConflict = port.ErrConflict
+var ErrInvalidScopes = port.ErrInvalidScopes
 
 type Store = port.Store
 type UnitOfWork = port.UnitOfWork

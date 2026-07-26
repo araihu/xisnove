@@ -2,8 +2,13 @@ package port
 
 import (
 	"context"
+	"errors"
+	"slices"
+	"sort"
 	"time"
 )
+
+var ErrInvalidScopes = errors.New("invalid API token scopes")
 
 type Scope string
 
@@ -25,6 +30,37 @@ const (
 	ScopeDiscoveryWrite     Scope = "discovery:write"
 	ScopeStatusRead         Scope = "status:read"
 )
+
+var recognizedScopes = map[Scope]struct{}{
+	ScopeTokensRead: {}, ScopeTokensWrite: {},
+	ScopeLocationsRead: {}, ScopeLocationsWrite: {},
+	ScopeMonitorsRead: {}, ScopeMonitorsWrite: {},
+	ScopeAgentsRead: {}, ScopeAgentsWrite: {},
+	ScopeIncidentsRead:     {},
+	ScopeNotificationsRead: {}, ScopeNotificationsWrite: {},
+	ScopeMaintenanceRead: {}, ScopeMaintenanceWrite: {},
+	ScopeDiscoveryRead: {}, ScopeDiscoveryWrite: {},
+	ScopeStatusRead: {},
+}
+
+func NormalizeScopes(scopes []Scope) ([]Scope, error) {
+	if len(scopes) == 0 {
+		return nil, ErrInvalidScopes
+	}
+	normalized := slices.Clone(scopes)
+	seen := make(map[Scope]struct{}, len(normalized))
+	for _, scope := range normalized {
+		if _, ok := recognizedScopes[scope]; !ok {
+			return nil, ErrInvalidScopes
+		}
+		if _, duplicate := seen[scope]; duplicate {
+			return nil, ErrInvalidScopes
+		}
+		seen[scope] = struct{}{}
+	}
+	sort.Slice(normalized, func(i, j int) bool { return normalized[i] < normalized[j] })
+	return normalized, nil
+}
 
 type PageRequest struct {
 	Limit  int

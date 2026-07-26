@@ -100,6 +100,10 @@ func mapPostgresAPIToken(record dbpostgres.ApiToken) (application.APITokenRecord
 		}
 		return application.APITokenRecord{}, fmt.Errorf("map API token scopes: %w", err)
 	}
+	scopes, err := application.NormalizeScopes(scopes)
+	if err != nil {
+		return application.APITokenRecord{}, fmt.Errorf("map API token scopes: %w", err)
+	}
 	expiresAt, err := postgresNullableTime(record.ExpiresAt)
 	if err != nil {
 		return application.APITokenRecord{}, fmt.Errorf("map API token expiry: %w", err)

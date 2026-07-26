@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/araihu/xisnove/application"
+	"github.com/araihu/xisnove/domain"
 )
 
 const testPassword = "correct horse battery staple"
@@ -99,6 +100,7 @@ func TestCreateSessionUsesSameErrorForUnknownEmailAndBadPassword(t *testing.T) {
 func TestAuthenticateAPITokenRejectsExpiredAndRevoked(t *testing.T) {
 	store := newFakeStore()
 	now := time.Date(2026, 7, 26, 4, 0, 0, 0, time.UTC)
+	store.runs.now = now
 	activeRaw, expiredRaw, revokedRaw := "active-token", "expired-token", "revoked-token"
 	revokedAt := now.Add(-time.Hour)
 	expiredAt := now.Add(-time.Minute)
@@ -205,9 +207,111 @@ func TestAuthenticateBearerDoesNotHideSessionStoreFailure(t *testing.T) {
 	}
 }
 
+func TestCreateAndRevokeSessionUseDatabaseTimeDespiteApplicationClockSkew(t *testing.T) {
+	store := newFakeStore()
+	databaseNow := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	store.runs.now = databaseNow
+	applicationNow := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
+	service := application.NewAuthService(application.AuthServiceConfig{
+		Store: store, Passwords: testPasswordHasher{}, Tokens: testTokenIssuer{},
+		SessionDuration: 12 * time.Hour, Now: func() time.Time { return applicationNow },
+		NewID: func() string { return "credential-id" },
+	})
+	ctx := context.Background()
+	if err := service.BootstrapAdmin(ctx, "admin@example.com", testPassword); err != nil {
+		t.Fatal(err)
+	}
+	credential, err := service.CreateSession(ctx, "admin@example.com", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := databaseNow.Add(12 * time.Hour); !credential.ExpiresAt.Equal(want) {
+		t.Fatalf("ExpiresAt = %s, want database time %s", credential.ExpiresAt, want)
+	}
+	principal, err := service.AuthenticateBearer(ctx, credential.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.runs.now = databaseNow.Add(time.Minute)
+	if err := service.RevokeCurrentSession(ctx, principal); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.sessions.records[0].RevokedAt; got == nil || !got.Equal(store.runs.now) {
+		t.Fatalf("RevokedAt = %v, want database time %s", got, store.runs.now)
+	}
+	if got := store.audit.records[0].CreatedAt; !got.Equal(store.runs.now) {
+		t.Fatalf("audit CreatedAt = %s, want database time %s", got, store.runs.now)
+	}
+}
+
+func TestAPITokenLifecycleUsesDatabaseTimeDespiteApplicationClockSkew(t *testing.T) {
+	store := newFakeStore()
+	databaseNow := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	store.runs.now = databaseNow
+	applicationNow := time.Date(2200, 1, 1, 0, 0, 0, 0, time.UTC)
+	tokens := testTokenIssuer{}
+	service := application.NewAPITokenService(application.APITokenServiceConfig{
+		Store: store, Tokens: tokens, Now: func() time.Time { return applicationNow },
+		NewID: func() string { return "token-id" },
+	})
+	expiresAt := databaseNow.Add(time.Hour)
+	credential, err := service.Create(context.Background(), application.Principal{
+		Kind: application.PrincipalAdmin, SubjectID: "admin-id",
+	}, application.CreateAPITokenCommand{
+		Label: "skew", Scopes: []application.Scope{application.ScopeMonitorsRead}, ExpiresAt: &expiresAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.apiTokens.records[0].CreatedAt; !got.Equal(databaseNow) {
+		t.Fatalf("CreatedAt = %s, want database time %s", got, databaseNow)
+	}
+	auth := application.NewAuthService(application.AuthServiceConfig{
+		Store: store, Tokens: tokens, Now: func() time.Time { return applicationNow }, NewID: func() string { return "audit-id" },
+	})
+	principal, err := auth.AuthenticateBearer(context.Background(), credential.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := store.apiTokens.records[0].LastUsedAt; got == nil || !got.Equal(databaseNow) {
+		t.Fatalf("LastUsedAt = %v, want database time %s", got, databaseNow)
+	}
+	store.runs.now = databaseNow.Add(time.Minute)
+	if err := service.Revoke(context.Background(), application.Principal{
+		Kind: application.PrincipalAdmin, SubjectID: principal.SubjectID,
+	}, "token-id"); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.apiTokens.records[0].RevokedAt; got == nil || !got.Equal(store.runs.now) {
+		t.Fatalf("RevokedAt = %v, want database time %s", got, store.runs.now)
+	}
+	if got := store.audit.records[len(store.audit.records)-1].CreatedAt; !got.Equal(store.runs.now) {
+		t.Fatalf("audit CreatedAt = %s, want database time %s", got, store.runs.now)
+	}
+}
+
+func TestAuthenticateAPITokenUsesDatabaseTimeWhenApplicationClockIsBehind(t *testing.T) {
+	store := newFakeStore()
+	databaseNow := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	store.runs.now = databaseNow
+	expiredAt := databaseNow.Add(-time.Second)
+	store.apiTokens.records = []application.APITokenRecord{{
+		ID: "expired-id", AdminID: "admin-id", Label: "expired", TokenHash: testTokenIssuer{}.Hash("expired-token"),
+		Scopes: []application.Scope{application.ScopeMonitorsRead}, CreatedAt: databaseNow.Add(-time.Hour), ExpiresAt: &expiredAt,
+	}}
+	service := application.NewAuthService(application.AuthServiceConfig{
+		Store: store, Tokens: testTokenIssuer{},
+		Now: func() time.Time { return time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC) },
+	})
+	if _, err := service.AuthenticateBearer(context.Background(), "expired-token"); !errors.Is(err, application.ErrInvalidCredentials) {
+		t.Fatalf("AuthenticateBearer() error = %v, want ErrInvalidCredentials", err)
+	}
+}
+
 func newAuthServiceForTest() (*application.AuthService, *fakeStore) {
 	store := newFakeStore()
 	now := time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC)
+	store.runs.now = now
 	nextID := 0
 	service := application.NewAuthService(application.AuthServiceConfig{
 		Store:           store,
@@ -252,6 +356,7 @@ type fakeStore struct {
 	sessions  *fakeSessionRepository
 	apiTokens *fakeAPITokenRepository
 	audit     *fakeAuditRepository
+	runs      *fakeRunRepository
 }
 
 func newFakeStore() *fakeStore {
@@ -260,12 +365,13 @@ func newFakeStore() *fakeStore {
 		sessions:  &fakeSessionRepository{},
 		apiTokens: &fakeAPITokenRepository{},
 		audit:     &fakeAuditRepository{},
+		runs:      &fakeRunRepository{now: time.Date(2026, 7, 26, 3, 0, 0, 0, time.UTC)},
 	}
 }
 
 func (s *fakeStore) Repositories() application.Repositories {
 	return application.Repositories{
-		Admins: s.admins, Sessions: s.sessions, APITokens: s.apiTokens, Audit: s.audit,
+		Admins: s.admins, Sessions: s.sessions, APITokens: s.apiTokens, Audit: s.audit, Runs: s.runs,
 	}
 }
 
@@ -333,6 +439,25 @@ func (r *fakeAdminRepository) FindByEmail(
 type fakeSessionRepository struct {
 	records []application.SessionRecord
 	findErr error
+}
+
+type fakeRunRepository struct {
+	now time.Time
+	err error
+}
+
+func (r *fakeRunRepository) DatabaseNow(context.Context) (time.Time, error) { return r.now, r.err }
+func (*fakeRunRepository) Insert(context.Context, application.NewRunRecord) (bool, error) {
+	return false, nil
+}
+func (*fakeRunRepository) ClaimProbe(context.Context, application.ClaimRunParams) (application.RunRecord, error) {
+	return application.RunRecord{}, nil
+}
+func (*fakeRunRepository) Get(context.Context, domain.CheckRunID) (application.RunRecord, error) {
+	return application.RunRecord{}, nil
+}
+func (*fakeRunRepository) Resolve(context.Context, domain.CheckRunID, domain.AgentID, []byte, time.Time) (bool, error) {
+	return false, nil
 }
 
 func (r *fakeSessionRepository) Create(
