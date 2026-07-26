@@ -107,3 +107,15 @@ plaintext and still checks a supplied generation-one hash. The controller uses
 apply for bootstrap, lost status, or a newer Kubernetes generation, and uses
 observation for steady polling. This preserves generation-aware idempotency
 while allowing post-rotation desired-state reconciliation.
+
+## Fix round 3: retry failed post-bootstrap apply
+
+Failure status now leaves top-level `observedGeneration` at the last successful
+apply. Conditions record the attempted generation, while the next reconcile
+retries the same credential-free Apply and deterministic key before switching
+back to steady Observe. Root compilation also updated the integration journey
+for generated optional credential pointers.
+
+Apply keys also distinguish bootstrap credential-bearing requests from
+credential-free reconciliation. Steady generation-one and overlap loops use
+Observe; only missing external status or a newer CR generation uses Apply.

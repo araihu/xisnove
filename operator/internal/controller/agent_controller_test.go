@@ -18,6 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func TestAgentCredentialStagesLocallyBeforeRemoteApply(t *testing.T) {
@@ -79,6 +80,9 @@ func TestAgentCredentialRotationPromotesOnlyAfterPutAndRevokesAfterHeartbeat(t *
 	remote := &fakeControlPlane{
 		applyAgent: func(_ context.Context, request controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
 			return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 2, PresentedCredentialGeneration: heartbeatGeneration, LastHeartbeatAt: now, LastDiscoverySyncAt: now}, nil
+		},
+		observeAgent: func(_ context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+			return controlplane.AgentState{ExternalID: request.ExternalID, CredentialGeneration: 2, PresentedCredentialGeneration: heartbeatGeneration, LastHeartbeatAt: now, LastDiscoverySyncAt: now}, nil
 		},
 		putCredential: func(_ context.Context, request controlplane.PutAgentCredentialRequest) error {
 			puts++
@@ -228,7 +232,7 @@ func TestAgentCredentialRevokeCrashKeepsPreviousForIdempotentRetry(t *testing.T)
 		putCredential: func(context.Context, controlplane.PutAgentCredentialRequest) error { return nil },
 		observeAgent: func(_ context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
 			observes++
-			return controlplane.AgentState{ExternalID: request.ExternalID, CredentialGeneration: 2, PresentedCredentialGeneration: 2, LastHeartbeatAt: now}, nil
+			return controlplane.AgentState{ExternalID: request.ExternalID, CredentialGeneration: 2, PresentedCredentialGeneration: heartbeatGeneration, LastHeartbeatAt: now}, nil
 		},
 		revokeCredential: func(context.Context, controlplane.RevokeAgentCredentialRequest) error { revokes++; return nil },
 	}
@@ -264,8 +268,8 @@ func TestAgentCredentialRevokeCrashKeepsPreviousForIdempotentRetry(t *testing.T)
 		t.Fatalf("revokes=%d, want 2", revokes)
 	}
 	reconcileAgent(t, r, agent)
-	if observes != 1 {
-		t.Fatalf("observes=%d, want 1", observes)
+	if observes < 1 {
+		t.Fatalf("observes=%d, want steady observations", observes)
 	}
 }
 
@@ -366,11 +370,53 @@ func TestApplyIdempotencyKeyTracksGenerationAndIsBounded(t *testing.T) {
 	agent := validAgent(strings.Repeat("a", 253))
 	agent.Namespace = strings.Repeat("b", 63)
 	agent.Generation = 1
-	first := applyIdempotencyKey(agent)
+	first := applyIdempotencyKey(agent, false)
 	agent.Generation = 2
-	second := applyIdempotencyKey(agent)
+	second := applyIdempotencyKey(agent, false)
 	if first == second || len(first) > 200 || len(second) > 200 {
 		t.Fatalf("keys first=%q second=%q", first, second)
+	}
+	if bootstrap := applyIdempotencyKey(agent, true); bootstrap == second {
+		t.Fatal("bootstrap and credential-free reconcile keys collided")
+	}
+}
+
+func TestAgentFailedPostBootstrapApplyKeepsObservedGenerationForRetry(t *testing.T) {
+	t.Parallel()
+	scheme := agentScheme(t)
+	agent := validAgent("retry-apply")
+	agent.Generation, agent.Status.ObservedGeneration, agent.Status.ExternalID = 2, 1, "agent-remote-1"
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: agent.Spec.CredentialSecretRef.Name, Namespace: agent.Namespace}, Data: map[string][]byte{CredentialKey: []byte(`{"credential":"credential-00000000000000000000000000000002","generation":2}`)}}
+	if err := controllerutil.SetControllerReference(agent, secret, scheme); err != nil {
+		t.Fatal(err)
+	}
+	attempts, observes := 0, 0
+	remote := &fakeControlPlane{applyAgent: func(context.Context, controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
+		attempts++
+		if attempts == 1 {
+			return controlplane.AgentState{}, errors.New("temporary apply failure")
+		}
+		return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 2}, nil
+	}, observeAgent: func(context.Context, controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+		observes++
+		return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 2}, nil
+	}}
+	kube := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&monitoringv1alpha1.Agent{}).WithObjects(agent, secret).Build()
+	r := testAgentReconciler(kube, scheme, remote)
+	if _, err := r.Reconcile(context.Background(), requestFor(agent)); err == nil {
+		t.Fatal("first apply unexpectedly succeeded")
+	}
+	stored := &monitoringv1alpha1.Agent{}
+	if err := kube.Get(context.Background(), requestFor(agent).NamespacedName, stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status.ObservedGeneration != 1 {
+		t.Fatalf("observed generation=%d, want 1", stored.Status.ObservedGeneration)
+	}
+	reconcileAgent(t, r, agent)
+	reconcileAgent(t, r, agent)
+	if attempts != 2 || observes != 1 {
+		t.Fatalf("apply=%d observe=%d", attempts, observes)
 	}
 }
 

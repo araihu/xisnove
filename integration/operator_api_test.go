@@ -116,7 +116,7 @@ func TestOperatorAPIOwnershipCredentialReplayAndScopeBoundaries(t *testing.T) {
 	apply := sdk.ApplyOperatorAgentRequest{
 		Owner: owner, Name: "edge", LocationId: location.JSON201.Id, Enabled: true,
 		Capabilities:      []sdk.AgentCapability{sdk.AgentCapabilityHttp},
-		InitialCredential: sdk.OperatorInitialCredential{Generation: 1, Credential: pointer(initialCredential)},
+		InitialCredential: &sdk.OperatorInitialCredential{Generation: 1, Credential: pointer(initialCredential)},
 	}
 	applyKey := sdk.RequiredIdempotencyKey("operator-agent-apply-1")
 	denied, err := client.ApplyOperatorAgentWithResponse(ctx, &sdk.ApplyOperatorAgentParams{IdempotencyKey: applyKey}, apply, adminAuth)

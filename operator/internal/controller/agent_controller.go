@@ -91,7 +91,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (
 	// Keep that first bundle unmounted during overlap so retries can observe the
 	// replacement heartbeat, but never regenerate it after a write crash.
 	initial := initialBundle(current, secret)
-	if initial != nil || agent.Status.ExternalID == "" || agent.Status.ObservedGeneration < agent.Generation {
+	if agent.Status.ExternalID == "" || agent.Status.ObservedGeneration < agent.Generation {
 		credential := []byte(nil)
 		if initial != nil {
 			credential = []byte(initial.Credential)
@@ -102,7 +102,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (
 			Name:              agent.Name,
 			Spec:              *agent.Spec.DeepCopy(),
 			InitialCredential: credential,
-			IdempotencyKey:    applyIdempotencyKey(agent),
+			IdempotencyKey:    applyIdempotencyKey(agent, initial != nil),
 		})
 		if err != nil {
 			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
@@ -462,7 +462,6 @@ func (r *AgentReconciler) recordAgentFailure(ctx context.Context, agent *monitor
 	setCondition(&agent.Status.Conditions, agent.Generation, ConditionReady, metav1.ConditionFalse, "ReconcileFailed", safe.Error())
 	setCondition(&agent.Status.Conditions, agent.Generation, ConditionSynced, metav1.ConditionFalse, "ApplyFailed", safe.Error())
 	setCondition(&agent.Status.Conditions, agent.Generation, ConditionDegraded, metav1.ConditionTrue, "ReconcileFailed", safe.Error())
-	agent.Status.ObservedGeneration = agent.Generation
 	if err := r.Status().Update(ctx, agent); err != nil {
 		return safeError(fmt.Errorf("record Agent status after %v: %w", safe, err))
 	}
@@ -559,8 +558,12 @@ func newCredential() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(value), nil
 }
-func applyIdempotencyKey(agent *monitoringv1alpha1.Agent) string {
-	return boundedIdempotencyKey("agent-apply", ownerFor(agent, "Agent"), agent.Generation, "apply")
+func applyIdempotencyKey(agent *monitoringv1alpha1.Agent, bootstrap bool) string {
+	mode := "reconcile"
+	if bootstrap {
+		mode = "bootstrap"
+	}
+	return boundedIdempotencyKey("agent-apply-"+mode, ownerFor(agent, "Agent"), agent.Generation, mode)
 }
 func credentialIdempotencyKey(agent *monitoringv1alpha1.Agent, generation int64, action string) string {
 	owner := ownerFor(agent, "Agent")

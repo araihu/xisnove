@@ -34,3 +34,4 @@ Task 4: fix round 1/5 (1 addressed, 0 open — validator diagnostics sanitized a
 Task 4: complete (commits 630843e..b084dc1, review clean; 1 deferred minor)
 Task 8: fix round 1/5 (6 addressed, 0 open — owner-proven observation, generation-aware and bounded reconciliation keys, presented-generation revoke fence, UTF-8 status bounds)
 Task 8: fix round 2/5 (1 addressed, 0 open — credential-free bound Agent apply after bootstrap)
+Task 8: fix round 3/5 (1 addressed, 0 open — failed post-bootstrap Apply retries before Observe)
