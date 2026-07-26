@@ -33,8 +33,74 @@ func TestMigrateFreshDatabaseIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
+	if version != 7 {
 		t.Fatalf("migration version = %d", version)
+	}
+}
+
+func TestAgentCredentialMigrationDowngradesWithForeignKeysEnabled(t *testing.T) {
+	db, err := sqlitestore.Open(filepath.Join(t.TempDir(), "downgrade.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	if err := sqlitestore.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO locations (id, name, created_at)
+		VALUES ('00000000-0000-4000-8000-000000000701', 'downgrade', '2026-07-26T00:00:00Z');
+		INSERT INTO agents (
+			id, location_id, name, credential_hash, credential_generation,
+			capabilities_json, created_at, updated_at
+		) VALUES (
+			'00000000-0000-4000-8000-000000000702',
+			'00000000-0000-4000-8000-000000000701', 'agent', X'07', 1,
+			'["http"]', '2026-07-26T00:00:00Z', '2026-07-26T00:00:00Z'
+		);
+		INSERT INTO agent_credentials (
+			agent_id, generation, credential_hash, created_at
+		) VALUES (
+			'00000000-0000-4000-8000-000000000702', 1, X'07', '2026-07-26T00:00:00Z'
+		);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := goose.NewProvider(
+		goose.DialectSQLite3,
+		db,
+		migrations.Files,
+		goose.WithTableName("schema_migrations"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.Down(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var version, foreignKeys, agentCount int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(version_id), 0)
+		FROM schema_migrations
+		WHERE is_applied = 1
+	`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agents").Scan(&agentCount); err != nil {
+		t.Fatal(err)
+	}
+	if version != 6 || foreignKeys != 1 || agentCount != 1 {
+		t.Fatalf("downgrade version=%d foreign_keys=%d agents=%d", version, foreignKeys, agentCount)
+	}
+	if _, err := db.ExecContext(ctx, "SELECT updated_at FROM agents"); err == nil {
+		t.Fatal("updated_at remained after downgrade")
+	}
+	if _, err := db.ExecContext(ctx, "SELECT 1 FROM agent_credentials"); err == nil {
+		t.Fatal("agent_credentials remained after downgrade")
 	}
 }
 

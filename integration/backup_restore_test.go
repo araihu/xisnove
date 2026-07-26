@@ -82,7 +82,7 @@ func TestBackupRestorePreservesFirstObservationState(t *testing.T) {
 	}
 	for _, table := range []string{
 		"admins", "monitors", "probe_results", "location_health",
-		"monitor_health", "incidents", "incident_events",
+		"monitor_health", "incidents", "incident_events", "agent_credentials",
 	} {
 		if got := rowCount(t, restored, table); got != 1 {
 			t.Fatalf("restored %s rows = %d, want 1", table, got)
@@ -111,7 +111,8 @@ func seedBackupState(t *testing.T, db *sql.DB) {
 		`INSERT INTO locations (id, name, created_at) VALUES ('00000000-0000-4000-8000-000000000002', 'public', '2026-07-25T00:00:00Z')`,
 		`INSERT INTO monitors (id, name, kind, interval_ms, timeout_ms, failure_threshold, recovery_threshold, probe_json, enabled, next_run_at, created_at, updated_at) VALUES ('00000000-0000-4000-8000-000000000003', 'target', 'http', 60000, 5000, 3, 2, '{"kind":"http","method":"GET","url":"https://example.com"}', 1, '2026-07-25T00:01:00Z', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z')`,
 		`INSERT INTO monitor_locations (monitor_id, location_id, required) VALUES ('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000002', 1)`,
-		`INSERT INTO agents (id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, created_at) VALUES ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000002', 'agent', X'01', 1, '["http"]', 'v1', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z')`,
+		`INSERT INTO agents (id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, created_at, updated_at) VALUES ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000002', 'agent', X'01', 1, '["http"]', 'v1', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z')`,
+		`INSERT INTO agent_credentials (agent_id, generation, credential_hash, created_at, last_authenticated_at) VALUES ('00000000-0000-4000-8000-000000000004', 1, X'01', '2026-07-25T00:00:00Z', '2026-07-25T00:00:00Z')`,
 		`INSERT INTO check_runs (id, monitor_id, location_id, scheduled_for, probe_json, probe_kind, timeout_ms, status, lease_agent_id, lease_token_hash, lease_attempt, lease_expires_at, resolved_at) VALUES ('00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000002', '2026-07-25T00:00:00Z', '{"kind":"http"}', 'http', 5000, 'resolved', '00000000-0000-4000-8000-000000000004', X'02', 1, '2026-07-25T00:01:00Z', '2026-07-25T00:00:01Z')`,
 		`INSERT INTO probe_results (id, run_id, agent_id, started_at, finished_at, received_at, outcome, latency_ms, observed_status, body_assertion_passed, error_code, diagnostic_sample, observed_values_json, protocol_timings_json) VALUES ('00000000-0000-4000-8000-000000000007', '00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000004', '2026-07-25T00:00:00Z', '2026-07-25T00:00:01Z', '2026-07-25T00:00:01Z', 'failed', 1000, 503, 0, 'status_mismatch', 'HTTP 503', '[]', '{}')`,
 		`INSERT INTO location_health (monitor_id, location_id, state, consecutive_failures, consecutive_successes, last_observed_at, last_transition_at, stale_at) VALUES ('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000002', 'down', 3, 0, '2026-07-25T00:00:01Z', '2026-07-25T00:00:01Z', '2026-07-25T00:02:00Z')`,

@@ -127,10 +127,11 @@ func resetIntegrationStorage(t *testing.T, handle *database.Handle) {
 	t.Helper()
 	for _, table := range []string{
 		"idempotency_records",
+		"api_tokens",
 		"notification_delivery_attempts", "notification_outbox", "notification_routes",
 		"notification_channels", "maintenance_intervals", "audit_events", "daily_uptime",
 		"operation_leases", "incident_events", "incidents", "monitor_health", "location_health",
-		"probe_results", "check_runs", "agent_enrollment_tokens", "agents", "monitor_locations",
+		"probe_results", "check_runs", "agent_enrollment_tokens", "agent_credentials", "agents", "monitor_locations",
 		"monitors", "locations", "sessions", "admins",
 	} {
 		if _, err := handle.DB.ExecContext(context.Background(), "DELETE FROM "+table); err != nil {

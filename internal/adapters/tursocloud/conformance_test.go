@@ -74,6 +74,7 @@ func resetManagedTurso(t *testing.T, database *sql.DB) {
 	t.Helper()
 	for _, table := range []string{
 		"idempotency_records",
+		"api_tokens",
 		"notification_delivery_attempts",
 		"notification_outbox",
 		"notification_routes",
@@ -89,6 +90,7 @@ func resetManagedTurso(t *testing.T, database *sql.DB) {
 		"probe_results",
 		"check_runs",
 		"agent_enrollment_tokens",
+		"agent_credentials",
 		"agents",
 		"monitor_locations",
 		"monitors",

@@ -99,3 +99,33 @@ func TestIdempotencySchema(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentCredentialGenerationSchema(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00007_agent_credentials.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"CREATE TABLE agent_credentials",
+		"PRIMARY KEY (agent_id, generation)",
+		"credential_hash BLOB NOT NULL UNIQUE",
+		"generation INTEGER NOT NULL CHECK (generation > 0)",
+		"REFERENCES agents(id) ON DELETE CASCADE",
+		"last_authenticated_at TEXT",
+		"ALTER TABLE agents ADD COLUMN updated_at TEXT",
+		"UPDATE agents SET updated_at = created_at",
+		"locations_name_id",
+		"monitors_display_order_id",
+		"agents_name_id",
+		"incidents_opened_id",
+		"incident_events_incident_created_id",
+		"SELECT id, credential_generation, credential_hash, created_at, revoked_at, last_seen_at",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("agent credential migration is missing %q", expected)
+		}
+	}
+}

@@ -11,7 +11,7 @@ import (
 func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 6 {
+	if migrations.LatestVersion != 7 {
 		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
 	}
 	var schema strings.Builder
@@ -57,6 +57,37 @@ func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	} {
 		if !strings.Contains(schema.String(), expected) {
 			t.Fatalf("migration family is missing %q", expected)
+		}
+	}
+}
+
+func TestAgentCredentialGenerationSchema(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00007_agent_credentials.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"CREATE TABLE agent_credentials",
+		"PRIMARY KEY (agent_id, generation)",
+		"credential_hash BYTEA NOT NULL UNIQUE",
+		"generation BIGINT NOT NULL CHECK (generation > 0)",
+		"REFERENCES agents(id) ON DELETE CASCADE",
+		"last_authenticated_at TIMESTAMPTZ",
+		"ALTER TABLE agents ADD COLUMN updated_at TIMESTAMPTZ",
+		"UPDATE agents SET updated_at = created_at",
+		"ALTER COLUMN updated_at SET NOT NULL",
+		"locations_name_id",
+		"monitors_display_order_id",
+		"agents_name_id",
+		"incidents_opened_id",
+		"incident_events_incident_created_id",
+		"SELECT id, credential_generation, credential_hash, created_at, revoked_at, last_seen_at",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("agent credential migration is missing %q", expected)
 		}
 	}
 }

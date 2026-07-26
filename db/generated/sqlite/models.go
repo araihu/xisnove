@@ -26,6 +26,16 @@ type Agent struct {
 	LastSeenAt           sql.NullString `json:"last_seen_at"`
 	RevokedAt            sql.NullString `json:"revoked_at"`
 	CreatedAt            string         `json:"created_at"`
+	UpdatedAt            sql.NullString `json:"updated_at"`
+}
+
+type AgentCredential struct {
+	AgentID             string         `json:"agent_id"`
+	Generation          int64          `json:"generation"`
+	CredentialHash      []byte         `json:"credential_hash"`
+	CreatedAt           string         `json:"created_at"`
+	RevokedAt           sql.NullString `json:"revoked_at"`
+	LastAuthenticatedAt sql.NullString `json:"last_authenticated_at"`
 }
 
 type AgentEnrollmentToken struct {

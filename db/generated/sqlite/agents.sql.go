@@ -101,7 +101,7 @@ func (q *Queries) CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgen
 }
 
 const findActiveAgentByCredentialHash = `-- name: FindActiveAgentByCredentialHash :one
-SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at
+SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at, updated_at
 FROM agents
 WHERE credential_hash = ?
   AND revoked_at IS NULL
@@ -121,12 +121,13 @@ func (q *Queries) FindActiveAgentByCredentialHash(ctx context.Context, credentia
 		&i.LastSeenAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at
+SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at, updated_at
 FROM agents
 WHERE id = ?
 `
@@ -145,6 +146,7 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 		&i.LastSeenAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
