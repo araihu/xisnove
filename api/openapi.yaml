@@ -468,7 +468,8 @@ paths:
       - {$ref: '#/components/parameters/AgentID'}
     post:
       operationId: rotateAgentCredential
-      summary: Revoke the current Agent credential and issue its replacement once
+      summary: Issue a replacement Agent credential with an overlap window
+      description: The existing credential remains valid until its generation is explicitly revoked after the replacement has been observed in an authenticated heartbeat. Rotation returns 409 while an earlier overlap is still active, so at most two generations are valid concurrently.
       tags: [management]
       security: [{adminBearer: []}, {apiTokenBearer: []}]
       x-xisnove-scopes: [agents:write]
@@ -480,6 +481,30 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/AgentCredential'}
+        '409':
+          description: A previous credential overlap must be resolved before rotating again
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/agents/{agentId}/credentials/{generation}:
+    parameters:
+      - {$ref: '#/components/parameters/AgentID'}
+      - {$ref: '#/components/parameters/AgentCredentialGeneration'}
+    delete:
+      operationId: revokeAgentCredentialGeneration
+      summary: Revoke one Agent credential generation
+      description: Revokes an older active generation only after the current replacement generation has been observed in an authenticated heartbeat. The current generation and premature revocation return 409. Repeating revocation of an already revoked generation is idempotent and returns 204.
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [agents:write]
+      responses:
+        '204': {description: Agent credential generation revoked}
+        '409':
+          description: The generation is current or its replacement has not completed an authenticated heartbeat
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         default: {$ref: '#/components/responses/Problem'}
   /v1/incidents:
     get:
@@ -1002,6 +1027,12 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    AgentCredentialGeneration:
+      name: generation
+      in: path
+      required: true
+      description: Monotonically increasing Agent credential generation.
+      schema: {type: integer, format: int64, minimum: 1}
     IncidentID:
       name: incidentId
       in: path
@@ -1040,7 +1071,7 @@ components:
       name: limit
       in: query
       description: Maximum number of records to return.
-      schema: {type: integer, format: int32, minimum: 1, maximum: 100, default: 50}
+      schema: {type: integer, format: int32, minimum: 1, maximum: 200, default: 50}
     Cursor:
       name: cursor
       in: query
@@ -1857,7 +1888,7 @@ components:
           type: array
           items: {$ref: '#/components/schemas/NotificationChannel'}
         page: {$ref: '#/components/schemas/PageMetadata'}
-        limit: {type: integer, format: int32, minimum: 1, maximum: 100, deprecated: true}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 200, deprecated: true}
         offset: {type: integer, format: int32, minimum: 0, deprecated: true}
     NotificationAction:
       type: string
@@ -1946,7 +1977,7 @@ components:
           type: array
           items: {$ref: '#/components/schemas/NotificationRoute'}
         page: {$ref: '#/components/schemas/PageMetadata'}
-        limit: {type: integer, format: int32, minimum: 1, maximum: 100, deprecated: true}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 200, deprecated: true}
         offset: {type: integer, format: int32, minimum: 0, deprecated: true}
     NotificationDeliveryState:
       type: string
@@ -2049,7 +2080,7 @@ components:
           type: array
           items: {$ref: '#/components/schemas/NotificationDelivery'}
         page: {$ref: '#/components/schemas/PageMetadata'}
-        limit: {type: integer, format: int32, minimum: 1, maximum: 100, deprecated: true}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 200, deprecated: true}
         offset: {type: integer, format: int32, minimum: 0, deprecated: true}
     CreateMaintenanceRequest:
       type: object
@@ -2081,7 +2112,7 @@ components:
           type: array
           items: {$ref: '#/components/schemas/Maintenance'}
         page: {$ref: '#/components/schemas/PageMetadata'}
-        limit: {type: integer, format: int32, minimum: 1, maximum: 100, deprecated: true}
+        limit: {type: integer, format: int32, minimum: 1, maximum: 200, deprecated: true}
         offset: {type: integer, format: int32, minimum: 0, deprecated: true}
     PublicStatusMonitor:
       type: object

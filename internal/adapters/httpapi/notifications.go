@@ -404,8 +404,8 @@ func pageValues(limit, offset *int32) (int, int) {
 	if resultLimit <= 0 {
 		resultLimit = 50
 	}
-	if resultLimit > 100 {
-		resultLimit = 100
+	if resultLimit > application.MaxPageLimit {
+		resultLimit = application.MaxPageLimit
 	}
 	if resultOffset < 0 {
 		resultOffset = 0

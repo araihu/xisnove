@@ -461,6 +461,9 @@ type TCPProbeDefinitionKind string
 // APITokenID defines model for APITokenID.
 type APITokenID = openapi_types.UUID
 
+// AgentCredentialGeneration defines model for AgentCredentialGeneration.
+type AgentCredentialGeneration = int64
+
 // AgentID defines model for AgentID.
 type AgentID = openapi_types.UUID
 

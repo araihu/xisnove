@@ -1,6 +1,10 @@
 package mockapi
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+	"strconv"
+)
 
 const (
 	fixtureAgentID     = "00000000-0000-4800-8000-000000000801"
@@ -25,7 +29,15 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"agentId": fixtureAgentID, "credential": FixtureAgentToken, "credentialGeneration": 1,
 		})
-	case "HeartbeatAgent", "RevokeAgent", "DisableLocation", "DisableNotificationChannel",
+	case "HeartbeatAgent":
+		s.observeAgentCredential(bearerToken(r))
+		w.WriteHeader(http.StatusNoContent)
+	case "RevokeAgent":
+		s.revokeAllAgentCredentials()
+		w.WriteHeader(http.StatusNoContent)
+	case "RevokeAgentCredentialGeneration":
+		s.revokeAgentCredentialGeneration(w, r)
+	case "DisableLocation", "DisableNotificationChannel",
 		"DisableNotificationRoute", "DeleteMaintenance":
 		w.WriteHeader(http.StatusNoContent)
 	case "LeaseAgentWork":
@@ -47,9 +59,13 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 		if s.replay(w, r) {
 			return
 		}
+		generation, credential, ok := s.rotateAgentCredential(w, r)
+		if !ok {
+			return
+		}
 		s.writeCredentialMutation(w, r, http.StatusCreated, map[string]any{
-			"agentId": fixtureAgentID, "credential": "xisnove_mock_agent_rotated_000000000000000001",
-			"credentialGeneration": 2,
+			"agentId": fixtureAgentID, "credential": credential,
+			"credentialGeneration": generation,
 		})
 	case "ListLocations":
 		writeJSON(w, http.StatusOK, pageEnvelope([]any{locationFixture()}, ""))
@@ -128,9 +144,72 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (s *Server) rotateAgentCredential(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for generation, credential := range s.agentCredentialsByGeneration {
+		if generation != s.currentAgentGeneration && !credential.revoked {
+			writeProblem(w, r, http.StatusConflict, "credential_overlap_active", "Previous credential overlap is still active", nil)
+			return 0, "", false
+		}
+	}
+	generation := s.currentAgentGeneration + 1
+	token := FixtureAgentTokenGeneration2
+	if generation != 2 {
+		token = fmt.Sprintf("xisnove_mock_agent_rotated_%024d", generation)
+	}
+	credential := &mockAgentCredential{token: token, generation: generation}
+	s.agentCredentialsByToken[token] = credential
+	s.agentCredentialsByGeneration[generation] = credential
+	s.currentAgentGeneration = generation
+	return generation, token, true
+}
+
+func (s *Server) observeAgentCredential(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if credential := s.agentCredentialsByToken[token]; credential != nil && !credential.revoked {
+		credential.observed = true
+	}
+}
+
+func (s *Server) revokeAgentCredentialGeneration(w http.ResponseWriter, r *http.Request) {
+	generation, err := strconv.ParseInt(r.PathValue("generation"), 10, 64)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "validation_failed", "Invalid credential generation", nil)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	credential := s.agentCredentialsByGeneration[generation]
+	if credential == nil {
+		writeProblem(w, r, http.StatusNotFound, "not_found", "Credential generation not found", nil)
+		return
+	}
+	if credential.revoked {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	current := s.agentCredentialsByGeneration[s.currentAgentGeneration]
+	if generation >= s.currentAgentGeneration || current == nil || !current.observed {
+		writeProblem(w, r, http.StatusConflict, "credential_overlap_incomplete", "Replacement credential has not completed an authenticated heartbeat", nil)
+		return
+	}
+	credential.revoked = true
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) revokeAllAgentCredentials() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, credential := range s.agentCredentialsByGeneration {
+		credential.revoked = true
+	}
+}
+
 func advertisedScope(operationID string) string {
 	switch operationID {
-	case "CreateAgentEnrollmentToken", "UpdateAgent", "RevokeAgent", "RotateAgentCredential":
+	case "CreateAgentEnrollmentToken", "UpdateAgent", "RevokeAgent", "RotateAgentCredential", "RevokeAgentCredentialGeneration":
 		return "agents:write"
 	case "ListAgents", "GetAgent":
 		return "agents:read"

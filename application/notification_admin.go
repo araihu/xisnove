@@ -13,7 +13,7 @@ import (
 	"github.com/araihu/xisnove/domain"
 )
 
-const maxAdminPageSize = 100
+const maxAdminPageSize = port.MaxPageLimit
 
 // NotificationChannelConfig is the plaintext form accepted at the use-case
 // boundary. It exists only long enough to validate, encode, and seal it.

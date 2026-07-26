@@ -1373,6 +1373,9 @@ type UpdateNotificationChannelRequest struct {
 // APITokenID defines model for APITokenID.
 type APITokenID = openapi_types.UUID
 
+// AgentCredentialGeneration defines model for AgentCredentialGeneration.
+type AgentCredentialGeneration = int64
+
 // AgentID defines model for AgentID.
 type AgentID = openapi_types.UUID
 
@@ -2085,10 +2088,19 @@ type ClientInterface interface {
 	// Takes a body of the `application/json` content type.
 	UpdateAgent(ctx context.Context, agentId AgentID, params *UpdateAgentParams, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RotateAgentCredential Revoke the current Agent credential and issue its replacement once
+	// RotateAgentCredential Issue a replacement Agent credential with an overlap window
+	//
+	// The existing credential remains valid until its generation is explicitly revoked after the replacement has been observed in an authenticated heartbeat. Rotation returns 409 while an earlier overlap is still active, so at most two generations are valid concurrently.
 	//
 	// Corresponds with POST /v1/agents/{agentId}/credential-rotations (the `RotateAgentCredential` operationId).
 	RotateAgentCredential(ctx context.Context, agentId AgentID, params *RotateAgentCredentialParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeAgentCredentialGeneration Revoke one Agent credential generation
+	//
+	// Revokes an older active generation only after the current replacement generation has been observed in an authenticated heartbeat. The current generation and premature revocation return 409. Repeating revocation of an already revoked generation is idempotent and returns 204.
+	//
+	// Corresponds with DELETE /v1/agents/{agentId}/credentials/{generation} (the `RevokeAgentCredentialGeneration` operationId).
+	RevokeAgentCredentialGeneration(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAPITokens List redacted API tokens
 	//
@@ -2619,11 +2631,30 @@ func (c *Client) UpdateAgent(ctx context.Context, agentId AgentID, params *Updat
 	return c.Client.Do(req)
 }
 
-// RotateAgentCredential Revoke the current Agent credential and issue its replacement once
+// RotateAgentCredential Issue a replacement Agent credential with an overlap window
+//
+// The existing credential remains valid until its generation is explicitly revoked after the replacement has been observed in an authenticated heartbeat. Rotation returns 409 while an earlier overlap is still active, so at most two generations are valid concurrently.
 //
 // Corresponds with POST /v1/agents/{agentId}/credential-rotations (the `RotateAgentCredential` operationId).
 func (c *Client) RotateAgentCredential(ctx context.Context, agentId AgentID, params *RotateAgentCredentialParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRotateAgentCredentialRequest(c.Server, agentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeAgentCredentialGeneration Revoke one Agent credential generation
+//
+// Revokes an older active generation only after the current replacement generation has been observed in an authenticated heartbeat. The current generation and premature revocation return 409. Repeating revocation of an already revoked generation is idempotent and returns 204.
+//
+// Corresponds with DELETE /v1/agents/{agentId}/credentials/{generation} (the `RevokeAgentCredentialGeneration` operationId).
+func (c *Client) RevokeAgentCredentialGeneration(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeAgentCredentialGenerationRequest(c.Server, agentId, generation)
 	if err != nil {
 		return nil, err
 	}
@@ -3999,6 +4030,47 @@ func NewRotateAgentCredentialRequest(server string, agentId AgentID, params *Rot
 			req.Header.Set("Idempotency-Key", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewRevokeAgentCredentialGenerationRequest constructs an http.Request for the RevokeAgentCredentialGeneration method
+func NewRevokeAgentCredentialGenerationRequest(server string, agentId AgentID, generation AgentCredentialGeneration) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agentId", agentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "generation", generation, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agents/%s/credentials/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -6350,12 +6422,23 @@ type ClientWithResponsesInterface interface {
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	UpdateAgentWithResponse(ctx context.Context, agentId AgentID, params *UpdateAgentParams, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentResponse, error)
 
-	// RotateAgentCredentialWithResponse Revoke the current Agent credential and issue its replacement once
+	// RotateAgentCredentialWithResponse Issue a replacement Agent credential with an overlap window
+	//
+	// The existing credential remains valid until its generation is explicitly revoked after the replacement has been observed in an authenticated heartbeat. Rotation returns 409 while an earlier overlap is still active, so at most two generations are valid concurrently.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/agents/{agentId}/credential-rotations (the `RotateAgentCredential` operationId).
 	RotateAgentCredentialWithResponse(ctx context.Context, agentId AgentID, params *RotateAgentCredentialParams, reqEditors ...RequestEditorFn) (*RotateAgentCredentialResponse, error)
+
+	// RevokeAgentCredentialGenerationWithResponse Revoke one Agent credential generation
+	//
+	// Revokes an older active generation only after the current replacement generation has been observed in an authenticated heartbeat. The current generation and premature revocation return 409. Repeating revocation of an already revoked generation is idempotent and returns 204.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/agents/{agentId}/credentials/{generation} (the `RevokeAgentCredentialGeneration` operationId).
+	RevokeAgentCredentialGenerationWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, reqEditors ...RequestEditorFn) (*RevokeAgentCredentialGenerationResponse, error)
 
 	// ListAPITokensWithResponse List redacted API tokens
 	//
@@ -7186,6 +7269,8 @@ type RotateAgentCredentialResponse struct {
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
 	JSON201 *AgentCredential
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
@@ -7193,6 +7278,11 @@ type RotateAgentCredentialResponse struct {
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
 func (r RotateAgentCredentialResponse) GetJSON201() *AgentCredential {
 	return r.JSON201
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RotateAgentCredentialResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
@@ -7223,6 +7313,54 @@ func (r RotateAgentCredentialResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RotateAgentCredentialResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeAgentCredentialGenerationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RevokeAgentCredentialGenerationResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RevokeAgentCredentialGenerationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeAgentCredentialGenerationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeAgentCredentialGenerationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeAgentCredentialGenerationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeAgentCredentialGenerationResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9478,7 +9616,9 @@ func (c *ClientWithResponses) UpdateAgentWithResponse(ctx context.Context, agent
 	return ParseUpdateAgentResponse(rsp)
 }
 
-// RotateAgentCredentialWithResponse Revoke the current Agent credential and issue its replacement once
+// RotateAgentCredentialWithResponse Issue a replacement Agent credential with an overlap window
+//
+// The existing credential remains valid until its generation is explicitly revoked after the replacement has been observed in an authenticated heartbeat. Rotation returns 409 while an earlier overlap is still active, so at most two generations are valid concurrently.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -9489,6 +9629,21 @@ func (c *ClientWithResponses) RotateAgentCredentialWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseRotateAgentCredentialResponse(rsp)
+}
+
+// RevokeAgentCredentialGenerationWithResponse Revoke one Agent credential generation
+//
+// Revokes an older active generation only after the current replacement generation has been observed in an authenticated heartbeat. The current generation and premature revocation return 409. Repeating revocation of an already revoked generation is idempotent and returns 204.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/agents/{agentId}/credentials/{generation} (the `RevokeAgentCredentialGeneration` operationId).
+func (c *ClientWithResponses) RevokeAgentCredentialGenerationWithResponse(ctx context.Context, agentId AgentID, generation AgentCredentialGeneration, reqEditors ...RequestEditorFn) (*RevokeAgentCredentialGenerationResponse, error) {
+	rsp, err := c.RevokeAgentCredentialGeneration(ctx, agentId, generation, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeAgentCredentialGenerationResponse(rsp)
 }
 
 // ListAPITokensWithResponse List redacted API tokens
@@ -10535,6 +10690,49 @@ func ParseRotateAgentCredentialResponse(rsp *http.Response) (*RotateAgentCredent
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeAgentCredentialGenerationResponse parses an HTTP response from a RevokeAgentCredentialGenerationWithResponse call
+func ParseRevokeAgentCredentialGenerationResponse(rsp *http.Response) (*RevokeAgentCredentialGenerationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeAgentCredentialGenerationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

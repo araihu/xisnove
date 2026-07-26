@@ -3,6 +3,7 @@ package mockapi_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -348,7 +349,8 @@ func TestEveryAdvertisedOperationReachesTheStrictMockDispatcher(t *testing.T) {
 	for path, item := range doc.Paths.Map() {
 		for method := range item.Operations() {
 			operation := item.GetOperation(method)
-			if operation == nil || operation.OperationID == "CreateSession" {
+			if operation == nil || operation.OperationID == "CreateSession" ||
+				operation.OperationID == "RevokeAgentCredentialGeneration" {
 				continue
 			}
 			path := replacePathParameters(path)
@@ -375,6 +377,46 @@ func TestEveryAdvertisedOperationReachesTheStrictMockDispatcher(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestAgentCredentialRotationLifecycleIsOverlapSafe(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+	session := login(t, server.URL)
+
+	rotate := func(key string) *http.Response {
+		return request(t, server.URL, http.MethodPost,
+			"/v1/agents/00000000-0000-4800-8000-000000000801/credential-rotations",
+			session, nil, map[string]string{"Idempotency-Key": key})
+	}
+	heartbeat := func(token string, generation int) *http.Response {
+		return request(t, server.URL, http.MethodPost, "/v1/agent/heartbeat", token, map[string]any{
+			"version": "mock-test", "credentialGeneration": generation, "capabilities": []string{"http"},
+		}, nil)
+	}
+	revoke := func(generation int) *http.Response {
+		return request(t, server.URL, http.MethodDelete,
+			fmt.Sprintf("/v1/agents/00000000-0000-4800-8000-000000000801/credentials/%d", generation),
+			session, nil, nil)
+	}
+	assertStatus := func(response *http.Response, want int) {
+		t.Helper()
+		defer response.Body.Close()
+		if response.StatusCode != want {
+			t.Fatalf("status=%d want=%d body=%s", response.StatusCode, want, readBody(t, response))
+		}
+	}
+
+	assertStatus(rotate("credential-lifecycle-rotate-1"), http.StatusCreated)
+	assertStatus(rotate("credential-lifecycle-rotate-2"), http.StatusConflict)
+	assertStatus(revoke(1), http.StatusConflict)
+	assertStatus(revoke(2), http.StatusConflict)
+	assertStatus(heartbeat(mockapi.FixtureAgentTokenGeneration2, 2), http.StatusNoContent)
+	assertStatus(revoke(1), http.StatusNoContent)
+	assertStatus(revoke(1), http.StatusNoContent)
+	assertStatus(heartbeat(mockapi.FixtureAgentToken, 1), http.StatusUnauthorized)
+	assertStatus(heartbeat(mockapi.FixtureAgentTokenGeneration2, 2), http.StatusNoContent)
+	assertStatus(rotate("credential-lifecycle-rotate-3"), http.StatusCreated)
 }
 
 func TestAgentResultUploadUsesContractAcknowledgementEnvelope(t *testing.T) {
@@ -477,7 +519,7 @@ func advertisedOperationRequest(operationID string) any {
 func advertisedSuccessStatus(operationID string) int {
 	switch operationID {
 	case "RevokeCurrentSession", "RevokeAPIToken", "DisableLocation", "DisableMonitor",
-		"HeartbeatAgent", "LeaseAgentWork", "RevokeAgent", "DisableNotificationChannel",
+		"HeartbeatAgent", "LeaseAgentWork", "RevokeAgent", "RevokeAgentCredentialGeneration", "DisableNotificationChannel",
 		"DisableNotificationRoute", "DeleteMaintenance":
 		return http.StatusNoContent
 	case "CreateAPIToken", "CreateLocation", "CreateMonitor", "CreateAgentEnrollmentToken",
@@ -497,6 +539,7 @@ func replacePathParameters(path string) string {
 		"{locationId}":    "00000000-0000-4000-8000-000000000001",
 		"{monitorId}":     "00000000-0000-4200-8000-000000000101",
 		"{agentId}":       "00000000-0000-4800-8000-000000000801",
+		"{generation}":    "1",
 		"{incidentId}":    "00000000-0000-4300-8000-000000000201",
 		"{candidateId}":   "00000000-0000-4400-8000-000000000401",
 		"{channelId}":     "00000000-0000-4500-8000-000000000501",

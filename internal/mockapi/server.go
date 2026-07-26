@@ -16,12 +16,13 @@ import (
 
 const (
 	// Fixture credentials are intentionally public, deterministic mock values.
-	FixtureAdminEmail       = "admin@xisnove.test"
-	FixtureAdminPassword    = "mock-password"
-	FixtureSessionToken     = "xisnove_mock_session_admin_0000000000000001"
-	FixtureAgentToken       = "xisnove_mock_agent_000000000000000000000001"
-	FixtureFullAPIToken     = "xisnove_mock_api_full_0000000000000000000001"
-	FixtureReadOnlyAPIToken = "xisnove_mock_api_read_0000000000000000000001"
+	FixtureAdminEmail            = "admin@xisnove.test"
+	FixtureAdminPassword         = "mock-password"
+	FixtureSessionToken          = "xisnove_mock_session_admin_0000000000000001"
+	FixtureAgentToken            = "xisnove_mock_agent_000000000000000000000001"
+	FixtureAgentTokenGeneration2 = "xisnove_mock_agent_rotated_000000000000000002"
+	FixtureFullAPIToken          = "xisnove_mock_api_full_0000000000000000000001"
+	FixtureReadOnlyAPIToken      = "xisnove_mock_api_read_0000000000000000000001"
 
 	fixtureTime       = "2026-07-25T12:00:00Z"
 	fixtureLocationID = "00000000-0000-4000-8000-000000000001"
@@ -30,19 +31,29 @@ const (
 type Server struct {
 	mu sync.Mutex
 
-	sessionActive    bool
-	tokensByID       map[string]*apiTokenRecord
-	tokensByValue    map[string]*apiTokenRecord
-	monitors         []map[string]any
-	incidents        []map[string]any
-	events           map[string][]map[string]any
-	candidates       []map[string]any
-	channels         []map[string]any
-	routes           []map[string]any
-	deliveries       []map[string]any
-	idempotency      map[string]storedResponse
-	idempotencyLocks map[string]*sync.Mutex
-	counters         map[string]int
+	sessionActive                bool
+	tokensByID                   map[string]*apiTokenRecord
+	tokensByValue                map[string]*apiTokenRecord
+	monitors                     []map[string]any
+	incidents                    []map[string]any
+	events                       map[string][]map[string]any
+	candidates                   []map[string]any
+	channels                     []map[string]any
+	routes                       []map[string]any
+	deliveries                   []map[string]any
+	idempotency                  map[string]storedResponse
+	idempotencyLocks             map[string]*sync.Mutex
+	counters                     map[string]int
+	agentCredentialsByToken      map[string]*mockAgentCredential
+	agentCredentialsByGeneration map[int64]*mockAgentCredential
+	currentAgentGeneration       int64
+}
+
+type mockAgentCredential struct {
+	token      string
+	generation int64
+	observed   bool
+	revoked    bool
 }
 
 type apiTokenRecord struct {
@@ -74,15 +85,21 @@ type strictMockDispatcher struct {
 
 func NewServer() *Server {
 	server := &Server{
-		tokensByID:       map[string]*apiTokenRecord{},
-		tokensByValue:    map[string]*apiTokenRecord{},
-		events:           map[string][]map[string]any{},
-		idempotency:      map[string]storedResponse{},
-		idempotencyLocks: map[string]*sync.Mutex{},
+		tokensByID:                   map[string]*apiTokenRecord{},
+		tokensByValue:                map[string]*apiTokenRecord{},
+		events:                       map[string][]map[string]any{},
+		idempotency:                  map[string]storedResponse{},
+		idempotencyLocks:             map[string]*sync.Mutex{},
+		agentCredentialsByToken:      map[string]*mockAgentCredential{},
+		agentCredentialsByGeneration: map[int64]*mockAgentCredential{},
+		currentAgentGeneration:       1,
 		counters: map[string]int{
 			"token": 1000, "monitor": 2000, "candidate": 3000, "channel": 4000,
 		},
 	}
+	initialAgentCredential := &mockAgentCredential{token: FixtureAgentToken, generation: 1, observed: true}
+	server.agentCredentialsByToken[initialAgentCredential.token] = initialAgentCredential
+	server.agentCredentialsByGeneration[initialAgentCredential.generation] = initialAgentCredential
 	server.seedFixtures()
 	return server
 }
@@ -248,8 +265,11 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, scope string)
 	if token == FixtureSessionToken && s.sessionActive {
 		return true
 	}
-	if token == FixtureAgentToken && strings.HasPrefix(scope, "agent:") {
-		return true
+	if strings.HasPrefix(scope, "agent:") {
+		credential := s.agentCredentialsByToken[token]
+		if credential != nil && !credential.revoked {
+			return true
+		}
 	}
 	record := s.tokensByValue[token]
 	if record == nil || record.RevokedAt != "" {

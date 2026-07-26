@@ -118,7 +118,7 @@ func TestNotificationContractIsTypedRedactedBoundedAndAdminOnly(t *testing.T) {
 		}
 		if parameters["limit"] == nil || parameters["offset"] == nil ||
 			parameters["limit"].Schema.Value.Max == nil ||
-			*parameters["limit"].Schema.Value.Max != 100 {
+			*parameters["limit"].Schema.Value.Max != 200 {
 			t.Errorf("%s pagination = %#v", operationID, parameters)
 		}
 	}

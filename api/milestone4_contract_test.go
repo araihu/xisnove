@@ -39,27 +39,28 @@ func TestHumanClientOperationIDsAreFrozen(t *testing.T) {
 		method string
 		path   string
 	}{
-		"revokeCurrentSession":      {http.MethodDelete, "/v1/sessions/current"},
-		"createAPIToken":            {http.MethodPost, "/v1/api-tokens"},
-		"listAPITokens":             {http.MethodGet, "/v1/api-tokens"},
-		"revokeAPIToken":            {http.MethodDelete, "/v1/api-tokens/{tokenId}"},
-		"listLocations":             {http.MethodGet, "/v1/locations"},
-		"getLocation":               {http.MethodGet, "/v1/locations/{locationId}"},
-		"listMonitors":              {http.MethodGet, "/v1/monitors"},
-		"updateMonitor":             {http.MethodPut, "/v1/monitors/{monitorId}"},
-		"disableMonitor":            {http.MethodDelete, "/v1/monitors/{monitorId}"},
-		"listAgents":                {http.MethodGet, "/v1/agents"},
-		"getAgent":                  {http.MethodGet, "/v1/agents/{agentId}"},
-		"revokeAgent":               {http.MethodDelete, "/v1/agents/{agentId}"},
-		"rotateAgentCredential":     {http.MethodPost, "/v1/agents/{agentId}/credential-rotations"},
-		"listIncidents":             {http.MethodGet, "/v1/incidents"},
-		"getIncident":               {http.MethodGet, "/v1/incidents/{incidentId}"},
-		"listIncidentEvents":        {http.MethodGet, "/v1/incidents/{incidentId}/events"},
-		"upsertDiscoveryCandidates": {http.MethodPost, "/v1/agent/discovery-candidates:batch"},
-		"listDiscoveryCandidates":   {http.MethodGet, "/v1/discovery-candidates"},
-		"getDiscoveryCandidate":     {http.MethodGet, "/v1/discovery-candidates/{candidateId}"},
-		"promoteDiscoveryCandidate": {http.MethodPost, "/v1/discovery-candidates/{candidateId}/promotion"},
-		"getPublicStatusPage":       {http.MethodGet, "/v1/status-page"},
+		"revokeCurrentSession":            {http.MethodDelete, "/v1/sessions/current"},
+		"createAPIToken":                  {http.MethodPost, "/v1/api-tokens"},
+		"listAPITokens":                   {http.MethodGet, "/v1/api-tokens"},
+		"revokeAPIToken":                  {http.MethodDelete, "/v1/api-tokens/{tokenId}"},
+		"listLocations":                   {http.MethodGet, "/v1/locations"},
+		"getLocation":                     {http.MethodGet, "/v1/locations/{locationId}"},
+		"listMonitors":                    {http.MethodGet, "/v1/monitors"},
+		"updateMonitor":                   {http.MethodPut, "/v1/monitors/{monitorId}"},
+		"disableMonitor":                  {http.MethodDelete, "/v1/monitors/{monitorId}"},
+		"listAgents":                      {http.MethodGet, "/v1/agents"},
+		"getAgent":                        {http.MethodGet, "/v1/agents/{agentId}"},
+		"revokeAgent":                     {http.MethodDelete, "/v1/agents/{agentId}"},
+		"rotateAgentCredential":           {http.MethodPost, "/v1/agents/{agentId}/credential-rotations"},
+		"revokeAgentCredentialGeneration": {http.MethodDelete, "/v1/agents/{agentId}/credentials/{generation}"},
+		"listIncidents":                   {http.MethodGet, "/v1/incidents"},
+		"getIncident":                     {http.MethodGet, "/v1/incidents/{incidentId}"},
+		"listIncidentEvents":              {http.MethodGet, "/v1/incidents/{incidentId}/events"},
+		"upsertDiscoveryCandidates":       {http.MethodPost, "/v1/agent/discovery-candidates:batch"},
+		"listDiscoveryCandidates":         {http.MethodGet, "/v1/discovery-candidates"},
+		"getDiscoveryCandidate":           {http.MethodGet, "/v1/discovery-candidates/{candidateId}"},
+		"promoteDiscoveryCandidate":       {http.MethodPost, "/v1/discovery-candidates/{candidateId}/promotion"},
+		"getPublicStatusPage":             {http.MethodGet, "/v1/status-page"},
 	}
 
 	for operationID, expected := range want {
@@ -68,6 +69,58 @@ func TestHumanClientOperationIDsAreFrozen(t *testing.T) {
 		if item == nil || operationForMethod(item, expected.method) != operation {
 			t.Errorf("%s is not %s %s", operationID, expected.method, expected.path)
 		}
+	}
+}
+
+func TestAgentCredentialRotationIsOverlapSafeAndIndividuallyRevocable(t *testing.T) {
+	doc := loadContract(t)
+	rotation := operationByID(t, doc, "rotateAgentCredential")
+	rotationText := strings.ToLower(rotation.Summary + " " + rotation.Description)
+	if !strings.Contains(rotationText, "overlap") {
+		t.Fatalf("rotateAgentCredential does not document overlap: %q", rotationText)
+	}
+	if strings.Contains(rotationText, "revoke the current") {
+		t.Fatalf("rotateAgentCredential promises immediate revocation: %q", rotationText)
+	}
+	for _, guarantee := range []string{"authenticated heartbeat", "at most two", "409"} {
+		if !strings.Contains(rotationText, guarantee) && (guarantee != "409" || rotation.Responses.Value("409") == nil) {
+			t.Errorf("rotateAgentCredential omits %q guarantee", guarantee)
+		}
+	}
+
+	revoke := operationByID(t, doc, "revokeAgentCredentialGeneration")
+	item := doc.Paths.Value("/v1/agents/{agentId}/credentials/{generation}")
+	if revoke == nil || item == nil || !hasParameter(item.Parameters, "path", "generation") {
+		t.Fatal("revokeAgentCredentialGeneration omits the generation path parameter")
+	}
+	revokeText := strings.ToLower(revoke.Summary + " " + revoke.Description)
+	for _, guarantee := range []string{"older", "authenticated heartbeat", "current generation", "idempotent"} {
+		if !strings.Contains(revokeText, guarantee) {
+			t.Errorf("revokeAgentCredentialGeneration omits %q guarantee", guarantee)
+		}
+	}
+	if revoke.Responses.Value("204") == nil || revoke.Responses.Value("409") == nil {
+		t.Errorf("revokeAgentCredentialGeneration responses do not freeze idempotent/conflict outcomes")
+	}
+}
+
+func TestLegacyPageMetadataAcceptsSharedMaximum(t *testing.T) {
+	doc := loadContract(t)
+	for _, name := range []string{"NotificationChannelPage", "NotificationRoutePage", "NotificationDeliveryPage", "MaintenancePage"} {
+		schema := doc.Components.Schemas[name]
+		limit := schema.Value.Properties["limit"]
+		if limit == nil || limit.Value == nil || limit.Value.Max == nil || *limit.Value.Max != 200 {
+			t.Errorf("%s.limit maximum is not 200", name)
+		}
+	}
+}
+
+func TestSharedPaginationLimitMatchesPublicPort(t *testing.T) {
+	doc := loadContract(t)
+	limit := doc.Components.Parameters["Limit"]
+	if limit == nil || limit.Value == nil || limit.Value.Schema == nil || limit.Value.Schema.Value == nil ||
+		limit.Value.Schema.Value.Max == nil || *limit.Value.Schema.Value.Max != 200 {
+		t.Fatalf("Limit maximum = %#v, want 200", limit)
 	}
 }
 
