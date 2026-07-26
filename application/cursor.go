@@ -53,6 +53,12 @@ type CursorAudience struct {
 type CursorCodec interface {
 	Encode(CursorKey, CursorSortKind) (string, error)
 	Decode(string, CursorSortKind) (CursorKey, error)
+}
+
+// AudienceCursorCodec extends the legacy cursor contract with Task 4
+// endpoint-and-filter-bound cursors.
+type AudienceCursorCodec interface {
+	CursorCodec
 	EncodeFor(CursorAudience, CursorKey, CursorShape) (string, error)
 	DecodeFor(string, CursorAudience, CursorShape) (CursorKey, error)
 }
@@ -81,7 +87,7 @@ type cursorFilter struct {
 	Values []string `json:"values"`
 }
 
-func NewHMACCursorCodec(key []byte) (CursorCodec, error) {
+func NewHMACCursorCodec(key []byte) (AudienceCursorCodec, error) {
 	if len(key) < sha256.Size {
 		return nil, errors.New("cursor key must contain at least 32 bytes")
 	}

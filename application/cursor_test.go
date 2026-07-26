@@ -40,6 +40,34 @@ func TestCursorRoundTripAndTamperRejection(t *testing.T) {
 	assertInvalidCursor(t, codec, "not-a-cursor", application.CursorSortTime)
 }
 
+type legacyOnlyCursorCodec struct{}
+
+func (legacyOnlyCursorCodec) Encode(application.CursorKey, application.CursorSortKind) (string, error) {
+	return "", nil
+}
+
+func (legacyOnlyCursorCodec) Decode(string, application.CursorSortKind) (application.CursorKey, error) {
+	return application.CursorKey{}, nil
+}
+
+func TestLegacyCursorCodecRemainsImplementableByExternalFakes(t *testing.T) {
+	var codec application.CursorCodec = legacyOnlyCursorCodec{}
+	if codec == nil {
+		t.Fatal("legacy fake was not assigned to CursorCodec")
+	}
+}
+
+func TestNewHMACCursorCodecExposesAudienceExtension(t *testing.T) {
+	codec, err := application.NewHMACCursorCodec([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var audienceCodec application.AudienceCursorCodec = codec
+	if audienceCodec == nil {
+		t.Fatal("NewHMACCursorCodec() returned no audience codec")
+	}
+}
+
 func TestAudienceCursorBindsEndpointAndFilters(t *testing.T) {
 	codec, err := application.NewHMACCursorCodec([]byte("0123456789abcdef0123456789abcdef"))
 	if err != nil {
@@ -192,7 +220,7 @@ func assertInvalidCursor(t *testing.T, codec application.CursorCodec, token stri
 	}
 }
 
-func assertInvalidAudienceCursor(t *testing.T, codec application.CursorCodec, token string, audience application.CursorAudience, shape application.CursorShape) {
+func assertInvalidAudienceCursor(t *testing.T, codec application.AudienceCursorCodec, token string, audience application.CursorAudience, shape application.CursorShape) {
 	t.Helper()
 	_, err := codec.DecodeFor(token, audience, shape)
 	var validation *application.ValidationError
