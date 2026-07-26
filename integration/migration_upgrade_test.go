@@ -370,7 +370,8 @@ func assertPresentedCredentialLookup(t *testing.T, handle *database.Handle, agen
 		if err != nil {
 			return err
 		}
-		if record.Agent.ID != agentID || record.PresentedCredentialGeneration != 2 || record.Agent.CredentialGeneration != 2 {
+		if record.Agent.ID != agentID || record.PresentedCredentialGeneration != 2 || record.Agent.CredentialGeneration != 2 ||
+			!bytes.Equal(record.CredentialHash, []byte{13, 14, 15, 16}) {
 			return fmt.Errorf("overlap lookup = %#v", record)
 		}
 		return nil

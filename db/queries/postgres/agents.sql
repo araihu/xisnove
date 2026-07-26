@@ -33,7 +33,10 @@ INSERT INTO agent_credentials (
 );
 
 -- name: FindActiveAgentByCredentialHash :one
-SELECT a.*, c.generation AS presented_credential_generation
+SELECT a.id, a.location_id, a.name, c.credential_hash,
+       a.credential_generation, a.capabilities_json, a.version,
+       a.last_seen_at, a.revoked_at, a.created_at, a.updated_at,
+       c.generation AS presented_credential_generation
 FROM agent_credentials c
 JOIN agents a ON a.id = c.agent_id
 WHERE c.credential_hash = sqlc.arg(credential_hash)
