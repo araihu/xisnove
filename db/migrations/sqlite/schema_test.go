@@ -92,6 +92,7 @@ func TestIdempotencySchema(t *testing.T) {
 		"CREATE TABLE idempotency_records",
 		"PRIMARY KEY (principal_id, operation_id, idempotency_key)",
 		"idempotency_records_expiry",
+		"julianday(expires_at)",
 	} {
 		if !strings.Contains(schema, expected) {
 			t.Fatalf("idempotency schema is missing %q", expected)

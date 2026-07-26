@@ -14,7 +14,9 @@ CREATE TABLE idempotency_records (
 );
 
 CREATE INDEX idempotency_records_expiry
-ON idempotency_records(expires_at, principal_id, operation_id, idempotency_key);
+ON idempotency_records(
+    julianday(expires_at), principal_id, operation_id, idempotency_key
+);
 
 -- +goose Down
 DROP TABLE idempotency_records;
