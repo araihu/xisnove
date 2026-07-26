@@ -23,6 +23,8 @@ const (
 type ManagementServiceConfig struct {
 	Store   UnitOfWork
 	Cursors AudienceCursorCodec
+	Tokens  TokenIssuer
+	NewID   func() string
 }
 
 // ManagementService owns request normalization, opaque cursor processing, and
@@ -30,10 +32,14 @@ type ManagementServiceConfig struct {
 type ManagementService struct {
 	store   UnitOfWork
 	cursors AudienceCursorCodec
+	tokens  TokenIssuer
+	newID   func() string
 }
 
 func NewManagementService(config ManagementServiceConfig) *ManagementService {
-	return &ManagementService{store: config.Store, cursors: config.Cursors}
+	return &ManagementService{
+		store: config.Store, cursors: config.Cursors, tokens: config.Tokens, newID: config.NewID,
+	}
 }
 
 func (s *ManagementService) GetLocation(ctx context.Context, id domain.LocationID) (domain.Location, error) {
