@@ -313,8 +313,25 @@ func TestPublicStatusPageHasRecentUptimeWithoutPrivateFields(t *testing.T) {
 		}
 	}
 	monitor := doc.Components.Schemas["PublicStatusMonitor"]
-	if monitor != nil && monitor.Value != nil && monitor.Value.Properties["recentUptime"] == nil {
-		t.Error("PublicStatusMonitor.recentUptime is missing")
+	if monitor != nil && monitor.Value != nil {
+		recent := monitor.Value.Properties["recentUptime"]
+		if recent == nil || recent.Value == nil || recent.Value.MaxItems == nil ||
+			*recent.Value.MaxItems != 90 {
+			t.Errorf("PublicStatusMonitor.recentUptime bound = %#v, want 90", recent)
+		}
+	}
+	page := doc.Components.Schemas["PublicStatusPage"]
+	if page != nil && page.Value != nil {
+		for _, field := range []string{"monitors", "activeIncidents"} {
+			property := page.Value.Properties[field]
+			if property == nil || property.Value == nil {
+				t.Errorf("PublicStatusPage.%s is missing", field)
+				continue
+			}
+			if property.Value.MaxItems != nil {
+				t.Errorf("PublicStatusPage.%s silently caps a complete aggregate", field)
+			}
+		}
 	}
 	for _, schemaName := range []string{"PublicStatusPage", "PublicStatusMonitor", "PublicIncidentSummary", "DailyUptimePoint"} {
 		schema := doc.Components.Schemas[schemaName]
