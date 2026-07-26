@@ -1,4 +1,4 @@
-.PHONY: generate generated-check test module-check storage-check operations-check race-check agent-check check
+.PHONY: generate generated-check test module-check storage-check operations-check race-check agent-check ui-check ui-browser-smoke check
 
 generate:
 	go generate ./...
@@ -36,4 +36,10 @@ agent-check:
 	cd agent && GOWORK=off go vet ./...
 	cd agent && GOWORK=off go test -race ./...
 
-check: generated-check module-check storage-check operations-check race-check agent-check
+ui-check:
+	GOWORK=off $(MAKE) -C ui check
+
+ui-browser-smoke:
+	GOWORK=off $(MAKE) -C ui browser-smoke
+
+check: generated-check module-check storage-check operations-check race-check agent-check ui-check
