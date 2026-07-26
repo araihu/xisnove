@@ -3,6 +3,9 @@ package architecture_test
 import (
 	"bytes"
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,6 +74,107 @@ func TestLegacyInternalPublicPackagesAreGone(t *testing.T) {
 	for _, path := range []string{"internal/domain", "internal/application", "internal/adapters/conformance"} {
 		if _, err := os.Stat(filepath.Join(root, path)); !os.IsNotExist(err) {
 			t.Errorf("legacy package path still exists: %s", path)
+		}
+	}
+}
+
+func TestAnalyticsArchivePortsRemainDistinctFromOperationalDeclarations(t *testing.T) {
+	packageDir := filepath.Join(repositoryRoot(t), "application", "port")
+	packages, err := parser.ParseDir(token.NewFileSet(), packageDir, func(info os.FileInfo) bool {
+		return strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatalf("parse public ports: %v", err)
+	}
+	publicPorts, ok := packages["port"]
+	if !ok {
+		t.Fatal("public port package was not parsed")
+	}
+
+	operational := map[string]bool{
+		"UnitOfWork":   true,
+		"Store":        true,
+		"Repositories": true,
+	}
+	for _, file := range publicPorts.Files {
+		for _, declaration := range file.Decls {
+			general, ok := declaration.(*ast.GenDecl)
+			if !ok || general.Tok != token.TYPE {
+				continue
+			}
+			for _, specification := range general.Specs {
+				typeSpec := specification.(*ast.TypeSpec)
+				if typeSpec.Name.Name != "Repositories" {
+					continue
+				}
+				repositories, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					t.Fatal("Repositories must remain a struct")
+				}
+				for _, field := range repositories.Fields.List {
+					if identifier, ok := field.Type.(*ast.Ident); ok {
+						operational[identifier.Name] = true
+					}
+				}
+			}
+		}
+	}
+
+	for _, file := range publicPorts.Files {
+		for _, declaration := range file.Decls {
+			general, ok := declaration.(*ast.GenDecl)
+			if !ok || general.Tok != token.TYPE {
+				continue
+			}
+			for _, specification := range general.Specs {
+				typeSpec := specification.(*ast.TypeSpec)
+				name := strings.ToLower(typeSpec.Name.Name)
+				if !strings.Contains(name, "analytics") && !strings.Contains(name, "archive") {
+					continue
+				}
+				if typeSpec.Assign.IsValid() {
+					t.Fatalf("%s must be a distinct interface declaration, not an alias", typeSpec.Name)
+				}
+				interfaceType, ok := typeSpec.Type.(*ast.InterfaceType)
+				if !ok {
+					t.Fatalf("%s must be an interface distinct from operational persistence", typeSpec.Name)
+				}
+				for _, method := range interfaceType.Methods.List {
+					var reused string
+					ast.Inspect(method.Type, func(node ast.Node) bool {
+						identifier, ok := node.(*ast.Ident)
+						if ok && operational[identifier.Name] {
+							reused = identifier.Name
+							return false
+						}
+						return true
+					})
+					if reused != "" {
+						t.Fatalf("%s reuses operational declaration %s", typeSpec.Name, reused)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestOpenCoreGuideDocumentsStablePublicSurface(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join(repositoryRoot(t), "docs", "architecture", "open-core.md"))
+	if err != nil {
+		t.Fatalf("read Open Core guide: %v", err)
+	}
+	for _, identifier := range []string{
+		"## Stable public identifiers",
+		"`application/port.UnitOfWork`",
+		"`application/port.Repositories`",
+		"`application/port.ErrNotFound`",
+		"`application/port.ErrConflict`",
+		"`contracttest.Factory`",
+		"`contracttest.Run`",
+		"application compatibility aliases",
+	} {
+		if !bytes.Contains(contents, []byte(identifier)) {
+			t.Errorf("Open Core guide does not document %s", identifier)
 		}
 	}
 }

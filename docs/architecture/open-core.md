@@ -35,6 +35,45 @@ billing, or entitlement concepts. A future hosted composition root is
 responsible for authentication, authorization, tenant-scoped persistence,
 cache/object keys, idempotency keys, and worker context construction.
 
+## Stable public identifiers
+
+The supported surface is intentionally small at its seams, while the domain
+and application types needed to construct a self-hosted or external
+composition root remain public. Exported Go identifiers follow semantic
+versioning; external consumers should use `errors.Is` for documented error
+identities rather than matching error strings.
+
+- `domain` owns the ID/value types and pure constructors:
+  `NewLocation`, `NewAgent`, `NewHTTPMonitor`, `NewTCPMonitor`,
+  `NewDNSMonitor`, `NewMaintenanceInterval`, `NewNotificationChannel`,
+  `NewNotificationRoute`, and `NewNotificationIdentity`.
+- `application/port.UnitOfWork` and
+  `application/port.Repositories` are the operational transaction boundary
+  and its callback-scoped repository set. The repository interfaces and record
+  types in `application/port` are part of that operational contract.
+  `application/port.ErrNotFound` and `application/port.ErrConflict` retain
+  their error identity for portable adapter behavior.
+- `application` owns use-case commands, views, service configuration structs,
+  and service constructors. `NewConfigurationService`, `NewAuthService`,
+  `NewAgentService`, `NewLeaseService`, `NewResultService`,
+  `NewHealthService`, `NewStalenessService`, `NewScheduler`,
+  `NewNotificationAdminService`, `NewNotificationSecretService`,
+  `NewDeliveryWorker`, `NewMaintenanceWorker`, and `NewRetentionWorker`
+  preserve their documented dependency-injection and validation behavior.
+  Error identities exported by these services include the authentication,
+  enrollment, no-work, notification-key/lease, maintenance-lease, and
+  retention-lease errors; callers may keep using `errors.Is` across releases.
+- `contracttest.Factory` accepts only an
+  `application/port.UnitOfWork`, and `contracttest.Run` is the stable adapter
+  behavioral-suite entry point. Adapter provisioning and credentials stay in
+  the caller's factory.
+
+The application compatibility aliases for `application/port` records,
+repositories, `UnitOfWork`, `ErrNotFound`, and `ErrConflict` are deliberately
+preserved for the current self-hosted migration. New external composition roots
+should import `application/port` directly; the aliases do not create a second
+port contract.
+
 ## Operational transactions and analytics
 
 `application/port.UnitOfWork` is the consistency boundary for configuration,
@@ -44,7 +83,11 @@ audit, and notification outbox rows. Consistency-sensitive writes stay in one
 
 ClickHouse or another OLAP database is not an operational-store replacement.
 A future analytics implementation will use a separate archive/analytics port
-fed asynchronously from committed operational events.
+fed asynchronously from committed operational events. An analytics or archive
+interface must be a distinct declaration: it cannot alias, embed, accept, or
+return `UnitOfWork`, `Repositories`, `Store`, or the operational repository
+interfaces. The architecture test enforces that rule for every future public
+port declaration whose name includes `Analytics` or `Archive`.
 
 ## Compatibility verification
 

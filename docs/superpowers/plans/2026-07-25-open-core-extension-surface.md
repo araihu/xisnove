@@ -45,7 +45,7 @@ SQLite/PostgreSQL/Turso adapters, and the repository's `make check` pipeline.
   adapter package.
 - [x] Assert `application` depends on `domain` and `application/port`, never
   `internal/adapters`, generated API types, sqlc types, or database drivers.
-- [ ] Assert operational and analytical interfaces are distinct declarations.
+- [x] Assert operational and analytical interfaces are distinct declarations.
 - [x] Parse non-test application source and reject replacing an incoming
   context with `context.Background()` or `context.TODO()`.
 - [ ] Run the tests red while packages still have internal paths.
@@ -103,7 +103,7 @@ type UnitOfWork interface {
   `WithinTx` with `Transact(ctx, callback)`.
 - [x] Thread the callback context into every repository call; never close over
   and substitute another context.
-- [ ] Preserve constructor behavior and public errors deliberately; document
+- [x] Preserve constructor behavior and public errors deliberately; document
   exported identifiers needed by external consumers.
 - [x] Run `go test -race ./application ./internal/adapters/...`.
 
@@ -132,10 +132,10 @@ type UnitOfWork interface {
 - Move: `internal/adapters/conformance/*.go` to `contracttest/*.go`
 - Modify: all adapter conformance test imports
 
-- [ ] Make suites accept public `port.UnitOfWork` factories only.
+- [x] Make suites accept public `port.UnitOfWork` factories only.
 - [x] Keep environment provisioning, credentials, and self-hosted adapter
   construction out of the public package.
-- [ ] Export only stable suite entry points and option types.
+- [x] Export only stable suite entry points and option types.
 - [x] Prove the same CRUD, transaction, lease, idempotency, and notification
   behavior for every supported relational profile.
 
