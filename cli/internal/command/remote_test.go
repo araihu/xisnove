@@ -101,6 +101,42 @@ func TestMonitorListUsesBearerAndOpaqueCursor(t *testing.T) {
 	}
 }
 
+func TestDiscoveryListLabelsProtocolAndRendersOpaqueCursor(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get("Authorization"); got != "Bearer mock-token" {
+			t.Errorf("Authorization = %q", got)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{
+  "items":[{
+    "id":"00000000-0000-4000-8000-000000000401","agentId":"00000000-0000-4000-8000-000000000301","locationId":"00000000-0000-4000-8000-000000000001",
+    "sourceKind":"Ingress","sourceUid":"ingress-uid","namespace":"home","name":"gateway","labels":{},"protocol":"http","target":"https://home.example.test/health",
+    "networkPerspective":"home-cluster","present":true,"state":"pending","firstSeenAt":"2026-07-25T10:00:00Z","lastObservedAt":"2026-07-25T10:00:00Z","updatedAt":"2026-07-25T10:00:00Z"
+  }],
+  "page":{"nextCursor":"discovery-next"}
+}`))
+	}))
+	defer server.Close()
+	configPath := writeRemoteTestProfile(t, server.URL)
+	var stdout, stderr bytes.Buffer
+	runner := command.Runner{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Credentials: credential.Resolver{LookupEnv: func(string) (string, bool) {
+			return "mock-token", true
+		}},
+	}
+	exit := runner.Run(context.Background(), []string{"--config", configPath, "discovery", "list"})
+	if exit != 0 {
+		t.Fatalf("Run() exit = %d, stderr = %s", exit, stderr.String())
+	}
+	want := "ID                                    NAME     PROTOCOL  STATE    TARGET                            LOCATION ID                           NEXT CURSOR\n" +
+		"00000000-0000-4000-8000-000000000401  gateway  http      pending  https://home.example.test/health  00000000-0000-4000-8000-000000000001  discovery-next\n"
+	if stdout.String() != want {
+		t.Fatalf("stdout mismatch\n--- got ---\n%s--- want ---\n%s", stdout.String(), want)
+	}
+}
+
 func TestMonitorCreateDecodesGeneratedModelAndSendsExplicitIdempotencyKey(t *testing.T) {
 	gotKey := ""
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

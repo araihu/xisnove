@@ -120,7 +120,7 @@ func newDiscoveryListCommand(runtime Runtime) *cobra.Command {
 			for _, candidate := range page.Items {
 				rows = append(rows, []string{candidate.Id.String(), candidate.Name, string(candidate.Protocol), string(candidate.State), candidate.Target, candidate.LocationId.String(), next})
 			}
-			return renderRemote(runtime, page, output.Table{Headers: []string{"ID", "NAME", "KIND", "STATE", "TARGET", "LOCATION ID", "NEXT CURSOR"}, Rows: rows})
+			return renderRemote(runtime, page, output.Table{Headers: []string{"ID", "NAME", "PROTOCOL", "STATE", "TARGET", "LOCATION ID", "NEXT CURSOR"}, Rows: rows})
 		},
 	}
 	command.Flags().Int32Var(&limit, "limit", 50, "maximum records (1-100)")
