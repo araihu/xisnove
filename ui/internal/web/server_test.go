@@ -160,6 +160,16 @@ func TestPublicStatusRendersFullPageOrHTMXFragment(t *testing.T) {
 	}
 }
 
+func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/app.js", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
+		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
+	}
+}
+
 func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
 	client := controlplane.NewFake(testUsername, testPassword, testCredential)
 	monitorID := uuid.New()

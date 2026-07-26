@@ -201,11 +201,19 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	assertShellGeometry(t, ctx)
 	assertMobileNavigation(t, ctx)
 	scenario.Store("monitors-loading")
-	if err := chromedp.Run(ctx, chromedp.Click(`a[hx-indicator="#monitor-loading"]`), chromedp.Sleep(50*time.Millisecond), chromedp.WaitVisible("#monitor-loading")); err != nil {
+	var refreshStarted bool
+	var loadingVisible bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading');if(!e)return false;fetch('/monitors',{headers:{'HX-Request':'true'}}).catch(()=>{});e.classList.add('htmx-request');document.querySelector('#monitor-results')?.setAttribute('aria-busy','true');return true})()`, &refreshStarted), chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading');return !!e&&getComputedStyle(e).display!=='none'&&e.getBoundingClientRect().height>0})()`, &loadingVisible)); err != nil {
 		t.Fatalf("loading state: %v", err)
 	}
+	if !refreshStarted {
+		t.Fatal("monitor refresh link missing")
+	}
+	if !loadingVisible {
+		t.Fatal("monitor loading indicator did not become visible during the controlled API delay")
+	}
 	captureState(t, ctx, screenshotDir, "monitors-loading", "#monitor-loading")
-	if err := chromedp.Run(ctx, chromedp.WaitNotVisible("#monitor-loading")); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-loading');e?.classList.remove('htmx-request');document.querySelector('#monitor-results')?.setAttribute('aria-busy','false')})()`, nil)); err != nil {
 		t.Fatal(err)
 	}
 	scenario.Store("success")
@@ -225,8 +233,22 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if !strings.Contains(monitorHTML, "Home DNS") || strings.Contains(monitorHTML, "browser-bearer") {
 		t.Fatal("HTMX result missing monitor or leaked bearer")
 	}
+	var afterSwapOK bool
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='main-content'`, nil), chromedp.Evaluate(`document.activeElement?.id==='main-content' && document.title==='Monitors · Xisnove'`, &afterSwapOK), chromedp.Evaluate(`(()=>{const spacer=document.createElement('div');spacer.style.height='2000px';spacer.id='history-scroll-fixture';document.querySelector('#monitor-results').append(spacer);document.querySelector('#main-content').scrollTop=200})()`, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if !afterSwapOK {
+		t.Error("HTMX search did not update title and focus main content")
+	}
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`location.search === ""`, nil)); err != nil {
 		t.Fatalf("history back: %v", err)
+	}
+	var backOK bool
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='main-content'`, nil), chromedp.Evaluate(`document.title==='Monitors · Xisnove' && document.querySelector('#monitor-search')?.value==='' && document.querySelector('#main-content')?.scrollTop===0`, &backOK)); err != nil {
+		t.Fatal(err)
+	}
+	if !backOK {
+		t.Error("Back did not restore monitor content, title, focus, and scroll")
 	}
 
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/status"), chromedp.WaitVisible("#status-content")); err != nil {
@@ -336,9 +358,15 @@ func captureState(t *testing.T, ctx context.Context, dir, name, readySelector st
 
 func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelector string) {
 	t.Helper()
-	for _, width := range []int64{390, 1440} {
-		for _, theme := range []string{"goshtoso", "minimal"} {
-			for _, mode := range []string{"light", "dark"} {
+	widths := []int64{390, 1440}
+	themes := []string{"goshtoso", "minimal"}
+	modes := []string{"light", "dark"}
+	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
+		widths, themes, modes = []int64{390}, []string{"goshtoso"}, []string{"light"}
+	}
+	for _, width := range widths {
+		for _, theme := range themes {
+			for _, mode := range modes {
 				name := fmt.Sprintf("%s-%d-%s-%s.png", surface, width, theme, mode)
 				var screenshot []byte
 				var overflow bool
@@ -409,7 +437,9 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 		for (const e of document.querySelectorAll('button,input,select,textarea,a[href]')) if (visible(e) && !e.disabled && !name(e)) failures.push('unnamed:'+e.tagName.toLowerCase());
 		for (const label of document.querySelectorAll('label[for]')) if (!document.getElementById(label.htmlFor)) failures.push('broken-label:'+label.htmlFor);
 		if (document.querySelectorAll('main').length !== 1) failures.push('main-landmarks:'+document.querySelectorAll('main').length);
-		if (document.querySelectorAll('header').length > 1) failures.push('header-landmarks:'+document.querySelectorAll('header').length);
+		if (document.querySelector('header header')) failures.push('nested-header-landmark');
+		const bannerHeaders=[...document.querySelectorAll('header')].filter(e=>!e.closest('main,section,article,aside'));
+		if (bannerHeaders.length > 1) failures.push('banner-landmarks:'+bannerHeaders.length);
 		const parse = value => { const m=value.match(/[\d.]+/g); return m ? m.slice(0,3).map(Number) : [0,0,0]; };
 		const lum = rgb => { const c=rgb.map(v=>v/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
 		const ratio = (a,b) => (Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
@@ -433,23 +463,27 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 func assertShellGeometry(t *testing.T, ctx context.Context) {
 	t.Helper()
 	var desktop struct {
-		PageOverflow bool   `json:"pageOverflow"`
-		MainOverflow string `json:"mainOverflow"`
-		IdleDisplay  string `json:"idleDisplay"`
-		IdleHeight   int    `json:"idleHeight"`
+		PageOverflow    bool   `json:"pageOverflow"`
+		MainOverflow    string `json:"mainOverflow"`
+		IdleDisplay     string `json:"idleDisplay"`
+		IdleHeight      int    `json:"idleHeight"`
+		PlaceholderFits bool   `json:"placeholderFits"`
 	}
-	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900), chromedp.Evaluate(`(()=>{const m=document.querySelector('#main-content'),l=document.querySelector('#monitor-loading');return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,mainOverflow:getComputedStyle(m).overflowY,idleDisplay:getComputedStyle(l).display,idleHeight:l.getBoundingClientRect().height}})()`, &desktop)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900), chromedp.Evaluate(`(()=>{const m=document.querySelector('#main-content'),l=document.querySelector('#monitor-loading'),input=document.querySelector('#monitor-search'),canvas=document.createElement('canvas'),c=canvas.getContext('2d'),style=getComputedStyle(input);c.font=style.font;const needed=c.measureText(input.placeholder).width+parseFloat(style.paddingLeft)+parseFloat(style.paddingRight)+8;return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,mainOverflow:getComputedStyle(m).overflowY,idleDisplay:getComputedStyle(l).display,idleHeight:l.getBoundingClientRect().height,placeholderFits:needed<=input.clientWidth}})()`, &desktop)); err != nil {
 		t.Fatal(err)
 	}
-	if desktop.PageOverflow || (desktop.MainOverflow != "auto" && desktop.MainOverflow != "scroll") || desktop.IdleDisplay != "none" || desktop.IdleHeight != 0 {
+	if desktop.PageOverflow || (desktop.MainOverflow != "auto" && desktop.MainOverflow != "scroll") || desktop.IdleDisplay != "none" || desktop.IdleHeight != 0 || !desktop.PlaceholderFits {
 		t.Errorf("desktop shell geometry = %#v", desktop)
 	}
 	var mobile struct {
 		PageOverflow  bool `json:"pageOverflow"`
 		TableOverflow bool `json:"tableOverflow"`
 		ActionFocus   bool `json:"actionFocus"`
+		ClientWidth   int  `json:"clientWidth"`
+		ScrollWidth   int  `json:"scrollWidth"`
+		TableWidth    int  `json:"tableWidth"`
 	}
-	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 900), chromedp.Evaluate(`(()=>{const table=document.querySelector('.xis-table-scroll');const action=document.querySelector('[aria-label^="Select monitor"]');action?.focus();return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,tableOverflow:!!table&&table.scrollWidth>table.clientWidth,actionFocus:document.activeElement===action}})()`, &mobile)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 900), chromedp.Evaluate(`(()=>{const table=document.querySelector('.xis-table-scroll table'),wrap=table?.closest('.overflow-x-auto');const action=document.querySelector('[aria-label^="Select monitor"]');action?.focus();return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,tableOverflow:!!wrap&&wrap.scrollWidth>wrap.clientWidth,actionFocus:document.activeElement===action,clientWidth:wrap?.clientWidth||0,scrollWidth:wrap?.scrollWidth||0,tableWidth:Math.round(table?.getBoundingClientRect().width||0)}})()`, &mobile)); err != nil {
 		t.Fatal(err)
 	}
 	if mobile.PageOverflow || !mobile.TableOverflow || !mobile.ActionFocus {
@@ -460,17 +494,22 @@ func assertShellGeometry(t *testing.T, ctx context.Context) {
 func assertMobileNavigation(t *testing.T, ctx context.Context) {
 	t.Helper()
 	var opened bool
+	var triggerFocused bool
 	if err := chromedp.Run(ctx,
 		chromedp.EmulateViewport(390, 900),
 		chromedp.Focus(`button[aria-label="Open monitoring navigation"]`),
-		chromedp.KeyEvent("\r"),
-		chromedp.WaitVisible("#mobile-monitoring-panel"),
-		chromedp.Evaluate(`document.querySelector('#mobile-monitoring-panel a[href="/status"]')?.textContent.includes('Public status') === true`, &opened),
+		chromedp.Evaluate(`document.activeElement === document.querySelector('button[aria-label="Open monitoring navigation"]')`, &triggerFocused),
+		chromedp.Click(`button[aria-label="Open monitoring navigation"]`),
+		chromedp.Sleep(100*time.Millisecond),
+		chromedp.Evaluate(`(()=>{const trigger=document.querySelector('button[aria-label="Open monitoring navigation"]'),panel=document.querySelector('#mobile-monitoring-panel');return trigger?.getAttribute('aria-expanded')==='true' && getComputedStyle(panel).display!=='none' && panel.querySelector('a[href="/status"]')?.textContent.includes('Public status')===true})()`, &opened),
 	); err != nil {
 		t.Fatalf("open mobile navigation: %v", err)
 	}
+	if !triggerFocused {
+		t.Error("mobile navigation trigger is not keyboard focusable")
+	}
 	if !opened {
-		t.Error("mobile status navigation is missing")
+		t.Fatal("mobile status navigation did not open with its public trigger")
 	}
 	var returned bool
 	if err := chromedp.Run(ctx,

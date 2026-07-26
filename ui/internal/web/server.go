@@ -77,6 +77,7 @@ func New(cfg Config) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
+	mux.HandleFunc("GET /ui/app.js", serveApplicationJS)
 	mux.HandleFunc("/", s.route)
 
 	var handler http.Handler = mux
@@ -86,6 +87,27 @@ func New(cfg Config) (http.Handler, error) {
 	handler = s.requestTimeout(handler)
 	handler = s.correlation(handler)
 	return handler, nil
+}
+
+const applicationJS = `(() => {
+  function focusMain() {
+    const main = document.getElementById("main-content");
+    if (!main) return;
+    main.scrollTop = 0;
+    main.focus({preventScroll: true});
+    const heading = main.querySelector("h1");
+    if (heading) document.title = heading.textContent.trim() + " · Xisnove";
+  }
+  document.addEventListener("htmx:afterSettle", focusMain);
+  document.addEventListener("htmx:historyRestore", () => setTimeout(focusMain, 0));
+  window.addEventListener("popstate", () => setTimeout(focusMain, 100));
+})();
+`
+
+func serveApplicationJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = io.WriteString(w, applicationJS)
 }
 
 func (s *server) route(w http.ResponseWriter, r *http.Request) {

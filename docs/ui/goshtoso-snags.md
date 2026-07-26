@@ -54,3 +54,18 @@ consumer that expects password semantics to remain safe without Alpine.
    its pseudo-version also encountered a transient `sum.golang.org` HTTP 500;
    a module-scoped direct Git fetch completed the pin. Ordinary `GOWORK=off go
    mod tidy`, generation, and tests then work without a local Goshtoso checkout.
+5. **Sidebar Overlay omits Escape and trigger-focus restoration.** The public
+   overlay supplies a labelled native trigger, backdrop, panel and Alpine open
+   state, but it does not close on Escape or return focus. Xisnove composes a
+   window Escape handler around the public component. Those contracts belong
+   in the component because every application drawer needs them.
+6. **Navbar renders action components twice.** Desktop and mobile action slots
+   render the same component value into the DOM simultaneously. Stateful or
+   labelled controls therefore duplicate IDs even when one copy is visually
+   hidden. Xisnove uses an application top bar inside AppShell and keeps Navbar
+   for public links without actions.
+7. **Navbar cannot be the AppShell Header value without nested banner
+   landmarks.** Both components render a `header`. The application-pattern
+   guidance says AppShell Header is content rather than another header, so
+   Xisnove uses a native top-bar container there. A public Navbar content-only
+   mode would remove this composition trap.

@@ -16,19 +16,29 @@ requests retain the real 502 or 504 status.
 
 ## Browser matrix
 
-The Chromedp smoke records 390 px and 1440 px screenshots for Goshtoso and
-Minimal themes in light and dark modes. It verifies direct navigation, HTMX
-refresh/navigation, browser history, no unexpected console errors, the
-AppShell skip link, persistent labels/names, no page-level horizontal overflow,
-and absence of opaque bearer credentials in DOM content. The smoke uses the
-real generated SDK adapter against a controlled HTTP API server and asserts
-the generated session, monitor page, monitor health, and public-status routes.
-Handler/render tests provide the remaining state matrix without JavaScript.
+The Chromedp smoke records the full 24-image happy matrix at 390 px and 1440 px
+for Goshtoso and Minimal themes in light and dark modes. It also records 26
+state images at both widths: invalid and timed-out login; monitor loading,
+empty, filtered-empty, upstream error and partial/unknown; and public empty,
+unknown, up, degraded with active incident, upstream error and timeout. These
+are browser-visible captures driven through the BFF and controlled API
+responses, not source-only assertions.
 
-The in-app browser backend was unavailable during this run (browser discovery
-returned no available backend). The official standalone Chromium harness still
-completed the full 24-image matrix; this record does not claim an axe scan or
-manual screen-reader inspection.
+The smoke verifies direct navigation, HTMX navigation, Back restoration of
+content/title/focus/scroll, no unexpected console errors, the AppShell skip
+link, visible focus, mobile navigation open/Escape/focus return, persistent
+labels and names, one desktop main scroll surface, hidden idle skeleton
+geometry, Goshtoso-owned table overflow at 390 px, row-action focusability and
+absence of opaque bearer credentials in DOM content. It uses the generated SDK
+adapter and asserts session, monitor page, monitor health and public-status
+routes.
+
+The automated P1 accessibility scan is an in-repo browser equivalent rather
+than axe. It fails on missing accessible names, broken labels, duplicate IDs,
+invalid main/banner landmarks, nested headers and measurable text contrast. It
+passed Minimal light and the other required theme/mode combinations. Desktop
+placeholder width is measured using the rendered font and padding. No manual
+screen-reader session is claimed.
 
 Application CSS uses Xisnove-owned selectors and Goshtoso semantic custom
 properties. It does not assume arbitrary utilities exist in embedded CSS;

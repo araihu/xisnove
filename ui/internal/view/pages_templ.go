@@ -93,7 +93,7 @@ func Document(title string, content templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<style>\n\t\t\t\t:root { --xis-gap: 1rem; }\n\t\t\t\tbody { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }\n\t\t\t\t.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }\n\t\t\t\t.xis-brand { font-size: 1.25rem; font-weight: 700; color: var(--color-on-surface-strong); }\n\t\t\t\t.dark .xis-brand { color: var(--color-on-surface-dark-strong); }\n\t\t\t\t.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; }\n\t\t\t\t.xis-stack { display: grid; gap: var(--xis-gap); }\n\t\t\t\t.xis-theme-controls { display: flex; align-items: end; gap: .5rem; min-width: 0; }\n\t\t\t\t.xis-field { display: grid; gap: .25rem; font-size: .875rem; }\n\t\t\t\t.xis-select, .xis-input { min-height: 2.75rem; min-width: 0; max-width: 100%; border: 1px solid var(--color-outline-strong, var(--color-outline)); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }\n\t\t\t\t.dark .xis-select, .dark .xis-input { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }\n\t\t\t\t.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }\n\t\t\t\t.xis-results { display: grid; gap: 1rem; min-height: 16rem; }\n\t\t\t\t.xis-table-scroll { overflow-x: auto; }\n\t\t\t\t.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }\n\t\t\t\t.dark .xis-meta { color: var(--color-on-surface-dark-muted); }\n\t\t\t\t.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }\n\t\t\t\t.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }\n\t\t\t\t.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t\t\t.xis-password { width: 100%; }\n\t\t\t\t.xis-skeleton { display: none; min-height: 12rem; }\n\t\t\t\t.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }\n\t\t\t\t.xis-mobile-nav { display: none; }\n\t\t\t\t@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-public-row { grid-template-columns: 1fr; } .xis-mobile-nav { display: block; } }\n\t\t\t</style></head><body>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<script src=\"/ui/app.js\" defer></script><style>\n\t\t\t\t:root { --xis-gap: 1rem; }\n\t\t\t\tbody { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }\n\t\t\t\t.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }\n\t\t\t\t.xis-brand { font-size: 1.25rem; font-weight: 700; color: var(--color-on-surface-strong); }\n\t\t\t\t.dark .xis-brand { color: var(--color-on-surface-dark-strong); }\n\t\t\t\t.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; }\n\t\t\t\t.xis-stack { display: grid; gap: var(--xis-gap); }\n\t\t\t\t.xis-theme-controls { display: flex; align-items: end; gap: .5rem; min-width: 0; }\n\t\t\t\t.xis-field { display: grid; gap: .25rem; font-size: .875rem; }\n\t\t\t\t.xis-monitor-search-field { min-width: 19rem; }\n\t\t\t\t.xis-select, .xis-input { min-height: 2.75rem; min-width: 0; max-width: 100%; border: 1px solid var(--color-outline-strong, var(--color-outline)); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }\n\t\t\t\t.dark .xis-select, .dark .xis-input { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }\n\t\t\t\t.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }\n\t\t\t\t.xis-results { display: grid; gap: 1rem; min-width: 0; min-height: 16rem; }\n\t\t\t\t.xis-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }\n\t\t\t\t.xis-table-scroll table { min-width: 48rem; }\n\t\t\t\t.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }\n\t\t\t\t.dark .xis-meta { color: var(--color-on-surface-dark-muted); }\n\t\t\t\t.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }\n\t\t\t\t.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }\n\t\t\t\t.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t\t\t.xis-password { width: 100%; }\n\t\t\t\t.xis-skeleton { display: none; min-height: 12rem; }\n\t\t\t\t.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }\n\t\t\t\t.xis-mobile-nav { display: none; }\n\t\t\t\t.xis-topbar { min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--color-outline); background: var(--color-surface); }\n\t\t\t\t.dark .xis-topbar { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark); }\n\t\t\t\t.xis-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: .75rem; }\n\t\t\t\t@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-public-row { grid-template-columns: 1fr; } .xis-mobile-nav { display: block; } }\n\t\t\t</style></head><body>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -101,7 +101,7 @@ func Document(title string, content templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<script>\n\t\t\t\tdocument.addEventListener(\"htmx:afterSwap\", function (event) {\n\t\t\t\t\tconst main = document.getElementById(\"main-content\");\n\t\t\t\t\tif (!main || !(event.detail.target === main || main.contains(event.detail.target))) return;\n\t\t\t\t\tmain.scrollTop = 0;\n\t\t\t\t\tmain.focus({preventScroll: true});\n\t\t\t\t\tconst heading = main.querySelector(\"h1\");\n\t\t\t\t\tif (heading) document.title = heading.textContent.trim() + \" · Xisnove\";\n\t\t\t\t});\n\t\t\t\tdocument.addEventListener(\"htmx:historyRestore\", function () {\n\t\t\t\t\tconst main = document.getElementById(\"main-content\");\n\t\t\t\t\tif (main) main.focus({preventScroll: true});\n\t\t\t\t});\n\t\t\t</script></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -267,7 +267,7 @@ func LoginForm(csrfToken string) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 137, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 129, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -343,7 +343,7 @@ func LogoutForm(csrfToken string) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 148, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 140, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
@@ -476,11 +476,27 @@ func TopBar(csrfToken string) templ.Component {
 			templ_7745c5c3_Var15 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/monitors", Actions: []navbar.ActionItem{
-			{Content: MobileNavigation(), Position: navbar.ActionLeft},
-			{Content: ThemeControls(), Position: navbar.ActionRight},
-			{Content: LogoutForm(csrfToken), Position: navbar.ActionRight},
-		}}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"xis-topbar\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = MobileNavigation().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<a class=\"xis-brand xis-native-link\" href=\"/monitors\">Xisnove</a><div class=\"xis-topbar-actions\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ThemeControls().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = LogoutForm(csrfToken).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -509,7 +525,7 @@ func MobileNavigation() templ.Component {
 			templ_7745c5c3_Var16 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"xis-mobile-nav\" x-on:keydown.escape.window=\"const trigger = $el.querySelector('button[aria-controls][aria-expanded=true]'); if (trigger) { trigger.click(); trigger.focus(); }\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"xis-mobile-nav\" x-on:keydown.escape.window=\"const trigger = $el.querySelector('button[aria-controls][aria-expanded=true]'); if (trigger) { trigger.click(); trigger.focus(); }\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -524,7 +540,7 @@ func MobileNavigation() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -611,7 +627,7 @@ func MonitorErrorContent(problem Problem) templ.Component {
 			templ_7745c5c3_Var19 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<section id=\"monitor-content\" class=\"xis-content xis-stack\" aria-labelledby=\"monitor-heading\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<section id=\"monitor-content\" class=\"xis-content xis-stack\" aria-labelledby=\"monitor-heading\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -623,33 +639,33 @@ func MonitorErrorContent(problem Problem) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<a class=\"xis-native-link\" href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<a class=\"xis-native-link\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 templ.SafeURL
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(problem.RetryURL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 202, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 194, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" hx-get=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(problem.RetryURL)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 202, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 194, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" hx-target=\"#main-content\" hx-push-url=\"true\">Retry</a></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" hx-target=\"#main-content\" hx-push-url=\"true\">Retry</a></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -678,7 +694,7 @@ func MonitorContent(data MonitorList) templ.Component {
 			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<section id=\"monitor-content\" class=\"xis-content xis-stack\" aria-labelledby=\"monitor-heading\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<section id=\"monitor-content\" class=\"xis-content xis-stack\" aria-labelledby=\"monitor-heading\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -690,7 +706,7 @@ func MonitorContent(data MonitorList) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div id=\"monitor-loading\" class=\"htmx-indicator xis-skeleton\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div id=\"monitor-loading\" class=\"htmx-indicator xis-skeleton\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -698,7 +714,7 @@ func MonitorContent(data MonitorList) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div><div id=\"monitor-results\" class=\"xis-results\" aria-live=\"polite\" aria-busy=\"false\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</div><div id=\"monitor-results\" class=\"xis-results\" aria-live=\"polite\" aria-busy=\"false\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -721,7 +737,7 @@ func MonitorContent(data MonitorList) templ.Component {
 				}
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div class=\"xis-table-scroll\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div class=\"xis-table-scroll\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -729,7 +745,7 @@ func MonitorContent(data MonitorList) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -740,7 +756,7 @@ func MonitorContent(data MonitorList) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -769,20 +785,20 @@ func MonitorSearch(query string) templ.Component {
 			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<form method=\"get\" action=\"/monitors\" hx-get=\"/monitors\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\"#monitor-loading\" class=\"xis-theme-controls\"><label class=\"xis-field\" for=\"monitor-search\">Search monitors <input class=\"xis-input\" id=\"monitor-search\" type=\"search\" name=\"q\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<form method=\"get\" action=\"/monitors\" hx-get=\"/monitors\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\"#monitor-loading\" class=\"xis-theme-controls\"><label class=\"xis-field xis-monitor-search-field\" for=\"monitor-search\">Search monitors <input class=\"xis-input\" id=\"monitor-search\" type=\"search\" name=\"q\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(query)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 236, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 228, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" placeholder=\"Name, kind, or description\"></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\" placeholder=\"Name, kind, or description\"></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -798,7 +814,7 @@ func MonitorSearch(query string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "Search ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "Search ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -808,7 +824,7 @@ func MonitorSearch(query string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -837,33 +853,33 @@ func MonitorRefresh(data MonitorList) templ.Component {
 			templ_7745c5c3_Var26 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<a class=\"xis-native-link\" href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<a class=\"xis-native-link\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var27 templ.SafeURL
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(monitorURL(data.Query, data.Cursor, data.Selected)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 243, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 235, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" hx-get=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitorURL(data.Query, data.Cursor, data.Selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 243, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 235, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\"#monitor-loading\">Refresh</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\"#monitor-loading\">Refresh</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -904,7 +920,7 @@ func ClearSearch() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "Clear search ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "Clear search ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -939,33 +955,33 @@ func NextPage(data MonitorList) templ.Component {
 			templ_7745c5c3_Var31 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<a class=\"xis-native-link\" href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<a class=\"xis-native-link\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var32 templ.SafeURL
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 249, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 241, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" hx-get=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitorURL(data.Query, data.NextCursor, data.Selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 249, Col: 170}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 241, Col: 170}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\"#monitor-loading\">Next page</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\"#monitor-loading\">Next page</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1006,7 +1022,7 @@ func MonitorActions(data MonitorList, id string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "Select ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "Select ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1099,7 +1115,7 @@ func PublicStatusErrorShell(problem Problem) templ.Component {
 			templ_7745c5c3_Var38 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}, Actions: []navbar.ActionItem{{Content: ThemeControls(), Position: navbar.ActionRight}}}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1132,7 +1148,7 @@ func PublicStatusShell(data sdk.PublicStatusPage) templ.Component {
 			templ_7745c5c3_Var39 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}, Actions: []navbar.ActionItem{{Content: ThemeControls(), Position: navbar.ActionRight}}}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1165,7 +1181,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 			templ_7745c5c3_Var40 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<main id=\"status-content\" aria-live=\"polite\" class=\"xis-content xis-stack\"><div class=\"xis-status-header\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<main id=\"status-content\" aria-live=\"polite\" class=\"xis-content xis-stack\"><div class=\"xis-status-header\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1173,7 +1189,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<a class=\"xis-native-link\" href=\"/status\" hx-get=\"/status\" hx-target=\"#status-content\" hx-swap=\"outerHTML\" hx-indicator=\"#status-loading\">Refresh</a></div><div id=\"status-loading\" class=\"htmx-indicator\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<a class=\"xis-native-link\" href=\"/status\" hx-get=\"/status\" hx-target=\"#status-content\" hx-swap=\"outerHTML\" hx-indicator=\"#status-loading\">Refresh</a></div><div id=\"status-loading\" class=\"htmx-indicator\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1181,7 +1197,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1195,51 +1211,51 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<section aria-label=\"Public monitors\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<section aria-label=\"Public monitors\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, monitor := range data.Monitors {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<article id=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<article id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue("monitor-" + monitor.Id.String())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 280, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 272, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" class=\"xis-public-row\"><div><h2>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" class=\"xis-public-row\"><div><h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(monitor.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 281, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 273, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</h2><p class=\"xis-meta\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</h2><p class=\"xis-meta\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(monitor.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 281, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 273, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1247,12 +1263,12 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</article>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</article>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1263,7 +1279,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</main>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1292,7 +1308,7 @@ func PublicStatusError(problem Problem) templ.Component {
 			templ_7745c5c3_Var44 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<main id=\"status-content\" aria-live=\"polite\" class=\"xis-content xis-stack\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<main id=\"status-content\" aria-live=\"polite\" class=\"xis-content xis-stack\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1304,7 +1320,7 @@ func PublicStatusError(problem Problem) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<a class=\"xis-native-link\" href=\"/status\" hx-get=\"/status\" hx-target=\"#status-content\" hx-swap=\"outerHTML\">Retry</a></main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<a class=\"xis-native-link\" href=\"/status\" hx-get=\"/status\" hx-target=\"#status-content\" hx-swap=\"outerHTML\">Retry</a></main>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1362,7 +1378,7 @@ func ProblemContent(problem Problem) templ.Component {
 			templ_7745c5c3_Var46 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<main id=\"problem-content\" class=\"xis-content xis-stack\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<main id=\"problem-content\" class=\"xis-content xis-stack\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1370,33 +1386,33 @@ func ProblemContent(problem Problem) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<div class=\"xis-meta\"><p>Error code: <code>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div class=\"xis-meta\"><p>Error code: <code>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(problem.Code)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 305, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 297, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</code></p><p>Correlation ID: <code>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</code></p><p>Correlation ID: <code>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(problem.CorrelationID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 305, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 297, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</code></p></div></main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</code></p></div></main>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
