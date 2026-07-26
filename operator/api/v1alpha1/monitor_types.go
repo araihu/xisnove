@@ -106,7 +106,7 @@ type MonitorSpec struct {
 }
 
 type MonitorHealthStatus struct {
-	// +kubebuilder:validation:Enum=unknown;up;degraded;down
+	// +kubebuilder:validation:Enum=pending;unknown;up;degraded;down
 	State              string       `json:"state,omitempty"`
 	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
 }

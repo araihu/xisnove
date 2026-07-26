@@ -94,6 +94,25 @@ jobs:
             agent/go.sum
       - run: go test -race ./agent/...
 
+  operator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            go.sum
+            operator/go.sum
+      - name: Verify generated operator artifacts
+        run: make -C operator verify
+      - name: Run operator envtest journeys with pinned assets
+        run: make -C operator envtest
+      - name: Run standalone operator race suite
+        run: GOWORK=off go -C operator test -race ./...
+      - name: Vet standalone operator module
+        run: GOWORK=off go -C operator vet ./...
+
   cli:
     runs-on: ubuntu-latest
     steps:
