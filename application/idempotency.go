@@ -13,6 +13,8 @@ import (
 const (
 	MaxIdempotencyKeyBytes     = 255
 	DefaultIdempotencyLifetime = 24 * time.Hour
+	idempotencyMaxAttempts     = 5
+	idempotencyRetryDelay      = 5 * time.Millisecond
 )
 
 var (
@@ -31,6 +33,10 @@ type IdempotencyRequest struct {
 	CredentialIssuance bool
 }
 
+// IdempotencyMutation must keep all side effects inside the supplied
+// transaction-scoped repositories. A non-credential mutation may be invoked
+// again after a retryable transaction abort, so it must be transaction-only
+// and retry-safe. Credential mutations are never invoked more than once.
 type IdempotencyMutation[T any] func(context.Context, Repositories) (resourceID string, resource T, err error)
 
 type IdempotencyLoader[T any] func(context.Context, Repositories, string) (T, error)
@@ -61,93 +67,127 @@ func (s *IdempotencyService[T]) Execute(
 		return zero, err
 	}
 
-	var result T
-	err = s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
-		databaseNow, err := repositories.Runs.DatabaseNow(ctx)
-		if err != nil {
-			return fmt.Errorf("read database time for idempotency: %w", err)
+	for attempt := 0; attempt < idempotencyMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return zero, err
 		}
-		databaseNow = databaseNow.UTC()
-		record, err := repositories.Idempotency.Get(
-			ctx,
-			request.Principal.CredentialID,
-			request.OperationID,
-			request.Key,
-			databaseNow,
-		)
-		switch {
-		case err == nil:
-			loaded, replayErr := replayIdempotentResource(ctx, repositories, request, requestHash, record, load)
-			if replayErr != nil {
-				return replayErr
+		result := zero
+		var mutationConflict error
+		mutationStarted := false
+		err = s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+			databaseNow, err := repositories.Runs.DatabaseNow(ctx)
+			if err != nil {
+				return fmt.Errorf("read database time for idempotency: %w", err)
 			}
-			result = loaded
+			databaseNow = databaseNow.UTC()
+			record, err := repositories.Idempotency.Get(
+				ctx,
+				request.Principal.CredentialID,
+				request.OperationID,
+				request.Key,
+				databaseNow,
+			)
+			switch {
+			case err == nil:
+				loaded, replayErr := replayIdempotentResource(ctx, repositories, request, requestHash, record, load)
+				if replayErr != nil {
+					return replayErr
+				}
+				result = loaded
+				return nil
+			case !errors.Is(err, ErrNotFound):
+				return fmt.Errorf("read idempotency record: %w", err)
+			}
+
+			if request.CredentialIssuance {
+				err = repositories.Idempotency.Create(ctx, newIdempotencyRecord(request, requestHash, request.ResourceID, databaseNow))
+				if errors.Is(err, ErrConflict) {
+					return errIdempotencyInsertConflict
+				}
+				if err != nil {
+					return fmt.Errorf("reserve credential idempotency record: %w", err)
+				}
+			}
+
+			mutationStarted = true
+			resourceID, created, err := mutate(ctx, repositories)
+			if err != nil {
+				if errors.Is(err, ErrConflict) {
+					mutationConflict = err
+					return errIdempotencyInsertConflict
+				}
+				return err
+			}
+			if resourceID == "" {
+				return errors.New("idempotent mutation returned an empty resource ID")
+			}
+			if request.CredentialIssuance && resourceID != request.ResourceID {
+				return errors.New("credential mutation returned an unexpected resource ID")
+			}
+			result = created
+			if !request.CredentialIssuance {
+				err = repositories.Idempotency.Create(ctx, newIdempotencyRecord(request, requestHash, resourceID, databaseNow))
+				if errors.Is(err, ErrConflict) {
+					return errIdempotencyInsertConflict
+				}
+				if err != nil {
+					return fmt.Errorf("create idempotency record: %w", err)
+				}
+			}
 			return nil
-		case !errors.Is(err, ErrNotFound):
-			return fmt.Errorf("read idempotency record: %w", err)
+		})
+		if err == nil {
+			return result, nil
 		}
-
-		if request.CredentialIssuance {
-			err = repositories.Idempotency.Create(ctx, newIdempotencyRecord(request, requestHash, request.ResourceID, databaseNow))
-			if errors.Is(err, ErrConflict) {
-				return errIdempotencyInsertConflict
-			}
+		if errors.Is(err, errIdempotencyInsertConflict) {
+			err = s.store.View(ctx, func(ctx context.Context, repositories Repositories) error {
+				databaseNow, err := repositories.Runs.DatabaseNow(ctx)
+				if err != nil {
+					return fmt.Errorf("read database time for idempotency conflict: %w", err)
+				}
+				record, err := repositories.Idempotency.Get(
+					ctx,
+					request.Principal.CredentialID,
+					request.OperationID,
+					request.Key,
+					databaseNow.UTC(),
+				)
+				if err != nil {
+					if errors.Is(err, ErrNotFound) && mutationConflict != nil {
+						return mutationConflict
+					}
+					return fmt.Errorf("read winning idempotency record: %w", err)
+				}
+				result, err = replayIdempotentResource(ctx, repositories, request, requestHash, record, load)
+				return err
+			})
 			if err != nil {
-				return fmt.Errorf("reserve credential idempotency record: %w", err)
+				return zero, err
 			}
+			return result, nil
 		}
+		if !errors.Is(err, ErrRetryableTransaction) || (request.CredentialIssuance && mutationStarted) {
+			return zero, err
+		}
+		if attempt == idempotencyMaxAttempts-1 {
+			return zero, err
+		}
+		if err := waitForIdempotencyRetry(ctx); err != nil {
+			return zero, err
+		}
+	}
+	return zero, errors.New("idempotency retry attempts exhausted")
+}
 
-		resourceID, created, err := mutate(ctx, repositories)
-		if err != nil {
-			return err
-		}
-		if resourceID == "" {
-			return errors.New("idempotent mutation returned an empty resource ID")
-		}
-		if request.CredentialIssuance && resourceID != request.ResourceID {
-			return errors.New("credential mutation returned an unexpected resource ID")
-		}
-		result = created
-		if !request.CredentialIssuance {
-			err = repositories.Idempotency.Create(ctx, newIdempotencyRecord(request, requestHash, resourceID, databaseNow))
-			if errors.Is(err, ErrConflict) {
-				return errIdempotencyInsertConflict
-			}
-			if err != nil {
-				return fmt.Errorf("create idempotency record: %w", err)
-			}
-		}
+func waitForIdempotencyRetry(ctx context.Context) error {
+	timer := time.NewTimer(idempotencyRetryDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
 		return nil
-	})
-	if err == nil {
-		return result, nil
 	}
-	if !errors.Is(err, errIdempotencyInsertConflict) {
-		return zero, err
-	}
-
-	err = s.store.View(ctx, func(ctx context.Context, repositories Repositories) error {
-		databaseNow, err := repositories.Runs.DatabaseNow(ctx)
-		if err != nil {
-			return fmt.Errorf("read database time for idempotency conflict: %w", err)
-		}
-		record, err := repositories.Idempotency.Get(
-			ctx,
-			request.Principal.CredentialID,
-			request.OperationID,
-			request.Key,
-			databaseNow.UTC(),
-		)
-		if err != nil {
-			return fmt.Errorf("read winning idempotency record: %w", err)
-		}
-		result, err = replayIdempotentResource(ctx, repositories, request, requestHash, record, load)
-		return err
-	})
-	if err != nil {
-		return zero, err
-	}
-	return result, nil
 }
 
 func CanonicalRequestFingerprint(request any) (string, error) {

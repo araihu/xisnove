@@ -58,6 +58,8 @@ type MaintenanceRepository = port.MaintenanceRepository
 type AuditRepository = port.AuditRepository
 type RetentionRepository = port.RetentionRepository
 
+var ErrRetryableTransaction = port.ErrRetryableTransaction
+
 const (
 	DefaultPageLimit                    = port.DefaultPageLimit
 	MaxPageLimit                        = port.MaxPageLimit

@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -222,6 +223,207 @@ func TestIdempotencyConflictRollsBackAndReloadsWinnerFromFreshView(t *testing.T)
 	}
 }
 
+func TestIdempotencyMutationConflictRollsBackAndReloadsWinnerFromFreshView(t *testing.T) {
+	request := application.IdempotencyRequest{
+		Principal:   application.Principal{CredentialID: "session-1"},
+		OperationID: "createLocation", Key: "same-location", ResourceKind: "location",
+		Request: struct {
+			Name string `json:"name"`
+		}{Name: "homelab"},
+	}
+	requestHash, err := application.CanonicalRequestFingerprint(request.Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newForcedIdempotencyConflictStore(application.IdempotencyRecord{
+		PrincipalID: "session-1", OperationID: "createLocation", Key: "same-location",
+		RequestHash: requestHash, ResourceKind: "location", ResourceID: "winner-id",
+		CreatedAt: time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC),
+		ExpiresAt: time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC),
+	})
+	service := application.NewIdempotencyService[string](store)
+	result, err := service.Execute(context.Background(), request,
+		func(_ context.Context, _ application.Repositories) (string, string, error) {
+			store.resources["loser-id"] = "loser"
+			return "", "", fmt.Errorf("create duplicate location: %w", application.ErrConflict)
+		},
+		func(_ context.Context, _ application.Repositories, id string) (string, error) {
+			return store.resources[id], nil
+		},
+	)
+	if err != nil || result != "winner" {
+		t.Fatalf("Execute() = %q, %v, want durable winner", result, err)
+	}
+	if store.transactCalls != 1 || store.viewCalls != 1 || store.transactionGets != 1 || store.creates != 0 || store.viewGets != 1 {
+		t.Fatalf("mutation-conflict path = transact:%d view:%d tx-get:%d create:%d view-get:%d",
+			store.transactCalls, store.viewCalls, store.transactionGets, store.creates, store.viewGets)
+	}
+	if _, retained := store.resources["loser-id"]; retained {
+		t.Fatal("mutation-conflict loser resource was not rolled back")
+	}
+}
+
+func TestIdempotencyMutationConflictWithoutWinnerReturnsOriginalError(t *testing.T) {
+	request := application.IdempotencyRequest{
+		Principal:   application.Principal{CredentialID: "session-1"},
+		OperationID: "createLocation", Key: "domain-conflict", ResourceKind: "location",
+		Request: struct {
+			Name string `json:"name"`
+		}{Name: "existing"},
+	}
+	store := newForcedIdempotencyConflictStore(application.IdempotencyRecord{
+		CreatedAt: time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC),
+	})
+	store.winnerAvailable = false
+	store.resources = make(map[string]string)
+	service := application.NewIdempotencyService[string](store)
+	wantErr := fmt.Errorf("location name already exists: %w", application.ErrConflict)
+	_, err := service.Execute(context.Background(), request,
+		func(_ context.Context, _ application.Repositories) (string, string, error) {
+			store.resources["loser-id"] = "loser"
+			return "", "", wantErr
+		},
+		nil,
+	)
+	if err != wantErr {
+		t.Fatalf("Execute() error = %v, want original %v", err, wantErr)
+	}
+	if store.transactCalls != 1 || store.viewCalls != 1 || store.viewGets != 1 {
+		t.Fatalf("mutation-conflict miss path = transact:%d view:%d view-get:%d", store.transactCalls, store.viewCalls, store.viewGets)
+	}
+	if _, retained := store.resources["loser-id"]; retained {
+		t.Fatal("domain-conflict loser resource was not rolled back")
+	}
+}
+
+func TestIdempotencyRetriesTransactionThenReplaysWinner(t *testing.T) {
+	request := retryIdempotencyRequest(false)
+	requestHash, err := application.CanonicalRequestFingerprint(request.Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &retryIdempotencyRepository{}
+	store := newRetryScriptStore(repository)
+	winner := application.IdempotencyRecord{
+		PrincipalID: request.Principal.CredentialID, OperationID: request.OperationID, Key: request.Key,
+		RequestHash: requestHash, ResourceKind: request.ResourceKind, ResourceID: "winner-id",
+		CreatedAt: store.now, ExpiresAt: store.now.Add(time.Hour),
+	}
+	store.transact = func(call int, ctx context.Context, fn func(context.Context, application.Repositories) error) error {
+		if err := fn(ctx, store.repositories()); err != nil {
+			return err
+		}
+		if call == 1 {
+			repository.record = &winner
+			return application.ErrRetryableTransaction
+		}
+		return nil
+	}
+	service := application.NewIdempotencyService[string](store)
+	mutations := 0
+	result, err := service.Execute(context.Background(), request,
+		func(context.Context, application.Repositories) (string, string, error) {
+			mutations++
+			return "loser-id", "loser", nil
+		},
+		func(_ context.Context, _ application.Repositories, id string) (string, error) {
+			if id != "winner-id" {
+				t.Fatalf("loader ID = %q, want winner-id", id)
+			}
+			return "winner", nil
+		},
+	)
+	if err != nil || result != "winner" {
+		t.Fatalf("Execute() = %q, %v", result, err)
+	}
+	if store.transactCalls != 2 || mutations != 1 || repository.gets != 2 {
+		t.Fatalf("retry path = %d transactions, %d mutations, %d gets", store.transactCalls, mutations, repository.gets)
+	}
+}
+
+func TestIdempotencyRetryExhaustionReturnsLastError(t *testing.T) {
+	repository := &retryIdempotencyRepository{}
+	store := newRetryScriptStore(repository)
+	wantErr := fmt.Errorf("serialization exhausted: %w", application.ErrRetryableTransaction)
+	store.transact = func(int, context.Context, func(context.Context, application.Repositories) error) error {
+		return wantErr
+	}
+	service := application.NewIdempotencyService[string](store)
+	_, err := service.Execute(context.Background(), retryIdempotencyRequest(false),
+		func(context.Context, application.Repositories) (string, string, error) {
+			t.Fatal("mutation ran while transaction admission failed")
+			return "", "", nil
+		}, nil,
+	)
+	if err != wantErr || store.transactCalls != 5 {
+		t.Fatalf("Execute() = %v after %d attempts, want original final error after 5", err, store.transactCalls)
+	}
+}
+
+func TestIdempotencyRetryWaitHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	store := newRetryScriptStore(&retryIdempotencyRepository{})
+	store.transact = func(int, context.Context, func(context.Context, application.Repositories) error) error {
+		cancel()
+		return application.ErrRetryableTransaction
+	}
+	service := application.NewIdempotencyService[string](store)
+	_, err := service.Execute(ctx, retryIdempotencyRequest(false),
+		func(context.Context, application.Repositories) (string, string, error) {
+			return "resource-id", "resource", nil
+		}, nil,
+	)
+	if err != context.Canceled || store.transactCalls != 1 {
+		t.Fatalf("Execute() = %v after %d attempts, want context cancellation during wait", err, store.transactCalls)
+	}
+}
+
+func TestCredentialIdempotencyRetriesBeforeReservationAndMutation(t *testing.T) {
+	repository := &retryIdempotencyRepository{}
+	store := newRetryScriptStore(repository)
+	store.transact = func(call int, ctx context.Context, fn func(context.Context, application.Repositories) error) error {
+		if call == 1 {
+			return application.ErrRetryableTransaction
+		}
+		return fn(ctx, store.repositories())
+	}
+	service := application.NewIdempotencyService[string](store)
+	mutations := 0
+	result, err := service.Execute(context.Background(), retryIdempotencyRequest(true),
+		func(context.Context, application.Repositories) (string, string, error) {
+			mutations++
+			return "credential-id", "secret-once", nil
+		}, nil,
+	)
+	if err != nil || result != "secret-once" || store.transactCalls != 2 || mutations != 1 || repository.creates != 1 {
+		t.Fatalf("Execute() = %q, %v; transactions=%d mutations=%d reservations=%d",
+			result, err, store.transactCalls, mutations, repository.creates)
+	}
+}
+
+func TestCredentialIdempotencyDoesNotRetryAfterMutationStarts(t *testing.T) {
+	repository := &retryIdempotencyRepository{}
+	store := newRetryScriptStore(repository)
+	store.transact = func(_ int, ctx context.Context, fn func(context.Context, application.Repositories) error) error {
+		if err := fn(ctx, store.repositories()); err != nil {
+			return err
+		}
+		repository.record = nil
+		return application.ErrRetryableTransaction
+	}
+	service := application.NewIdempotencyService[string](store)
+	mutations := 0
+	_, err := service.Execute(context.Background(), retryIdempotencyRequest(true),
+		func(context.Context, application.Repositories) (string, string, error) {
+			mutations++
+			return "credential-id", "secret-once", nil
+		}, nil,
+	)
+	if err != application.ErrRetryableTransaction || store.transactCalls != 1 || mutations != 1 {
+		t.Fatalf("Execute() = %v; transactions=%d mutations=%d, want no second mint", err, store.transactCalls, mutations)
+	}
+}
+
 func TestIdempotencyRollbackLeavesNoRecord(t *testing.T) {
 	store := newIdempotencyStore()
 	service := application.NewIdempotencyService[string](store)
@@ -429,6 +631,78 @@ func cloneStrings(source map[string]string) map[string]string {
 	return clone
 }
 
+func retryIdempotencyRequest(credential bool) application.IdempotencyRequest {
+	request := application.IdempotencyRequest{
+		Principal:   application.Principal{CredentialID: "session-1"},
+		OperationID: "createLocation", Key: "retryable", ResourceKind: "location",
+		Request: struct {
+			Name string `json:"name"`
+		}{Name: "homelab"},
+	}
+	if credential {
+		request.OperationID = "createAPIToken"
+		request.ResourceKind = "api-token"
+		request.ResourceID = "credential-id"
+		request.CredentialIssuance = true
+	}
+	return request
+}
+
+type retryScriptStore struct {
+	now           time.Time
+	repository    *retryIdempotencyRepository
+	transactCalls int
+	viewCalls     int
+	transact      func(int, context.Context, func(context.Context, application.Repositories) error) error
+}
+
+func newRetryScriptStore(repository *retryIdempotencyRepository) *retryScriptStore {
+	return &retryScriptStore{
+		now: time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC), repository: repository,
+	}
+}
+
+func (s *retryScriptStore) Transact(ctx context.Context, fn func(context.Context, application.Repositories) error) error {
+	s.transactCalls++
+	return s.transact(s.transactCalls, ctx, fn)
+}
+
+func (s *retryScriptStore) View(ctx context.Context, fn func(context.Context, application.Repositories) error) error {
+	s.viewCalls++
+	return fn(ctx, s.repositories())
+}
+
+func (s *retryScriptStore) repositories() application.Repositories {
+	return application.Repositories{
+		Runs: idempotencyRunRepository{s.now}, Idempotency: s.repository,
+	}
+}
+
+type retryIdempotencyRepository struct {
+	record  *application.IdempotencyRecord
+	gets    int
+	creates int
+}
+
+func (r *retryIdempotencyRepository) Get(context.Context, string, string, string, time.Time) (application.IdempotencyRecord, error) {
+	r.gets++
+	if r.record == nil {
+		return application.IdempotencyRecord{}, application.ErrNotFound
+	}
+	return *r.record, nil
+}
+
+func (r *retryIdempotencyRepository) Create(_ context.Context, record application.IdempotencyRecord) error {
+	r.creates++
+	clone := record
+	r.record = &clone
+	return nil
+}
+
+func (*retryIdempotencyRepository) DeleteExpired(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
+
 type forcedIdempotencyConflictStore struct {
 	now             time.Time
 	winner          application.IdempotencyRecord
@@ -439,12 +713,13 @@ type forcedIdempotencyConflictStore struct {
 	transactionGets int
 	viewGets        int
 	creates         int
+	winnerAvailable bool
 }
 
 func newForcedIdempotencyConflictStore(winner application.IdempotencyRecord) *forcedIdempotencyConflictStore {
 	return &forcedIdempotencyConflictStore{
 		now: winner.CreatedAt.Add(time.Minute), winner: winner,
-		resources: map[string]string{"winner-id": "winner"},
+		resources: map[string]string{"winner-id": "winner"}, winnerAvailable: true,
 	}
 }
 
@@ -485,6 +760,9 @@ func (r forcedIdempotencyConflictRepository) Get(context.Context, string, string
 		return application.IdempotencyRecord{}, application.ErrNotFound
 	}
 	r.store.viewGets++
+	if !r.store.winnerAvailable {
+		return application.IdempotencyRecord{}, application.ErrNotFound
+	}
 	return r.store.winner, nil
 }
 

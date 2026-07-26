@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
-	ErrConflict = errors.New("conflict")
+	ErrNotFound             = errors.New("not found")
+	ErrConflict             = errors.New("conflict")
+	ErrRetryableTransaction = errors.New("retryable transaction")
 )
 
 // UnitOfWork is the public transaction boundary for operational persistence.
