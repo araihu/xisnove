@@ -99,6 +99,37 @@ type DailyUptime struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type DiscoveryBatch struct {
+	AgentID      string       `json:"agent_id"`
+	BatchID      string       `json:"batch_id"`
+	RequestHash  string       `json:"request_hash"`
+	Accepted     int32        `json:"accepted"`
+	CreatedCount int32        `json:"created_count"`
+	UpdatedCount int32        `json:"updated_count"`
+	CompletedAt  sql.NullTime `json:"completed_at"`
+	CreatedAt    time.Time    `json:"created_at"`
+}
+
+type DiscoveryCandidate struct {
+	ID                 string          `json:"id"`
+	AgentID            string          `json:"agent_id"`
+	LocationID         string          `json:"location_id"`
+	SourceKind         string          `json:"source_kind"`
+	SourceUid          string          `json:"source_uid"`
+	Namespace          string          `json:"namespace"`
+	Name               string          `json:"name"`
+	LabelsJson         json.RawMessage `json:"labels_json"`
+	Protocol           string          `json:"protocol"`
+	Target             string          `json:"target"`
+	NetworkPerspective string          `json:"network_perspective"`
+	Present            bool            `json:"present"`
+	LastObservedAt     time.Time       `json:"last_observed_at"`
+	PromotedMonitorID  sql.NullString  `json:"promoted_monitor_id"`
+	DriftHint          string          `json:"drift_hint"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+}
+
 type IdempotencyRecord struct {
 	PrincipalID    string    `json:"principal_id"`
 	OperationID    string    `json:"operation_id"`

@@ -33,7 +33,7 @@ func TestMigrateFreshDatabaseIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != 8 {
+	if version != 9 {
 		t.Fatalf("migration version = %d", version)
 	}
 }
@@ -78,7 +78,7 @@ func TestLocationLifecycleMigrationUpgradesVersionSevenAndDowngrades(t *testing.
 	if enabled != 1 || updatedAt != createdAt {
 		t.Fatalf("upgraded location enabled=%d updated_at=%q", enabled, updatedAt)
 	}
-	if _, err := provider.Down(ctx); err != nil {
+	if _, err := provider.DownTo(ctx, 7); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, "SELECT enabled, updated_at FROM locations"); err == nil {
@@ -124,10 +124,8 @@ func TestAgentCredentialMigrationDowngradesWithForeignKeysEnabled(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for range 2 {
-		if _, err := provider.Down(ctx); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := provider.DownTo(ctx, 6); err != nil {
+		t.Fatal(err)
 	}
 	var version, foreignKeys, agentCount int
 	if err := db.QueryRowContext(ctx, `

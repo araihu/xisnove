@@ -62,7 +62,7 @@ func TestLocationLifecycleMigrationUpgradesVersionSevenAndDowngrades(t *testing.
 	if !enabled || !updatedAt.Equal(createdAt) {
 		t.Fatalf("upgraded location enabled=%v updated_at=%s", enabled, updatedAt)
 	}
-	if _, err := provider.Down(ctx); err != nil {
+	if _, err := provider.DownTo(ctx, 7); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, "SELECT enabled, updated_at FROM locations"); err == nil {

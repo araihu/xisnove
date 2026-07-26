@@ -19,6 +19,7 @@ type Querier interface {
 	ClaimOperationLease(ctx context.Context, arg ClaimOperationLeaseParams) (OperationLease, error)
 	ClaimProbeRun(ctx context.Context, arg ClaimProbeRunParams) (CheckRun, error)
 	ClaimStaleLocationHealth(ctx context.Context, arg ClaimStaleLocationHealthParams) (int64, error)
+	CompleteDiscoveryBatch(ctx context.Context, arg CompleteDiscoveryBatchParams) (int64, error)
 	ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAgentEnrollmentTokenParams) (AgentEnrollmentToken, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) error
@@ -27,6 +28,7 @@ type Querier interface {
 	CreateAgentCredential(ctx context.Context, arg CreateAgentCredentialParams) error
 	CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgentEnrollmentTokenParams) error
 	CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) error
+	CreateDiscoveryBatch(ctx context.Context, arg CreateDiscoveryBatchParams) (int64, error)
 	CreateLocation(ctx context.Context, arg CreateLocationParams) error
 	CreateMaintenanceInterval(ctx context.Context, arg CreateMaintenanceIntervalParams) error
 	CreateMonitor(ctx context.Context, arg CreateMonitorParams) error
@@ -48,6 +50,9 @@ type Querier interface {
 	GetActiveIncidentByMonitor(ctx context.Context, monitorID string) (Incident, error)
 	GetAgent(ctx context.Context, id string) (Agent, error)
 	GetCheckRun(ctx context.Context, id string) (CheckRun, error)
+	GetDiscoveryBatch(ctx context.Context, arg GetDiscoveryBatchParams) (DiscoveryBatch, error)
+	GetDiscoveryCandidate(ctx context.Context, id string) (DiscoveryCandidate, error)
+	GetDiscoveryCandidateByIdentity(ctx context.Context, arg GetDiscoveryCandidateByIdentityParams) (DiscoveryCandidate, error)
 	GetLocation(ctx context.Context, id string) (GetLocationRow, error)
 	GetLocationHealth(ctx context.Context, arg GetLocationHealthParams) (LocationHealth, error)
 	GetMaintenanceInterval(ctx context.Context, id string) (MaintenanceInterval, error)
@@ -59,14 +64,17 @@ type Querier interface {
 	GetNotificationRoute(ctx context.Context, id string) (NotificationRoute, error)
 	GetProbeResultByID(ctx context.Context, id string) (ProbeResult, error)
 	GetProbeResultByRun(ctx context.Context, runID string) (ProbeResult, error)
+	InsertDiscoveryCandidate(ctx context.Context, arg InsertDiscoveryCandidateParams) (int64, error)
 	InsertIncidentEvent(ctx context.Context, arg InsertIncidentEventParams) error
 	InsertProbeResult(ctx context.Context, arg InsertProbeResultParams) (int64, error)
 	InsertScheduledRun(ctx context.Context, arg InsertScheduledRunParams) (int64, error)
+	LinkDiscoveryPromotion(ctx context.Context, arg LinkDiscoveryPromotionParams) (int64, error)
 	ListAPITokens(ctx context.Context, rowLimit int64) ([]ApiToken, error)
 	ListAPITokensAfter(ctx context.Context, arg ListAPITokensAfterParams) ([]ApiToken, error)
 	ListActiveMaintenanceIntervals(ctx context.Context, arg ListActiveMaintenanceIntervalsParams) ([]MaintenanceInterval, error)
 	ListAuditEventsByIncident(ctx context.Context, incidentID sql.NullString) ([]AuditEvent, error)
 	ListDailyUptime(ctx context.Context, arg ListDailyUptimeParams) ([]DailyUptime, error)
+	ListDiscoveryCandidates(ctx context.Context, arg ListDiscoveryCandidatesParams) ([]DiscoveryCandidate, error)
 	ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error)
 	ListEnabledNotificationRoutes(ctx context.Context) ([]NotificationRoute, error)
 	ListLocationHealth(ctx context.Context, monitorID string) ([]ListLocationHealthRow, error)
@@ -122,6 +130,7 @@ type Querier interface {
 	TouchAPITokenLastUsed(ctx context.Context, arg TouchAPITokenLastUsedParams) (int64, error)
 	TouchAgentCredentialAuthentication(ctx context.Context, arg TouchAgentCredentialAuthenticationParams) (int64, error)
 	UpdateAgentHeartbeat(ctx context.Context, arg UpdateAgentHeartbeatParams) (int64, error)
+	UpdateDiscoveryCandidateByIdentity(ctx context.Context, arg UpdateDiscoveryCandidateByIdentityParams) (int64, error)
 	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
 	UpdateNotificationRoute(ctx context.Context, arg UpdateNotificationRouteParams) (int64, error)
 	UpdateOperationLeaseCursor(ctx context.Context, arg UpdateOperationLeaseCursorParams) (int64, error)
