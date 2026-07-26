@@ -34,6 +34,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 		w.results = make(chan controlplane.ProbeResultInput, 100)
 	})
 	capabilities := w.enabledCapabilities()
+	probeCapabilities := enabledProbeCapabilities(capabilities)
 	generation := w.CredentialGeneration
 	if generation <= 0 {
 		generation = 1
@@ -57,6 +58,9 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 	if heartbeat.StatusCode() != http.StatusNoContent {
 		return fmt.Errorf("send heartbeat: HTTP %d", heartbeat.StatusCode())
 	}
+	if len(probeCapabilities) == 0 {
+		return nil
+	}
 
 	for len(w.results) < cap(w.results) {
 		editor, err = w.bearerEditor()
@@ -70,7 +74,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 		lease, err := w.Client.LeaseAgentWorkWithResponse(
 			ctx,
 			controlplane.LeaseWorkRequest{
-				WaitSeconds: waitSeconds, Capabilities: capabilities,
+				WaitSeconds: waitSeconds, Capabilities: probeCapabilities,
 			},
 			editor,
 		)
@@ -188,6 +192,17 @@ func (w *Worker) enabledCapabilities() []controlplane.AgentCapability {
 		return []controlplane.AgentCapability{controlplane.AgentCapabilityHttp}
 	}
 	return append([]controlplane.AgentCapability(nil), w.Capabilities...)
+}
+
+func enabledProbeCapabilities(capabilities []controlplane.AgentCapability) []controlplane.AgentCapability {
+	probes := make([]controlplane.AgentCapability, 0, len(capabilities))
+	for _, capability := range capabilities {
+		switch capability {
+		case controlplane.AgentCapabilityHttp, controlplane.AgentCapabilityTcp, controlplane.AgentCapabilityDns:
+			probes = append(probes, capability)
+		}
+	}
+	return probes
 }
 
 func (w *Worker) bearerEditor() (controlplane.RequestEditorFn, error) {

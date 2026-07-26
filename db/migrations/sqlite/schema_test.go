@@ -154,3 +154,22 @@ func TestLocationLifecycleSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverySchema(t *testing.T) {
+	t.Parallel()
+	content, err := migrations.Files.ReadFile("00009_discovery.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"CREATE TABLE discovery_batches", "CREATE TABLE discovery_candidates",
+		"UNIQUE (agent_id, location_id, source_kind, source_uid, protocol, target)",
+		"ON DELETE SET NULL", "discovery_candidates_present_updated_id",
+		"discovery_candidates_location_updated_id",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("discovery schema is missing %q", expected)
+		}
+	}
+}

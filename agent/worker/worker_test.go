@@ -119,6 +119,72 @@ func TestRunOnceReturnsNilWhenLeaseHasNoWork(t *testing.T) {
 	}
 }
 
+func TestRunOnceAdvertisesDiscoveryButLeasesOnlyProbeCapabilities(t *testing.T) {
+	var heartbeat controlplane.AgentHeartbeat
+	var lease controlplane.LeaseWorkRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agent/heartbeat":
+			if err := json.NewDecoder(r.Body).Decode(&heartbeat); err != nil {
+				t.Fatal(err)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case "/v1/agent/work:lease":
+			if err := json.NewDecoder(r.Body).Decode(&lease); err != nil {
+				t.Fatal(err)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := controlplane.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	capabilities := []controlplane.AgentCapability{
+		controlplane.AgentCapabilityHttp,
+		controlplane.AgentCapabilityKubernetesDiscovery,
+		controlplane.AgentCapabilityKubernetesWatch,
+	}
+	instance := worker.Worker{Client: client, Credential: func() (string, error) { return "credential", nil }, Executor: fixedExecutor{}, Capabilities: capabilities}
+	if err := instance.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(heartbeat.Capabilities) != 3 {
+		t.Fatalf("heartbeat capabilities=%v", heartbeat.Capabilities)
+	}
+	if len(lease.Capabilities) != 1 || lease.Capabilities[0] != controlplane.AgentCapabilityHttp {
+		t.Fatalf("lease capabilities=%v", lease.Capabilities)
+	}
+}
+
+func TestRunOnceDiscoveryOnlyHeartbeatDoesNotRequestProbeLease(t *testing.T) {
+	leaseCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agent/heartbeat":
+			w.WriteHeader(http.StatusNoContent)
+		case "/v1/agent/work:lease":
+			leaseCalls++
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := controlplane.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := worker.Worker{Client: client, Credential: func() (string, error) { return "credential", nil }, Executor: fixedExecutor{}, Capabilities: []controlplane.AgentCapability{controlplane.AgentCapabilityKubernetesDiscovery}}
+	if err := instance.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if leaseCalls != 0 {
+		t.Fatalf("lease calls=%d", leaseCalls)
+	}
+}
+
 func TestRunOnceBatchUploadRetriesIdenticalResults(t *testing.T) {
 	works := []controlplane.ProbeWork{testHTTPWork(), testHTTPWork(), testHTTPWork()}
 	for index := range works {
