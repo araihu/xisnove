@@ -1,0 +1,53 @@
+{{- if .Values.agent.enabled }}
+{{- $locationID := required "agent.locationID is required when agent.enabled=true" .Values.agent.locationID -}}
+{{- if and (gt (len .Values.operator.watchNamespaces) 0) (not (has .Release.Namespace .Values.operator.watchNamespaces)) -}}
+{{- fail "operator.watchNamespaces must include the release namespace when agent.enabled=true" -}}
+{{- end -}}
+apiVersion: monitoring.xisnove.io/v1alpha1
+kind: Agent
+metadata:
+  name: {{ include "xisnove-edge.agentName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "xisnove-edge.labels" . | nindent 4 }}
+    app.kubernetes.io/component: discovery
+spec:
+  locationID: {{ $locationID | quote }}
+  capabilities:
+    {{- toYaml .Values.agent.capabilities | nindent 4 }}
+  credentialSecretRef:
+    name: {{ include "xisnove-edge.agentCredentialSecret" . }}
+    key: {{ .Values.agent.credentialSecret.key }}
+  credentialRotation:
+    requestedGeneration: {{ .Values.agent.requestedCredentialGeneration }}
+  discovery:
+    namespaces:
+      {{- if .Values.agent.discovery.clusterWide }}
+      - "*"
+      {{- else if eq (len .Values.agent.discovery.namespaces) 0 }}
+      - {{ .Release.Namespace }}
+      {{- else }}
+      {{- toYaml .Values.agent.discovery.namespaces | nindent 6 }}
+      {{- end }}
+    resources:
+      {{- toYaml .Values.agent.discovery.resources | nindent 6 }}
+    staleAfterSeconds: {{ .Values.agent.discovery.staleAfterSeconds }}
+  workload:
+    image: {{ include "xisnove-edge.agentImage" . }}
+    serviceAccountName: {{ include "xisnove-edge.discoveryServiceAccount" . }}
+    replicas: {{ .Values.agent.workload.replicas }}
+    resources:
+      {{- toYaml .Values.agent.workload.resources | nindent 6 }}
+    {{- with .Values.agent.workload.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.agent.workload.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.agent.workload.affinity }}
+    affinity:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+{{- end }}
