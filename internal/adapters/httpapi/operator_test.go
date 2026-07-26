@@ -94,6 +94,19 @@ func TestOperatorHandlerAppliesAgentAndReplaysWithoutCredential(t *testing.T) {
 	if replayed.Code != http.StatusOK || !strings.Contains(replayed.Body.String(), applied.ExternalId.String()) || strings.Contains(replayed.Body.String(), credential) {
 		t.Fatalf("lost-response replay = %d %s", replayed.Code, replayed.Body.String())
 	}
+	missing := map[string]any{"owner": map[string]string{"key": "monitoring.xisnove.io/Agent/default/new", "uid": "new-uid"}, "name": "new", "locationId": location.ID, "enabled": true, "capabilities": []string{"http"}}
+	if response := performOperatorRequest(t, handler, http.MethodPost, "/v1/operator/agents:apply", "missing-initial", operatorToken.Token, missing); response.Code != http.StatusBadRequest {
+		t.Fatalf("missing initial status=%d", response.Code)
+	}
+	updated := map[string]any{"owner": body["owner"], "name": "edge-updated", "locationId": location.ID, "enabled": true, "capabilities": []string{"http", "tcp"}}
+	response := performOperatorRequest(t, handler, http.MethodPost, "/v1/operator/agents:apply", "bound-no-initial", operatorToken.Token, updated)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), applied.ExternalId.String()) || strings.Contains(response.Body.String(), credential) {
+		t.Fatalf("bound update=%d %s", response.Code, response.Body.String())
+	}
+	badObserve := performOperatorRequest(t, handler, http.MethodPost, "/v1/operator/agents:observe", "", operatorToken.Token, map[string]any{"owner": map[string]string{"key": "monitoring.xisnove.io/Agent/default/edge", "uid": "recreated"}, "externalId": applied.ExternalId})
+	if badObserve.Code == http.StatusOK {
+		t.Fatalf("recreated owner observe succeeded: %s", badObserve.Body.String())
+	}
 }
 
 func TestOperatorValidatorRejectsOversizedCredentialWithoutDiagnosticLeak(t *testing.T) {

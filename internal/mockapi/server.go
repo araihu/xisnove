@@ -609,9 +609,12 @@ func (s *Server) operatorMutation(w http.ResponseWriter, r *http.Request, operat
 	case "ApplyOperatorAgent":
 		credential := nestedString(input, "initialCredential", "credential")
 		generation, validGeneration := nestedInt64(input, "initialCredential", "generation")
-		if credential == "" || !validGeneration || generation != 1 {
+		if credential != "" && (!validGeneration || generation != 1) {
 			writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request validation failed", nil)
 			return
+		}
+		if credential == "" {
+			generation = 1
 		}
 		s.applyOperatorAgent(w, r, ownerKey, ownerUID, generation, credential)
 	case "PutOperatorAgentCredential":
@@ -659,7 +662,7 @@ func (s *Server) applyOperatorAgent(w http.ResponseWriter, r *http.Request, key,
 	s.mu.Lock()
 	agent, found := s.operatorAgents[identity]
 	if found {
-		if agent.credentialGeneration != generation || agent.credentialHashes[generation] != hash {
+		if credential != "" && (agent.credentialGeneration != generation || agent.credentialHashes[generation] != hash) {
 			s.mu.Unlock()
 			writeProblem(w, r, http.StatusConflict, "operator_credential_hash_conflict", "Operator credential hash conflict", nil)
 			return

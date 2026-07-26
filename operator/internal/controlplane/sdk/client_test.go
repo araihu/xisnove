@@ -100,6 +100,39 @@ func TestCredentialRotationAndRevokeUseTheMockOwnershipContract(t *testing.T) {
 	}
 }
 
+func TestApplyAgentWithoutBootstrapOmitsCredentialAndMapsObservation(t *testing.T) {
+	t.Parallel()
+	mock := mockapi.NewServer()
+	server := httptest.NewServer(assertRequest(t, mock.Handler(), func(r *http.Request) {
+		if r.URL.Path != "/v1/operator/agents:apply" {
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(body, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if _, found := raw["initialCredential"]; found {
+			t.Fatal("credential-free apply encoded initialCredential")
+		}
+		if r.Header.Get("Idempotency-Key") == "" || raw["owner"] == nil {
+			t.Fatal("missing owner or idempotency")
+		}
+	}))
+	defer server.Close()
+	client := newClient(t, server.URL)
+	owner := controlplane.OwnerReference{Key: "fixture/operator-agent", UID: "fixture-agent-uid"}
+	state, err := client.ApplyAgent(context.Background(), controlplane.ApplyAgentRequest{Owner: owner, Name: "fixture", Spec: monitoringv1alpha1.AgentSpec{LocationID: fixtureLocationID, Capabilities: []monitoringv1alpha1.AgentCapability{monitoringv1alpha1.AgentCapabilityHTTP}}, IdempotencyKey: "credential-free-apply"})
+	if err != nil || state.ExternalID == "" {
+		t.Fatalf("apply=%#v err=%v", state, err)
+	}
+	observed, err := client.ObserveAgent(context.Background(), controlplane.ObserveAgentRequest{Owner: owner, ExternalID: fixtureAgentID})
+	if err != nil || observed.PresentedCredentialGeneration == 0 {
+		t.Fatalf("observe=%#v err=%v", observed, err)
+	}
+}
+
 func TestDeleteMonitorAllowsAnEmptyExternalID(t *testing.T) {
 	t.Parallel()
 

@@ -427,6 +427,70 @@ func TestAgentFailedPostBootstrapApplyKeepsObservedGenerationForRetry(t *testing
 	}
 }
 
+func TestAgentPostBootstrapSpecUpdateAndGenerationThreeConverge(t *testing.T) {
+	t.Parallel()
+	scheme := agentScheme(t)
+	agent := validAgent("completed")
+	agent.Generation, agent.Status.ObservedGeneration, agent.Status.ExternalID, agent.Status.CredentialGeneration = 2, 2, "agent-remote-1", 2
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: agent.Spec.CredentialSecretRef.Name, Namespace: agent.Namespace}, Data: map[string][]byte{CredentialKey: []byte(`{"credential":"credential-00000000000000000000000000000002","generation":2}`)}}
+	if err := controllerutil.SetControllerReference(agent, secret, scheme); err != nil {
+		t.Fatal(err)
+	}
+	applies, observes, puts, revokes := 0, 0, 0, 0
+	presented := int64(2)
+	remote := &fakeControlPlane{applyAgent: func(_ context.Context, req controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
+		applies++
+		if len(req.InitialCredential) != 0 || req.Spec.Workload.Image != "changed" || req.IdempotencyKey == "" || len(req.IdempotencyKey) > 200 {
+			t.Fatalf("apply=%#v", req)
+		}
+		return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 2, PresentedCredentialGeneration: presented}, nil
+	}, observeAgent: func(_ context.Context, req controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+		observes++
+		return controlplane.AgentState{ExternalID: req.ExternalID, CredentialGeneration: 3, PresentedCredentialGeneration: presented, LastHeartbeatAt: time.Now()}, nil
+	}, putCredential: func(_ context.Context, req controlplane.PutAgentCredentialRequest) error {
+		puts++
+		if req.Generation != 3 || len(req.Credential) == 0 {
+			t.Fatalf("put=%#v", req)
+		}
+		return nil
+	}, revokeCredential: func(_ context.Context, req controlplane.RevokeAgentCredentialRequest) error {
+		revokes++
+		if req.Generation != 2 {
+			t.Fatalf("revoke=%#v", req)
+		}
+		return nil
+	}}
+	kube := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&monitoringv1alpha1.Agent{}).WithObjects(agent, secret).Build()
+	r := testAgentReconciler(kube, scheme, remote)
+	stored := &monitoringv1alpha1.Agent{}
+	_ = kube.Get(context.Background(), requestFor(agent).NamespacedName, stored)
+	stored.Generation = 3
+	stored.Spec.Workload.Image = "changed"
+	if err := kube.Update(context.Background(), stored); err != nil {
+		t.Fatal(err)
+	}
+	reconcileAgent(t, r, agent)
+	if applies != 1 {
+		t.Fatalf("applies=%d", applies)
+	}
+	if err := kube.Get(context.Background(), requestFor(agent).NamespacedName, stored); err != nil {
+		t.Fatal(err)
+	}
+	stored.Spec.CredentialRotation.RequestedGeneration = 3
+	stored.Generation = 4
+	if err := kube.Update(context.Background(), stored); err != nil {
+		t.Fatal(err)
+	}
+	reconcileAgent(t, r, agent)
+	presented = 3
+	reconcileAgent(t, r, agent)
+	got := getCredentialSecret(t, kube, agent)
+	current, next, err := credentialState(got, CredentialKey)
+	if err != nil || current.Generation != 3 || next != nil || previousCredentialGeneration(got) != 0 || puts != 1 || revokes != 1 || observes < 1 {
+		t.Fatalf("state current=%#v next=%#v puts=%d revokes=%d observes=%d", current, next, puts, revokes, observes)
+	}
+}
+
 func agentScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	scheme := testScheme(t)

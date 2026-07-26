@@ -125,3 +125,10 @@ Observe; only missing external status or a newer CR generation uses Apply.
 Controller fakes are strict again for unexpected observation calls; lifecycle
 tests now explicitly model required observations. The acceptance suite also
 covers the bounded generation-aware Apply key and post-bootstrap retry path.
+
+## Fix round 5: repeated reconciliation acceptance
+
+`TestAgentPostBootstrapSpecUpdateAndGenerationThreeConverge`,
+`TestApplyAgentWithoutBootstrapOmitsCredentialAndMapsObservation`, and the
+real handler apply journey prove credential-free bound reconciliation, gen3
+promotion/revoke convergence, and write-only wire behavior.
