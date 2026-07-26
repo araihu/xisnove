@@ -331,14 +331,61 @@ func TestPublicStatusPageHasRecentUptimeWithoutPrivateFields(t *testing.T) {
 
 func TestDiscoveryBatchIsBounded(t *testing.T) {
 	doc := loadContract(t)
+	input := doc.Components.Schemas["DiscoveryCandidateInput"]
+	if input == nil || input.Value == nil {
+		t.Fatal("DiscoveryCandidateInput is missing")
+	}
+	for _, field := range []string{
+		"sourceKind", "sourceUid", "namespace", "name", "labels", "protocol",
+		"target", "networkPerspective", "present", "observedAt",
+	} {
+		if !slices.Contains(input.Value.Required, field) {
+			t.Errorf("DiscoveryCandidateInput does not require %s", field)
+		}
+	}
+	for _, forbidden := range []string{"agentId", "locationId", "externalId"} {
+		if input.Value.Properties[forbidden] != nil {
+			t.Errorf("DiscoveryCandidateInput exposes %s", forbidden)
+		}
+	}
+
 	batch := doc.Components.Schemas["DiscoveryCandidateBatch"]
 	if batch == nil || batch.Value == nil {
 		t.Fatal("DiscoveryCandidateBatch is missing")
 	}
 	candidates := batch.Value.Properties["candidates"]
 	if candidates == nil || candidates.Value == nil || candidates.Value.MaxItems == nil ||
-		candidates.Value.MinItems != 1 || *candidates.Value.MaxItems != 100 {
+		candidates.Value.MinItems != 1 || *candidates.Value.MaxItems != 500 {
 		t.Fatalf("discovery candidates bound = %#v", candidates)
+	}
+
+	ack := doc.Components.Schemas["DiscoveryCandidateBatchAcknowledgement"]
+	if ack == nil || ack.Value == nil {
+		t.Fatal("DiscoveryCandidateBatchAcknowledgement is missing")
+	}
+	for _, field := range []string{"accepted", "created", "updated"} {
+		property := ack.Value.Properties[field]
+		if property == nil || property.Value == nil || property.Value.Max == nil ||
+			*property.Value.Max != 500 {
+			t.Errorf("DiscoveryCandidateBatchAcknowledgement.%s maximum = %#v", field, property)
+		}
+	}
+
+	output := doc.Components.Schemas["DiscoveryCandidate"]
+	if output == nil || output.Value == nil {
+		t.Fatal("DiscoveryCandidate is missing")
+	}
+	for _, field := range []string{
+		"id", "agentId", "locationId", "sourceKind", "sourceUid", "namespace",
+		"name", "labels", "protocol", "target", "networkPerspective", "present",
+		"state", "firstSeenAt", "lastObservedAt", "updatedAt",
+	} {
+		if !slices.Contains(output.Value.Required, field) {
+			t.Errorf("DiscoveryCandidate does not require %s", field)
+		}
+	}
+	if output.Value.Properties["externalId"] != nil || output.Value.Properties["lastSeenAt"] != nil {
+		t.Error("DiscoveryCandidate retains ambiguous legacy identity or timestamp fields")
 	}
 }
 

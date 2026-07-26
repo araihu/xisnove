@@ -562,6 +562,14 @@ paths:
     post:
       operationId: upsertDiscoveryCandidates
       summary: Idempotently upsert a bounded discovery candidate batch
+      description: >-
+        Upserts observations owned by the authenticated Agent. The server derives
+        agentId and locationId from that principal. Stable identity is
+        (agentId, locationId, sourceKind, sourceUid, protocol, target).
+        present=false marks an existing candidate absent without deleting it or
+        changing a promoted Monitor; an unknown tombstone and observations older
+        than lastObservedAt are idempotent no-ops. Duplicate identities in one
+        batch are rejected, and Idempotency-Key identifies the logical upload batch.
       tags: [agent, discovery]
       security: [{agentBearer: []}]
       x-xisnove-scopes: [agent:discovery]
@@ -1729,16 +1737,30 @@ components:
     DiscoveryCandidateInput:
       type: object
       additionalProperties: false
-      required: [externalId, kind, name, target, labels, observedAt]
+      required:
+        - sourceKind
+        - sourceUid
+        - namespace
+        - name
+        - labels
+        - protocol
+        - target
+        - networkPerspective
+        - present
+        - observedAt
       properties:
-        externalId: {type: string, minLength: 1, maxLength: 512}
-        kind: {type: string, enum: [http, tcp, dns]}
+        sourceKind: {type: string, minLength: 1, maxLength: 120}
+        sourceUid: {type: string, minLength: 1, maxLength: 512}
+        namespace: {type: string, maxLength: 253}
         name: {type: string, minLength: 1, maxLength: 200}
-        target: {type: string, minLength: 1, maxLength: 4096}
         labels:
           type: object
           maxProperties: 64
           additionalProperties: {type: string, maxLength: 253}
+        protocol: {type: string, enum: [http, tcp, dns]}
+        target: {type: string, minLength: 1, maxLength: 4096}
+        networkPerspective: {type: string, minLength: 1, maxLength: 253}
+        present: {type: boolean}
         observedAt: {type: string, format: date-time}
     DiscoveryCandidateBatch:
       type: object
@@ -1748,47 +1770,58 @@ components:
         candidates:
           type: array
           minItems: 1
-          maxItems: 100
+          maxItems: 500
           items: {$ref: '#/components/schemas/DiscoveryCandidateInput'}
     DiscoveryCandidateBatchAcknowledgement:
       type: object
       additionalProperties: false
       required: [accepted, created, updated]
       properties:
-        accepted: {type: integer, format: int32, minimum: 0, maximum: 100}
-        created: {type: integer, format: int32, minimum: 0, maximum: 100}
-        updated: {type: integer, format: int32, minimum: 0, maximum: 100}
+        accepted: {type: integer, format: int32, minimum: 0, maximum: 500}
+        created: {type: integer, format: int32, minimum: 0, maximum: 500}
+        updated: {type: integer, format: int32, minimum: 0, maximum: 500}
     DiscoveryCandidate:
       type: object
       additionalProperties: false
       required:
         - id
-        - externalId
         - agentId
         - locationId
-        - kind
+        - sourceKind
+        - sourceUid
+        - namespace
         - name
-        - target
         - labels
+        - protocol
+        - target
+        - networkPerspective
+        - present
         - state
         - firstSeenAt
-        - lastSeenAt
+        - lastObservedAt
+        - updatedAt
       properties:
         id: {type: string, format: uuid}
-        externalId: {type: string, minLength: 1, maxLength: 512}
         agentId: {type: string, format: uuid}
         locationId: {type: string, format: uuid}
-        kind: {type: string, enum: [http, tcp, dns]}
+        sourceKind: {type: string, minLength: 1, maxLength: 120}
+        sourceUid: {type: string, minLength: 1, maxLength: 512}
+        namespace: {type: string, maxLength: 253}
         name: {type: string, minLength: 1, maxLength: 200}
-        target: {type: string, minLength: 1, maxLength: 4096}
         labels:
           type: object
           maxProperties: 64
           additionalProperties: {type: string, maxLength: 253}
+        protocol: {type: string, enum: [http, tcp, dns]}
+        target: {type: string, minLength: 1, maxLength: 4096}
+        networkPerspective: {type: string, minLength: 1, maxLength: 253}
+        present: {type: boolean}
         state: {$ref: '#/components/schemas/DiscoveryCandidateState'}
         promotedMonitorId: {type: string, format: uuid}
+        driftHint: {type: string, maxLength: 1024}
         firstSeenAt: {type: string, format: date-time}
-        lastSeenAt: {type: string, format: date-time}
+        lastObservedAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
     DiscoveryCandidatePage:
       type: object
       additionalProperties: false
