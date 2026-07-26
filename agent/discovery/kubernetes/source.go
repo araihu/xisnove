@@ -71,27 +71,33 @@ func (source Source) Watchers(publisher discovery.Publisher) ([]Watcher, error) 
 	result := make([]Watcher, 0, len(source.Namespaces)*len(source.Resources))
 	for _, namespace := range source.Namespaces {
 		for _, resource := range source.Resources {
-			listWatch, object, err := source.listWatch(namespace, resource)
+			relists := make(chan struct{}, 1)
+			listWatch, object, err := source.listWatch(namespace, resource, relists)
 			if err != nil {
 				return nil, err
 			}
+			listWatch = cache.ToListWatcherWithWatchListSemantics(listWatch.(*cache.ListWatch), watchListUnsupported{})
 			watchSource := source
 			watchSource.Namespaces = []string{namespace}
 			watchSource.Resources = []Resource{resource}
-			result = append(result, Watcher{Informer: cache.NewSharedIndexInformer(listWatch, object, 0, cache.Indexers{}), Source: watchSource, Publish: publisher})
+			result = append(result, Watcher{Informer: cache.NewSharedIndexInformer(listWatch, object, 0, cache.Indexers{}), Source: watchSource, Publish: publisher, Relists: relists})
 		}
 	}
 	return result, nil
 }
 
-func (source Source) listWatch(namespace string, resource Resource) (cache.ListerWatcher, runtime.Object, error) {
+func (source Source) listWatch(namespace string, resource Resource, relists chan<- struct{}) (cache.ListerWatcher, runtime.Object, error) {
 	switch resource {
 	case ResourceServices:
 		if source.Core == nil {
 			return nil, nil, errors.New("Kubernetes core client is not configured")
 		}
 		return &cache.ListWatch{ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
-			return source.Core.Services(namespace).List(ctx, options)
+			items, err := source.Core.Services(namespace).List(ctx, options)
+			if err == nil {
+				signal(relists)
+			}
+			return items, err
 		}, WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			return source.Core.Services(namespace).Watch(ctx, options)
 		}}, &corev1.Service{}, nil
@@ -100,7 +106,11 @@ func (source Source) listWatch(namespace string, resource Resource) (cache.Liste
 			return nil, nil, errors.New("Kubernetes discovery client is not configured")
 		}
 		return &cache.ListWatch{ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
-			return source.Discovery.EndpointSlices(namespace).List(ctx, options)
+			items, err := source.Discovery.EndpointSlices(namespace).List(ctx, options)
+			if err == nil {
+				signal(relists)
+			}
+			return items, err
 		}, WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			return source.Discovery.EndpointSlices(namespace).Watch(ctx, options)
 		}}, &discoveryv1.EndpointSlice{}, nil
@@ -109,7 +119,11 @@ func (source Source) listWatch(namespace string, resource Resource) (cache.Liste
 			return nil, nil, errors.New("Kubernetes networking client is not configured")
 		}
 		return &cache.ListWatch{ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
-			return source.Networking.Ingresses(namespace).List(ctx, options)
+			items, err := source.Networking.Ingresses(namespace).List(ctx, options)
+			if err == nil {
+				signal(relists)
+			}
+			return items, err
 		}, WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			return source.Networking.Ingresses(namespace).Watch(ctx, options)
 		}}, &networkingv1.Ingress{}, nil
@@ -119,7 +133,11 @@ func (source Source) listWatch(namespace string, resource Resource) (cache.Liste
 		}
 		client := source.Dynamic.Resource(gatewayResources[resource]).Namespace(namespace)
 		return &cache.ListWatch{ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
-			return client.List(ctx, options)
+			items, err := client.List(ctx, options)
+			if err == nil {
+				signal(relists)
+			}
+			return items, err
 		}, WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			return client.Watch(ctx, options)
 		}}, &unstructured.Unstructured{}, nil
@@ -127,6 +145,17 @@ func (source Source) listWatch(namespace string, resource Resource) (cache.Liste
 		return nil, nil, fmt.Errorf("unsupported Kubernetes discovery resource %q", resource)
 	}
 }
+
+func signal(events chan<- struct{}) {
+	select {
+	case events <- struct{}{}:
+	default:
+	}
+}
+
+type watchListUnsupported struct{}
+
+func (watchListUnsupported) IsWatchListSemanticsUnSupported() bool { return true }
 
 func (source Source) Snapshot(ctx context.Context) (discovery.Batch, error) {
 	batch, err := source.collect(ctx)

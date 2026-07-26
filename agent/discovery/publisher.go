@@ -47,12 +47,15 @@ type Runner struct {
 }
 
 type LoopConfig struct {
-	Enabled    bool
-	Cadence    time.Duration
-	MinBackoff time.Duration
-	MaxBackoff time.Duration
-	Wait       func(context.Context, time.Duration) error
-	OnError    func(error)
+	Enabled bool
+	// InitialDelay is used after an already-published bootstrap snapshot so the
+	// next full list happens on cadence instead of immediately duplicating it.
+	InitialDelay bool
+	Cadence      time.Duration
+	MinBackoff   time.Duration
+	MaxBackoff   time.Duration
+	Wait         func(context.Context, time.Duration) error
+	OnError      func(error)
 }
 
 // Run publishes discovery snapshots on an independently enabled cadence. A
@@ -68,6 +71,14 @@ func (runner Runner) Run(ctx context.Context, config LoopConfig) error {
 	wait := config.Wait
 	if wait == nil {
 		wait = waitFor
+	}
+	if config.InitialDelay {
+		if err := wait(ctx, config.Cadence); err != nil {
+			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return fmt.Errorf("wait for initial discovery cycle: %w", err)
+		}
 	}
 	backoff := config.MinBackoff
 	for ctx.Err() == nil {

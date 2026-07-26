@@ -225,6 +225,10 @@ func runKubernetesDiscovery(ctx context.Context, config config, client *controlp
 		slog.Warn("Kubernetes discovery diagnostic", "code", diagnostic.Code, "source", diagnostic.Source.Kind+"/"+diagnostic.Source.Namespace+"/"+diagnostic.Source.Name)
 	}}
 	publisher := discovery.APIPublisher{Client: client, Credentials: credentialProvider(config)}
+	runner := discovery.Runner{Producer: source, Publisher: publisher}
+	if err := runner.RunOnce(ctx); err != nil {
+		return fmt.Errorf("publish initial Kubernetes discovery snapshot: %w", err)
+	}
 	if config.kubernetesDiscovery.watch {
 		watchers, err := source.Watchers(publisher)
 		if err != nil {
@@ -238,8 +242,7 @@ func runKubernetesDiscovery(ctx context.Context, config config, client *controlp
 			}(watcher)
 		}
 	}
-	runner := discovery.Runner{Producer: source, Publisher: publisher}
-	return runner.Run(ctx, discovery.LoopConfig{Enabled: true, Cadence: 5 * time.Minute, MinBackoff: time.Second, MaxBackoff: time.Minute, OnError: func(err error) { slog.Warn("Kubernetes discovery cycle failed", "error", err) }})
+	return runner.Run(ctx, discovery.LoopConfig{Enabled: true, InitialDelay: true, Cadence: 5 * time.Minute, MinBackoff: time.Second, MaxBackoff: time.Minute, OnError: func(err error) { slog.Warn("Kubernetes discovery cycle failed", "error", err) }})
 }
 
 func parseCapabilities(raw string) ([]controlplane.AgentCapability, error) {

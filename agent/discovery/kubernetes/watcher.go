@@ -15,6 +15,7 @@ type Watcher struct {
 	Informer cache.SharedIndexInformer
 	Source   Source
 	Publish  discovery.Publisher
+	Relists  <-chan struct{}
 }
 
 func (watcher Watcher) Run(ctx context.Context) error {
@@ -22,10 +23,15 @@ func (watcher Watcher) Run(ctx context.Context) error {
 		return errors.New("Kubernetes discovery watcher is not configured")
 	}
 	updates := make(chan struct{}, 1)
-	// A listener is required before Run so the shared informer starts its
-	// ListWatch. It intentionally ignores the initial list; that list is
-	// published by Source as the only complete observation.
-	if _, err := watcher.Informer.AddEventHandler(cache.ResourceEventHandlerFuncs{}); err != nil {
+	if _, err := watcher.Informer.AddEventHandler(cache.ResourceEventHandlerDetailedFuncs{
+		AddFunc: func(_ any, initial bool) {
+			if !initial {
+				enqueue(updates)
+			}
+		},
+		UpdateFunc: func(any, any) { enqueue(updates) },
+		DeleteFunc: func(any) { enqueue(updates) },
+	}); err != nil {
 		return err
 	}
 	go watcher.Informer.Run(ctx.Done())
@@ -35,35 +41,23 @@ func (watcher Watcher) Run(ctx context.Context) error {
 		}
 		return errors.New("Kubernetes discovery informer did not sync")
 	}
-	_, err := watcher.Informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(any) { enqueue(updates) },
-		UpdateFunc: func(any, any) { enqueue(updates) },
-		DeleteFunc: func(any) { enqueue(updates) },
-	})
-	if err != nil {
-		return err
-	}
+	drain(watcher.Relists)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-updates:
-			batches, err := watcher.Source.Snapshots(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return nil
-				}
+		case <-watcher.Relists:
+			if err := watcher.publish(ctx, true); err != nil {
 				return err
 			}
-			for _, batch := range batches {
-				batch.Complete = false
-				if len(batch.Candidates) == 0 {
-					continue
+		case <-updates:
+			select {
+			case <-watcher.Relists:
+				if err := watcher.publish(ctx, true); err != nil {
+					return err
 				}
-				if err := watcher.Publish.Publish(ctx, batch); err != nil {
-					if ctx.Err() != nil {
-						return nil
-					}
+			default:
+				if err := watcher.publish(ctx, false); err != nil {
 					return err
 				}
 			}
@@ -71,9 +65,42 @@ func (watcher Watcher) Run(ctx context.Context) error {
 	}
 }
 
+func (watcher Watcher) publish(ctx context.Context, complete bool) error {
+	batches, err := watcher.Source.Snapshots(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
+	for _, batch := range batches {
+		batch.Complete = complete && batch.Complete
+		if len(batch.Candidates) == 0 && !batch.Complete {
+			continue
+		}
+		if err := watcher.Publish.Publish(ctx, batch); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 func enqueue(queue chan<- struct{}) {
 	select {
 	case queue <- struct{}{}:
 	default:
+	}
+}
+
+func drain(events <-chan struct{}) {
+	for events != nil {
+		select {
+		case <-events:
+		default:
+			return
+		}
 	}
 }
