@@ -40,6 +40,98 @@ func TestCursorRoundTripAndTamperRejection(t *testing.T) {
 	assertInvalidCursor(t, codec, "not-a-cursor", application.CursorSortTime)
 }
 
+func TestAudienceCursorBindsEndpointAndFilters(t *testing.T) {
+	codec, err := application.NewHMACCursorCodec([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	audience := application.CursorAudience{
+		Endpoint: "/v1/incidents",
+		Filter: map[string][]string{
+			"monitorId": {"00000000-0000-4000-8000-000000000001"},
+			"state":     {"open", "acknowledged"},
+		},
+	}
+	key := application.CursorKey{Sort: "open", ID: "00000000-0000-4000-8000-000000000001"}
+	token, err := codec.EncodeFor(audience, key, application.CursorShapeString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(token, audience.Endpoint) || strings.Contains(token, key.Sort) || strings.Contains(token, key.ID) {
+		t.Fatal("cursor exposes plaintext audience or key material")
+	}
+	if got, err := codec.DecodeFor(token, audience, application.CursorShapeString); err != nil || got != key {
+		t.Fatalf("DecodeFor() = %#v, %v", got, err)
+	}
+
+	canonicalEquivalent := application.CursorAudience{
+		Endpoint: "/v1/incidents",
+		Filter: map[string][]string{
+			"state":     {"acknowledged", "open"},
+			"monitorId": {"00000000-0000-4000-8000-000000000001"},
+		},
+	}
+	canonicalToken, err := codec.EncodeFor(canonicalEquivalent, key, application.CursorShapeString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if canonicalToken != token {
+		t.Fatalf("equivalent audience token = %q, want canonical %q", canonicalToken, token)
+	}
+
+	assertInvalidAudienceCursor(t, codec, token, application.CursorAudience{Endpoint: "/v1/incidents/events", Filter: audience.Filter}, application.CursorShapeString)
+	assertInvalidAudienceCursor(t, codec, token, application.CursorAudience{Endpoint: audience.Endpoint, Filter: map[string][]string{"state": {"closed"}}}, application.CursorShapeString)
+
+	parts := strings.Split(token, ".")
+	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload[len(payload)-2] ^= 1
+	tampered := base64.RawURLEncoding.EncodeToString(payload) + "." + parts[1]
+	assertInvalidAudienceCursor(t, codec, tampered, audience, application.CursorShapeString)
+}
+
+func TestAudienceCursorSupportsCanonicalIntegerAndTimeShapes(t *testing.T) {
+	codec, err := application.NewHMACCursorCodec([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	audience := application.CursorAudience{Endpoint: "/v1/incidents", Filter: map[string][]string{"state": {"open"}}}
+	id := "00000000-0000-4000-8000-000000000001"
+	for _, test := range []struct {
+		name  string
+		shape application.CursorShape
+		sort  string
+	}{
+		{name: "integer", shape: application.CursorShapeInt, sort: "42"},
+		{name: "time", shape: application.CursorShapeTime, sort: "2026-07-26T12:00:00.123Z"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			want := application.CursorKey{Sort: test.sort, ID: id}
+			token, err := codec.EncodeFor(audience, want, test.shape)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := codec.DecodeFor(token, audience, test.shape)
+			if err != nil || got != want {
+				t.Fatalf("DecodeFor() = %#v, %v", got, err)
+			}
+		})
+	}
+	for _, badInteger := range []string{"0042", "+42", "42.0"} {
+		if _, err := codec.EncodeFor(audience, application.CursorKey{Sort: badInteger, ID: id}, application.CursorShapeInt); err == nil {
+			t.Errorf("EncodeFor() accepted non-canonical integer %q", badInteger)
+		}
+	}
+	if _, err := codec.EncodeFor(audience, application.CursorKey{Sort: "2026-07-26T09:00:00-03:00", ID: id}, application.CursorShapeTime); err == nil {
+		t.Fatal("EncodeFor() accepted non-canonical UTC time")
+	}
+	if _, err := codec.EncodeFor(application.CursorAudience{Endpoint: "/v1/incidents/", Filter: audience.Filter}, application.CursorKey{Sort: "open", ID: id}, application.CursorShapeString); err == nil {
+		t.Fatal("EncodeFor() accepted a non-canonical endpoint path")
+	}
+}
+
 func TestCursorRejectsVersionAndSortMismatch(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	codec, err := application.NewHMACCursorCodec(key)
@@ -97,6 +189,15 @@ func assertInvalidCursor(t *testing.T, codec application.CursorCodec, token stri
 	var validation *application.ValidationError
 	if !errors.As(err, &validation) || validation.Fields["cursor"] != "is invalid" {
 		t.Fatalf("Decode() error = %v, want cursor ValidationError", err)
+	}
+}
+
+func assertInvalidAudienceCursor(t *testing.T, codec application.CursorCodec, token string, audience application.CursorAudience, shape application.CursorShape) {
+	t.Helper()
+	_, err := codec.DecodeFor(token, audience, shape)
+	var validation *application.ValidationError
+	if !errors.As(err, &validation) || validation.Fields["cursor"] != "is invalid" {
+		t.Fatalf("DecodeFor() error = %v, want cursor ValidationError", err)
 	}
 }
 
