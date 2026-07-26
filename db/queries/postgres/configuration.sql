@@ -1,9 +1,12 @@
 -- name: CreateLocation :exec
-INSERT INTO locations (id, name, created_at)
-VALUES (sqlc.arg(id), sqlc.arg(name), sqlc.arg(created_at));
+INSERT INTO locations (id, name, enabled, created_at, updated_at)
+VALUES (
+  sqlc.arg(id), sqlc.arg(name), sqlc.arg(enabled),
+  sqlc.arg(created_at), sqlc.arg(updated_at)
+);
 
 -- name: GetLocation :one
-SELECT id, name, created_at
+SELECT id, name, enabled, created_at, updated_at
 FROM locations
 WHERE id = sqlc.arg(id);
 
@@ -60,7 +63,9 @@ SELECT
   ml.required
 FROM monitors m
 JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN locations l ON l.id = ml.location_id
 WHERE m.enabled
+  AND l.enabled
   AND m.next_run_at <= sqlc.arg(now)
 ORDER BY m.next_run_at, m.id, ml.location_id
 LIMIT sqlc.arg(row_limit);

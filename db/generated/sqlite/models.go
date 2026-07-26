@@ -127,9 +127,11 @@ type IncidentEvent struct {
 }
 
 type Location struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	CreatedAt string         `json:"created_at"`
+	Enabled   int64          `json:"enabled"`
+	UpdatedAt sql.NullString `json:"updated_at"`
 }
 
 type LocationHealth struct {

@@ -11,7 +11,7 @@ import (
 func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 7 {
+	if migrations.LatestVersion != 8 {
 		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
 	}
 	var schema strings.Builder
@@ -57,6 +57,28 @@ func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	} {
 		if !strings.Contains(schema.String(), expected) {
 			t.Fatalf("migration family is missing %q", expected)
+		}
+	}
+}
+
+func TestLocationLifecycleSchema(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00008_location_lifecycle.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT TRUE",
+		"ADD COLUMN updated_at TIMESTAMPTZ",
+		"UPDATE locations SET updated_at = created_at",
+		"ALTER COLUMN updated_at SET NOT NULL",
+		"DROP COLUMN updated_at",
+		"DROP COLUMN enabled",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("location lifecycle migration is missing %q", expected)
 		}
 	}
 }

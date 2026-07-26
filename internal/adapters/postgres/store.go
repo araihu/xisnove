@@ -89,6 +89,7 @@ func (s *store) transact(
 }
 
 func newRepositories(queries *dbpostgres.Queries) application.Repositories {
+	management := &managementRepository{queries: queries}
 	return application.Repositories{
 		Admins:               &adminRepository{queries: queries},
 		Sessions:             &sessionRepository{queries: queries},
@@ -107,6 +108,8 @@ func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 		Maintenance:          &maintenanceRepository{queries: queries},
 		Audit:                &auditRepository{queries: queries},
 		Retention:            &retentionRepository{queries: queries},
+		Management:           management,
+		ManagementCommands:   management,
 	}
 }
 
@@ -227,7 +230,9 @@ func (r *locationRepository) Create(ctx context.Context, location domain.Locatio
 	err := r.queries.CreateLocation(ctx, dbpostgres.CreateLocationParams{
 		ID:        string(location.ID),
 		Name:      location.Name,
+		Enabled:   location.Enabled,
 		CreatedAt: formatTime(location.CreatedAt),
+		UpdatedAt: formatTime(location.UpdatedAt),
 	})
 	if err != nil {
 		return repositoryError("create location", err)
@@ -243,17 +248,7 @@ func (r *locationRepository) Get(
 	if err != nil {
 		return domain.Location{}, repositoryError("get location", err)
 	}
-	createdAt, err := parseTime(record.CreatedAt)
-	if err != nil {
-		return domain.Location{}, fmt.Errorf("map location: %w", err)
-	}
-	return domain.Location{
-		ID:        domain.LocationID(record.ID),
-		Name:      record.Name,
-		Enabled:   true,
-		CreatedAt: createdAt,
-		UpdatedAt: createdAt,
-	}, nil
+	return mapManagementLocation(record.ID, record.Name, record.Enabled, record.CreatedAt, record.UpdatedAt)
 }
 
 type monitorRepository struct {

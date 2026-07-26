@@ -131,3 +131,26 @@ func TestAgentCredentialGenerationSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestLocationLifecycleSchema(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00008_location_lifecycle.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1",
+		"ADD COLUMN updated_at TEXT",
+		"UPDATE locations SET updated_at = created_at",
+		"locations_updated_at_insert_not_null",
+		"locations_updated_at_update_not_null",
+		"DROP COLUMN updated_at",
+		"DROP COLUMN enabled",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("location lifecycle migration is missing %q", expected)
+		}
+	}
+}

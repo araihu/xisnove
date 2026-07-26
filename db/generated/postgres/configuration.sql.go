@@ -52,18 +52,29 @@ func (q *Queries) AssignMonitorLocation(ctx context.Context, arg AssignMonitorLo
 }
 
 const createLocation = `-- name: CreateLocation :exec
-INSERT INTO locations (id, name, created_at)
-VALUES ($1, $2, $3)
+INSERT INTO locations (id, name, enabled, created_at, updated_at)
+VALUES (
+  $1, $2, $3,
+  $4, $5
+)
 `
 
 type CreateLocationParams struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (q *Queries) CreateLocation(ctx context.Context, arg CreateLocationParams) error {
-	_, err := q.db.ExecContext(ctx, createLocation, arg.ID, arg.Name, arg.CreatedAt)
+	_, err := q.db.ExecContext(ctx, createLocation,
+		arg.ID,
+		arg.Name,
+		arg.Enabled,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
 	return err
 }
 
@@ -123,15 +134,29 @@ func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) er
 }
 
 const getLocation = `-- name: GetLocation :one
-SELECT id, name, created_at
+SELECT id, name, enabled, created_at, updated_at
 FROM locations
 WHERE id = $1
 `
 
-func (q *Queries) GetLocation(ctx context.Context, id string) (Location, error) {
+type GetLocationRow struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetLocation(ctx context.Context, id string) (GetLocationRow, error) {
 	row := q.db.QueryRowContext(ctx, getLocation, id)
-	var i Location
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	var i GetLocationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
@@ -202,7 +227,9 @@ SELECT
   ml.required
 FROM monitors m
 JOIN monitor_locations ml ON ml.monitor_id = m.id
+JOIN locations l ON l.id = ml.location_id
 WHERE m.enabled
+  AND l.enabled
   AND m.next_run_at <= $1
 ORDER BY m.next_run_at, m.id, ml.location_id
 LIMIT $2

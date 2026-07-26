@@ -33,8 +33,56 @@ func TestMigrateFreshDatabaseIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != 7 {
+	if version != 8 {
 		t.Fatalf("migration version = %d", version)
+	}
+}
+
+func TestLocationLifecycleMigrationUpgradesVersionSevenAndDowngrades(t *testing.T) {
+	db, err := sqlitestore.Open(filepath.Join(t.TempDir(), "location-v8.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	provider, err := goose.NewProvider(
+		goose.DialectSQLite3,
+		db,
+		migrations.Files,
+		goose.WithTableName("schema_migrations"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	const createdAt = "2026-07-26T04:00:00Z"
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO locations (id, name, created_at)
+		VALUES ('00000000-0000-4000-8000-000000000800', 'upgrade-v8', ?)
+	`, createdAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlitestore.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var enabled int
+	var updatedAt string
+	if err := db.QueryRowContext(ctx, `
+		SELECT enabled, updated_at FROM locations
+		WHERE id = '00000000-0000-4000-8000-000000000800'
+	`).Scan(&enabled, &updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if enabled != 1 || updatedAt != createdAt {
+		t.Fatalf("upgraded location enabled=%d updated_at=%q", enabled, updatedAt)
+	}
+	if _, err := provider.Down(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "SELECT enabled, updated_at FROM locations"); err == nil {
+		t.Fatal("location lifecycle columns remained after downgrade")
 	}
 }
 
@@ -49,8 +97,8 @@ func TestAgentCredentialMigrationDowngradesWithForeignKeysEnabled(t *testing.T) 
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `
-		INSERT INTO locations (id, name, created_at)
-		VALUES ('00000000-0000-4000-8000-000000000701', 'downgrade', '2026-07-26T00:00:00Z');
+		INSERT INTO locations (id, name, enabled, created_at, updated_at)
+		VALUES ('00000000-0000-4000-8000-000000000701', 'downgrade', 1, '2026-07-26T00:00:00Z', '2026-07-26T00:00:00Z');
 		INSERT INTO agents (
 			id, location_id, name, credential_hash, credential_generation,
 			capabilities_json, created_at, updated_at
@@ -76,8 +124,10 @@ func TestAgentCredentialMigrationDowngradesWithForeignKeysEnabled(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := provider.Down(ctx); err != nil {
-		t.Fatal(err)
+	for range 2 {
+		if _, err := provider.Down(ctx); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var version, foreignKeys, agentCount int
 	if err := db.QueryRowContext(ctx, `
@@ -139,8 +189,8 @@ func TestAgentUpdatedAtRejectsNull(t *testing.T) {
 				t.Fatal(err)
 			}
 			if _, err := db.ExecContext(ctx, `
-				INSERT INTO locations (id, name, created_at)
-				VALUES ('location-null', 'null enforcement', '2026-07-26T00:00:00Z');
+				INSERT INTO locations (id, name, enabled, created_at, updated_at)
+				VALUES ('location-null', 'null enforcement', 1, '2026-07-26T00:00:00Z', '2026-07-26T00:00:00Z');
 				INSERT INTO agents (
 					id, location_id, name, credential_hash, credential_generation,
 					capabilities_json, created_at, updated_at
