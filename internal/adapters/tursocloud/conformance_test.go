@@ -73,6 +73,9 @@ func managedTestDatabase(t *testing.T, ctx context.Context) (string, string) {
 func resetManagedTurso(t *testing.T, database *sql.DB) {
 	t.Helper()
 	for _, table := range []string{
+		"operator_resources",
+		"discovery_batches",
+		"discovery_candidates",
 		"idempotency_records",
 		"api_tokens",
 		"notification_delivery_attempts",

@@ -65,6 +65,10 @@ func TestMigrationUpgradeAcrossLocalProfiles(t *testing.T) {
 				t.Fatal(err)
 			}
 			seedVersionSixAgent(t, handle, false)
+			if _, err := provider.UpTo(ctx, 9); err != nil {
+				t.Fatal(err)
+			}
+			seedVersionNineDiscovery(t, handle)
 			if err := handle.Ready(ctx); err == nil {
 				t.Fatal("version 6 database reported ready for version 7 binary")
 			}
@@ -76,6 +80,7 @@ func TestMigrationUpgradeAcrossLocalProfiles(t *testing.T) {
 			assertCurrentAgentWriterPopulatesUpdatedAt(t, handle)
 			assertAgentUpdatedAtRejectsNull(t, handle, false)
 			assertUpgradedAgentCredential(t, handle)
+			assertUpgradedVersionNineDiscovery(t, handle)
 		})
 	}
 }
@@ -131,6 +136,10 @@ func TestMigrationUpgradePostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedVersionSixAgent(t, handle, true)
+	if _, err := provider.UpTo(ctx, 9); err != nil {
+		t.Fatal(err)
+	}
+	seedVersionNineDiscovery(t, handle)
 	if err := handle.Ready(ctx); err == nil {
 		t.Fatal("version 6 database reported ready for version 7 binary")
 	}
@@ -142,7 +151,61 @@ func TestMigrationUpgradePostgres(t *testing.T) {
 	assertCurrentAgentWriterPopulatesUpdatedAt(t, handle)
 	assertAgentUpdatedAtRejectsNull(t, handle, true)
 	assertUpgradedAgentCredential(t, handle)
+	assertUpgradedVersionNineDiscovery(t, handle)
 	assertPostgresAgentCredentialDowngrade(t, handle, provider)
+}
+
+func seedVersionNineDiscovery(t *testing.T, handle *database.Handle) {
+	t.Helper()
+	_, err := handle.DB.ExecContext(context.Background(), `
+		INSERT INTO discovery_batches (
+			agent_id, batch_id, request_hash, accepted, created_count, updated_count, completed_at, created_at
+		) VALUES (
+			'00000000-0000-4000-8000-000000000105', 'upgrade-discovery', 'upgrade-hash',
+			1, 1, 0, '2026-07-25T12:10:00Z', '2026-07-25T12:09:00Z'
+		);
+		INSERT INTO discovery_candidates (
+			id, agent_id, location_id, source_kind, source_uid, namespace, name,
+			labels_json, protocol, target, network_perspective, present,
+			last_observed_at, promoted_monitor_id, drift_hint, created_at, updated_at
+		) VALUES (
+			'00000000-0000-4000-8000-000000000110',
+			'00000000-0000-4000-8000-000000000105', '00000000-0000-4000-8000-000000000101',
+			'service', 'service-uid', 'default', 'upgrade-api', '{}', 'http',
+			'https://upgrade.default.svc/health', 'cluster-a', TRUE, '2026-07-25T12:10:00Z',
+			'00000000-0000-4000-8000-000000000102', '', '2026-07-25T12:09:00Z', '2026-07-25T12:10:00Z'
+		)
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertUpgradedVersionNineDiscovery(t *testing.T, handle *database.Handle) {
+	t.Helper()
+	var promoted sql.NullString
+	var present string
+	var complete, lastComplete sql.NullString
+	if err := handle.DB.QueryRowContext(context.Background(), `
+		SELECT promoted_monitor_id, CAST(present AS TEXT) FROM discovery_candidates
+		WHERE id = '00000000-0000-4000-8000-000000000110'
+	`).Scan(&promoted, &present); err != nil {
+		t.Fatal(err)
+	}
+	if !promoted.Valid || promoted.String != "00000000-0000-4000-8000-000000000102" || (present != "1" && present != "true") {
+		t.Fatalf("upgraded discovery candidate promoted=%v present=%q", promoted, present)
+	}
+	if err := handle.DB.QueryRowContext(context.Background(), `
+		SELECT CAST(complete AS TEXT), CAST(last_complete_discovery_at AS TEXT)
+		FROM discovery_batches JOIN agents ON agents.id = discovery_batches.agent_id
+		WHERE discovery_batches.agent_id = '00000000-0000-4000-8000-000000000105'
+		  AND batch_id = 'upgrade-discovery'
+	`).Scan(&complete, &lastComplete); err != nil {
+		t.Fatal(err)
+	}
+	if !complete.Valid || (complete.String != "0" && complete.String != "false") || lastComplete.Valid {
+		t.Fatalf("upgraded discovery defaults complete=%v last_complete=%v", complete, lastComplete)
+	}
 }
 
 func seedVersionSixAgent(t *testing.T, handle *database.Handle, postgres bool) {

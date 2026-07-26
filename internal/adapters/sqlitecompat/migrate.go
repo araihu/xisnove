@@ -9,7 +9,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-const LatestMigrationVersion = 9
+const LatestMigrationVersion = migrations.LatestVersion
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	provider, err := goose.NewProvider(

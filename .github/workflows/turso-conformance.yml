@@ -116,6 +116,11 @@ jobs:
           gotestsum --junitfile managed-turso-conformance.xml --
           -race ./internal/adapters/tursocloud
           -run '^TestPersistenceConformance$' -count=1
+      - name: Run managed Turso Kubernetes-edge storage conformance
+        run: >-
+          gotestsum --junitfile managed-turso-operator-edge.xml --
+          -race ./integration
+          -run '^TestOperatorEdgeStorage/TursoCloud$' -count=1
       - name: Upload managed Turso test report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

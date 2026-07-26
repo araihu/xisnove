@@ -16,17 +16,18 @@ type Admin struct {
 }
 
 type Agent struct {
-	ID                   string         `json:"id"`
-	LocationID           string         `json:"location_id"`
-	Name                 string         `json:"name"`
-	CredentialHash       []byte         `json:"credential_hash"`
-	CredentialGeneration int64          `json:"credential_generation"`
-	CapabilitiesJson     []byte         `json:"capabilities_json"`
-	Version              sql.NullString `json:"version"`
-	LastSeenAt           sql.NullString `json:"last_seen_at"`
-	RevokedAt            sql.NullString `json:"revoked_at"`
-	CreatedAt            string         `json:"created_at"`
-	UpdatedAt            sql.NullString `json:"updated_at"`
+	ID                      string         `json:"id"`
+	LocationID              string         `json:"location_id"`
+	Name                    string         `json:"name"`
+	CredentialHash          []byte         `json:"credential_hash"`
+	CredentialGeneration    int64          `json:"credential_generation"`
+	CapabilitiesJson        []byte         `json:"capabilities_json"`
+	Version                 sql.NullString `json:"version"`
+	LastSeenAt              sql.NullString `json:"last_seen_at"`
+	RevokedAt               sql.NullString `json:"revoked_at"`
+	CreatedAt               string         `json:"created_at"`
+	UpdatedAt               sql.NullString `json:"updated_at"`
+	LastCompleteDiscoveryAt sql.NullString `json:"last_complete_discovery_at"`
 }
 
 type AgentCredential struct {
@@ -96,14 +97,16 @@ type DailyUptime struct {
 }
 
 type DiscoveryBatch struct {
-	AgentID      string         `json:"agent_id"`
-	BatchID      string         `json:"batch_id"`
-	RequestHash  string         `json:"request_hash"`
-	Accepted     int64          `json:"accepted"`
-	CreatedCount int64          `json:"created_count"`
-	UpdatedCount int64          `json:"updated_count"`
-	CompletedAt  sql.NullString `json:"completed_at"`
-	CreatedAt    string         `json:"created_at"`
+	AgentID             string         `json:"agent_id"`
+	BatchID             string         `json:"batch_id"`
+	RequestHash         string         `json:"request_hash"`
+	Accepted            int64          `json:"accepted"`
+	CreatedCount        int64          `json:"created_count"`
+	UpdatedCount        int64          `json:"updated_count"`
+	CompletedAt         sql.NullString `json:"completed_at"`
+	CreatedAt           string         `json:"created_at"`
+	Complete            int64          `json:"complete"`
+	ObservedCompletedAt sql.NullString `json:"observed_completed_at"`
 }
 
 type DiscoveryCandidate struct {
@@ -287,6 +290,14 @@ type OperationLease struct {
 	ExpiresAt  string `json:"expires_at"`
 	CursorJson []byte `json:"cursor_json"`
 	UpdatedAt  string `json:"updated_at"`
+}
+
+type OperatorResource struct {
+	OwnerKey   string         `json:"owner_key"`
+	OwnerUid   string         `json:"owner_uid"`
+	Kind       string         `json:"kind"`
+	ResourceID string         `json:"resource_id"`
+	DeletedAt  sql.NullString `json:"deleted_at"`
 }
 
 type ProbeResult struct {

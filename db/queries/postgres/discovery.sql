@@ -1,6 +1,6 @@
 -- name: CreateDiscoveryBatch :execrows
-INSERT INTO discovery_batches (agent_id, batch_id, request_hash, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO discovery_batches (agent_id, batch_id, request_hash, complete, observed_completed_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (agent_id, batch_id) DO NOTHING;
 
 -- name: GetDiscoveryBatch :one
@@ -10,6 +10,24 @@ SELECT * FROM discovery_batches WHERE agent_id = $1 AND batch_id = $2;
 UPDATE discovery_batches
 SET accepted = $1, created_count = $2, updated_count = $3, completed_at = $4
 WHERE agent_id = $5 AND batch_id = $6 AND completed_at IS NULL;
+
+-- name: MarkAbsentDiscoveryCandidates :execrows
+UPDATE discovery_candidates
+SET present = FALSE, updated_at = sqlc.arg(updated_at)
+WHERE agent_id = sqlc.arg(agent_id) AND present = TRUE
+  AND last_observed_at < sqlc.arg(completed_at);
+
+-- name: RecordAgentLastCompleteDiscovery :execrows
+UPDATE agents
+SET last_complete_discovery_at = sqlc.arg(completed_at)
+WHERE id = sqlc.arg(agent_id) AND (
+    last_complete_discovery_at IS NULL OR last_complete_discovery_at < sqlc.arg(completed_at)
+);
+
+-- name: GetAgentLastCompleteDiscovery :one
+SELECT last_complete_discovery_at
+FROM agents
+WHERE id = sqlc.arg(agent_id);
 
 -- name: InsertDiscoveryCandidate :execrows
 INSERT INTO discovery_candidates (

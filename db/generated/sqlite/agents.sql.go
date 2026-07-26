@@ -132,7 +132,7 @@ func (q *Queries) CreateAgentEnrollmentToken(ctx context.Context, arg CreateAgen
 const findActiveAgentByCredentialHash = `-- name: FindActiveAgentByCredentialHash :one
 SELECT a.id, a.location_id, a.name, c.credential_hash,
        a.credential_generation, a.capabilities_json, a.version,
-       a.last_seen_at, a.revoked_at, a.created_at, a.updated_at,
+       a.last_seen_at, a.revoked_at, a.created_at, a.updated_at, a.last_complete_discovery_at,
        c.generation AS presented_credential_generation
 FROM agent_credentials c
 JOIN agents a ON a.id = c.agent_id
@@ -153,6 +153,7 @@ type FindActiveAgentByCredentialHashRow struct {
 	RevokedAt                     sql.NullString `json:"revoked_at"`
 	CreatedAt                     string         `json:"created_at"`
 	UpdatedAt                     sql.NullString `json:"updated_at"`
+	LastCompleteDiscoveryAt       sql.NullString `json:"last_complete_discovery_at"`
 	PresentedCredentialGeneration int64          `json:"presented_credential_generation"`
 }
 
@@ -171,13 +172,14 @@ func (q *Queries) FindActiveAgentByCredentialHash(ctx context.Context, credentia
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastCompleteDiscoveryAt,
 		&i.PresentedCredentialGeneration,
 	)
 	return i, err
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at, updated_at
+SELECT id, location_id, name, credential_hash, credential_generation, capabilities_json, version, last_seen_at, revoked_at, created_at, updated_at, last_complete_discovery_at
 FROM agents
 WHERE id = ?
 `
@@ -197,6 +199,7 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastCompleteDiscoveryAt,
 	)
 	return i, err
 }

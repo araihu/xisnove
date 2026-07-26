@@ -26,13 +26,19 @@ func (s *store) DiscoveryTransact(ctx context.Context, fn func(context.Context, 
 }
 
 func discoveryRepositories(repositories port.Repositories, queries *dbpostgres.Queries) port.DiscoveryRepositories {
-	return port.DiscoveryRepositories{Discovery: &discoveryRepository{queries: queries}, Locations: repositories.Locations, Monitors: repositories.Monitors, Health: repositories.Health}
+	return port.DiscoveryRepositories{Discovery: &discoveryRepository{queries: queries}, Agents: repositories.Agents, Locations: repositories.Locations, Monitors: repositories.Monitors, Health: repositories.Health}
 }
 
 type discoveryRepository struct{ queries *dbpostgres.Queries }
 
 func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.DiscoveryBatch) (port.DiscoveryBatchAcknowledgement, error) {
-	insertedBatch, err := r.queries.CreateDiscoveryBatch(ctx, dbpostgres.CreateDiscoveryBatchParams{AgentID: string(batch.AgentID), BatchID: batch.ID, RequestHash: batch.RequestHash, CreatedAt: batch.CreatedAt})
+	if err := validateDiscoveryBatch(batch); err != nil {
+		return port.DiscoveryBatchAcknowledgement{}, err
+	}
+	insertedBatch, err := r.queries.CreateDiscoveryBatch(ctx, dbpostgres.CreateDiscoveryBatchParams{
+		AgentID: string(batch.AgentID), BatchID: batch.ID, RequestHash: batch.RequestHash,
+		Complete: batch.Complete, ObservedCompletedAt: nullableTimeValue(batch.CompletedAt), CreatedAt: batch.CreatedAt,
+	})
 	if err != nil {
 		return port.DiscoveryBatchAcknowledgement{}, repositoryError("create discovery batch", err)
 	}
@@ -41,7 +47,7 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 		if err != nil {
 			return port.DiscoveryBatchAcknowledgement{}, repositoryError("get discovery batch", err)
 		}
-		if stored.RequestHash != batch.RequestHash {
+		if stored.RequestHash != batch.RequestHash || stored.Complete != batch.Complete || !sameNullableDiscoveryTime(stored.ObservedCompletedAt, batch.CompletedAt) {
 			return port.DiscoveryBatchAcknowledgement{}, port.ErrConflict
 		}
 		if !stored.CompletedAt.Valid {
@@ -77,6 +83,14 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 			ack.Updated++
 		}
 	}
+	if batch.Complete {
+		if _, err := r.queries.MarkAbsentDiscoveryCandidates(ctx, dbpostgres.MarkAbsentDiscoveryCandidatesParams{UpdatedAt: batch.CreatedAt, AgentID: string(batch.AgentID), CompletedAt: batch.CompletedAt}); err != nil {
+			return port.DiscoveryBatchAcknowledgement{}, repositoryError("mark absent discovery candidates", err)
+		}
+		if _, err := r.queries.RecordAgentLastCompleteDiscovery(ctx, dbpostgres.RecordAgentLastCompleteDiscoveryParams{CompletedAt: nullableTimeValue(batch.CompletedAt), AgentID: string(batch.AgentID)}); err != nil {
+			return port.DiscoveryBatchAcknowledgement{}, repositoryError("record complete discovery", err)
+		}
+	}
 	completed, err := r.queries.CompleteDiscoveryBatch(ctx, dbpostgres.CompleteDiscoveryBatchParams{Accepted: int32(ack.Accepted), CreatedCount: int32(ack.Created), UpdatedCount: int32(ack.Updated), CompletedAt: sql.NullTime{Time: batch.CreatedAt, Valid: true}, AgentID: string(batch.AgentID), BatchID: batch.ID})
 	if err != nil {
 		return port.DiscoveryBatchAcknowledgement{}, repositoryError("complete discovery batch", err)
@@ -85,6 +99,36 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 		return port.DiscoveryBatchAcknowledgement{}, port.ErrConflict
 	}
 	return ack, nil
+}
+
+func (r *discoveryRepository) LastCompleteAt(ctx context.Context, agentID domain.AgentID) (*time.Time, error) {
+	value, err := r.queries.GetAgentLastCompleteDiscovery(ctx, string(agentID))
+	if err != nil {
+		return nil, repositoryError("get last complete discovery", err)
+	}
+	return parseNullableTime(value)
+}
+
+func validateDiscoveryBatch(batch port.DiscoveryBatch) error {
+	if !batch.Complete && len(batch.Candidates) == 0 {
+		return port.ErrConflict
+	}
+	if !batch.Complete {
+		return nil
+	}
+	if batch.CompletedAt.IsZero() {
+		return port.ErrConflict
+	}
+	for _, candidate := range batch.Candidates {
+		if !candidate.LastObservedAt.Equal(batch.CompletedAt) {
+			return port.ErrConflict
+		}
+	}
+	return nil
+}
+
+func sameNullableDiscoveryTime(stored sql.NullTime, expected time.Time) bool {
+	return stored.Valid == !expected.IsZero() && (!stored.Valid || stored.Time.Equal(expected))
 }
 
 func (r *discoveryRepository) insertCandidate(ctx context.Context, candidate domain.DiscoveryCandidate) (bool, error) {
@@ -198,3 +242,4 @@ func postgresMonitorID(id *domain.MonitorID) sql.NullString {
 
 var _ port.DiscoveryUnitOfWork = (*store)(nil)
 var _ port.DiscoveryRepository = (*discoveryRepository)(nil)
+var _ port.CompleteDiscoveryRepository = (*discoveryRepository)(nil)

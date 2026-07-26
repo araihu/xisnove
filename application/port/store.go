@@ -51,6 +51,7 @@ type Repositories struct {
 	Management           ManagementQueryRepository
 	ManagementCommands   ManagementCommandRepository
 	Discovery            DiscoveryRepository
+	Operator             OperatorRepository
 }
 
 type AdminRecord struct {
@@ -87,6 +88,7 @@ type AgentRecord struct {
 	Agent                         domain.Agent
 	CredentialHash                []byte
 	PresentedCredentialGeneration uint64
+	LastCompleteDiscoveryAt       *time.Time
 }
 
 type DueMonitor struct {

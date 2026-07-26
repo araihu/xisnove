@@ -43,16 +43,18 @@ func (q *Queries) CompleteDiscoveryBatch(ctx context.Context, arg CompleteDiscov
 }
 
 const createDiscoveryBatch = `-- name: CreateDiscoveryBatch :execrows
-INSERT INTO discovery_batches (agent_id, batch_id, request_hash, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO discovery_batches (agent_id, batch_id, request_hash, complete, observed_completed_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (agent_id, batch_id) DO NOTHING
 `
 
 type CreateDiscoveryBatchParams struct {
-	AgentID     string    `json:"agent_id"`
-	BatchID     string    `json:"batch_id"`
-	RequestHash string    `json:"request_hash"`
-	CreatedAt   time.Time `json:"created_at"`
+	AgentID             string       `json:"agent_id"`
+	BatchID             string       `json:"batch_id"`
+	RequestHash         string       `json:"request_hash"`
+	Complete            bool         `json:"complete"`
+	ObservedCompletedAt sql.NullTime `json:"observed_completed_at"`
+	CreatedAt           time.Time    `json:"created_at"`
 }
 
 func (q *Queries) CreateDiscoveryBatch(ctx context.Context, arg CreateDiscoveryBatchParams) (int64, error) {
@@ -60,6 +62,8 @@ func (q *Queries) CreateDiscoveryBatch(ctx context.Context, arg CreateDiscoveryB
 		arg.AgentID,
 		arg.BatchID,
 		arg.RequestHash,
+		arg.Complete,
+		arg.ObservedCompletedAt,
 		arg.CreatedAt,
 	)
 	if err != nil {
@@ -68,8 +72,21 @@ func (q *Queries) CreateDiscoveryBatch(ctx context.Context, arg CreateDiscoveryB
 	return result.RowsAffected()
 }
 
+const getAgentLastCompleteDiscovery = `-- name: GetAgentLastCompleteDiscovery :one
+SELECT last_complete_discovery_at
+FROM agents
+WHERE id = $1
+`
+
+func (q *Queries) GetAgentLastCompleteDiscovery(ctx context.Context, agentID string) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, getAgentLastCompleteDiscovery, agentID)
+	var last_complete_discovery_at sql.NullTime
+	err := row.Scan(&last_complete_discovery_at)
+	return last_complete_discovery_at, err
+}
+
 const getDiscoveryBatch = `-- name: GetDiscoveryBatch :one
-SELECT agent_id, batch_id, request_hash, accepted, created_count, updated_count, completed_at, created_at FROM discovery_batches WHERE agent_id = $1 AND batch_id = $2
+SELECT agent_id, batch_id, request_hash, accepted, created_count, updated_count, completed_at, created_at, complete, observed_completed_at FROM discovery_batches WHERE agent_id = $1 AND batch_id = $2
 `
 
 type GetDiscoveryBatchParams struct {
@@ -89,6 +106,8 @@ func (q *Queries) GetDiscoveryBatch(ctx context.Context, arg GetDiscoveryBatchPa
 		&i.UpdatedCount,
 		&i.CompletedAt,
 		&i.CreatedAt,
+		&i.Complete,
+		&i.ObservedCompletedAt,
 	)
 	return i, err
 }
@@ -336,6 +355,48 @@ func (q *Queries) ListDiscoveryCandidates(ctx context.Context, arg ListDiscovery
 		return nil, err
 	}
 	return items, nil
+}
+
+const markAbsentDiscoveryCandidates = `-- name: MarkAbsentDiscoveryCandidates :execrows
+UPDATE discovery_candidates
+SET present = FALSE, updated_at = $1
+WHERE agent_id = $2 AND present = TRUE
+  AND last_observed_at < $3
+`
+
+type MarkAbsentDiscoveryCandidatesParams struct {
+	UpdatedAt   time.Time `json:"updated_at"`
+	AgentID     string    `json:"agent_id"`
+	CompletedAt time.Time `json:"completed_at"`
+}
+
+func (q *Queries) MarkAbsentDiscoveryCandidates(ctx context.Context, arg MarkAbsentDiscoveryCandidatesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markAbsentDiscoveryCandidates, arg.UpdatedAt, arg.AgentID, arg.CompletedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const recordAgentLastCompleteDiscovery = `-- name: RecordAgentLastCompleteDiscovery :execrows
+UPDATE agents
+SET last_complete_discovery_at = $1
+WHERE id = $2 AND (
+    last_complete_discovery_at IS NULL OR last_complete_discovery_at < $1
+)
+`
+
+type RecordAgentLastCompleteDiscoveryParams struct {
+	CompletedAt sql.NullTime `json:"completed_at"`
+	AgentID     string       `json:"agent_id"`
+}
+
+func (q *Queries) RecordAgentLastCompleteDiscovery(ctx context.Context, arg RecordAgentLastCompleteDiscoveryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, recordAgentLastCompleteDiscovery, arg.CompletedAt, arg.AgentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateDiscoveryCandidateByIdentity = `-- name: UpdateDiscoveryCandidateByIdentity :execrows

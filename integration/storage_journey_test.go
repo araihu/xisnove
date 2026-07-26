@@ -30,7 +30,7 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	if err := secondary.Ready(ctx); err != nil {
 		t.Fatalf("secondary readiness: %v", err)
 	}
-	assertSchemaVersion(t, primary, 9)
+	assertSchemaVersion(t, primary, 10)
 
 	ids := &matrixIDs{}
 	tokens := &matrixTokens{}
@@ -384,7 +384,7 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	}
 
 	reopened := harness.closeAndReopen(t)
-	assertSchemaVersion(t, reopened, 9)
+	assertSchemaVersion(t, reopened, 10)
 	assertTableCount(t, reopened, "admins", 1)
 	assertTableCount(t, reopened, "sessions", 1)
 	assertTableCount(t, reopened, "locations", 1)

@@ -111,6 +111,7 @@ func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 		Management:           management,
 		ManagementCommands:   management,
 		Discovery:            &discoveryRepository{queries: queries},
+		Operator:             &operatorRepository{queries: queries},
 	}
 }
 
@@ -766,7 +767,7 @@ func (r *agentRepository) FindActiveByCredentialHash(
 		ID: record.ID, LocationID: record.LocationID, Name: record.Name,
 		CredentialHash: record.CredentialHash, CredentialGeneration: record.CredentialGeneration,
 		CapabilitiesJson: record.CapabilitiesJson, Version: record.Version, LastSeenAt: record.LastSeenAt,
-		RevokedAt: record.RevokedAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+		RevokedAt: record.RevokedAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, LastCompleteDiscoveryAt: record.LastCompleteDiscoveryAt,
 	})
 	if err != nil {
 		return application.AgentRecord{}, err
@@ -1131,9 +1132,11 @@ func mapAgent(record dbpostgres.Agent) (application.AgentRecord, error) {
 	if err != nil {
 		return application.AgentRecord{}, fmt.Errorf("map agent update: %w", err)
 	}
-	return application.AgentRecord{
-		Agent: agent, CredentialHash: record.CredentialHash,
-	}, nil
+	lastComplete, err := parseNullableTime(record.LastCompleteDiscoveryAt)
+	if err != nil {
+		return application.AgentRecord{}, fmt.Errorf("map agent complete discovery: %w", err)
+	}
+	return application.AgentRecord{Agent: agent, CredentialHash: record.CredentialHash, LastCompleteDiscoveryAt: lastComplete}, nil
 }
 
 func mapRun(record dbpostgres.CheckRun) (application.RunRecord, error) {

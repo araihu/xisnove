@@ -1,6 +1,6 @@
 -- name: CreateDiscoveryBatch :execrows
-INSERT INTO discovery_batches (agent_id, batch_id, request_hash, created_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO discovery_batches (agent_id, batch_id, request_hash, complete, observed_completed_at, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (agent_id, batch_id) DO NOTHING;
 
 -- name: GetDiscoveryBatch :one
@@ -10,6 +10,23 @@ SELECT * FROM discovery_batches WHERE agent_id = ? AND batch_id = ?;
 UPDATE discovery_batches
 SET accepted = ?, created_count = ?, updated_count = ?, completed_at = ?
 WHERE agent_id = ? AND batch_id = ? AND completed_at IS NULL;
+
+-- name: MarkAbsentDiscoveryCandidates :execrows
+UPDATE discovery_candidates
+SET present = 0, updated_at = ?
+WHERE agent_id = ? AND present = 1 AND last_observed_at < ?;
+
+-- name: RecordAgentLastCompleteDiscovery :execrows
+UPDATE agents
+SET last_complete_discovery_at = sqlc.arg(completed_at)
+WHERE id = sqlc.arg(agent_id) AND (
+    last_complete_discovery_at IS NULL OR last_complete_discovery_at < sqlc.arg(completed_at)
+);
+
+-- name: GetAgentLastCompleteDiscovery :one
+SELECT last_complete_discovery_at
+FROM agents
+WHERE id = ?;
 
 -- name: InsertDiscoveryCandidate :execrows
 INSERT INTO discovery_candidates (

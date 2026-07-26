@@ -15,12 +15,100 @@ import (
 
 func RunDiscovery(t *testing.T, factory Factory) {
 	t.Helper()
+	RunOperatorEdge(t, factory)
+	t.Run("complete snapshots atomically mark absence and preserve freshness", func(t *testing.T) { testCompleteDiscoverySnapshots(t, factory(t)) })
 	t.Run("discovery idempotency stale and promotion", func(t *testing.T) { testDiscoveryLifecycle(t, factory(t)) })
 	t.Run("discovery transaction rollback", func(t *testing.T) { testDiscoveryRollback(t, factory(t)) })
 	t.Run("unknown tombstone is a no-op", func(t *testing.T) { testUnknownDiscoveryTombstone(t, factory(t)) })
 	t.Run("newer observation wins concurrently", func(t *testing.T) { testConcurrentDiscoveryOrdering(t, factory(t)) })
 	t.Run("promotion is concurrent and idempotent", func(t *testing.T) { testConcurrentDiscoveryPromotion(t, factory(t)) })
 	t.Run("cursor traverses every page and terminates", func(t *testing.T) { testDiscoveryCursorTraversal(t, factory(t)) })
+}
+
+func testCompleteDiscoverySnapshots(t *testing.T, unit port.UnitOfWork) {
+	t.Helper()
+	discovery := unit.(port.DiscoveryUnitOfWork)
+	ctx := context.Background()
+	initial := time.Date(2026, 7, 26, 13, 0, 0, 0, time.UTC)
+	completed := initial.Add(10 * time.Minute)
+	agentID, locationID := seedDiscoveryOwner(t, ctx, unit, initial)
+	present := mustDiscoveryCandidate(t, "00000000-0000-4000-8000-000000000941", agentID, locationID, true, initial)
+	missing := mustDiscoveryCandidate(t, "00000000-0000-4000-8000-000000000942", agentID, locationID, true, initial)
+	missing.SourceUID = "uid-2"
+	applyDiscoveryBatch(t, ctx, discovery, port.DiscoveryBatch{ID: "complete-base", AgentID: agentID, RequestHash: "complete-base", Candidates: []domain.DiscoveryCandidate{present, missing}, CreatedAt: initial})
+
+	monitor := mustDiscoveryMonitor(t, "00000000-0000-4000-8000-000000000943", initial)
+	if err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		if err := repositories.Monitors.Create(ctx, monitor); err != nil {
+			return err
+		}
+		_, err := repositories.Discovery.LinkPromotion(ctx, present.ID, monitor.ID, initial)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	present.LastObservedAt, present.UpdatedAt = completed, completed
+	completeBatch := port.DiscoveryBatch{ID: "complete-current", AgentID: agentID, RequestHash: "complete-current", Candidates: []domain.DiscoveryCandidate{present}, Complete: true, CompletedAt: completed, CreatedAt: completed.Add(time.Minute)}
+	applyDiscoveryBatch(t, ctx, discovery, completeBatch)
+
+	if err := discovery.DiscoveryView(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		storedPresent, err := repositories.Discovery.Get(ctx, present.ID)
+		if err != nil {
+			return err
+		}
+		storedMissing, err := repositories.Discovery.Get(ctx, missing.ID)
+		if err != nil {
+			return err
+		}
+		if !storedPresent.Present || !storedPresent.LastObservedAt.Equal(completed) || storedPresent.PromotedMonitorID == nil || *storedPresent.PromotedMonitorID != monitor.ID {
+			t.Fatalf("complete present candidate = %#v", storedPresent)
+		}
+		if storedMissing.Present || storedMissing.PromotedMonitorID != nil {
+			t.Fatalf("complete missing candidate = %#v", storedMissing)
+		}
+		completeReader, ok := repositories.Discovery.(port.CompleteDiscoveryRepository)
+		if !ok {
+			t.Fatal("discovery repository does not expose complete observation freshness")
+		}
+		latest, err := completeReader.LastCompleteAt(ctx, agentID)
+		if err != nil || latest == nil || !latest.Equal(completed) {
+			t.Fatalf("last complete = %v, %v", latest, err)
+		}
+		agent, err := repositories.Agents.Get(ctx, agentID)
+		if err != nil || agent.LastCompleteDiscoveryAt == nil || !agent.LastCompleteDiscoveryAt.Equal(completed) {
+			t.Fatalf("agent complete discovery = %#v, %v", agent.LastCompleteDiscoveryAt, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		_, err := repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{ID: "empty-partial", AgentID: agentID, RequestHash: "empty-partial", CreatedAt: completed})
+		return err
+	}); !errors.Is(err, port.ErrConflict) {
+		t.Fatalf("empty partial = %v, want conflict", err)
+	}
+	if err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		_, err := repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{ID: "empty-complete", AgentID: agentID, RequestHash: "empty-complete", Complete: true, CompletedAt: completed.Add(time.Minute), CreatedAt: completed.Add(2 * time.Minute)})
+		return err
+	}); err != nil {
+		t.Fatalf("empty complete: %v", err)
+	}
+	if err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		_, err := repositories.Discovery.ApplyBatch(ctx, port.DiscoveryBatch{ID: "complete-current", AgentID: agentID, RequestHash: "complete-current", Candidates: []domain.DiscoveryCandidate{present}, Complete: false, CreatedAt: completed})
+		return err
+	}); !errors.Is(err, port.ErrConflict) {
+		t.Fatalf("changed completeness replay = %v, want conflict", err)
+	}
+	changedTime := completeBatch
+	changedTime.CompletedAt = completed.Add(time.Second)
+	if err := discovery.DiscoveryTransact(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		_, err := repositories.Discovery.ApplyBatch(ctx, changedTime)
+		return err
+	}); !errors.Is(err, port.ErrConflict) {
+		t.Fatalf("changed timestamp replay = %v, want conflict", err)
+	}
 }
 
 func testUnknownDiscoveryTombstone(t *testing.T, unit port.UnitOfWork) {

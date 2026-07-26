@@ -126,6 +126,7 @@ func newTursoCloudStorageHarness(t *testing.T) *storageHarness {
 func resetIntegrationStorage(t *testing.T, handle *database.Handle) {
 	t.Helper()
 	for _, table := range []string{
+		"operator_resources", "discovery_batches", "discovery_candidates",
 		"idempotency_records",
 		"api_tokens",
 		"notification_delivery_attempts", "notification_outbox", "notification_routes",

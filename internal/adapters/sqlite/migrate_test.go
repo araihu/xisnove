@@ -33,7 +33,7 @@ func TestMigrateFreshDatabaseIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != 9 {
+	if version != 10 {
 		t.Fatalf("migration version = %d", version)
 	}
 }
