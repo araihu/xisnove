@@ -4,16 +4,21 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/araihu/xisnove/application"
 	postgresmigrations "github.com/araihu/xisnove/db/migrations/postgres"
 	sqlitemigrations "github.com/araihu/xisnove/db/migrations/sqlite"
+	"github.com/araihu/xisnove/domain"
 	"github.com/araihu/xisnove/internal/adapters/database"
 	postgresstore "github.com/araihu/xisnove/internal/adapters/postgres"
 	postgrescontainer "github.com/araihu/xisnove/internal/testsupport/postgrescontainer"
@@ -68,6 +73,8 @@ func TestMigrationUpgradeAcrossLocalProfiles(t *testing.T) {
 			}
 			assertUpgradedMonitor(t, handle)
 			assertUpgradedIncident(t, handle)
+			assertCurrentAgentWriterPopulatesUpdatedAt(t, handle)
+			assertAgentUpdatedAtRejectsNull(t, handle, false)
 			assertUpgradedAgentCredential(t, handle)
 		})
 	}
@@ -132,7 +139,10 @@ func TestMigrationUpgradePostgres(t *testing.T) {
 	}
 	assertUpgradedMonitor(t, handle)
 	assertUpgradedIncident(t, handle)
+	assertCurrentAgentWriterPopulatesUpdatedAt(t, handle)
+	assertAgentUpdatedAtRejectsNull(t, handle, true)
 	assertUpgradedAgentCredential(t, handle)
+	assertPostgresAgentCredentialDowngrade(t, handle, provider)
 }
 
 func seedVersionSixAgent(t *testing.T, handle *database.Handle, postgres bool) {
@@ -149,7 +159,17 @@ func seedVersionSixAgent(t *testing.T, handle *database.Handle, postgres bool) {
 			'00000000-0000-4000-8000-000000000105',
 			'00000000-0000-4000-8000-000000000101',
 			'upgrade-agent', `+credentialHash+`, 3, '["http"]', 'v6',
-			'2026-07-25T12:03:00Z', '2026-07-25T12:04:00Z', '2026-07-25T12:02:00Z'
+			'2026-07-25T12:03:00Z', NULL, '2026-07-25T12:02:00Z'
+		);
+		INSERT INTO agents (
+			id, location_id, name, credential_hash, credential_generation,
+			capabilities_json, version, last_seen_at, revoked_at, created_at
+		) VALUES (
+			'00000000-0000-4000-8000-000000000106',
+			'00000000-0000-4000-8000-000000000101',
+			'revoked-upgrade-agent', `+credentialHashLiteral(postgres, "05060708")+`, 2,
+			'["http"]', 'v6', '2026-07-25T12:04:00Z',
+			'2026-07-25T12:05:00Z', '2026-07-25T12:02:00Z'
 		)
 	`)
 	if err != nil {
@@ -170,7 +190,8 @@ func assertUpgradedAgentCredential(t *testing.T, handle *database.Handle) {
 	var agentID string
 	var generation int64
 	var credentialHash []byte
-	var createdAt, revokedAt, lastAuthenticatedAt string
+	var createdAt, lastAuthenticatedAt string
+	var revokedAt sql.NullString
 	if err := handle.DB.QueryRowContext(context.Background(), `
 		SELECT agent_id, generation, credential_hash,
 		       CAST(created_at AS TEXT), CAST(revoked_at AS TEXT), CAST(last_authenticated_at AS TEXT)
@@ -181,15 +202,190 @@ func assertUpgradedAgentCredential(t *testing.T, handle *database.Handle) {
 	}
 	if agentID != "00000000-0000-4000-8000-000000000105" ||
 		generation != 3 || !bytes.Equal(credentialHash, []byte{1, 2, 3, 4}) ||
-		!strings.HasPrefix(agentUpdatedAt, "2026-07-25 12:02:00") && agentUpdatedAt != "2026-07-25T12:02:00Z" ||
+		!strings.HasPrefix(agentUpdatedAt, "2026-07-25 12:03:00") && agentUpdatedAt != "2026-07-25T12:03:00Z" ||
 		!strings.HasPrefix(createdAt, "2026-07-25 12:02:00") && createdAt != "2026-07-25T12:02:00Z" ||
-		!strings.HasPrefix(revokedAt, "2026-07-25 12:04:00") && revokedAt != "2026-07-25T12:04:00Z" ||
+		revokedAt.Valid ||
 		!strings.HasPrefix(lastAuthenticatedAt, "2026-07-25 12:03:00") && lastAuthenticatedAt != "2026-07-25T12:03:00Z" {
 		t.Fatalf(
-			"upgraded credential agent=%q generation=%d hash=%x agent_updated=%q created=%q revoked=%q authenticated=%q",
+			"upgraded credential agent=%q generation=%d hash=%x agent_updated=%q created=%q revoked=%v authenticated=%q",
 			agentID, generation, credentialHash, agentUpdatedAt, createdAt, revokedAt, lastAuthenticatedAt,
 		)
 	}
+	// The application port does not expose credential generations yet. This
+	// SQL-level lookup freezes the active hash+generation storage invariant
+	// until the port is finalized.
+	placeholder := "?"
+	if handle.Profile == database.ProfilePostgres {
+		placeholder = "$1"
+	}
+	var authenticatedAgentID string
+	var authenticatedGeneration int64
+	if err := handle.DB.QueryRowContext(context.Background(), `
+		SELECT a.id, c.generation
+		FROM agent_credentials c
+		JOIN agents a ON a.id = c.agent_id
+		WHERE c.credential_hash = `+placeholder+`
+		  AND c.revoked_at IS NULL
+		  AND a.revoked_at IS NULL
+	`, []byte{1, 2, 3, 4}).Scan(&authenticatedAgentID, &authenticatedGeneration); err != nil {
+		t.Fatal(err)
+	}
+	if authenticatedAgentID != agentID || authenticatedGeneration != generation {
+		t.Fatalf("active credential lookup agent=%q generation=%d", authenticatedAgentID, authenticatedGeneration)
+	}
+	var revokedUpdatedAt string
+	if err := handle.DB.QueryRowContext(context.Background(), `
+		SELECT CAST(updated_at AS TEXT)
+		FROM agents
+		WHERE id = '00000000-0000-4000-8000-000000000106'
+	`).Scan(&revokedUpdatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(revokedUpdatedAt, "2026-07-25 12:05:00") && revokedUpdatedAt != "2026-07-25T12:05:00Z" {
+		t.Fatalf("revoked agent updated_at=%q", revokedUpdatedAt)
+	}
+}
+
+func assertCurrentAgentWriterPopulatesUpdatedAt(t *testing.T, handle *database.Handle) {
+	t.Helper()
+	createdAt := time.Date(2026, 7, 25, 13, 0, 0, 0, time.UTC)
+	agent, err := domain.NewAgent(domain.NewAgentParams{
+		ID: "00000000-0000-4000-8000-000000000107", LocationID: "00000000-0000-4000-8000-000000000101",
+		Name: "post-upgrade-agent", Capabilities: []domain.AgentCapability{domain.CapabilityHTTP},
+		CredentialGeneration: 1, CreatedAt: createdAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Store.Transact(context.Background(), func(ctx context.Context, repositories application.Repositories) error {
+		return repositories.Agents.Create(ctx, application.AgentRecord{Agent: agent, CredentialHash: []byte{9, 10, 11, 12}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var updatedAt string
+	if err := handle.DB.QueryRowContext(context.Background(), `
+		SELECT CAST(updated_at AS TEXT)
+		FROM agents
+		WHERE id = '00000000-0000-4000-8000-000000000107'
+	`).Scan(&updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(updatedAt, "2026-07-25 13:00:00") && updatedAt != createdAt.Format(time.RFC3339Nano) {
+		t.Fatalf("writer updated_at=%s, want %s", updatedAt, createdAt)
+	}
+	heartbeatAt := createdAt.Add(time.Hour)
+	if err := handle.Store.Transact(context.Background(), func(ctx context.Context, repositories application.Repositories) error {
+		updated, err := repositories.Agents.UpdateHeartbeat(
+			ctx, agent.ID, agent.CredentialGeneration, "v7", agent.Capabilities, heartbeatAt,
+		)
+		if err != nil {
+			return err
+		}
+		if !updated {
+			return errors.New("heartbeat did not update agent")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.DB.QueryRowContext(context.Background(), `
+		SELECT CAST(updated_at AS TEXT)
+		FROM agents
+		WHERE id = '00000000-0000-4000-8000-000000000107'
+	`).Scan(&updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(updatedAt, "2026-07-25 14:00:00") && updatedAt != heartbeatAt.Format(time.RFC3339Nano) {
+		t.Fatalf("heartbeat updated_at=%s, want %s", updatedAt, heartbeatAt)
+	}
+}
+
+func assertAgentUpdatedAtRejectsNull(t *testing.T, handle *database.Handle, postgres bool) {
+	t.Helper()
+	for _, test := range []struct {
+		name      string
+		statement string
+	}{
+		{
+			name: "explicit null insert",
+			statement: `INSERT INTO agents (
+				id, location_id, name, credential_hash, credential_generation,
+				capabilities_json, created_at, updated_at
+			) VALUES (
+				'00000000-0000-4000-8000-000000000108',
+				'00000000-0000-4000-8000-000000000101', 'null-agent', ` + credentialHashLiteral(postgres, "0d") + `,
+				1, '["http"]', '2026-07-25T13:00:00Z', NULL
+			)`,
+		},
+		{
+			name: "omitted insert",
+			statement: `INSERT INTO agents (
+				id, location_id, name, credential_hash, credential_generation,
+				capabilities_json, created_at
+			) VALUES (
+				'00000000-0000-4000-8000-000000000109',
+				'00000000-0000-4000-8000-000000000101', 'omitted-agent', ` + credentialHashLiteral(postgres, "0e") + `,
+				1, '["http"]', '2026-07-25T13:00:00Z'
+			)`,
+		},
+		{
+			name: "null update",
+			statement: `UPDATE agents SET updated_at = NULL
+				WHERE id = '00000000-0000-4000-8000-000000000107'`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := handle.DB.ExecContext(context.Background(), test.statement); err == nil {
+				t.Fatal("agents.updated_at accepted NULL")
+			}
+		})
+	}
+}
+
+func assertPostgresAgentCredentialDowngrade(
+	t *testing.T,
+	handle *database.Handle,
+	provider *goose.Provider,
+) {
+	t.Helper()
+	if _, err := provider.Down(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var agentCount int
+	if err := handle.DB.QueryRowContext(context.Background(), `
+		SELECT COUNT(*) FROM agents
+		WHERE id = '00000000-0000-4000-8000-000000000105'
+	`).Scan(&agentCount); err != nil {
+		t.Fatal(err)
+	}
+	if agentCount != 1 {
+		t.Fatalf("legacy agent count after downgrade=%d", agentCount)
+	}
+	if _, err := handle.DB.ExecContext(context.Background(), "SELECT updated_at FROM agents"); err == nil {
+		t.Fatal("updated_at remained after PostgreSQL downgrade")
+	}
+	if _, err := handle.DB.ExecContext(context.Background(), "SELECT 1 FROM agent_credentials"); err == nil {
+		t.Fatal("agent_credentials remained after PostgreSQL downgrade")
+	}
+	for _, index := range []string{
+		"locations_name_id", "monitors_display_order_id", "agents_name_id",
+		"incidents_opened_id", "incident_events_incident_created_id",
+	} {
+		var found sql.NullString
+		if err := handle.DB.QueryRowContext(context.Background(), "SELECT to_regclass($1)", index).Scan(&found); err != nil {
+			t.Fatal(err)
+		}
+		if found.Valid {
+			t.Fatalf("index %s remained after PostgreSQL downgrade", index)
+		}
+	}
+}
+
+func credentialHashLiteral(postgres bool, value string) string {
+	if postgres {
+		return `decode('` + value + `', 'hex')`
+	}
+	return `X'` + value + `'`
 }
 
 func seedVersionThreeIncident(t *testing.T, handle *database.Handle) {

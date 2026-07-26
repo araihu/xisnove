@@ -1,8 +1,12 @@
 -- +goose Up
 ALTER TABLE agents ADD COLUMN updated_at TIMESTAMPTZ;
-UPDATE agents SET updated_at = created_at;
+UPDATE agents
+SET updated_at = GREATEST(
+    created_at,
+    COALESCE(last_seen_at, created_at),
+    COALESCE(revoked_at, created_at)
+);
 ALTER TABLE agents ALTER COLUMN updated_at SET NOT NULL;
-ALTER TABLE agents ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
 
 CREATE TABLE agent_credentials (
     agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,

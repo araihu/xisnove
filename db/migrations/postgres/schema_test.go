@@ -77,7 +77,7 @@ func TestAgentCredentialGenerationSchema(t *testing.T) {
 		"REFERENCES agents(id) ON DELETE CASCADE",
 		"last_authenticated_at TIMESTAMPTZ",
 		"ALTER TABLE agents ADD COLUMN updated_at TIMESTAMPTZ",
-		"UPDATE agents SET updated_at = created_at",
+		"SET updated_at = GREATEST",
 		"ALTER COLUMN updated_at SET NOT NULL",
 		"locations_name_id",
 		"monitors_display_order_id",

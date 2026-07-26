@@ -744,6 +744,7 @@ func (r *agentRepository) Create(ctx context.Context, record application.AgentRe
 		LastSeenAt:           nullableTimeValue(record.Agent.LastSeenAt),
 		RevokedAt:            nullableTime(record.Agent.RevokedAt),
 		CreatedAt:            formatTime(record.Agent.CreatedAt),
+		UpdatedAt:            nullableTimeValue(record.Agent.CreatedAt),
 	})
 	if err != nil {
 		return repositoryError("create agent", err)

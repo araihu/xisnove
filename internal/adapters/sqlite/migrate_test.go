@@ -104,6 +104,60 @@ func TestAgentCredentialMigrationDowngradesWithForeignKeysEnabled(t *testing.T) 
 	}
 }
 
+func TestAgentUpdatedAtRejectsNull(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		statement string
+	}{
+		{
+			name: "explicit null insert",
+			statement: `INSERT INTO agents (
+				id, location_id, name, credential_hash, credential_generation,
+				capabilities_json, created_at, updated_at
+			) VALUES ('agent-null', 'location-null', 'agent', X'01', 1, '["http"]', '2026-07-26T00:00:00Z', NULL)`,
+		},
+		{
+			name: "omitted insert",
+			statement: `INSERT INTO agents (
+				id, location_id, name, credential_hash, credential_generation,
+				capabilities_json, created_at
+			) VALUES ('agent-null', 'location-null', 'agent', X'01', 1, '["http"]', '2026-07-26T00:00:00Z')`,
+		},
+		{
+			name:      "null update",
+			statement: `UPDATE agents SET updated_at = NULL WHERE id = 'agent-valid'`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db, err := sqlitestore.Open(filepath.Join(t.TempDir(), "updated-at.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = db.Close() })
+			ctx := context.Background()
+			if err := sqlitestore.Migrate(ctx, db); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.ExecContext(ctx, `
+				INSERT INTO locations (id, name, created_at)
+				VALUES ('location-null', 'null enforcement', '2026-07-26T00:00:00Z');
+				INSERT INTO agents (
+					id, location_id, name, credential_hash, credential_generation,
+					capabilities_json, created_at, updated_at
+				) VALUES (
+					'agent-valid', 'location-null', 'valid agent', X'02', 1,
+					'["http"]', '2026-07-26T00:00:00Z', '2026-07-26T00:00:00Z'
+				);
+			`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.ExecContext(ctx, test.statement); err == nil {
+				t.Fatal("agents.updated_at accepted NULL")
+			}
+		})
+	}
+}
+
 func TestProtocolBreadthMigrationPreservesHTTPMonitor(t *testing.T) {
 	db, err := sqlitestore.Open(filepath.Join(t.TempDir(), "upgrade.db"))
 	if err != nil {

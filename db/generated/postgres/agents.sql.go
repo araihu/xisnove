@@ -44,11 +44,11 @@ func (q *Queries) ConsumeAgentEnrollmentToken(ctx context.Context, arg ConsumeAg
 const createAgent = `-- name: CreateAgent :exec
 INSERT INTO agents (
   id, location_id, name, credential_hash, credential_generation,
-  capabilities_json, version, last_seen_at, revoked_at, created_at
+  capabilities_json, version, last_seen_at, revoked_at, created_at, updated_at
 ) VALUES (
   $1, $2, $3, $4,
   $5, $6, $7,
-  $8, $9, $10
+  $8, $9, $10, $11
 )
 `
 
@@ -63,6 +63,7 @@ type CreateAgentParams struct {
 	LastSeenAt           sql.NullTime    `json:"last_seen_at"`
 	RevokedAt            sql.NullTime    `json:"revoked_at"`
 	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error {
@@ -77,6 +78,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error 
 		arg.LastSeenAt,
 		arg.RevokedAt,
 		arg.CreatedAt,
+		arg.UpdatedAt,
 	)
 	return err
 }
@@ -165,7 +167,8 @@ UPDATE agents
 SET version = $1,
     credential_generation = $2,
     capabilities_json = $3,
-    last_seen_at = $4
+    last_seen_at = $4,
+    updated_at = $4
 WHERE id = $5
   AND revoked_at IS NULL
   AND credential_generation = $2
