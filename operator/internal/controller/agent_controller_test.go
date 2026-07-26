@@ -40,6 +40,8 @@ func TestAgentCredentialStagesLocallyBeforeRemoteApply(t *testing.T) {
 			t.Fatalf("retry credential changed: %q != %q", got, firstCredential)
 		}
 		return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 1}, nil
+	}, observeAgent: func(_ context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+		return controlplane.AgentState{ExternalID: request.ExternalID, CredentialGeneration: 1}, nil
 	}}
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&monitoringv1alpha1.Agent{}).WithObjects(agent).Build()
 	r := testAgentReconciler(kube, scheme, remote)
@@ -146,6 +148,9 @@ func TestAgentCredentialPutFailureRetainsUnmountedNextForRetry(t *testing.T) {
 		applyAgent: func(context.Context, controlplane.ApplyAgentRequest) (controlplane.AgentState, error) {
 			return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 1}, nil
 		},
+		observeAgent: func(_ context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+			return controlplane.AgentState{ExternalID: request.ExternalID, CredentialGeneration: 1}, nil
+		},
 		putCredential: func(_ context.Context, request controlplane.PutAgentCredentialRequest) error {
 			putAttempts++
 			if putAttempts == 1 {
@@ -197,6 +202,8 @@ func TestAgentCredentialApplyCrashRetainsNextUntilPromotionRetries(t *testing.T)
 			t.Fatal("apply retry generated a different credential")
 		}
 		return controlplane.AgentState{ExternalID: "agent-remote-1", CredentialGeneration: 1}, nil
+	}, observeAgent: func(_ context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
+		return controlplane.AgentState{ExternalID: request.ExternalID, CredentialGeneration: 1}, nil
 	}}
 	base := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&monitoringv1alpha1.Agent{}).WithObjects(agent).Build()
 	flaky := &failSecretUpdateClient{Client: base, failures: 1}

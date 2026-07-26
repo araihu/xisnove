@@ -313,7 +313,7 @@ type fakeControlPlane struct {
 
 func (f *fakeControlPlane) ObserveAgent(ctx context.Context, request controlplane.ObserveAgentRequest) (controlplane.AgentState, error) {
 	if f.observeAgent == nil {
-		return controlplane.AgentState{ExternalID: request.ExternalID}, nil
+		return controlplane.AgentState{}, errors.New("unexpected ObserveAgent call")
 	}
 	return f.observeAgent(ctx, request)
 }

@@ -119,3 +119,9 @@ for generated optional credential pointers.
 Apply keys also distinguish bootstrap credential-bearing requests from
 credential-free reconciliation. Steady generation-one and overlap loops use
 Observe; only missing external status or a newer CR generation uses Apply.
+
+## Fix round 4: post-bootstrap acceptance guardrails
+
+Controller fakes are strict again for unexpected observation calls; lifecycle
+tests now explicitly model required observations. The acceptance suite also
+covers the bounded generation-aware Apply key and post-bootstrap retry path.
