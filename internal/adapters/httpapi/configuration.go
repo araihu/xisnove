@@ -28,6 +28,7 @@ type ServerConfig struct {
 	Management    *application.ManagementService
 	PublicStatus  *application.PublicStatusService
 	Discovery     *application.DiscoveryService
+	Operator      application.OperatorService
 }
 
 type Server struct {
@@ -45,6 +46,7 @@ type Server struct {
 	management    *application.ManagementService
 	publicStatus  *application.PublicStatusService
 	discovery     *application.DiscoveryService
+	operator      application.OperatorService
 }
 
 func NewServer(config ServerConfig) *Server {
@@ -60,6 +62,7 @@ func NewServer(config ServerConfig) *Server {
 		management:    config.Management,
 		publicStatus:  config.PublicStatus,
 		discovery:     config.Discovery,
+		operator:      config.Operator,
 	}
 }
 

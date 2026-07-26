@@ -147,6 +147,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 			Management:   management,
 			PublicStatus: publicStatus,
 			Discovery:    discovery,
+			Operator:     newOperatorService(store, tokens),
 			Lease: application.NewLeaseService(application.LeaseServiceConfig{
 				Store: store, Tokens: tokens, LeaseDuration: leaseDuration,
 				ObserveLease: leaseObserver(metrics),

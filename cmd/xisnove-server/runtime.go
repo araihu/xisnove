@@ -7,8 +7,13 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/araihu/xisnove/application"
 	"github.com/araihu/xisnove/internal/adapters/observability"
 )
+
+func newOperatorService(store application.UnitOfWork, credentials application.CredentialHasher) application.OperatorService {
+	return application.OperatorService{Store: store, Credentials: credentials}
+}
 
 func runLifecycleLoop(
 	claims context.Context,
