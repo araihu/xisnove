@@ -96,6 +96,36 @@ func TestOperatorHandlerAppliesAgentAndReplaysWithoutCredential(t *testing.T) {
 	}
 }
 
+func TestOperatorValidatorRejectsOversizedCredentialWithoutDiagnosticLeak(t *testing.T) {
+	handler, err := NewHandler(HandlerConfig{
+		Server: NewServer(ServerConfig{}), Ready: func(context.Context) error { return nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := strings.Repeat("credential-sentinel-", 80)
+	response := performOperatorRequest(t, handler, http.MethodPost, "/v1/operator/agents:apply", "operator-validator-oversized", "", map[string]any{
+		"owner": map[string]string{"key": "monitoring.xisnove.io/Agent/default/edge", "uid": "agent-uid-1"},
+		"name":  "edge", "locationId": "00000000-0000-4000-8000-000000000001", "enabled": true,
+		"capabilities":      []string{"http"},
+		"initialCredential": map[string]any{"generation": 1, "credential": credential},
+	})
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("validator status = %d, body = %s", response.Code, response.Body.String())
+	}
+	responseBody := response.Body.String()
+	var problem Problem
+	if err := json.NewDecoder(strings.NewReader(responseBody)).Decode(&problem); err != nil {
+		t.Fatal(err)
+	}
+	if problem.Type != "https://xisnove.dev/problems/validation" || problem.Title != "Request validation failed" || problem.Code != "validation_failed" || problem.Status != http.StatusBadRequest {
+		t.Fatalf("validator problem = %#v", problem)
+	}
+	if problem.Detail != nil || problem.Instance != nil || strings.Contains(responseBody, "credential-sentinel-") {
+		t.Fatalf("validator problem leaked request diagnostic: %#v", problem)
+	}
+}
+
 func performOperatorRequest(t *testing.T, handler http.Handler, method, path, key, token string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	payload, err := json.Marshal(body)

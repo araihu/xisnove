@@ -73,14 +73,8 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 					return nil
 				},
 			},
-			ErrorHandler: func(w http.ResponseWriter, message string, status int) {
-				detail := message
-				writeProblem(w, Problem{
-					Type:  "https://xisnove.dev/problems/validation",
-					Title: "Request validation failed", Status: int32(status),
-					Code: "validation_failed", CorrelationId: "unknown",
-					Detail: &detail,
-				})
+			ErrorHandler: func(w http.ResponseWriter, _ string, status int) {
+				writeProblem(w, sanitizedValidationProblem(status, "unknown"))
 			},
 		},
 	)(api)
@@ -105,6 +99,22 @@ func NewHandler(config HandlerConfig) (http.Handler, error) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	return correlationIDs(logRequests(recoverPanics(root))), nil
+}
+
+// sanitizedValidationProblem intentionally omits validator diagnostics. They
+// can contain attacker-controlled request fragments, including credentials.
+// A stable RFC 9457 envelope is sufficient for callers and remains bounded.
+func sanitizedValidationProblem(status int, correlation string) Problem {
+	if status < http.StatusBadRequest || status > 599 {
+		status = http.StatusBadRequest
+	}
+	if correlation == "" {
+		correlation = "unknown"
+	}
+	return Problem{
+		Type: "https://xisnove.dev/problems/validation", Title: "Request validation failed",
+		Status: int32(status), Code: "validation_failed", CorrelationId: correlation,
+	}
 }
 
 // operatorActionServeMux adapts an OpenAPI action suffix to net/http's

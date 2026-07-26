@@ -1,7 +1,10 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -78,6 +81,38 @@ func TestOperatorAPIOwnershipCredentialReplayAndScopeBoundaries(t *testing.T) {
 	operatorAuth := bearer(issued.JSON201.Token)
 	owner := sdk.ExternalOwner{Key: "monitoring.xisnove.io/Agent/default/edge", Uid: "edge-uid-1"}
 	initialCredential := "initial-credential-012345678901234567890123456789"
+	validatorCredential := strings.Repeat("validator-credential-sentinel-", 80)
+	validatorBody, err := json.Marshal(map[string]any{
+		"owner": map[string]string{"key": owner.Key, "uid": owner.Uid},
+		"name":  "edge", "locationId": location.JSON201.Id, "enabled": true,
+		"capabilities":      []string{"http"},
+		"initialCredential": map[string]any{"generation": 1, "credential": validatorCredential},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validatorRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/v1/operator/agents:apply", bytes.NewReader(validatorBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	validatorRequest.Header.Set("Content-Type", "application/json")
+	validatorRequest.Header.Set("Idempotency-Key", "operator-validator-oversized")
+	validatorResponse, err := server.Client().Do(validatorRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validatorResponseBody, err := io.ReadAll(validatorResponse.Body)
+	_ = validatorResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var validatorProblem sdk.Problem
+	if err := json.Unmarshal(validatorResponseBody, &validatorProblem); err != nil {
+		t.Fatal(err)
+	}
+	if validatorResponse.StatusCode != http.StatusBadRequest || validatorProblem.Type != "https://xisnove.dev/problems/validation" || validatorProblem.Title != "Request validation failed" || validatorProblem.Detail != nil || validatorProblem.Instance != nil || strings.Contains(string(validatorResponseBody), "validator-credential-sentinel-") {
+		t.Fatalf("validator response = status:%d problem:%#v", validatorResponse.StatusCode, validatorProblem)
+	}
 	apply := sdk.ApplyOperatorAgentRequest{
 		Owner: owner, Name: "edge", LocationId: location.JSON201.Id, Enabled: true,
 		Capabilities:      []sdk.AgentCapability{sdk.AgentCapabilityHttp},
