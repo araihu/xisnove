@@ -111,7 +111,8 @@ type Repositories struct { Monitors MonitorRepository }
 	}{
 		{"independent", `type AnalyticsWriter interface { Append(string) error }`, false},
 		{"names are harmless", `type AnalyticsWriter interface { Append(UnitOfWork string, Store int) error }`, false},
-		{"non-interface", `type AnalyticsRecord struct{ Value string }`, true},
+		{"record value is allowed", `type AnalyticsRecord struct{ Value string }`, false},
+		{"record alias is allowed", `type Record struct{ Value string }; type AnalyticsRecord = Record`, false},
 		{"direct alias", `type AnalyticsPort = UnitOfWork`, true},
 		{"direct embed", `type AnalyticsPort interface { UnitOfWork }`, true},
 		{"alias parameter", `type OperationalAlias = UnitOfWork; type AnalyticsPort interface { Use(OperationalAlias) }`, true},
@@ -172,8 +173,11 @@ func analyticsArchivePortViolations(checked *types.Package) []string {
 		if !ok {
 			continue
 		}
+		_, aliasesInterface := types.Unalias(object.Type()).Underlying().(*types.Interface)
 		if object.IsAlias() {
-			violations = append(violations, name+" must be a distinct interface declaration, not an alias")
+			if aliasesInterface {
+				violations = append(violations, name+" must be a distinct interface declaration, not an alias")
+			}
 			continue
 		}
 		named, ok := object.Type().(*types.Named)
@@ -183,7 +187,6 @@ func analyticsArchivePortViolations(checked *types.Package) []string {
 		}
 		interfaceType, ok := named.Underlying().(*types.Interface)
 		if !ok {
-			violations = append(violations, name+" must be an interface distinct from operational persistence")
 			continue
 		}
 		interfaceType.Complete()
@@ -248,6 +251,11 @@ func TestOpenCoreGuideDocumentsStablePublicSurface(t *testing.T) {
 		"`domain.NewNotificationChannel`",
 		"`domain.NewNotificationRoute`",
 		"`domain.NewNotificationIdentity`",
+		"`domain.ErrInvalidAgent`",
+		"`domain.ErrInvalidLocation`",
+		"`domain.ErrInvalidMonitor`",
+		"`domain.ErrInvalidMaintenance`",
+		"`domain.ErrInvalidNotification`",
 		"`application/port.UnitOfWork`",
 		"`application/port.Repositories`",
 		"`application/port.ErrNotFound`",

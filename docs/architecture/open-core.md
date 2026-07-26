@@ -48,6 +48,10 @@ identities rather than matching error strings.
   `domain.NewTCPMonitor`, `domain.NewDNSMonitor`,
   `domain.NewMaintenanceInterval`, `domain.NewNotificationChannel`,
   `domain.NewNotificationRoute`, and `domain.NewNotificationIdentity`.
+  Constructor validation retains the error identities
+  `domain.ErrInvalidAgent`, `domain.ErrInvalidLocation`,
+  `domain.ErrInvalidMonitor`, `domain.ErrInvalidMaintenance`, and
+  `domain.ErrInvalidNotification`.
 - `application/port.UnitOfWork` and
   `application/port.Repositories` are the operational transaction boundary
   and its callback-scoped repository set. The repository interfaces and record
