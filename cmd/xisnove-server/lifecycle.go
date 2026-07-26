@@ -52,8 +52,9 @@ type serverLifecycle struct {
 
 	claimsCtx    context.Context
 	cancelClaims context.CancelFunc
-	workCtx      context.Context
-	cancelWork   context.CancelFunc
+	workMu       sync.Mutex
+	workCancels  map[uint64]context.CancelFunc
+	nextWorkID   uint64
 
 	stopOnce  sync.Once
 	forceOnce sync.Once
@@ -67,12 +68,11 @@ type serverLifecycle struct {
 
 func newServerLifecycle() *serverLifecycle {
 	claimsCtx, cancelClaims := context.WithCancel(context.Background())
-	workCtx, cancelWork := context.WithCancel(context.Background())
 	return &serverLifecycle{
 		phase: lifecycleAccepting, accepting: true,
 		claimsCtx: claimsCtx, cancelClaims: cancelClaims,
-		workCtx: workCtx, cancelWork: cancelWork,
-		forced: make(chan struct{}), done: make(chan struct{}),
+		workCancels: make(map[uint64]context.CancelFunc),
+		forced:      make(chan struct{}), done: make(chan struct{}),
 	}
 }
 
@@ -124,12 +124,18 @@ func (l *serverLifecycle) Admit(parent context.Context) (context.Context, func()
 	}
 	l.inflight.Add(1)
 	ctx, cancel := context.WithCancel(parent)
-	stopWorkCancellation := context.AfterFunc(l.workCtx, cancel)
+	l.workMu.Lock()
+	workID := l.nextWorkID
+	l.nextWorkID++
+	l.workCancels[workID] = cancel
+	l.workMu.Unlock()
 	var once sync.Once
 	release := func() {
 		once.Do(func() {
-			stopWorkCancellation()
+			l.workMu.Lock()
+			delete(l.workCancels, workID)
 			cancel()
+			l.workMu.Unlock()
 			l.inflight.Done()
 		})
 	}
@@ -163,8 +169,8 @@ func (l *serverLifecycle) AdmitClaim(parent context.Context) (context.Context, f
 func (l *serverLifecycle) Force() {
 	l.stopClaims()
 	l.forceOnce.Do(func() {
+		l.cancelAdmittedWork()
 		close(l.forced)
-		l.cancelWork()
 	})
 }
 
@@ -209,7 +215,7 @@ func (l *serverLifecycle) runShutdown(ctx context.Context, closeFn func(context.
 	case <-l.forced:
 		shutdownErr = errors.New("shutdown forced before in-flight work drained")
 	case <-ctx.Done():
-		l.cancelWork()
+		l.cancelAdmittedWork()
 		shutdownErr = ctx.Err()
 	}
 
@@ -237,7 +243,7 @@ func (l *serverLifecycle) runShutdown(ctx context.Context, closeFn func(context.
 			shutdownErr = errors.Join(shutdownErr, ctx.Err())
 		}
 	}
-	l.cancelWork()
+	l.cancelAdmittedWork()
 	l.setPhase(lifecycleClosed)
 
 	l.resultMu.Lock()
@@ -256,6 +262,17 @@ func (l *serverLifecycle) stopClaims() {
 		l.cancelClaims()
 		l.setPhase(lifecycleDraining)
 	})
+}
+
+// cancelAdmittedWork synchronously invokes every active work canceler. Force
+// and deadline shutdown paths call it before they signal completion, so their
+// callers never observe shutdown complete while admitted work is still live.
+func (l *serverLifecycle) cancelAdmittedWork() {
+	l.workMu.Lock()
+	defer l.workMu.Unlock()
+	for _, cancel := range l.workCancels {
+		cancel()
+	}
 }
 
 func (l *serverLifecycle) setPhase(phase lifecyclePhase) {

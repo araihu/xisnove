@@ -152,8 +152,8 @@ func TestLifecycleForceCancelsWorkAndBoundsDrain(t *testing.T) {
 
 	select {
 	case <-workCtx.Done():
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Force did not cancel admitted work")
+	default:
+		t.Fatal("Force returned before canceling admitted work")
 	}
 	select {
 	case err := <-shutdownDone:
@@ -235,6 +235,29 @@ func TestLifecycleShutdownDeadlineCancelsWorkAndBoundsClose(t *testing.T) {
 	case <-closeStarted:
 	case <-time.After(time.Second):
 		t.Fatal("close hook was not attempted")
+	}
+}
+
+func TestLifecycleShutdownCanceledContextSynchronouslyCancelsAdmittedWork(t *testing.T) {
+	for range 100 {
+		lifecycle := newServerLifecycle()
+		workCtx, release, err := lifecycle.Admit(context.Background())
+		if err != nil {
+			t.Fatalf("Admit() error = %v", err)
+		}
+
+		shutdownCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err = lifecycle.Shutdown(shutdownCtx, nil)
+		release()
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Shutdown() error = %v, want context canceled", err)
+		}
+		select {
+		case <-workCtx.Done():
+		default:
+			t.Fatal("Shutdown returned before canceling admitted work")
+		}
 	}
 }
 
