@@ -43,6 +43,7 @@ type DiscoveryListRequest struct {
 type DiscoveryRepository interface {
 	ApplyBatch(context.Context, DiscoveryBatch) (DiscoveryBatchAcknowledgement, error)
 	Get(context.Context, domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error)
+	GetForUpdate(context.Context, domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error)
 	List(context.Context, DiscoveryListRequest) ([]domain.DiscoveryCandidate, error)
 	LinkPromotion(context.Context, domain.DiscoveryCandidateID, domain.MonitorID, time.Time) (bool, error)
 }

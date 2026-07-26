@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"time"
 
 	"github.com/araihu/xisnove/application/port"
@@ -52,6 +51,16 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 	}
 	ack := port.DiscoveryBatchAcknowledgement{Accepted: len(batch.Candidates)}
 	for _, candidate := range batch.Candidates {
+		if !candidate.Present {
+			updated, err := r.updateCandidate(ctx, candidate)
+			if err != nil {
+				return port.DiscoveryBatchAcknowledgement{}, err
+			}
+			if updated {
+				ack.Updated++
+			}
+			continue
+		}
 		created, err := r.insertCandidate(ctx, candidate)
 		if err != nil {
 			return port.DiscoveryBatchAcknowledgement{}, err
@@ -60,10 +69,13 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 			ack.Created++
 			continue
 		}
-		if err := r.updateCandidate(ctx, candidate); err != nil {
+		updated, err := r.updateCandidate(ctx, candidate)
+		if err != nil {
 			return port.DiscoveryBatchAcknowledgement{}, err
 		}
-		ack.Updated++
+		if updated {
+			ack.Updated++
+		}
 	}
 	completed, err := r.queries.CompleteDiscoveryBatch(ctx, dbpostgres.CompleteDiscoveryBatchParams{Accepted: int32(ack.Accepted), CreatedCount: int32(ack.Created), UpdatedCount: int32(ack.Updated), CompletedAt: sql.NullTime{Time: batch.CreatedAt, Valid: true}, AgentID: string(batch.AgentID), BatchID: batch.ID})
 	if err != nil {
@@ -92,45 +104,35 @@ func (r *discoveryRepository) insertCandidate(ctx context.Context, candidate dom
 	return rows == 1, nil
 }
 
-func (r *discoveryRepository) updateCandidate(ctx context.Context, candidate domain.DiscoveryCandidate) error {
-	existingRow, err := r.queries.GetDiscoveryCandidateByIdentity(ctx, postgresDiscoveryIdentity(candidate.Identity()))
-	if err != nil {
-		return repositoryError("get discovery candidate identity", err)
-	}
-	existing, err := mapPostgresDiscoveryCandidate(existingRow)
-	if err != nil {
-		return err
-	}
-	if candidate.LastObservedAt.Before(existing.LastObservedAt) {
-		return nil
-	}
-	drift := existing.DriftHint
-	if existing.PromotedMonitorID != nil && (existing.Name != candidate.Name || existing.Namespace != candidate.Namespace || existing.NetworkPerspective != candidate.NetworkPerspective || !maps.Equal(existing.Labels, candidate.Labels)) {
-		drift = "source metadata changed after promotion"
-	}
+func (r *discoveryRepository) updateCandidate(ctx context.Context, candidate domain.DiscoveryCandidate) (bool, error) {
 	labels, err := json.Marshal(candidate.Labels)
 	if err != nil {
-		return err
+		return false, err
 	}
 	rows, err := r.queries.UpdateDiscoveryCandidateByIdentity(ctx, dbpostgres.UpdateDiscoveryCandidateByIdentityParams{
 		Namespace: candidate.Namespace, Name: candidate.Name, LabelsJson: labels, NetworkPerspective: candidate.NetworkPerspective,
-		Present: candidate.Present, LastObservedAt: candidate.LastObservedAt, DriftHint: drift, UpdatedAt: candidate.UpdatedAt,
+		Present: candidate.Present, LastObservedAt: candidate.LastObservedAt, UpdatedAt: candidate.UpdatedAt,
 		AgentID: string(candidate.AgentID), LocationID: string(candidate.LocationID), SourceKind: candidate.SourceKind, SourceUid: candidate.SourceUID,
 		Protocol: string(candidate.Protocol), Target: candidate.Target,
 	})
 	if err != nil {
-		return repositoryError("update discovery candidate", err)
+		return false, repositoryError("update discovery candidate", err)
 	}
-	if rows != 1 {
-		return port.ErrConflict
-	}
-	return nil
+	return rows == 1, nil
 }
 
 func (r *discoveryRepository) Get(ctx context.Context, id domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error) {
 	row, err := r.queries.GetDiscoveryCandidate(ctx, string(id))
 	if err != nil {
 		return domain.DiscoveryCandidate{}, repositoryError("get discovery candidate", err)
+	}
+	return mapPostgresDiscoveryCandidate(row)
+}
+
+func (r *discoveryRepository) GetForUpdate(ctx context.Context, id domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error) {
+	row, err := r.queries.GetDiscoveryCandidateForUpdate(ctx, string(id))
+	if err != nil {
+		return domain.DiscoveryCandidate{}, repositoryError("get discovery candidate for update", err)
 	}
 	return mapPostgresDiscoveryCandidate(row)
 }

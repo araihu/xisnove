@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"time"
 
 	"github.com/araihu/xisnove/application/port"
@@ -33,7 +32,7 @@ func discoveryRepositories(repositories port.Repositories, queries *dbsqlite.Que
 type discoveryRepository struct{ queries *dbsqlite.Queries }
 
 func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.DiscoveryBatch) (port.DiscoveryBatchAcknowledgement, error) {
-	insertedBatch, err := r.queries.CreateDiscoveryBatch(ctx, dbsqlite.CreateDiscoveryBatchParams{AgentID: string(batch.AgentID), BatchID: batch.ID, RequestHash: batch.RequestHash, CreatedAt: formatTime(batch.CreatedAt)})
+	insertedBatch, err := r.queries.CreateDiscoveryBatch(ctx, dbsqlite.CreateDiscoveryBatchParams{AgentID: string(batch.AgentID), BatchID: batch.ID, RequestHash: batch.RequestHash, CreatedAt: formatDiscoveryTime(batch.CreatedAt)})
 	if err != nil {
 		return port.DiscoveryBatchAcknowledgement{}, repositoryError("create discovery batch", err)
 	}
@@ -52,6 +51,16 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 	}
 	ack := port.DiscoveryBatchAcknowledgement{Accepted: len(batch.Candidates)}
 	for _, candidate := range batch.Candidates {
+		if !candidate.Present {
+			updated, err := r.updateCandidate(ctx, candidate)
+			if err != nil {
+				return port.DiscoveryBatchAcknowledgement{}, err
+			}
+			if updated {
+				ack.Updated++
+			}
+			continue
+		}
 		created, err := r.insertCandidate(ctx, candidate)
 		if err != nil {
 			return port.DiscoveryBatchAcknowledgement{}, err
@@ -60,14 +69,17 @@ func (r *discoveryRepository) ApplyBatch(ctx context.Context, batch port.Discove
 			ack.Created++
 			continue
 		}
-		if err := r.updateCandidate(ctx, candidate); err != nil {
+		updated, err := r.updateCandidate(ctx, candidate)
+		if err != nil {
 			return port.DiscoveryBatchAcknowledgement{}, err
 		}
-		ack.Updated++
+		if updated {
+			ack.Updated++
+		}
 	}
 	completed, err := r.queries.CompleteDiscoveryBatch(ctx, dbsqlite.CompleteDiscoveryBatchParams{
 		Accepted: int64(ack.Accepted), CreatedCount: int64(ack.Created), UpdatedCount: int64(ack.Updated),
-		CompletedAt: nullableTimeValue(batch.CreatedAt), AgentID: string(batch.AgentID), BatchID: batch.ID,
+		CompletedAt: sql.NullString{String: formatDiscoveryTime(batch.CreatedAt), Valid: true}, AgentID: string(batch.AgentID), BatchID: batch.ID,
 	})
 	if err != nil {
 		return port.DiscoveryBatchAcknowledgement{}, repositoryError("complete discovery batch", err)
@@ -87,8 +99,8 @@ func (r *discoveryRepository) insertCandidate(ctx context.Context, candidate dom
 		ID: string(candidate.ID), AgentID: string(candidate.AgentID), LocationID: string(candidate.LocationID),
 		SourceKind: candidate.SourceKind, SourceUid: candidate.SourceUID, Namespace: candidate.Namespace, Name: candidate.Name,
 		LabelsJson: labels, Protocol: string(candidate.Protocol), Target: candidate.Target, NetworkPerspective: candidate.NetworkPerspective,
-		Present: boolInt(candidate.Present), LastObservedAt: formatTime(candidate.LastObservedAt), PromotedMonitorID: discoveryNullableMonitorID(candidate.PromotedMonitorID),
-		DriftHint: candidate.DriftHint, CreatedAt: formatTime(candidate.CreatedAt), UpdatedAt: formatTime(candidate.UpdatedAt),
+		Present: boolInt(candidate.Present), LastObservedAt: formatDiscoveryTime(candidate.LastObservedAt), PromotedMonitorID: discoveryNullableMonitorID(candidate.PromotedMonitorID),
+		DriftHint: candidate.DriftHint, CreatedAt: formatDiscoveryTime(candidate.CreatedAt), UpdatedAt: formatDiscoveryTime(candidate.UpdatedAt),
 	})
 	if err != nil {
 		return false, repositoryError("insert discovery candidate", err)
@@ -96,45 +108,35 @@ func (r *discoveryRepository) insertCandidate(ctx context.Context, candidate dom
 	return rows == 1, nil
 }
 
-func (r *discoveryRepository) updateCandidate(ctx context.Context, candidate domain.DiscoveryCandidate) error {
-	existingRow, err := r.queries.GetDiscoveryCandidateByIdentity(ctx, sqliteDiscoveryIdentity(candidate.Identity()))
-	if err != nil {
-		return repositoryError("get discovery candidate identity", err)
-	}
-	existing, err := mapSQLiteDiscoveryCandidate(existingRow)
-	if err != nil {
-		return err
-	}
-	if candidate.LastObservedAt.Before(existing.LastObservedAt) {
-		return nil
-	}
-	drift := existing.DriftHint
-	if existing.PromotedMonitorID != nil && (existing.Name != candidate.Name || existing.Namespace != candidate.Namespace || existing.NetworkPerspective != candidate.NetworkPerspective || !maps.Equal(existing.Labels, candidate.Labels)) {
-		drift = "source metadata changed after promotion"
-	}
+func (r *discoveryRepository) updateCandidate(ctx context.Context, candidate domain.DiscoveryCandidate) (bool, error) {
 	labels, err := json.Marshal(candidate.Labels)
 	if err != nil {
-		return err
+		return false, err
 	}
 	rows, err := r.queries.UpdateDiscoveryCandidateByIdentity(ctx, dbsqlite.UpdateDiscoveryCandidateByIdentityParams{
 		Namespace: candidate.Namespace, Name: candidate.Name, LabelsJson: labels, NetworkPerspective: candidate.NetworkPerspective,
-		Present: boolInt(candidate.Present), LastObservedAt: formatTime(candidate.LastObservedAt), DriftHint: drift, UpdatedAt: formatTime(candidate.UpdatedAt),
+		Present: boolInt(candidate.Present), LastObservedAt: formatDiscoveryTime(candidate.LastObservedAt), UpdatedAt: formatDiscoveryTime(candidate.UpdatedAt),
 		AgentID: string(candidate.AgentID), LocationID: string(candidate.LocationID), SourceKind: candidate.SourceKind,
 		SourceUid: candidate.SourceUID, Protocol: string(candidate.Protocol), Target: candidate.Target,
 	})
 	if err != nil {
-		return repositoryError("update discovery candidate", err)
+		return false, repositoryError("update discovery candidate", err)
 	}
-	if rows != 1 {
-		return port.ErrConflict
-	}
-	return nil
+	return rows == 1, nil
 }
 
 func (r *discoveryRepository) Get(ctx context.Context, id domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error) {
 	row, err := r.queries.GetDiscoveryCandidate(ctx, string(id))
 	if err != nil {
 		return domain.DiscoveryCandidate{}, repositoryError("get discovery candidate", err)
+	}
+	return mapSQLiteDiscoveryCandidate(row)
+}
+
+func (r *discoveryRepository) GetForUpdate(ctx context.Context, id domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error) {
+	row, err := r.queries.GetDiscoveryCandidateForUpdate(ctx, string(id))
+	if err != nil {
+		return domain.DiscoveryCandidate{}, repositoryError("get discovery candidate for update", err)
 	}
 	return mapSQLiteDiscoveryCandidate(row)
 }
@@ -156,7 +158,7 @@ func (r *discoveryRepository) List(ctx context.Context, request port.DiscoveryLi
 }
 
 func (r *discoveryRepository) LinkPromotion(ctx context.Context, id domain.DiscoveryCandidateID, monitorID domain.MonitorID, at time.Time) (bool, error) {
-	rows, err := r.queries.LinkDiscoveryPromotion(ctx, dbsqlite.LinkDiscoveryPromotionParams{PromotedMonitorID: sql.NullString{String: string(monitorID), Valid: true}, UpdatedAt: formatTime(at), ID: string(id)})
+	rows, err := r.queries.LinkDiscoveryPromotion(ctx, dbsqlite.LinkDiscoveryPromotionParams{PromotedMonitorID: sql.NullString{String: string(monitorID), Valid: true}, UpdatedAt: formatDiscoveryTime(at), ID: string(id)})
 	if err != nil {
 		return false, repositoryError("link discovery promotion", err)
 	}
@@ -197,6 +199,10 @@ func discoveryNullableMonitorID(id *domain.MonitorID) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: string(*id), Valid: true}
+}
+
+func formatDiscoveryTime(value time.Time) string {
+	return value.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
 }
 
 var _ port.DiscoveryUnitOfWork = (*store)(nil)

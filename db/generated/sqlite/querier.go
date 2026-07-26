@@ -53,6 +53,7 @@ type Querier interface {
 	GetDiscoveryBatch(ctx context.Context, arg GetDiscoveryBatchParams) (DiscoveryBatch, error)
 	GetDiscoveryCandidate(ctx context.Context, id string) (DiscoveryCandidate, error)
 	GetDiscoveryCandidateByIdentity(ctx context.Context, arg GetDiscoveryCandidateByIdentityParams) (DiscoveryCandidate, error)
+	GetDiscoveryCandidateForUpdate(ctx context.Context, id string) (DiscoveryCandidate, error)
 	GetLocation(ctx context.Context, id string) (GetLocationRow, error)
 	GetLocationHealth(ctx context.Context, arg GetLocationHealthParams) (LocationHealth, error)
 	GetMaintenanceInterval(ctx context.Context, id string) (MaintenanceInterval, error)
