@@ -38,8 +38,9 @@ type ApplyOperatorMonitor struct {
 }
 
 type DeleteOperatorMonitor struct {
-	Owner      port.ExternalOwner
-	ExternalID domain.MonitorID
+	Owner          port.ExternalOwner
+	ExternalID     domain.MonitorID
+	IdempotencyKey string
 }
 
 type OperatorMonitorState struct {
@@ -80,14 +81,16 @@ type PutOperatorCredential struct {
 }
 
 type RevokeOperatorCredential struct {
-	Owner      port.ExternalOwner
-	AgentID    domain.AgentID
-	Generation uint64
+	Owner          port.ExternalOwner
+	AgentID        domain.AgentID
+	Generation     uint64
+	IdempotencyKey string
 }
 
 type DeleteOperatorAgent struct {
-	Owner      port.ExternalOwner
-	ExternalID domain.AgentID
+	Owner          port.ExternalOwner
+	ExternalID     domain.AgentID
+	IdempotencyKey string
 }
 
 func (s OperatorService) ApplyMonitor(ctx context.Context, request ApplyOperatorMonitor) (OperatorMonitorState, error) {
@@ -184,13 +187,31 @@ func (s OperatorService) DeleteMonitor(ctx context.Context, request DeleteOperat
 	if err := validateOperatorOwner(request.Owner); err != nil {
 		return err
 	}
-	return s.Store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
-		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil {
+	if err := validateOperatorKey(request.IdempotencyKey); err != nil {
+		return err
+	}
+	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
+		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil || repositories.Idempotency == nil {
 			return errors.New("operator monitor repositories are not configured")
+		}
+		mutation := operatorMutation{
+			Owner: request.Owner, OperationID: "deleteOperatorMonitor", Key: request.IdempotencyKey,
+			ResourceKind: operatorMonitorKind, ResourceID: string(request.ExternalID),
+			Request: struct {
+				Owner      port.ExternalOwner
+				ExternalID domain.MonitorID
+			}{request.Owner, request.ExternalID},
+		}
+		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
+		if err != nil || replayed {
+			return err
 		}
 		binding, err := repositories.Operator.Resolve(ctx, request.Owner, operatorMonitorKind)
 		if errors.Is(err, ErrNotFound) {
-			return nil
+			if request.ExternalID != "" {
+				return ErrConflict
+			}
+			return finishOperatorMutation(ctx, repositories, mutation, now)
 		}
 		if err != nil {
 			return err
@@ -198,14 +219,13 @@ func (s OperatorService) DeleteMonitor(ctx context.Context, request DeleteOperat
 		if request.ExternalID != "" && request.ExternalID != domain.MonitorID(binding.ResourceID) {
 			return ErrConflict
 		}
-		now, err := operatorDatabaseNow(ctx, repositories)
-		if err != nil {
-			return err
-		}
 		if _, err := repositories.ManagementCommands.DisableMonitor(ctx, domain.MonitorID(binding.ResourceID), now); err != nil && !errors.Is(err, ErrNotFound) {
 			return err
 		}
-		return repositories.Operator.Tombstone(ctx, request.Owner, operatorMonitorKind, now)
+		if err := repositories.Operator.Tombstone(ctx, request.Owner, operatorMonitorKind, now); err != nil {
+			return err
+		}
+		return finishOperatorMutation(ctx, repositories, mutation, now)
 	})
 }
 
@@ -342,12 +362,26 @@ func (s OperatorService) PutAgentCredential(ctx context.Context, request PutOper
 	if err := validateOperatorCredential(request.Credential); err != nil {
 		return err
 	}
-	return s.Store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
 		if err := requireOperatorAgentRepositories(repositories); err != nil {
 			return err
 		}
 		hash := slices.Clone(s.Credentials.Hash(request.Credential))
 		defer clearBytes(hash)
+		mutation := operatorMutation{
+			Owner: request.Owner, OperationID: "putOperatorAgentCredential", Key: request.IdempotencyKey,
+			ResourceKind: "agent-credential", ResourceID: string(request.AgentID),
+			Request: struct {
+				Owner          port.ExternalOwner
+				AgentID        domain.AgentID
+				Generation     uint64
+				CredentialHash []byte
+			}{request.Owner, request.AgentID, request.Generation, hash},
+		}
+		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
+		if err != nil || replayed {
+			return err
+		}
 		binding, err := repositories.Operator.Resolve(ctx, request.Owner, operatorAgentKind)
 		if err != nil {
 			return err
@@ -365,13 +399,9 @@ func (s OperatorService) PutAgentCredential(ctx context.Context, request PutOper
 		if request.Generation != agent.CredentialGeneration+1 {
 			existing, getErr := repositories.ManagementCommands.GetAgentCredentialGeneration(ctx, request.AgentID, request.Generation)
 			if getErr == nil && existing.RevokedAt == nil && subtle.ConstantTimeCompare(existing.CredentialHash, hash) == 1 {
-				return nil
+				return finishOperatorMutation(ctx, repositories, mutation, now)
 			}
 			return ErrConflict
-		}
-		now, err := operatorDatabaseNow(ctx, repositories)
-		if err != nil {
-			return err
 		}
 		created, err := repositories.ManagementCommands.CreateAgentCredentialGeneration(ctx, port.CreateAgentCredentialGenerationCommand{ExpectedCurrentGeneration: agent.CredentialGeneration, Credential: port.AgentCredentialRecord{AgentID: request.AgentID, Generation: request.Generation, CredentialHash: slices.Clone(hash), CreatedAt: now}})
 		if err != nil {
@@ -380,7 +410,7 @@ func (s OperatorService) PutAgentCredential(ctx context.Context, request PutOper
 		if !created {
 			return ErrConflict
 		}
-		return nil
+		return finishOperatorMutation(ctx, repositories, mutation, now)
 	})
 }
 
@@ -394,9 +424,25 @@ func (s OperatorService) RevokeAgentCredential(ctx context.Context, request Revo
 	if request.AgentID == "" || request.Generation == 0 {
 		return validationField("credential", "agent and generation are required")
 	}
-	return s.Store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
-		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil {
+	if err := validateOperatorKey(request.IdempotencyKey); err != nil {
+		return err
+	}
+	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
+		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil || repositories.Idempotency == nil {
 			return errors.New("operator credential repositories are not configured")
+		}
+		mutation := operatorMutation{
+			Owner: request.Owner, OperationID: "revokeOperatorAgentCredential", Key: request.IdempotencyKey,
+			ResourceKind: "agent-credential", ResourceID: string(request.AgentID),
+			Request: struct {
+				Owner      port.ExternalOwner
+				AgentID    domain.AgentID
+				Generation uint64
+			}{request.Owner, request.AgentID, request.Generation},
+		}
+		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
+		if err != nil || replayed {
+			return err
 		}
 		binding, err := repositories.Operator.Resolve(ctx, request.Owner, operatorAgentKind)
 		if err != nil {
@@ -405,17 +451,13 @@ func (s OperatorService) RevokeAgentCredential(ctx context.Context, request Revo
 		if domain.AgentID(binding.ResourceID) != request.AgentID {
 			return ErrConflict
 		}
-		now, err := operatorDatabaseNow(ctx, repositories)
-		if err != nil {
-			return err
-		}
 		outcome, err := repositories.ManagementCommands.RevokeAgentCredentialGeneration(ctx, request.AgentID, request.Generation, now)
 		if err != nil {
 			return err
 		}
 		switch outcome {
 		case port.CredentialGenerationRevoked, port.CredentialGenerationAlreadyRevoked:
-			return nil
+			return finishOperatorMutation(ctx, repositories, mutation, now)
 		case port.CredentialGenerationCurrent, port.CredentialGenerationReplacementUnobserved:
 			return ErrConflict
 		default:
@@ -431,13 +473,31 @@ func (s OperatorService) DeleteAgent(ctx context.Context, request DeleteOperator
 	if err := validateOperatorOwner(request.Owner); err != nil {
 		return err
 	}
-	return s.Store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
-		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil {
+	if err := validateOperatorKey(request.IdempotencyKey); err != nil {
+		return err
+	}
+	return transactOperatorMutation(ctx, s.Store, func(ctx context.Context, repositories Repositories) error {
+		if repositories.Operator == nil || repositories.ManagementCommands == nil || repositories.Runs == nil || repositories.Idempotency == nil {
 			return errors.New("operator agent repositories are not configured")
+		}
+		mutation := operatorMutation{
+			Owner: request.Owner, OperationID: "deleteOperatorAgent", Key: request.IdempotencyKey,
+			ResourceKind: operatorAgentKind, ResourceID: string(request.ExternalID),
+			Request: struct {
+				Owner      port.ExternalOwner
+				ExternalID domain.AgentID
+			}{request.Owner, request.ExternalID},
+		}
+		replayed, now, err := beginOperatorMutation(ctx, repositories, mutation)
+		if err != nil || replayed {
+			return err
 		}
 		binding, err := repositories.Operator.Resolve(ctx, request.Owner, operatorAgentKind)
 		if errors.Is(err, ErrNotFound) {
-			return nil
+			if request.ExternalID != "" {
+				return ErrConflict
+			}
+			return finishOperatorMutation(ctx, repositories, mutation, now)
 		}
 		if err != nil {
 			return err
@@ -445,14 +505,13 @@ func (s OperatorService) DeleteAgent(ctx context.Context, request DeleteOperator
 		if request.ExternalID != "" && request.ExternalID != domain.AgentID(binding.ResourceID) {
 			return ErrConflict
 		}
-		now, err := operatorDatabaseNow(ctx, repositories)
-		if err != nil {
-			return err
-		}
 		if _, err := repositories.ManagementCommands.RevokeAgent(ctx, domain.AgentID(binding.ResourceID), now); err != nil && !errors.Is(err, ErrNotFound) {
 			return err
 		}
-		return repositories.Operator.Tombstone(ctx, request.Owner, operatorAgentKind, now)
+		if err := repositories.Operator.Tombstone(ctx, request.Owner, operatorAgentKind, now); err != nil {
+			return err
+		}
+		return finishOperatorMutation(ctx, repositories, mutation, now)
 	})
 }
 
@@ -499,6 +558,76 @@ func clearBytes(value []byte) {
 	for index := range value {
 		value[index] = 0
 	}
+}
+
+type operatorMutation struct {
+	Owner        port.ExternalOwner
+	OperationID  string
+	Key          string
+	ResourceKind string
+	ResourceID   string
+	Request      any
+}
+
+func beginOperatorMutation(ctx context.Context, repositories Repositories, mutation operatorMutation) (bool, time.Time, error) {
+	if repositories.Idempotency == nil {
+		return false, time.Time{}, errors.New("operator idempotency repository is not configured")
+	}
+	fingerprint, err := CanonicalRequestFingerprint(mutation.Request)
+	if err != nil {
+		return false, time.Time{}, err
+	}
+	now, err := operatorDatabaseNow(ctx, repositories)
+	if err != nil {
+		return false, time.Time{}, err
+	}
+	record, err := repositories.Idempotency.Get(ctx, operatorPrincipal(mutation.Owner).CredentialID, mutation.OperationID, mutation.Key, now)
+	if err == nil {
+		if record.RequestHash != fingerprint || record.ResourceKind != mutation.ResourceKind || record.ResourceID != mutation.ResourceID {
+			return false, time.Time{}, ErrIdempotencyKeyReused
+		}
+		return true, now, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return false, time.Time{}, err
+	}
+	return false, now, nil
+}
+
+func finishOperatorMutation(ctx context.Context, repositories Repositories, mutation operatorMutation, now time.Time) error {
+	fingerprint, err := CanonicalRequestFingerprint(mutation.Request)
+	if err != nil {
+		return err
+	}
+	err = repositories.Idempotency.Create(ctx, port.IdempotencyRecord{
+		PrincipalID: operatorPrincipal(mutation.Owner).CredentialID, OperationID: mutation.OperationID,
+		Key: mutation.Key, RequestHash: fingerprint, ResourceKind: mutation.ResourceKind,
+		ResourceID: mutation.ResourceID, CreatedAt: now, ExpiresAt: now.Add(DefaultIdempotencyLifetime),
+	})
+	if errors.Is(err, ErrConflict) {
+		return ErrRetryableTransaction
+	}
+	return err
+}
+
+func transactOperatorMutation(
+	ctx context.Context,
+	store port.UnitOfWork,
+	mutation func(context.Context, Repositories) error,
+) error {
+	for attempt := 0; attempt < idempotencyMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := store.Transact(ctx, mutation)
+		if !errors.Is(err, ErrRetryableTransaction) || attempt == idempotencyMaxAttempts-1 {
+			return err
+		}
+		if err := waitForIdempotencyRetry(ctx); err != nil {
+			return err
+		}
+	}
+	return errors.New("operator idempotency retry attempts exhausted")
 }
 
 func requireOperatorMonitorRepositories(repositories Repositories) error {
