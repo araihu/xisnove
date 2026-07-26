@@ -2,6 +2,7 @@ package sdk_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -111,5 +112,70 @@ func TestAuthenticationAndIdempotencyRequestEditorsSetHeaders(t *testing.T) {
 	}
 	if request.Header.Get("Idempotency-Key") != "monitor-create-1" {
 		t.Fatalf("Idempotency-Key = %q", request.Header.Get("Idempotency-Key"))
+	}
+}
+
+func TestAuthenticationAndIdempotencyRequestEditorsRejectEmptyBeforeMutation(t *testing.T) {
+	for name, editor := range map[string]sdk.RequestEditorFn{
+		"bearer":      sdk.WithBearerToken(""),
+		"idempotency": sdk.WithIdempotencyKey(""),
+	} {
+		t.Run(name, func(t *testing.T) {
+			request, err := http.NewRequest(http.MethodPost, "https://xisnove.example.test/v1/monitors", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("X-Preserved", "value")
+			if err := editor(context.Background(), request); err == nil {
+				t.Fatal("editor accepted empty input")
+			}
+			if request.Header.Get("Authorization") != "" || request.Header.Get("Idempotency-Key") != "" || request.Header.Get("X-Preserved") != "value" {
+				t.Fatalf("editor mutated request headers: %#v", request.Header)
+			}
+		})
+	}
+}
+
+func TestAuthenticationAndIdempotencyRequestEditorsOnlySetOwnedHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		editor    sdk.RequestEditorFn
+		header    string
+		want      string
+		preserved string
+	}{
+		{name: "bearer", editor: sdk.WithBearerToken("fixture-token"), header: "Authorization", want: "Bearer fixture-token", preserved: "Idempotency-Key"},
+		{name: "idempotency", editor: sdk.WithIdempotencyKey("retry-1"), header: "Idempotency-Key", want: "retry-1", preserved: "Authorization"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request, err := http.NewRequest(http.MethodPost, "https://xisnove.example.test/v1/monitors", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set(test.preserved, "preserved")
+			if err := test.editor(context.Background(), request); err != nil {
+				t.Fatal(err)
+			}
+			if got := request.Header.Get(test.header); got != test.want {
+				t.Fatalf("%s = %q, want %q", test.header, got, test.want)
+			}
+			if got := request.Header.Get(test.preserved); got != "preserved" {
+				t.Fatalf("%s = %q, want preserved", test.preserved, got)
+			}
+		})
+	}
+}
+
+func TestRequestEditorEmptyErrorsAreStable(t *testing.T) {
+	request, err := http.NewRequest(http.MethodGet, "https://xisnove.example.test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sdk.WithBearerToken("")(context.Background(), request); !errors.Is(err, sdk.ErrEmptyBearerToken) {
+		t.Fatalf("bearer error = %v", err)
+	}
+	if err := sdk.WithIdempotencyKey("")(context.Background(), request); !errors.Is(err, sdk.ErrEmptyIdempotencyKey) {
+		t.Fatalf("idempotency error = %v", err)
 	}
 }

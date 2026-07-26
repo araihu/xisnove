@@ -2,10 +2,16 @@ package sdk
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrEmptyBearerToken    = errors.New("bearer token is empty")
+	ErrEmptyIdempotencyKey = errors.New("idempotency key is empty")
 )
 
 // Health-state aliases preserve the original SDK surface after additional
@@ -20,6 +26,9 @@ const (
 
 func WithBearerToken(token string) RequestEditorFn {
 	return func(_ context.Context, request *http.Request) error {
+		if token == "" {
+			return ErrEmptyBearerToken
+		}
 		request.Header.Set("Authorization", "Bearer "+token)
 		return nil
 	}
@@ -27,6 +36,9 @@ func WithBearerToken(token string) RequestEditorFn {
 
 func WithIdempotencyKey(key string) RequestEditorFn {
 	return func(_ context.Context, request *http.Request) error {
+		if key == "" {
+			return ErrEmptyIdempotencyKey
+		}
 		request.Header.Set("Idempotency-Key", key)
 		return nil
 	}
