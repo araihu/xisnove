@@ -157,8 +157,11 @@ func (s *AgentService) Authenticate(
 		return Principal{}, fmt.Errorf("authenticate agent: %w", err)
 	}
 	return Principal{
-		Kind: PrincipalAgent, SubjectID: string(record.Agent.ID),
-		CredentialKind: CredentialAgent, CredentialID: string(record.Agent.ID),
+		Kind:                 PrincipalAgent,
+		SubjectID:            string(record.Agent.ID),
+		CredentialKind:       CredentialAgent,
+		CredentialID:         string(record.Agent.ID),
+		CredentialGeneration: record.Agent.CredentialGeneration,
 	}, nil
 }
 
@@ -171,7 +174,9 @@ func (s *AgentService) Heartbeat(
 ) error {
 	if principal.Kind != PrincipalAgent ||
 		principal.SubjectID == "" ||
-		credentialGeneration == 0 {
+		principal.CredentialGeneration == 0 ||
+		credentialGeneration == 0 ||
+		credentialGeneration != principal.CredentialGeneration {
 		return ErrInvalidCredentials
 	}
 	version = strings.TrimSpace(version)

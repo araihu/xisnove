@@ -52,11 +52,12 @@ const (
 )
 
 type Principal struct {
-	Kind           PrincipalKind
-	SubjectID      string
-	CredentialKind CredentialKind
-	CredentialID   string
-	Scopes         []Scope
+	Kind                 PrincipalKind
+	SubjectID            string
+	CredentialKind       CredentialKind
+	CredentialID         string
+	CredentialGeneration uint64
+	Scopes               []Scope
 }
 
 type SessionCredential struct {

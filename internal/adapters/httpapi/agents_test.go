@@ -63,7 +63,9 @@ func TestAgentEnrollmentAndHeartbeatHandlers(t *testing.T) {
 	agentContext := httpapi.ContextWithPrincipal(
 		context.Background(),
 		application.Principal{
-			Kind: application.PrincipalAgent, SubjectID: enrolled.AgentId.String(),
+			Kind:                 application.PrincipalAgent,
+			SubjectID:            enrolled.AgentId.String(),
+			CredentialGeneration: 1,
 		},
 	)
 	heartbeatResponse, err := server.HeartbeatAgent(

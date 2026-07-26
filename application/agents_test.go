@@ -100,7 +100,8 @@ func TestAgentCredentialAuthenticatesAndHeartbeatUpdatesPresence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if principal.Kind != application.PrincipalAgent ||
-		principal.SubjectID != string(enrolled.ID) {
+		principal.SubjectID != string(enrolled.ID) ||
+		principal.CredentialGeneration != 1 {
 		t.Fatalf("Principal = %#v", principal)
 	}
 	err = service.Heartbeat(
@@ -123,8 +124,8 @@ func TestAgentCredentialAuthenticatesAndHeartbeatUpdatesPresence(t *testing.T) {
 	}
 }
 
-func TestHeartbeatRejectsStaleCredentialGeneration(t *testing.T) {
-	service, _ := newAgentServiceForTest(t)
+func TestHeartbeatRejectsGenerationThatDoesNotMatchAuthenticatedCredential(t *testing.T) {
+	service, store := newAgentServiceForTest(t)
 	ctx := context.Background()
 	enrollment, err := service.CreateEnrollmentToken(ctx, "l1", 15*time.Minute)
 	if err != nil {
@@ -140,19 +141,38 @@ func TestHeartbeatRejectsStaleCredentialGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := application.Principal{
-		Kind: application.PrincipalAgent, SubjectID: string(enrolled.ID),
+	principal, err := service.Authenticate(ctx, enrolled.Credential)
+	if err != nil {
+		t.Fatal(err)
 	}
+	repositories := store.Repositories()
+	agents := &heartbeatCountingAgentRepository{AgentRepository: repositories.Agents}
+	repositories.Agents = agents
+	countingStore := &heartbeatCountingStore{repositories: repositories}
+	service = application.NewAgentService(application.AgentServiceConfig{
+		Store: countingStore,
+		Now:   func() time.Time { return time.Date(2026, 7, 25, 1, 2, 3, 0, time.UTC) },
+	})
 
 	err = service.Heartbeat(
 		ctx,
 		principal,
-		2,
+		principal.CredentialGeneration+1,
 		"v0.1.0",
 		[]domain.AgentCapability{domain.CapabilityHTTP},
 	)
 	if !errors.Is(err, application.ErrInvalidCredentials) {
 		t.Fatalf("error = %v", err)
+	}
+	if countingStore.transactions != 0 || agents.heartbeatCalls != 0 {
+		t.Fatalf("heartbeat reached storage: transactions=%d updates=%d", countingStore.transactions, agents.heartbeatCalls)
+	}
+	record, err := store.Repositories().Agents.Get(ctx, enrolled.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Agent.Version != "" || !record.Agent.LastSeenAt.IsZero() {
+		t.Fatalf("mismatched heartbeat updated agent: %#v", record.Agent)
 	}
 }
 
@@ -207,4 +227,35 @@ func (i *sequenceTokenIssuer) New() (application.IssuedToken, error) {
 func (*sequenceTokenIssuer) Hash(raw string) []byte {
 	hash := sha256.Sum256([]byte(raw))
 	return hash[:]
+}
+
+type heartbeatCountingStore struct {
+	repositories application.Repositories
+	transactions int
+}
+
+func (s *heartbeatCountingStore) View(ctx context.Context, callback func(context.Context, application.Repositories) error) error {
+	return callback(ctx, s.repositories)
+}
+
+func (s *heartbeatCountingStore) Transact(ctx context.Context, callback func(context.Context, application.Repositories) error) error {
+	s.transactions++
+	return callback(ctx, s.repositories)
+}
+
+type heartbeatCountingAgentRepository struct {
+	application.AgentRepository
+	heartbeatCalls int
+}
+
+func (r *heartbeatCountingAgentRepository) UpdateHeartbeat(
+	ctx context.Context,
+	agentID domain.AgentID,
+	credentialGeneration uint64,
+	version string,
+	capabilities []domain.AgentCapability,
+	seenAt time.Time,
+) (bool, error) {
+	r.heartbeatCalls++
+	return r.AgentRepository.UpdateHeartbeat(ctx, agentID, credentialGeneration, version, capabilities, seenAt)
 }
