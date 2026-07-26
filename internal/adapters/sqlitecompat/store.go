@@ -267,7 +267,9 @@ func (r *locationRepository) Get(
 	return domain.Location{
 		ID:        domain.LocationID(record.ID),
 		Name:      record.Name,
+		Enabled:   true,
 		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
 	}, nil
 }
 
@@ -1147,6 +1149,14 @@ func mapAgent(record dbsqlite.Agent) (application.AgentRecord, error) {
 	if err != nil {
 		return application.AgentRecord{}, fmt.Errorf("map agent revocation: %w", err)
 	}
+	updatedAt, err := parseNullableTime(record.UpdatedAt)
+	if err != nil {
+		return application.AgentRecord{}, fmt.Errorf("map agent update: %w", err)
+	}
+	if updatedAt == nil {
+		return application.AgentRecord{}, errors.New("map agent update: missing timestamp")
+	}
+	agent.UpdatedAt = *updatedAt
 	return application.AgentRecord{
 		Agent: agent, CredentialHash: record.CredentialHash,
 	}, nil

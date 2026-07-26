@@ -11,7 +11,9 @@ var ErrInvalidLocation = errors.New("invalid location")
 type Location struct {
 	ID        LocationID
 	Name      string
+	Enabled   bool
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func NewLocation(id LocationID, name string, createdAt time.Time) (Location, error) {
@@ -23,6 +25,8 @@ func NewLocation(id LocationID, name string, createdAt time.Time) (Location, err
 	return Location{
 		ID:        id,
 		Name:      name,
+		Enabled:   true,
 		CreatedAt: createdAt.UTC(),
+		UpdatedAt: createdAt.UTC(),
 	}, nil
 }

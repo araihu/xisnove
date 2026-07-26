@@ -26,6 +26,7 @@ type Agent struct {
 	LastSeenAt           time.Time
 	RevokedAt            *time.Time
 	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type NewAgentParams struct {
@@ -53,6 +54,7 @@ func NewAgent(params NewAgentParams) (Agent, error) {
 		Capabilities:         append([]AgentCapability(nil), params.Capabilities...),
 		CredentialGeneration: params.CredentialGeneration,
 		CreatedAt:            params.CreatedAt.UTC(),
+		UpdatedAt:            params.CreatedAt.UTC(),
 	}, nil
 }
 

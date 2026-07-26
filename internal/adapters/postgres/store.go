@@ -250,7 +250,9 @@ func (r *locationRepository) Get(
 	return domain.Location{
 		ID:        domain.LocationID(record.ID),
 		Name:      record.Name,
+		Enabled:   true,
 		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
 	}, nil
 }
 
@@ -1128,6 +1130,10 @@ func mapAgent(record dbpostgres.Agent) (application.AgentRecord, error) {
 	agent.RevokedAt, err = parseNullableTime(record.RevokedAt)
 	if err != nil {
 		return application.AgentRecord{}, fmt.Errorf("map agent revocation: %w", err)
+	}
+	agent.UpdatedAt, err = parseTime(record.UpdatedAt)
+	if err != nil {
+		return application.AgentRecord{}, fmt.Errorf("map agent update: %w", err)
 	}
 	return application.AgentRecord{
 		Agent: agent, CredentialHash: record.CredentialHash,

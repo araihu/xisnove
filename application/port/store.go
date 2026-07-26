@@ -48,6 +48,8 @@ type Repositories struct {
 	Maintenance          MaintenanceRepository
 	Audit                AuditRepository
 	Retention            RetentionRepository
+	Management           ManagementQueryRepository
+	ManagementCommands   ManagementCommandRepository
 }
 
 type AdminRecord struct {
