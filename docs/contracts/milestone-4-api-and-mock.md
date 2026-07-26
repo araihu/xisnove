@@ -73,8 +73,11 @@ editors := []sdk.RequestEditorFn{
 The handwritten public SDK layer also provides:
 
 - `ErrorFromResponse`, which turns non-2xx responses into a redacted `APIError`
-  containing the RFC 9457 code, correlation ID, status, and field errors;
+  containing the RFC 9457 code, correlation ID, status, and field errors while
+  omitting untrusted `detail` and `instance` values;
 - operation-bound `*PageFetcher` methods for every cursor-paged resource;
+- stable typed page errors even when a non-2xx intermediary response contains
+  malformed JSON;
 - `WalkPages`, which passes cursors opaquely, observes cancellation, and rejects
   repeated cursor cycles.
 

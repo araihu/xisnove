@@ -54,9 +54,16 @@ func ErrorFromResponse(response *http.Response, body []byte) error {
 }
 
 func cloneProblem(problem Problem) Problem {
+	redacted := Problem{
+		Code:          problem.Code,
+		CorrelationId: problem.CorrelationId,
+		Status:        problem.Status,
+		Title:         problem.Title,
+		Type:          problem.Type,
+	}
 	if problem.FieldErrors != nil {
 		fields := append([]FieldError(nil), (*problem.FieldErrors)...)
-		problem.FieldErrors = &fields
+		redacted.FieldErrors = &fields
 	}
-	return problem
+	return redacted
 }

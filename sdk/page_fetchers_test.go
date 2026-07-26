@@ -92,6 +92,29 @@ func TestTypedPageFetcherReturnsStructuredAPIError(t *testing.T) {
 	}
 }
 
+func TestTypedPageFetcherReturnsStructuredAPIErrorForMalformedProblem(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("Content-Type", "application/problem+json")
+		response.Header().Set("X-Request-ID", "request-malformed")
+		response.WriteHeader(http.StatusBadGateway)
+		_, _ = response.Write([]byte(`{"code":`))
+	}))
+	defer server.Close()
+	client, err := sdk.NewClientWithResponses(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.AgentsPageFetcher(sdk.ListAgentsParams{})(context.Background(), "")
+	var apiError *sdk.APIError
+	if !errors.As(err, &apiError) {
+		t.Fatalf("page error = %#v", err)
+	}
+	if apiError.StatusCode != http.StatusBadGateway || apiError.Problem.Status != http.StatusBadGateway ||
+		apiError.Problem.Code != "http_error" || apiError.Problem.CorrelationId != "request-malformed" {
+		t.Fatalf("API error = %#v", apiError)
+	}
+}
+
 func assertTypedPage[T any](t *testing.T, fetch sdk.PageFetcher[T], ctx context.Context) {
 	t.Helper()
 	page, err := fetch(ctx, "opaque-cursor")

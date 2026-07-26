@@ -18,6 +18,7 @@ func TestErrorFromResponseDecodesRFC9457WithoutLeakingDetail(t *testing.T) {
 		"code":"rate_limited",
 		"correlationId":"request-42",
 		"detail":"provider secret must not be formatted",
+		"instance":"https://provider.invalid/credentials/secret-instance",
 		"fieldErrors":[{"field":"limit","message":"try later"}]
 	}`)
 	err := sdk.ErrorFromResponse(response, body)
@@ -29,6 +30,9 @@ func TestErrorFromResponseDecodesRFC9457WithoutLeakingDetail(t *testing.T) {
 		apiError.Problem.CorrelationId != "request-42" || apiError.Problem.FieldErrors == nil ||
 		len(*apiError.Problem.FieldErrors) != 1 {
 		t.Fatalf("API error = %#v", apiError)
+	}
+	if apiError.Problem.Detail != nil || apiError.Problem.Instance != nil {
+		t.Fatalf("untrusted problem diagnostics retained: %#v", apiError.Problem)
 	}
 	if strings.Contains(err.Error(), "provider secret") || !strings.Contains(err.Error(), "request-42") {
 		t.Fatalf("redacted error text = %q", err)
