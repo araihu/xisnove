@@ -410,7 +410,13 @@ func (s *server) renderAdaptive(w http.ResponseWriter, r *http.Request, status i
 	if isHTMX(r) {
 		component = fragment
 	}
-	if err := renderComponent(r.Context(), w, status, component); err != nil {
+	renderCtx := r.Context()
+	if renderCtx.Err() != nil {
+		// Preserve request values such as correlation ID while allowing the small
+		// terminal recovery surface to render after the upstream deadline fired.
+		renderCtx = context.WithoutCancel(renderCtx)
+	}
+	if err := renderComponent(renderCtx, w, status, component); err != nil {
 		s.logger.ErrorContext(r.Context(), "render response failed", "correlation_id", correlationID(r.Context()))
 	}
 }

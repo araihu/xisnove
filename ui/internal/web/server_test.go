@@ -335,6 +335,22 @@ func TestLoginTimeoutIsPresentedWithoutLoggingCredentialsOrQuery(t *testing.T) {
 	}
 }
 
+func TestLoginTimeoutRendersHTMLAfterRequestContextDeadline(t *testing.T) {
+	handler, _ := newTestHandler(t, blockingClient{}, 5*time.Millisecond)
+	loginCSRF, loginCSRFCookie := getLoginCSRF(t, handler)
+	form := url.Values{"email": {testUsername}, "password": {testPassword}, "_csrf": {loginCSRF}}
+	request := httptest.NewRequest(http.MethodPost, "https://ui.example.test/login", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(loginCSRFCookie)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusGatewayTimeout || !strings.Contains(recorder.Body.String(), `id="problem-content"`) || !strings.Contains(recorder.Body.String(), "Control plane timed out") {
+		t.Fatalf("timeout HTML = %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestLogoutRejectsMissingCSRFWithProblemPresentation(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
 	sessionCookie := &http.Cookie{

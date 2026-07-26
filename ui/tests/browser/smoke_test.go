@@ -46,6 +46,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			_ = json.NewDecoder(r.Body).Decode(&request)
 			if request.Password != nil && *request.Password == "invalid" {
 				w.WriteHeader(http.StatusUnauthorized)
+				_ = json.NewEncoder(w).Encode(sdk.Problem{Type: "urn:test:invalid", Title: "Invalid credentials", Status: http.StatusUnauthorized, Code: "invalid_credentials", CorrelationId: "browser-test"})
 				return
 			}
 			if request.Password != nil && *request.Password == "timeout" {
