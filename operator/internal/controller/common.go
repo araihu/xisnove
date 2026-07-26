@@ -64,10 +64,26 @@ func setCondition(conditions *[]metav1.Condition, generation int64, conditionTyp
 		Reason:             reason,
 		Message:            boundMessage(message),
 	})
+	// Conditions are status summaries, not an event stream. Keep the condition
+	// just written and discard the oldest unrelated entry if an older object
+	// already contained more condition types than this API permits.
+	for len(*conditions) > 8 {
+		drop := 0
+		for index := range *conditions {
+			if (*conditions)[index].Type != conditionType {
+				drop = index
+				break
+			}
+		}
+		*conditions = append((*conditions)[:drop], (*conditions)[drop+1:]...)
+	}
 }
 
 func ownerFor(object client.Object, kind string) controlplane.OwnerReference {
-	return controlplane.OwnerReference{Key: fmt.Sprintf("monitoring.xisnove.io/%s/%s/%s/%s", kind, object.GetNamespace(), object.GetName(), object.GetUID())}
+	return controlplane.OwnerReference{
+		Key: fmt.Sprintf("monitoring.xisnove.io/%s/%s/%s", kind, object.GetNamespace(), object.GetName()),
+		UID: string(object.GetUID()),
+	}
 }
 
 func isForceDelete(object client.Object) bool {

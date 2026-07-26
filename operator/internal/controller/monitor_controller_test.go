@@ -46,10 +46,13 @@ func TestMonitorReconcileUsesStableOwnershipAndBoundedStatus(t *testing.T) {
 	if len(requests) != 2 {
 		t.Fatalf("apply calls = %d, want 2", len(requests))
 	}
-	wantOwner := "monitoring.xisnove.io/Monitor/default/payments/monitor-uid"
+	wantOwner := "monitoring.xisnove.io/Monitor/default/payments"
 	for index, request := range requests {
 		if request.Owner.Key != wantOwner {
 			t.Fatalf("request[%d] owner = %q, want %q", index, request.Owner.Key, wantOwner)
+		}
+		if request.Owner.UID != "monitor-uid" {
+			t.Fatalf("request[%d] owner UID = %q, want monitor-uid", index, request.Owner.UID)
 		}
 	}
 	if requests[1].ExternalID != "monitor-remote-1" {
@@ -72,6 +75,29 @@ func TestMonitorReconcileUsesStableOwnershipAndBoundedStatus(t *testing.T) {
 	assertCondition(t, got.Status.Conditions, ConditionReady, metav1.ConditionTrue, "Reconciled")
 	assertCondition(t, got.Status.Conditions, ConditionSynced, metav1.ConditionTrue, "Applied")
 	assertCondition(t, got.Status.Conditions, ConditionDegraded, metav1.ConditionFalse, "Healthy")
+}
+
+func TestMonitorHealthConditionTruthTable(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		state string
+		want  metav1.ConditionStatus
+	}{
+		{state: "pending", want: metav1.ConditionUnknown},
+		{state: "unknown", want: metav1.ConditionUnknown},
+		{state: "up", want: metav1.ConditionFalse},
+		{state: "down", want: metav1.ConditionTrue},
+		{state: "degraded", want: metav1.ConditionTrue},
+	} {
+		test := test
+		t.Run(test.state, func(t *testing.T) {
+			got, _, _ := monitorDegradedCondition(test.state)
+			if got != test.want {
+				t.Fatalf("Degraded(%q) = %s, want %s", test.state, got, test.want)
+			}
+		})
+	}
 }
 
 func TestMonitorDeletionKeepsFinalizerWhenOwnershipCannotBeProven(t *testing.T) {
@@ -276,7 +302,7 @@ type fakeControlPlane struct {
 	applyMonitor     func(context.Context, controlplane.ApplyMonitorRequest) (controlplane.MonitorState, error)
 	deleteMonitor    func(context.Context, controlplane.DeleteRemoteObjectRequest) error
 	applyAgent       func(context.Context, controlplane.ApplyAgentRequest) (controlplane.AgentState, error)
-	issueCredential  func(context.Context, controlplane.IssueAgentCredentialRequest) (controlplane.IssuedCredential, error)
+	putCredential    func(context.Context, controlplane.PutAgentCredentialRequest) error
 	revokeCredential func(context.Context, controlplane.RevokeAgentCredentialRequest) error
 	deleteAgent      func(context.Context, controlplane.DeleteRemoteObjectRequest) error
 }
@@ -302,11 +328,11 @@ func (f *fakeControlPlane) ApplyAgent(ctx context.Context, request controlplane.
 	return f.applyAgent(ctx, request)
 }
 
-func (f *fakeControlPlane) IssueAgentCredential(ctx context.Context, request controlplane.IssueAgentCredentialRequest) (controlplane.IssuedCredential, error) {
-	if f.issueCredential == nil {
-		return controlplane.IssuedCredential{}, errors.New("unexpected IssueAgentCredential call")
+func (f *fakeControlPlane) PutAgentCredential(ctx context.Context, request controlplane.PutAgentCredentialRequest) error {
+	if f.putCredential == nil {
+		return errors.New("unexpected PutAgentCredential call")
 	}
-	return f.issueCredential(ctx, request)
+	return f.putCredential(ctx, request)
 }
 
 func (f *fakeControlPlane) RevokeAgentCredential(ctx context.Context, request controlplane.RevokeAgentCredentialRequest) error {

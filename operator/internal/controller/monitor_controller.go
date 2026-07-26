@@ -65,13 +65,25 @@ func (r *MonitorReconciler) Reconcile(ctx context.Context, request ctrl.Request)
 	}
 	setCondition(&monitor.Status.Conditions, monitor.Generation, ConditionReady, metav1.ConditionTrue, "Reconciled", "The operator-owned Monitor is ready")
 	setCondition(&monitor.Status.Conditions, monitor.Generation, ConditionSynced, metav1.ConditionTrue, "Applied", "Desired state is synchronized through the control-plane client")
-	setCondition(&monitor.Status.Conditions, monitor.Generation, ConditionDegraded, metav1.ConditionFalse, "Healthy", "No reconciliation error is active")
+	degraded, reason, message := monitorDegradedCondition(state.AggregateHealth)
+	setCondition(&monitor.Status.Conditions, monitor.Generation, ConditionDegraded, degraded, reason, message)
 	if !equality.Semantic.DeepEqual(previousStatus, &monitor.Status) {
 		if err := r.Status().Update(ctx, monitor); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 	return ctrl.Result{RequeueAfter: r.pollInterval()}, nil
+}
+
+func monitorDegradedCondition(health string) (metav1.ConditionStatus, string, string) {
+	switch health {
+	case "up":
+		return metav1.ConditionFalse, "Healthy", "The aggregate health is up"
+	case "down", "degraded":
+		return metav1.ConditionTrue, "Unhealthy", "The aggregate health requires attention"
+	default:
+		return metav1.ConditionUnknown, "HealthUnknown", "The aggregate health is pending or unknown"
+	}
 }
 
 func (r *MonitorReconciler) finalize(ctx context.Context, monitor *monitoringv1alpha1.Monitor) (ctrl.Result, error) {

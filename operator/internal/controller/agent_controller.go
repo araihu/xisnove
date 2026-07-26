@@ -2,6 +2,9 @@ package controller
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -23,23 +26,30 @@ import (
 
 const (
 	CredentialKey                          = "credential"
+	NextCredentialKey                      = "credential.next"
 	PreviousCredentialKey                  = "credential.previous"
 	CredentialGenerationAnnotation         = "monitoring.xisnove.io/credential-generation"
 	PreviousCredentialGenerationAnnotation = "monitoring.xisnove.io/previous-credential-generation"
 	credentialMountPath                    = "/var/run/xisnove"
 )
 
+type credentialBundle struct {
+	Credential string `json:"credential"`
+	Generation int64  `json:"generation"`
+}
+
 type AgentReconciler struct {
 	client.Client
 	// APIReader performs exact Secret reads without starting a namespace-wide
 	// Secret informer. This lets the operator RBAC omit list/watch on Secrets.
-	APIReader         client.Reader
-	Scheme            *runtime.Scheme
-	ControlPlane      controlplane.Client
-	ControlPlaneURL   string
-	DefaultAgentImage string
-	PollInterval      time.Duration
-	Now               func() time.Time
+	APIReader           client.Reader
+	Scheme              *runtime.Scheme
+	ControlPlane        controlplane.Client
+	ControlPlaneURL     string
+	DefaultAgentImage   string
+	PollInterval        time.Duration
+	HeartbeatStaleAfter time.Duration
+	Now                 func() time.Time
 }
 
 func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
@@ -58,76 +68,108 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (
 	}
 
 	previousStatus := agent.Status.DeepCopy()
+	if credentialKey(agent) == NextCredentialKey || credentialKey(agent) == PreviousCredentialKey {
+		return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("credential Secret key is reserved for controller lifecycle state"))
+	}
 	secret, err := r.readCredentialSecret(ctx, agent)
 	if err != nil {
 		return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
 	}
-	currentGeneration := credentialGeneration(secret, agent.Status.CredentialGeneration)
+	if secret == nil {
+		secret, err = r.stageCredentialSecret(ctx, agent, 1)
+		if err != nil {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
+		}
+	}
+
+	current, next, err := credentialState(secret, credentialKey(agent))
+	if err != nil {
+		return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
+	}
+	state := controlplane.AgentState{}
+	// The control-plane apply endpoint deliberately accepts only generation one.
+	// Keep that first bundle unmounted during overlap so retries can observe the
+	// replacement heartbeat, but never regenerate it after a write crash.
+	initial := initialBundle(current, secret)
+	if initial != nil {
+		state, err = r.ControlPlane.ApplyAgent(ctx, controlplane.ApplyAgentRequest{
+			Owner:             ownerFor(agent, "Agent"),
+			ExternalID:        agent.Status.ExternalID,
+			Name:              agent.Name,
+			Spec:              *agent.Spec.DeepCopy(),
+			InitialCredential: []byte(initial.Credential),
+			IdempotencyKey:    applyIdempotencyKey(agent),
+		})
+		if err != nil {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
+		}
+		if state.ExternalID == "" || state.CredentialGeneration < 1 {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("control plane returned an invalid Agent state"))
+		}
+		agent.Status.ExternalID = state.ExternalID
+	}
+
+	if current == nil && next != nil {
+		if next.Generation != 1 || state.ExternalID == "" {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("initial credential staging did not produce a registered Agent"))
+		}
+		if err := r.promoteInitialCredential(ctx, secret, agent, *next); err != nil {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
+		}
+		current = next
+		next = nil
+	}
+	if current == nil {
+		return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("operator-owned credential Secret has no current credential bundle"))
+	}
+
 	desiredGeneration := agent.Spec.CredentialRotation.RequestedGeneration
 	if desiredGeneration < 1 {
 		desiredGeneration = 1
 	}
-	state, err := r.ControlPlane.ApplyAgent(ctx, controlplane.ApplyAgentRequest{
-		Owner:                ownerFor(agent, "Agent"),
-		ExternalID:           agent.Status.ExternalID,
-		Name:                 agent.Name,
-		Spec:                 *agent.Spec.DeepCopy(),
-		NeedsCredential:      secret == nil,
-		CredentialGeneration: currentGeneration,
-		IdempotencyKey:       credentialIdempotencyKey(agent, desiredGeneration),
-	})
-	if err != nil {
-		return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
-	}
-	if state.ExternalID == "" {
-		return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("control plane returned an empty agent identifier"))
-	}
-	agent.Status.ExternalID = state.ExternalID
-
-	if secret == nil {
-		if state.Credential == nil {
-			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("control plane did not return the requested initial credential"))
+	if next != nil {
+		if next.Generation != desiredGeneration || next.Generation <= current.Generation {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("credential Secret has an invalid staged replacement"))
 		}
-		secret, err = r.materializeInitialCredential(ctx, agent, *state.Credential)
-		state.Credential = nil
+		if agent.Status.ExternalID == "" {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("cannot register a replacement credential without an Agent identifier"))
+		}
+		if err := r.putAndPromoteCredential(ctx, agent, secret, *current, *next); err != nil {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
+		}
+		current, next = next, nil
+	} else if desiredGeneration > current.Generation {
+		if previousCredentialGeneration(secret) > 0 {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("cannot rotate credentials while the previous generation awaits a heartbeat"))
+		}
+		secret, err = r.stageCredentialSecret(ctx, agent, desiredGeneration)
 		if err != nil {
 			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
 		}
-		currentGeneration = credentialGeneration(secret, 0)
-	}
-
-	if desiredGeneration > currentGeneration {
-		issued, issueErr := r.ControlPlane.IssueAgentCredential(ctx, controlplane.IssueAgentCredentialRequest{
-			Owner:               ownerFor(agent, "Agent"),
-			ExternalID:          state.ExternalID,
-			RequestedGeneration: desiredGeneration,
-			IdempotencyKey:      credentialIdempotencyKey(agent, desiredGeneration),
-		})
-		if issueErr != nil {
-			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, issueErr)
+		_, staged, stateErr := credentialState(secret, credentialKey(agent))
+		if stateErr != nil || staged == nil {
+			if stateErr == nil {
+				stateErr = errors.New("credential Secret staging did not retain the replacement")
+			}
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, stateErr)
 		}
-		if issued.Generation != desiredGeneration || len(issued.Value) == 0 {
-			clear(issued.Value)
-			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, fmt.Errorf("control plane returned credential generation %d, want %d", issued.Generation, desiredGeneration))
+		if agent.Status.ExternalID == "" {
+			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, errors.New("cannot register a replacement credential without an Agent identifier"))
 		}
-		secret, err = r.rotateCredentialSecret(ctx, agent, secret, issued)
-		clear(issued.Value)
-		if err != nil {
+		if err := r.putAndPromoteCredential(ctx, agent, secret, *current, *staged); err != nil {
 			return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
 		}
-		previous := currentGeneration
+		current = staged
+	}
+
+	if previous := previousCredentialGeneration(secret); previous > 0 {
 		agent.Status.PreviousCredentialGeneration = &previous
-		agent.Status.CredentialGeneration = desiredGeneration
 		agent.Status.RotationPhase = monitoringv1alpha1.RotationPhaseAwaitingHeartbeat
-		currentGeneration = desiredGeneration
-	}
-
-	previousGeneration := previousCredentialGeneration(secret)
-	if previousGeneration > 0 {
-		agent.Status.PreviousCredentialGeneration = &previousGeneration
-		agent.Status.RotationPhase = monitoringv1alpha1.RotationPhaseAwaitingHeartbeat
-		if state.HeartbeatCredentialGeneration >= currentGeneration {
-			if err := r.ControlPlane.RevokeAgentCredential(ctx, controlplane.RevokeAgentCredentialRequest{Owner: ownerFor(agent, "Agent"), ExternalID: state.ExternalID, Generation: previousGeneration}); err != nil {
+		if state.CredentialGeneration >= current.Generation && !state.LastHeartbeatAt.IsZero() {
+			if err := r.ControlPlane.RevokeAgentCredential(ctx, controlplane.RevokeAgentCredentialRequest{
+				Owner: ownerFor(agent, "Agent"), ExternalID: agent.Status.ExternalID, Generation: previous,
+				IdempotencyKey: credentialIdempotencyKey(agent, previous, "revoke"),
+			}); err != nil {
 				return ctrl.Result{}, r.recordAgentFailure(ctx, agent, err)
 			}
 			if err := r.finishCredentialOverlap(ctx, secret); err != nil {
@@ -136,10 +178,10 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, request ctrl.Request) (
 			agent.Status.PreviousCredentialGeneration = nil
 			agent.Status.RotationPhase = monitoringv1alpha1.RotationPhaseComplete
 		}
-	} else if currentGeneration >= desiredGeneration && currentGeneration > 1 {
+	} else if current.Generation > 1 {
 		agent.Status.RotationPhase = monitoringv1alpha1.RotationPhaseComplete
 	}
-	agent.Status.CredentialGeneration = currentGeneration
+	agent.Status.CredentialGeneration = current.Generation
 
 	deployment, err := r.applyAgentDeployment(ctx, agent)
 	if err != nil {
@@ -159,7 +201,9 @@ func (r *AgentReconciler) finalize(ctx context.Context, agent *monitoringv1alpha
 		return ctrl.Result{}, nil
 	}
 	if !isForceDelete(agent) {
-		err := r.ControlPlane.DeleteAgent(ctx, controlplane.DeleteRemoteObjectRequest{Owner: ownerFor(agent, "Agent"), ExternalID: agent.Status.ExternalID})
+		err := r.ControlPlane.DeleteAgent(ctx, controlplane.DeleteRemoteObjectRequest{
+			Owner: ownerFor(agent, "Agent"), ExternalID: agent.Status.ExternalID, IdempotencyKey: deleteIdempotencyKey(agent),
+		})
 		if err = ignoreRemoteNotFound(err); err != nil {
 			return ctrl.Result{}, safeError(err)
 		}
@@ -190,48 +234,86 @@ func (r *AgentReconciler) readCredentialSecret(ctx context.Context, agent *monit
 	return secret, nil
 }
 
-func (r *AgentReconciler) materializeInitialCredential(ctx context.Context, agent *monitoringv1alpha1.Agent, issued controlplane.IssuedCredential) (*corev1.Secret, error) {
-	if issued.Generation < 1 || len(issued.Value) == 0 {
-		return nil, errors.New("control plane returned an invalid initial credential")
+func (r *AgentReconciler) stageCredentialSecret(ctx context.Context, agent *monitoringv1alpha1.Agent, generation int64) (*corev1.Secret, error) {
+	if generation < 1 {
+		return nil, errors.New("credential generation must be positive")
+	}
+	credential, err := newCredential()
+	if err != nil {
+		return nil, err
+	}
+	bundle, err := marshalCredentialBundle(credentialBundle{Credential: credential, Generation: generation})
+	if err != nil {
+		return nil, err
 	}
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: agent.Spec.CredentialSecretRef.Name, Namespace: agent.Namespace, Annotations: map[string]string{CredentialGenerationAnnotation: strconv.FormatInt(issued.Generation, 10)}},
+		ObjectMeta: metav1.ObjectMeta{Name: agent.Spec.CredentialSecretRef.Name, Namespace: agent.Namespace},
 		Type:       corev1.SecretTypeOpaque,
-		Data:       map[string][]byte{credentialKey(agent): append([]byte(nil), issued.Value...)},
+		Data:       map[string][]byte{NextCredentialKey: bundle},
 	}
 	if err := controllerutil.SetControllerReference(agent, secret, r.Scheme); err != nil {
 		return nil, err
 	}
 	if err := r.Create(ctx, secret); err != nil {
-		return nil, fmt.Errorf("materialize operator-owned credential Secret: %w", err)
+		if !apierrors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("pre-stage operator-owned credential Secret: %w", err)
+		}
+		existing, readErr := r.readCredentialSecret(ctx, agent)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if existing == nil {
+			return nil, errors.New("credential Secret disappeared while staging")
+		}
+		if len(existing.Data[NextCredentialKey]) != 0 {
+			return existing, nil
+		}
+		if existing.Data == nil {
+			existing.Data = map[string][]byte{}
+		}
+		existing.Data[NextCredentialKey] = bundle
+		if err := r.Update(ctx, existing); err != nil {
+			return nil, fmt.Errorf("pre-stage replacement credential bundle: %w", err)
+		}
+		return existing, nil
 	}
 	return secret, nil
 }
 
-func (r *AgentReconciler) rotateCredentialSecret(ctx context.Context, agent *monitoringv1alpha1.Agent, secret *corev1.Secret, issued controlplane.IssuedCredential) (*corev1.Secret, error) {
-	if secret.Data == nil {
-		secret.Data = map[string][]byte{}
-	}
+func (r *AgentReconciler) promoteInitialCredential(ctx context.Context, secret *corev1.Secret, agent *monitoringv1alpha1.Agent, next credentialBundle) error {
 	key := credentialKey(agent)
-	current := append([]byte(nil), secret.Data[key]...)
-	if len(current) == 0 {
-		return nil, errors.New("operator-owned credential Secret has an empty current credential")
-	}
-	previousGeneration := credentialGeneration(secret, agent.Status.CredentialGeneration)
-	secret.Data[PreviousCredentialKey] = current
-	secret.Data[key] = append([]byte(nil), issued.Value...)
+	secret.Data[key] = append([]byte(nil), secret.Data[NextCredentialKey]...)
+	delete(secret.Data, NextCredentialKey)
 	if secret.Annotations == nil {
 		secret.Annotations = map[string]string{}
 	}
-	secret.Annotations[CredentialGenerationAnnotation] = strconv.FormatInt(issued.Generation, 10)
-	secret.Annotations[PreviousCredentialGenerationAnnotation] = strconv.FormatInt(previousGeneration, 10)
-	if err := controllerutil.SetControllerReference(agent, secret, r.Scheme); err != nil {
-		return nil, err
-	}
+	secret.Annotations[CredentialGenerationAnnotation] = strconv.FormatInt(next.Generation, 10)
 	if err := r.Update(ctx, secret); err != nil {
-		return nil, fmt.Errorf("atomically update credential Secret: %w", err)
+		return fmt.Errorf("promote initial credential bundle: %w", err)
 	}
-	return secret, nil
+	return nil
+}
+
+func (r *AgentReconciler) putAndPromoteCredential(ctx context.Context, agent *monitoringv1alpha1.Agent, secret *corev1.Secret, current, next credentialBundle) error {
+	if err := r.ControlPlane.PutAgentCredential(ctx, controlplane.PutAgentCredentialRequest{
+		Owner: ownerFor(agent, "Agent"), ExternalID: agent.Status.ExternalID, Generation: next.Generation,
+		Credential: []byte(next.Credential), IdempotencyKey: credentialIdempotencyKey(agent, next.Generation, "put"),
+	}); err != nil {
+		return err
+	}
+	key := credentialKey(agent)
+	secret.Data[PreviousCredentialKey] = append([]byte(nil), secret.Data[key]...)
+	secret.Data[key] = append([]byte(nil), secret.Data[NextCredentialKey]...)
+	delete(secret.Data, NextCredentialKey)
+	if secret.Annotations == nil {
+		secret.Annotations = map[string]string{}
+	}
+	secret.Annotations[CredentialGenerationAnnotation] = strconv.FormatInt(next.Generation, 10)
+	secret.Annotations[PreviousCredentialGenerationAnnotation] = strconv.FormatInt(current.Generation, 10)
+	if err := r.Update(ctx, secret); err != nil {
+		return fmt.Errorf("promote replacement credential bundle: %w", err)
+	}
+	return nil
 }
 
 func (r *AgentReconciler) finishCredentialOverlap(ctx context.Context, secret *corev1.Secret) error {
@@ -261,47 +343,15 @@ func (r *AgentReconciler) applyAgentDeployment(ctx context.Context, agent *monit
 		if image == "" {
 			image = r.DefaultAgentImage
 		}
-		automount := true
-		runAsNonRoot := true
-		readOnlyRoot := true
-		allowPrivilegeEscalation := false
+		automount, runAsNonRoot, readOnlyRoot, allowPrivilegeEscalation := true, true, true, false
 		seccomp := corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
 		deployment.Labels = cloneStringMap(labels)
-		deployment.Spec = appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
-			Selector: &metav1.LabelSelector{MatchLabels: cloneStringMap(labels)},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: cloneStringMap(labels)},
-				Spec: corev1.PodSpec{
-					ServiceAccountName:           agent.Spec.Workload.ServiceAccountName,
-					AutomountServiceAccountToken: &automount,
-					SecurityContext:              &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, SeccompProfile: &seccomp},
-					NodeSelector:                 cloneStringMap(agent.Spec.Workload.NodeSelector),
-					Tolerations:                  append([]corev1.Toleration(nil), agent.Spec.Workload.Tolerations...),
-					Affinity:                     agent.Spec.Workload.Affinity.DeepCopy(),
-					Containers: []corev1.Container{{
-						Name: "agent", Image: image, ImagePullPolicy: corev1.PullIfNotPresent,
-						Env: []corev1.EnvVar{
-							{Name: "XISNOVE_URL", Value: r.ControlPlaneURL},
-							{Name: "XISNOVE_AGENT_ID", Value: agent.Status.ExternalID},
-							{Name: "XISNOVE_AGENT_CREDENTIAL_FILE", Value: credentialMountPath + "/" + credentialKey(agent)},
-							{Name: "XISNOVE_AGENT_CAPABILITIES", Value: joinCapabilities(agent.Spec.Capabilities)},
-							{Name: "XISNOVE_DISCOVERY_NAMESPACES", Value: joinNamespaces(agent)},
-							{Name: "XISNOVE_DISCOVERY_RESOURCES", Value: joinDiscoveryResources(agent.Spec.Discovery.Resources)},
-						},
-						Resources: *agent.Spec.Workload.Resources.DeepCopy(),
-						SecurityContext: &corev1.SecurityContext{
-							ReadOnlyRootFilesystem:   &readOnlyRoot,
-							AllowPrivilegeEscalation: &allowPrivilegeEscalation,
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-						},
-						VolumeMounts: []corev1.VolumeMount{{Name: "credential", MountPath: credentialMountPath, ReadOnly: true}},
-					}},
-					Volumes: []corev1.Volume{{Name: "credential", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: agent.Spec.CredentialSecretRef.Name}}}},
-				},
-			},
-		}
+		deployment.Spec = appsv1.DeploymentSpec{Replicas: &replicas, Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType}, Selector: &metav1.LabelSelector{MatchLabels: cloneStringMap(labels)}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: cloneStringMap(labels)}, Spec: corev1.PodSpec{
+			ServiceAccountName: agent.Spec.Workload.ServiceAccountName, AutomountServiceAccountToken: &automount,
+			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, SeccompProfile: &seccomp}, NodeSelector: cloneStringMap(agent.Spec.Workload.NodeSelector), Tolerations: append([]corev1.Toleration(nil), agent.Spec.Workload.Tolerations...), Affinity: agent.Spec.Workload.Affinity.DeepCopy(),
+			Containers: []corev1.Container{{Name: "agent", Image: image, ImagePullPolicy: corev1.PullIfNotPresent, Env: []corev1.EnvVar{{Name: "XISNOVE_URL", Value: r.ControlPlaneURL}, {Name: "XISNOVE_AGENT_ID", Value: agent.Status.ExternalID}, {Name: "XISNOVE_AGENT_CREDENTIAL_FILE", Value: credentialMountPath + "/" + credentialKey(agent)}, {Name: "XISNOVE_AGENT_CAPABILITIES", Value: joinCapabilities(agent.Spec.Capabilities)}, {Name: "XISNOVE_DISCOVERY_NAMESPACES", Value: joinNamespaces(agent)}, {Name: "XISNOVE_DISCOVERY_RESOURCES", Value: joinDiscoveryResources(agent.Spec.Discovery.Resources)}}, Resources: *agent.Spec.Workload.Resources.DeepCopy(), SecurityContext: &corev1.SecurityContext{ReadOnlyRootFilesystem: &readOnlyRoot, AllowPrivilegeEscalation: &allowPrivilegeEscalation, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, VolumeMounts: []corev1.VolumeMount{{Name: "credential", MountPath: credentialMountPath, ReadOnly: true}}}},
+			Volumes:    []corev1.Volume{{Name: "credential", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: agent.Spec.CredentialSecretRef.Name, Items: []corev1.KeyToPath{{Key: credentialKey(agent), Path: credentialKey(agent)}}}}}},
+		}}}
 		return nil
 	})
 	if err != nil {
@@ -310,7 +360,7 @@ func (r *AgentReconciler) applyAgentDeployment(ctx context.Context, agent *monit
 	return deployment, nil
 }
 
-func (r *AgentReconciler) recordAgentSuccess(agent *monitoringv1alpha1.Agent, state controlplane.AgentState, _ *appsv1.Deployment) {
+func (r *AgentReconciler) recordAgentSuccess(agent *monitoringv1alpha1.Agent, state controlplane.AgentState, deployment *appsv1.Deployment) {
 	agent.Status.ObservedGeneration = agent.Generation
 	if !state.LastHeartbeatAt.IsZero() {
 		value := metav1.NewTime(state.LastHeartbeatAt)
@@ -321,39 +371,61 @@ func (r *AgentReconciler) recordAgentSuccess(agent *monitoringv1alpha1.Agent, st
 		agent.Status.LastDiscoverySyncTime = &value
 	}
 	setCondition(&agent.Status.Conditions, agent.Generation, ConditionRegistered, metav1.ConditionTrue, "Registered", "The operator-owned Agent identity is registered")
-	setCondition(&agent.Status.Conditions, agent.Generation, ConditionWorkloadReady, metav1.ConditionTrue, "DeploymentApplied", "The operator-owned Deployment is applied")
-	if agent.Status.LastHeartbeatTime == nil {
-		setCondition(&agent.Status.Conditions, agent.Generation, ConditionHeartbeat, metav1.ConditionFalse, "AwaitingHeartbeat", "The Agent has not reported a heartbeat yet")
-	} else {
-		setCondition(&agent.Status.Conditions, agent.Generation, ConditionHeartbeat, metav1.ConditionTrue, "Observed", "The control plane has observed an Agent heartbeat")
-	}
+	workloadReady := r.recordWorkloadCondition(agent, deployment)
+	heartbeatReady, heartbeatStale := r.recordHeartbeatCondition(agent)
 	discoveryReady, discoveryStale := r.recordDiscoveryCondition(agent)
-	ready := metav1.ConditionTrue
-	reason := "Reconciled"
-	message := "Registration and workload desired state are synchronized"
-	if agent.Status.LastHeartbeatTime == nil {
-		ready = metav1.ConditionFalse
-		reason = "AwaitingHeartbeat"
-		message = "Registration and workload are synchronized; waiting for the first heartbeat"
+	ready, reason, message := metav1.ConditionTrue, "Reconciled", "Registration and workload desired state are synchronized"
+	if !workloadReady {
+		ready, reason, message = metav1.ConditionFalse, "WorkloadUnavailable", "The Agent Deployment is not available"
+	} else if !heartbeatReady {
+		ready, reason, message = metav1.ConditionFalse, "HeartbeatStale", "The Agent heartbeat is missing or stale"
 	} else if discoveryStale {
-		ready = metav1.ConditionFalse
-		reason = "DiscoveryStale"
-		message = "The Agent heartbeat is current but its discovery catalog is stale"
+		ready, reason, message = metav1.ConditionFalse, "DiscoveryStale", "The Agent heartbeat is current but its discovery catalog is stale"
 	} else if !discoveryReady {
-		ready = metav1.ConditionFalse
-		reason = "AwaitingDiscovery"
-		message = "The Agent heartbeat is current; waiting for a complete discovery snapshot"
+		ready, reason, message = metav1.ConditionFalse, "AwaitingDiscovery", "The Agent heartbeat is current; waiting for a complete discovery snapshot"
 	}
 	setCondition(&agent.Status.Conditions, agent.Generation, ConditionReady, ready, reason, message)
 	setCondition(&agent.Status.Conditions, agent.Generation, ConditionSynced, metav1.ConditionTrue, "Applied", "Desired state is synchronized through the control-plane client")
-	if discoveryStale {
+	if heartbeatStale {
+		setCondition(&agent.Status.Conditions, agent.Generation, ConditionDegraded, metav1.ConditionTrue, "HeartbeatStale", "The Agent heartbeat is missing or stale")
+	} else if discoveryStale {
 		setCondition(&agent.Status.Conditions, agent.Generation, ConditionDegraded, metav1.ConditionTrue, "DiscoveryStale", "The last complete discovery catalog snapshot is stale")
 	} else {
 		setCondition(&agent.Status.Conditions, agent.Generation, ConditionDegraded, metav1.ConditionFalse, "Healthy", "No reconciliation error is active")
 	}
 }
 
-func (r *AgentReconciler) recordDiscoveryCondition(agent *monitoringv1alpha1.Agent) (ready bool, stale bool) {
+func (r *AgentReconciler) recordWorkloadCondition(agent *monitoringv1alpha1.Agent, deployment *appsv1.Deployment) bool {
+	if deployment == nil || deployment.Status.ObservedGeneration < deployment.Generation {
+		setCondition(&agent.Status.Conditions, agent.Generation, ConditionWorkloadReady, metav1.ConditionUnknown, "Progressing", "Waiting for the Deployment generation to be observed")
+		return false
+	}
+	replicas := int32(1)
+	if agent.Spec.Workload.Replicas != nil {
+		replicas = *agent.Spec.Workload.Replicas
+	}
+	if deployment.Status.AvailableReplicas < replicas {
+		setCondition(&agent.Status.Conditions, agent.Generation, ConditionWorkloadReady, metav1.ConditionFalse, "Unavailable", "The Deployment has insufficient available replicas")
+		return false
+	}
+	setCondition(&agent.Status.Conditions, agent.Generation, ConditionWorkloadReady, metav1.ConditionTrue, "Available", "The Deployment observed the desired generation and replicas are available")
+	return true
+}
+
+func (r *AgentReconciler) recordHeartbeatCondition(agent *monitoringv1alpha1.Agent) (bool, bool) {
+	if agent.Status.LastHeartbeatTime == nil {
+		setCondition(&agent.Status.Conditions, agent.Generation, ConditionHeartbeat, metav1.ConditionFalse, "AwaitingHeartbeat", "The Agent has not reported a heartbeat yet")
+		return false, true
+	}
+	if r.now().Sub(agent.Status.LastHeartbeatTime.Time) > r.heartbeatStaleAfter() {
+		setCondition(&agent.Status.Conditions, agent.Generation, ConditionHeartbeat, metav1.ConditionFalse, "Stale", "The Agent heartbeat is stale")
+		return false, true
+	}
+	setCondition(&agent.Status.Conditions, agent.Generation, ConditionHeartbeat, metav1.ConditionTrue, "Observed", "The control plane has observed a recent Agent heartbeat")
+	return true, false
+}
+
+func (r *AgentReconciler) recordDiscoveryCondition(agent *monitoringv1alpha1.Agent) (bool, bool) {
 	if !hasDiscoveryCapability(agent.Spec.Capabilities) {
 		return true, false
 	}
@@ -389,44 +461,32 @@ func (r *AgentReconciler) SetupWithManager(manager ctrl.Manager) error {
 	if r.APIReader == nil {
 		r.APIReader = manager.GetAPIReader()
 	}
-	return ctrl.NewControllerManagedBy(manager).
-		For(&monitoringv1alpha1.Agent{}).
-		Owns(&appsv1.Deployment{}).
-		Complete(r)
+	return ctrl.NewControllerManagedBy(manager).For(&monitoringv1alpha1.Agent{}).Owns(&appsv1.Deployment{}).Complete(r)
 }
-
 func (r *AgentReconciler) now() time.Time {
 	if r.Now != nil {
 		return r.Now()
 	}
 	return time.Now()
 }
-
 func (r *AgentReconciler) pollInterval() time.Duration {
 	if r.PollInterval > 0 {
 		return r.PollInterval
 	}
 	return 30 * time.Second
 }
-
+func (r *AgentReconciler) heartbeatStaleAfter() time.Duration {
+	if r.HeartbeatStaleAfter > 0 {
+		return r.HeartbeatStaleAfter
+	}
+	return 5 * time.Minute
+}
 func credentialKey(agent *monitoringv1alpha1.Agent) string {
 	if agent.Spec.CredentialSecretRef.Key == "" {
 		return CredentialKey
 	}
 	return agent.Spec.CredentialSecretRef.Key
 }
-
-func credentialGeneration(secret *corev1.Secret, fallback int64) int64 {
-	if secret == nil {
-		return fallback
-	}
-	value, err := strconv.ParseInt(secret.Annotations[CredentialGenerationAnnotation], 10, 64)
-	if err != nil || value < 1 {
-		return fallback
-	}
-	return value
-}
-
 func previousCredentialGeneration(secret *corev1.Secret) int64 {
 	if secret == nil || len(secret.Data[PreviousCredentialKey]) == 0 {
 		return 0
@@ -437,11 +497,68 @@ func previousCredentialGeneration(secret *corev1.Secret) int64 {
 	}
 	return value
 }
-
-func credentialIdempotencyKey(agent *monitoringv1alpha1.Agent, generation int64) string {
-	return ownerFor(agent, "Agent").Key + "/credential/" + strconv.FormatInt(generation, 10)
+func initialBundle(current *credentialBundle, secret *corev1.Secret) *credentialBundle {
+	if current != nil && current.Generation == 1 {
+		return current
+	}
+	next, err := parseCredentialBundle(secret.Data[NextCredentialKey])
+	if err == nil && next.Generation == 1 {
+		return &next
+	}
+	previous, err := parseCredentialBundle(secret.Data[PreviousCredentialKey])
+	if err == nil && previous.Generation == 1 {
+		return &previous
+	}
+	return nil
 }
-
+func credentialState(secret *corev1.Secret, key string) (*credentialBundle, *credentialBundle, error) {
+	current, err := parseOptionalCredentialBundle(secret.Data[key])
+	if err != nil {
+		return nil, nil, fmt.Errorf("read current credential bundle: %w", err)
+	}
+	next, err := parseOptionalCredentialBundle(secret.Data[NextCredentialKey])
+	if err != nil {
+		return nil, nil, fmt.Errorf("read staged credential bundle: %w", err)
+	}
+	return current, next, nil
+}
+func parseOptionalCredentialBundle(value []byte) (*credentialBundle, error) {
+	if len(value) == 0 {
+		return nil, nil
+	}
+	bundle, err := parseCredentialBundle(value)
+	if err != nil {
+		return nil, err
+	}
+	return &bundle, nil
+}
+func parseCredentialBundle(value []byte) (credentialBundle, error) {
+	var bundle credentialBundle
+	if err := json.Unmarshal(value, &bundle); err != nil || strings.TrimSpace(bundle.Credential) == "" || bundle.Generation < 1 {
+		return credentialBundle{}, errors.New("credential bundle is invalid")
+	}
+	return bundle, nil
+}
+func marshalCredentialBundle(bundle credentialBundle) ([]byte, error) { return json.Marshal(bundle) }
+func newCredential() (string, error) {
+	value := make([]byte, 32)
+	if _, err := rand.Read(value); err != nil {
+		return "", fmt.Errorf("generate credential: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+func applyIdempotencyKey(agent *monitoringv1alpha1.Agent) string {
+	owner := ownerFor(agent, "Agent")
+	return owner.Key + "/" + owner.UID + "/apply/1"
+}
+func credentialIdempotencyKey(agent *monitoringv1alpha1.Agent, generation int64, action string) string {
+	owner := ownerFor(agent, "Agent")
+	return owner.Key + "/" + owner.UID + "/credential/" + strconv.FormatInt(generation, 10) + "/" + action
+}
+func deleteIdempotencyKey(agent *monitoringv1alpha1.Agent) string {
+	owner := ownerFor(agent, "Agent")
+	return owner.Key + "/" + owner.UID + "/delete"
+}
 func joinCapabilities(capabilities []monitoringv1alpha1.AgentCapability) string {
 	values := make([]string, len(capabilities))
 	for index, capability := range capabilities {
@@ -449,7 +566,6 @@ func joinCapabilities(capabilities []monitoringv1alpha1.AgentCapability) string 
 	}
 	return strings.Join(values, ",")
 }
-
 func joinDiscoveryResources(resources []monitoringv1alpha1.DiscoveryResource) string {
 	values := make([]string, len(resources))
 	for index, resource := range resources {
@@ -457,14 +573,12 @@ func joinDiscoveryResources(resources []monitoringv1alpha1.DiscoveryResource) st
 	}
 	return strings.Join(values, ",")
 }
-
 func joinNamespaces(agent *monitoringv1alpha1.Agent) string {
 	if len(agent.Spec.Discovery.Namespaces) == 0 {
 		return agent.Namespace
 	}
 	return strings.Join(agent.Spec.Discovery.Namespaces, ",")
 }
-
 func hasDiscoveryCapability(capabilities []monitoringv1alpha1.AgentCapability) bool {
 	for _, capability := range capabilities {
 		if capability == monitoringv1alpha1.AgentCapabilityKubernetesDiscovery || capability == monitoringv1alpha1.AgentCapabilityKubernetesWatch {
@@ -473,7 +587,6 @@ func hasDiscoveryCapability(capabilities []monitoringv1alpha1.AgentCapability) b
 	}
 	return false
 }
-
 func cloneStringMap(values map[string]string) map[string]string {
 	if values == nil {
 		return nil
