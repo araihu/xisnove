@@ -27,11 +27,11 @@ const (
 	DiscoveryStateAll      DiscoveryState = ""
 	DiscoveryStatePending  DiscoveryState = "pending"
 	DiscoveryStatePromoted DiscoveryState = "promoted"
-	DiscoveryStateStale    DiscoveryState = "stale"
 )
 
 type DiscoveryFilter struct {
-	State DiscoveryState
+	State   DiscoveryState
+	Present *bool
 }
 
 type DiscoveryListRequest struct {

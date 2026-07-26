@@ -133,6 +133,10 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	if err != nil {
 		return fmt.Errorf("configure public status: %w", err)
 	}
+	discovery := application.NewDiscoveryService(application.DiscoveryServiceConfig{
+		Store: handle.DiscoveryUnitOfWork(), NewCandidateID: ids.NewUUID,
+		NewMonitorID: ids.NewUUID, Now: xisclock.Now, Cursors: cursors,
+	})
 	handler, err := httpapi.NewHandler(httpapi.HandlerConfig{
 		Server: httpapi.NewServer(httpapi.ServerConfig{
 			Auth: auth, APITokens: apiTokens,
@@ -142,6 +146,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 			Agents:       agents,
 			Management:   management,
 			PublicStatus: publicStatus,
+			Discovery:    discovery,
 			Lease: application.NewLeaseService(application.LeaseServiceConfig{
 				Store: store, Tokens: tokens, LeaseDuration: leaseDuration,
 				ObserveLease: leaseObserver(metrics),

@@ -142,7 +142,14 @@ func (r *discoveryRepository) List(ctx context.Context, request port.DiscoveryLi
 	if request.After != "" {
 		after = sql.NullString{String: string(request.After), Valid: true}
 	}
-	rows, err := r.queries.ListDiscoveryCandidates(ctx, dbpostgres.ListDiscoveryCandidatesParams{State: string(request.Filter.State), AfterID: after, RowLimit: int32(request.Limit)})
+	present := sql.NullBool{}
+	if request.Filter.Present != nil {
+		present = sql.NullBool{Bool: *request.Filter.Present, Valid: true}
+	}
+	rows, err := r.queries.ListDiscoveryCandidates(ctx, dbpostgres.ListDiscoveryCandidatesParams{
+		State: string(request.Filter.State), PresentFilter: present,
+		AfterID: after, RowLimit: int32(request.Limit),
+	})
 	if err != nil {
 		return nil, repositoryError("list discovery candidates", err)
 	}

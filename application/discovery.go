@@ -18,6 +18,8 @@ var ErrDiscoveryBatchTooLarge = errors.New("discovery batch exceeds 500 entries"
 
 const MaxDiscoveryBatchSize = 500
 
+const discoveryCursorEndpoint = "/v1/discovery-candidates"
+
 type DiscoveryInput struct {
 	LocationID                             domain.LocationID
 	SourceKind, SourceUID, Namespace, Name string
@@ -49,6 +51,7 @@ type DiscoveryServiceConfig struct {
 	NewCandidateID func() string
 	NewMonitorID   func() string
 	Now            func() time.Time
+	Cursors        AudienceCursorCodec
 }
 
 type DiscoveryService struct {
@@ -56,10 +59,14 @@ type DiscoveryService struct {
 	newCandidateID func() string
 	newMonitorID   func() string
 	now            func() time.Time
+	cursors        AudienceCursorCodec
 }
 
 func NewDiscoveryService(config DiscoveryServiceConfig) *DiscoveryService {
-	return &DiscoveryService{store: config.Store, newCandidateID: config.NewCandidateID, newMonitorID: config.NewMonitorID, now: config.Now}
+	return &DiscoveryService{
+		store: config.Store, newCandidateID: config.NewCandidateID,
+		newMonitorID: config.NewMonitorID, now: config.Now, cursors: config.Cursors,
+	}
 }
 
 func (s *DiscoveryService) Publish(ctx context.Context, agentID domain.AgentID, batchID string, inputs []DiscoveryInput) (port.DiscoveryBatchAcknowledgement, error) {
@@ -192,6 +199,60 @@ func (s *DiscoveryService) Get(ctx context.Context, id domain.DiscoveryCandidate
 		return err
 	})
 	return candidate.Clone(), err
+}
+
+func (s *DiscoveryService) List(
+	ctx context.Context,
+	filter port.DiscoveryFilter,
+	page PageRequest,
+) (Page[domain.DiscoveryCandidate], error) {
+	if s == nil || s.store == nil || s.cursors == nil {
+		return Page[domain.DiscoveryCandidate]{}, errors.New("discovery list service is not configured")
+	}
+	if filter.State != port.DiscoveryStateAll && filter.State != port.DiscoveryStatePending &&
+		filter.State != port.DiscoveryStatePromoted {
+		return Page[domain.DiscoveryCandidate]{}, &ValidationError{Fields: map[string]string{"state": "must be pending or promoted"}}
+	}
+	audience := CursorAudience{Endpoint: discoveryCursorEndpoint, Filter: map[string][]string{}}
+	if filter.State != port.DiscoveryStateAll {
+		audience.Filter["state"] = []string{string(filter.State)}
+	}
+	if filter.Present != nil {
+		audience.Filter["present"] = []string{strconv.FormatBool(*filter.Present)}
+	}
+	limit := NormalizePageLimit(page.Limit)
+	request := port.DiscoveryListRequest{Filter: filter, Limit: limit + 1}
+	if page.Cursor != "" {
+		key, err := s.cursors.DecodeFor(page.Cursor, audience, CursorShapeString)
+		if err != nil {
+			return Page[domain.DiscoveryCandidate]{}, err
+		}
+		request.After = domain.DiscoveryCandidateID(key.ID)
+	}
+	var rows []domain.DiscoveryCandidate
+	err := s.store.DiscoveryView(ctx, func(ctx context.Context, repositories port.DiscoveryRepositories) error {
+		var err error
+		rows, err = repositories.Discovery.List(ctx, request)
+		return err
+	})
+	if err != nil {
+		return Page[domain.DiscoveryCandidate]{}, fmt.Errorf("list discovery candidates: %w", err)
+	}
+	rows, hasMore := trimPage(rows, limit)
+	result := Page[domain.DiscoveryCandidate]{Items: make([]domain.DiscoveryCandidate, len(rows))}
+	for index, candidate := range rows {
+		result.Items[index] = candidate.Clone()
+	}
+	if !hasMore {
+		return result, nil
+	}
+	last := rows[len(rows)-1]
+	cursor, err := s.cursors.EncodeFor(audience, CursorKey{Sort: string(last.ID), ID: string(last.ID)}, CursorShapeString)
+	if err != nil {
+		return Page[domain.DiscoveryCandidate]{}, err
+	}
+	result.NextCursor = cursor
+	return result, nil
 }
 
 func discoveryProbe(candidate domain.DiscoveryCandidate) (domain.ProbeDefinition, error) {

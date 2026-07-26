@@ -53,10 +53,10 @@ SELECT * FROM discovery_candidates WHERE id = $1 FOR UPDATE;
 SELECT * FROM discovery_candidates
 WHERE (
     sqlc.arg(state)::text = '' OR
-    (sqlc.arg(state)::text = 'stale' AND present = FALSE) OR
     (sqlc.arg(state)::text = 'promoted' AND promoted_monitor_id IS NOT NULL) OR
-    (sqlc.arg(state)::text = 'pending' AND present = TRUE AND promoted_monitor_id IS NULL)
-) AND (sqlc.narg(after_id)::uuid IS NULL OR id > sqlc.narg(after_id)::uuid)
+    (sqlc.arg(state)::text = 'pending' AND promoted_monitor_id IS NULL)
+) AND (sqlc.narg(present_filter)::boolean IS NULL OR present = sqlc.narg(present_filter)::boolean)
+  AND (sqlc.narg(after_id)::uuid IS NULL OR id > sqlc.narg(after_id)::uuid)
 ORDER BY id
 LIMIT sqlc.arg(row_limit);
 

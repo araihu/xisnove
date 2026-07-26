@@ -213,7 +213,6 @@ func (e DiscoveryCandidateInputProtocol) Valid() bool {
 
 // Defines values for DiscoveryCandidateState.
 const (
-	DiscoveryCandidateStateIgnored  DiscoveryCandidateState = "ignored"
 	DiscoveryCandidateStatePending  DiscoveryCandidateState = "pending"
 	DiscoveryCandidateStatePromoted DiscoveryCandidateState = "promoted"
 )
@@ -221,8 +220,6 @@ const (
 // Valid indicates whether the value is a known member of the DiscoveryCandidateState enum.
 func (e DiscoveryCandidateState) Valid() bool {
 	switch e {
-	case DiscoveryCandidateStateIgnored:
-		return true
 	case DiscoveryCandidateStatePending:
 		return true
 	case DiscoveryCandidateStatePromoted:
@@ -1485,8 +1482,9 @@ type ListDiscoveryCandidatesParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Cursor Opaque continuation token returned as page.nextCursor by a previous page.
-	Cursor *Cursor                  `form:"cursor,omitempty" json:"cursor,omitempty"`
-	State  *DiscoveryCandidateState `form:"state,omitempty" json:"state,omitempty"`
+	Cursor  *Cursor                  `form:"cursor,omitempty" json:"cursor,omitempty"`
+	State   *DiscoveryCandidateState `form:"state,omitempty" json:"state,omitempty"`
+	Present *bool                    `form:"present,omitempty" json:"present,omitempty"`
 }
 
 // PromoteDiscoveryCandidateParams defines parameters for PromoteDiscoveryCandidate.
@@ -4400,6 +4398,18 @@ func NewListDiscoveryCandidatesRequest(server string, params *ListDiscoveryCandi
 		if params.State != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Present != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "present", *params.Present, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

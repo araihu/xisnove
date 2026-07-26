@@ -297,7 +297,8 @@ func testDiscoveryLifecycle(t *testing.T, unit port.UnitOfWork) {
 		if stored.Present || stored.PromotedMonitorID == nil || *stored.PromotedMonitorID != monitor.ID {
 			t.Fatalf("stored=%#v", stored)
 		}
-		listed, err := repositories.Discovery.List(ctx, port.DiscoveryListRequest{Filter: port.DiscoveryFilter{State: port.DiscoveryStateStale}, Limit: 10})
+		present := false
+		listed, err := repositories.Discovery.List(ctx, port.DiscoveryListRequest{Filter: port.DiscoveryFilter{Present: &present}, Limit: 10})
 		if err != nil {
 			return err
 		}

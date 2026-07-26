@@ -15,8 +15,9 @@ import (
 
 func TestRunnerPublishesBoundedSnapshot(t *testing.T) {
 	producer := &fakeProducer{batch: discovery.Batch{ID: "batch-1", Candidates: []controlplane.DiscoveryCandidateInput{{
-		ExternalId: "service/uid-1", Kind: controlplane.DiscoveryCandidateInputKindHttp,
-		Name: "api", Target: "https://api.default.svc/health", Labels: map[string]string{"app": "api"},
+		SourceKind: "service", SourceUid: "uid-1", Protocol: controlplane.DiscoveryCandidateInputProtocolHttp,
+		Namespace: "default", Name: "api", Target: "https://api.default.svc/health",
+		NetworkPerspective: "cluster-a", Present: true, Labels: map[string]string{"app": "api"},
 		ObservedAt: time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC),
 	}}}}
 	publisher := &fakePublisher{}
@@ -40,8 +41,9 @@ func TestRunnerRejectsOversizedSnapshotWithoutPublishing(t *testing.T) {
 
 func TestRunnerLoopIsSeparatelyEnabledAndUsesBoundedBackoff(t *testing.T) {
 	producer := &fakeProducer{batch: discovery.Batch{ID: "batch-1", Candidates: []controlplane.DiscoveryCandidateInput{{
-		ExternalId: "service/uid-1", Kind: controlplane.DiscoveryCandidateInputKindHttp,
-		Name: "api", Target: "https://api.default.svc/health", Labels: map[string]string{},
+		SourceKind: "service", SourceUid: "uid-1", Protocol: controlplane.DiscoveryCandidateInputProtocolHttp,
+		Namespace: "default", Name: "api", Target: "https://api.default.svc/health",
+		NetworkPerspective: "cluster-a", Present: true, Labels: map[string]string{},
 		ObservedAt: time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC),
 	}}}}
 	publisher := &fakePublisher{errs: []error{errors.New("first"), errors.New("second"), nil}}
@@ -85,6 +87,9 @@ func TestAPIPublisherFailsClosedOnPartialAcknowledgement(t *testing.T) {
 		if request.URL.Path != "/v1/agent/discovery-candidates:batch" || request.Header.Get("Authorization") != "Bearer credential" {
 			t.Errorf("request path=%q authorization=%q", request.URL.Path, request.Header.Get("Authorization"))
 		}
+		if request.Header.Get("Idempotency-Key") != "batch-1" {
+			t.Errorf("idempotency key=%q", request.Header.Get("Idempotency-Key"))
+		}
 		var body controlplane.DiscoveryCandidateBatch
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 			t.Error(err)
@@ -92,10 +97,7 @@ func TestAPIPublisherFailsClosedOnPartialAcknowledgement(t *testing.T) {
 			return
 		}
 		requests++
-		accepted := len(body.Candidates)
-		if requests == 2 {
-			accepted--
-		}
+		accepted := len(body.Candidates) - 1
 		response.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(response).Encode(controlplane.DiscoveryCandidateBatchAcknowledgement{Accepted: int32(accepted)})
 	}))
@@ -106,10 +108,15 @@ func TestAPIPublisherFailsClosedOnPartialAcknowledgement(t *testing.T) {
 	}
 	candidates := make([]controlplane.DiscoveryCandidateInput, 101)
 	for index := range candidates {
-		candidates[index] = controlplane.DiscoveryCandidateInput{ExternalId: "service/uid", Kind: controlplane.DiscoveryCandidateInputKindHttp, Name: "api", Target: "https://api.default.svc/health", Labels: map[string]string{}, ObservedAt: time.Now().UTC()}
+		candidates[index] = controlplane.DiscoveryCandidateInput{
+			SourceKind: "service", SourceUid: "uid", Namespace: "default", Name: "api",
+			Labels: map[string]string{}, Protocol: controlplane.DiscoveryCandidateInputProtocolHttp,
+			Target: "https://api.default.svc/health", NetworkPerspective: "cluster-a", Present: true,
+			ObservedAt: time.Now().UTC(),
+		}
 	}
 	err = (discovery.APIPublisher{Client: client, Credential: func() (string, error) { return "credential", nil }}).Publish(context.Background(), discovery.Batch{ID: "batch-1", Candidates: candidates})
-	if !errors.Is(err, discovery.ErrPartialAcknowledgement) || requests != 2 {
+	if !errors.Is(err, discovery.ErrPartialAcknowledgement) || requests != 1 {
 		t.Fatalf("error=%v requests=%d", err, requests)
 	}
 }

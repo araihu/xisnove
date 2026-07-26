@@ -599,6 +599,9 @@ paths:
         - name: state
           in: query
           schema: {$ref: '#/components/schemas/DiscoveryCandidateState'}
+        - name: present
+          in: query
+          schema: {type: boolean}
       responses:
         '200':
           description: Bounded discovery candidate catalog
@@ -1733,7 +1736,7 @@ components:
         page: {$ref: '#/components/schemas/PageMetadata'}
     DiscoveryCandidateState:
       type: string
-      enum: [pending, promoted, ignored]
+      enum: [pending, promoted]
     DiscoveryCandidateInput:
       type: object
       additionalProperties: false

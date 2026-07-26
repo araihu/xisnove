@@ -138,6 +138,14 @@ func (h *Handle) PublicStatusUnitOfWork() application.PublicStatusUnitOfWork {
 	}
 }
 
+func (h *Handle) DiscoveryUnitOfWork() application.DiscoveryUnitOfWork {
+	store, ok := h.Store.(application.DiscoveryUnitOfWork)
+	if !ok {
+		panic("opened database profile does not implement discovery transactions")
+	}
+	return store
+}
+
 func openSQLite(ctx context.Context, config Config) (*Handle, error) {
 	db, err := sqlitestore.Open(config.URL)
 	if err != nil {

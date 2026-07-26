@@ -404,6 +404,24 @@ func TestDiscoveryBatchIsBounded(t *testing.T) {
 	if output.Value.Properties["externalId"] != nil || output.Value.Properties["lastSeenAt"] != nil {
 		t.Error("DiscoveryCandidate retains ambiguous legacy identity or timestamp fields")
 	}
+	state := doc.Components.Schemas["DiscoveryCandidateState"]
+	if state == nil || state.Value == nil {
+		t.Fatal("DiscoveryCandidateState is missing")
+	}
+	gotStates := make([]string, 0, len(state.Value.Enum))
+	for _, value := range state.Value.Enum {
+		gotStates = append(gotStates, value.(string))
+	}
+	slices.Sort(gotStates)
+	if !slices.Equal(gotStates, []string{"pending", "promoted"}) {
+		t.Errorf("DiscoveryCandidateState = %v, want state independent from presence", gotStates)
+	}
+	list := operationByID(t, doc, "listDiscoveryCandidates")
+	for _, parameter := range []string{"state", "present"} {
+		if !hasParameter(list.Parameters, "query", parameter) {
+			t.Errorf("listDiscoveryCandidates omits %s query filter", parameter)
+		}
+	}
 }
 
 func TestProblemResponseFollowsRFC9457(t *testing.T) {

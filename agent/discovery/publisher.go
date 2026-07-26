@@ -14,8 +14,7 @@ var ErrBatchTooLarge = errors.New("discovery snapshot exceeds 500 candidates")
 var ErrPartialAcknowledgement = errors.New("discovery API acknowledged only part of the submitted chunk")
 
 const (
-	MaxBatchSize   = 500
-	maxRequestSize = 100
+	MaxBatchSize = 500
 )
 
 type Batch struct {
@@ -140,21 +139,18 @@ func (publisher APIPublisher) Publish(ctx context.Context, batch Batch) error {
 		request.Header.Set("Authorization", "Bearer "+credential)
 		return nil
 	}
-	for offset := 0; offset < len(batch.Candidates); offset += maxRequestSize {
-		end := min(offset+maxRequestSize, len(batch.Candidates))
-		key := controlplane.IdempotencyKey(fmt.Sprintf("%s/%d", batch.ID, offset/maxRequestSize))
-		response, err := publisher.Client.UpsertDiscoveryCandidatesWithResponse(ctx,
-			&controlplane.UpsertDiscoveryCandidatesParams{IdempotencyKey: &key},
-			controlplane.DiscoveryCandidateBatch{Candidates: batch.Candidates[offset:end]}, editor)
-		if err != nil {
-			return err
-		}
-		if response.StatusCode() != http.StatusOK || response.JSON200 == nil {
-			return fmt.Errorf("discovery API returned HTTP %d", response.StatusCode())
-		}
-		if int(response.JSON200.Accepted) != end-offset {
-			return fmt.Errorf("%w: accepted %d of %d", ErrPartialAcknowledgement, response.JSON200.Accepted, end-offset)
-		}
+	key := controlplane.IdempotencyKey(batch.ID)
+	response, err := publisher.Client.UpsertDiscoveryCandidatesWithResponse(ctx,
+		&controlplane.UpsertDiscoveryCandidatesParams{IdempotencyKey: &key},
+		controlplane.DiscoveryCandidateBatch{Candidates: batch.Candidates}, editor)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode() != http.StatusOK || response.JSON200 == nil {
+		return fmt.Errorf("discovery API returned HTTP %d", response.StatusCode())
+	}
+	if int(response.JSON200.Accepted) != len(batch.Candidates) {
+		return fmt.Errorf("%w: accepted %d of %d", ErrPartialAcknowledgement, response.JSON200.Accepted, len(batch.Candidates))
 	}
 	return nil
 }

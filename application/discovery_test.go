@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"sort"
 	"testing"
 	"time"
 
@@ -133,6 +134,46 @@ func TestPromotedCandidateReportsDriftWhenSourceChanges(t *testing.T) {
 	}
 }
 
+func TestListDiscoveryCandidatesBindsPresenceAndCursorAudience(t *testing.T) {
+	fixture := newDiscoveryFixture()
+	first := fixture.input("uid-1", true)
+	second := fixture.input("uid-2", false)
+	if _, err := fixture.service.Publish(context.Background(), "agent-1", "batch-1", []application.DiscoveryInput{first}); err != nil {
+		t.Fatal(err)
+	}
+	// An absent observation only becomes catalog state after the source was seen.
+	second.Present = true
+	if _, err := fixture.service.Publish(context.Background(), "agent-1", "batch-2", []application.DiscoveryInput{second}); err != nil {
+		t.Fatal(err)
+	}
+	second.Present = false
+	second.ObservedAt = second.ObservedAt.Add(time.Minute)
+	if _, err := fixture.service.Publish(context.Background(), "agent-1", "batch-3", []application.DiscoveryInput{second}); err != nil {
+		t.Fatal(err)
+	}
+
+	present := true
+	page, err := fixture.service.List(context.Background(), port.DiscoveryFilter{State: port.DiscoveryStatePending, Present: &present}, application.PageRequest{Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.NextCursor != "" || !page.Items[0].Present {
+		t.Fatalf("present page = %#v, %v", page, err)
+	}
+
+	all, err := fixture.service.List(context.Background(), port.DiscoveryFilter{State: port.DiscoveryStatePending}, application.PageRequest{Limit: 1})
+	if err != nil || len(all.Items) != 1 || all.NextCursor == "" {
+		t.Fatalf("first page = %#v, %v", all, err)
+	}
+	absent := false
+	_, err = fixture.service.List(context.Background(), port.DiscoveryFilter{State: port.DiscoveryStatePending, Present: &absent}, application.PageRequest{Limit: 1, Cursor: all.NextCursor})
+	var validation *application.ValidationError
+	if !errors.As(err, &validation) || validation.Fields["cursor"] != "is invalid" {
+		t.Fatalf("filter-mismatched cursor error = %#v", err)
+	}
+	secondPage, err := fixture.service.List(context.Background(), port.DiscoveryFilter{State: port.DiscoveryStatePending}, application.PageRequest{Limit: 1, Cursor: all.NextCursor})
+	if err != nil || len(secondPage.Items) != 1 || secondPage.Items[0].ID == all.Items[0].ID || secondPage.NextCursor != "" {
+		t.Fatalf("second page = %#v, %v", secondPage, err)
+	}
+}
+
 type discoveryFixture struct {
 	service    *application.DiscoveryService
 	store      *discoveryStore
@@ -148,11 +189,16 @@ func newDiscoveryFixture() discoveryFixture {
 	store := &discoveryStore{repositories: port.DiscoveryRepositories{
 		Discovery: repository, Locations: discoveryLocations{}, Monitors: monitors, Health: health,
 	}}
+	codec, err := application.NewHMACCursorCodec([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		panic(err)
+	}
 	return discoveryFixture{service: application.NewDiscoveryService(application.DiscoveryServiceConfig{
 		Store:          store,
-		NewCandidateID: func() string { return fmt.Sprintf("candidate-%d", len(repository.candidates)+1) },
+		NewCandidateID: func() string { return fmt.Sprintf("00000000-0000-4000-8000-%012d", len(repository.candidates)+1) },
 		NewMonitorID:   sequenceIDs("monitor-1", "monitor-2"),
 		Now:            func() time.Time { return time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC) },
+		Cursors:        codec,
 	}), store: store, repository: repository, monitors: monitors, health: health}
 }
 
@@ -241,10 +287,24 @@ func (r *discoveryRepository) Get(_ context.Context, id domain.DiscoveryCandidat
 func (r *discoveryRepository) GetForUpdate(ctx context.Context, id domain.DiscoveryCandidateID) (domain.DiscoveryCandidate, error) {
 	return r.Get(ctx, id)
 }
-func (r *discoveryRepository) List(_ context.Context, _ port.DiscoveryListRequest) ([]domain.DiscoveryCandidate, error) {
+func (r *discoveryRepository) List(_ context.Context, request port.DiscoveryListRequest) ([]domain.DiscoveryCandidate, error) {
 	result := make([]domain.DiscoveryCandidate, 0, len(r.candidates))
 	for _, value := range r.candidates {
+		if request.After != "" && value.ID <= request.After {
+			continue
+		}
+		if request.Filter.State == port.DiscoveryStatePromoted && value.PromotedMonitorID == nil ||
+			request.Filter.State == port.DiscoveryStatePending && value.PromotedMonitorID != nil {
+			continue
+		}
+		if request.Filter.Present != nil && value.Present != *request.Filter.Present {
+			continue
+		}
 		result = append(result, value.Clone())
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	if request.Limit > 0 && len(result) > request.Limit {
+		result = result[:request.Limit]
 	}
 	return result, nil
 }

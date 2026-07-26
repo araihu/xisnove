@@ -142,7 +142,14 @@ func (r *discoveryRepository) GetForUpdate(ctx context.Context, id domain.Discov
 }
 
 func (r *discoveryRepository) List(ctx context.Context, request port.DiscoveryListRequest) ([]domain.DiscoveryCandidate, error) {
-	rows, err := r.queries.ListDiscoveryCandidates(ctx, dbsqlite.ListDiscoveryCandidatesParams{State: string(request.Filter.State), AfterID: string(request.After), RowLimit: int64(request.Limit)})
+	present := sql.NullBool{}
+	if request.Filter.Present != nil {
+		present = sql.NullBool{Bool: *request.Filter.Present, Valid: true}
+	}
+	rows, err := r.queries.ListDiscoveryCandidates(ctx, dbsqlite.ListDiscoveryCandidatesParams{
+		State: string(request.Filter.State), PresentFilter: present,
+		AfterID: string(request.After), RowLimit: int64(request.Limit),
+	})
 	if err != nil {
 		return nil, repositoryError("list discovery candidates", err)
 	}

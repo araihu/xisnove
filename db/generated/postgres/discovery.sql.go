@@ -277,22 +277,28 @@ const listDiscoveryCandidates = `-- name: ListDiscoveryCandidates :many
 SELECT id, agent_id, location_id, source_kind, source_uid, namespace, name, labels_json, protocol, target, network_perspective, present, last_observed_at, promoted_monitor_id, drift_hint, created_at, updated_at FROM discovery_candidates
 WHERE (
     $1::text = '' OR
-    ($1::text = 'stale' AND present = FALSE) OR
     ($1::text = 'promoted' AND promoted_monitor_id IS NOT NULL) OR
-    ($1::text = 'pending' AND present = TRUE AND promoted_monitor_id IS NULL)
-) AND ($2::uuid IS NULL OR id > $2::uuid)
+    ($1::text = 'pending' AND promoted_monitor_id IS NULL)
+) AND ($2::boolean IS NULL OR present = $2::boolean)
+  AND ($3::uuid IS NULL OR id > $3::uuid)
 ORDER BY id
-LIMIT $3
+LIMIT $4
 `
 
 type ListDiscoveryCandidatesParams struct {
-	State    string         `json:"state"`
-	AfterID  sql.NullString `json:"after_id"`
-	RowLimit int32          `json:"row_limit"`
+	State         string         `json:"state"`
+	PresentFilter sql.NullBool   `json:"present_filter"`
+	AfterID       sql.NullString `json:"after_id"`
+	RowLimit      int32          `json:"row_limit"`
 }
 
 func (q *Queries) ListDiscoveryCandidates(ctx context.Context, arg ListDiscoveryCandidatesParams) ([]DiscoveryCandidate, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscoveryCandidates, arg.State, arg.AfterID, arg.RowLimit)
+	rows, err := q.db.QueryContext(ctx, listDiscoveryCandidates,
+		arg.State,
+		arg.PresentFilter,
+		arg.AfterID,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
