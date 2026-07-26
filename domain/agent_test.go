@@ -56,11 +56,13 @@ func TestNewAgentRejectsUnknownCapability(t *testing.T) {
 	}
 }
 
-func TestAgentAcceptsEachProbeCapabilityExactlyOnce(t *testing.T) {
+func TestAgentAcceptsEachCapabilityExactlyOnce(t *testing.T) {
 	capabilities := []domain.AgentCapability{
 		domain.CapabilityHTTP,
 		domain.CapabilityTCP,
 		domain.CapabilityDNS,
+		domain.CapabilityKubernetesDiscovery,
+		domain.CapabilityKubernetesWatch,
 	}
 	agent, err := domain.NewAgent(domain.NewAgentParams{
 		ID: "agent-1", LocationID: "location-1", Name: "edge",
@@ -70,8 +72,26 @@ func TestAgentAcceptsEachProbeCapabilityExactlyOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agent.Capabilities) != 3 {
+	if len(agent.Capabilities) != 5 {
 		t.Fatalf("capabilities = %#v", agent.Capabilities)
+	}
+}
+
+func TestProbeCapabilitiesExcludeDiscoveryWork(t *testing.T) {
+	got := domain.ProbeCapabilities([]domain.AgentCapability{
+		domain.CapabilityKubernetesDiscovery,
+		domain.CapabilityHTTP,
+		domain.CapabilityKubernetesWatch,
+		domain.CapabilityDNS,
+	})
+	want := []domain.AgentCapability{domain.CapabilityHTTP, domain.CapabilityDNS}
+	if len(got) != len(want) {
+		t.Fatalf("probe capabilities = %#v", got)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("probe capabilities = %#v", got)
+		}
 	}
 }
 

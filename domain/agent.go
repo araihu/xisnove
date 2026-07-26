@@ -11,9 +11,11 @@ var ErrInvalidAgent = errors.New("invalid agent")
 type AgentCapability string
 
 const (
-	CapabilityHTTP AgentCapability = "http"
-	CapabilityTCP  AgentCapability = "tcp"
-	CapabilityDNS  AgentCapability = "dns"
+	CapabilityHTTP                AgentCapability = "http"
+	CapabilityTCP                 AgentCapability = "tcp"
+	CapabilityDNS                 AgentCapability = "dns"
+	CapabilityKubernetesDiscovery AgentCapability = "kubernetes-discovery"
+	CapabilityKubernetesWatch     AgentCapability = "kubernetes-watch"
 )
 
 type Agent struct {
@@ -66,7 +68,9 @@ func ValidateAgentCapabilities(capabilities []AgentCapability) error {
 	for _, capability := range capabilities {
 		if capability != CapabilityHTTP &&
 			capability != CapabilityTCP &&
-			capability != CapabilityDNS {
+			capability != CapabilityDNS &&
+			capability != CapabilityKubernetesDiscovery &&
+			capability != CapabilityKubernetesWatch {
 			return ErrInvalidAgent
 		}
 		if _, exists := seen[capability]; exists {
@@ -75,4 +79,18 @@ func ValidateAgentCapabilities(capabilities []AgentCapability) error {
 		seen[capability] = struct{}{}
 	}
 	return nil
+}
+
+// ProbeCapabilities returns only capabilities that can claim monitor work.
+// Discovery capabilities describe a separate publication loop and must never
+// be treated as probe kinds by the scheduler or lease service.
+func ProbeCapabilities(capabilities []AgentCapability) []AgentCapability {
+	probes := make([]AgentCapability, 0, len(capabilities))
+	for _, capability := range capabilities {
+		switch capability {
+		case CapabilityHTTP, CapabilityTCP, CapabilityDNS:
+			probes = append(probes, capability)
+		}
+	}
+	return probes
 }

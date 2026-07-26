@@ -141,7 +141,12 @@ func TestManagementMonitorReplacementPreservesIdentityAndAssignmentAtomically(t 
 func TestManagementAgentUpdateRevokesPermanentlyAndUsesOneAudit(t *testing.T) {
 	fixture := newManagementMutationFixture(t)
 	name := "renamed agent"
-	capabilities := []domain.AgentCapability{domain.CapabilityDNS, domain.CapabilityHTTP}
+	capabilities := []domain.AgentCapability{
+		domain.CapabilityDNS,
+		domain.CapabilityHTTP,
+		domain.CapabilityKubernetesDiscovery,
+		domain.CapabilityKubernetesWatch,
+	}
 	enabled := false
 	updated, err := fixture.service.UpdateAgent(
 		context.Background(), fixture.principal, managementID3, "agent-key",

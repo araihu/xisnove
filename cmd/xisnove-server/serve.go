@@ -26,6 +26,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	databaseFlags := addDatabaseFlags(flags)
 	keyFlags := addNotificationKeyFlags(flags, os.Getenv)
+	cursorKeyFlags := addCursorSigningKeyFlags(flags, os.Getenv)
 	notificationWorkerFlags := addNotificationWorkerFlags(flags)
 	retentionWorkerFlags := addRetentionWorkerFlags(flags)
 	observabilityFlags := addObservabilityFlags(flags)
@@ -63,6 +64,10 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	}()
 	tracing.InstallGlobal()
 	sealer, err := keyFlags.load()
+	if err != nil {
+		return err
+	}
+	cursors, err := cursorKeyFlags.load(parent)
 	if err != nil {
 		return err
 	}
@@ -119,13 +124,17 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	agents := application.NewAgentService(application.AgentServiceConfig{
 		Store: store, Tokens: tokens, Now: xisclock.Now, NewID: ids.NewUUID,
 	})
+	management := application.NewManagementService(application.ManagementServiceConfig{
+		Store: store, Cursors: cursors, Tokens: tokens, NewID: ids.NewUUID,
+	})
 	handler, err := httpapi.NewHandler(httpapi.HandlerConfig{
 		Server: httpapi.NewServer(httpapi.ServerConfig{
 			Auth: auth, APITokens: apiTokens,
 			Configuration: application.NewConfigurationService(
 				store, xisclock.Now, ids.NewUUID,
 			),
-			Agents: agents,
+			Agents:     agents,
+			Management: management,
 			Lease: application.NewLeaseService(application.LeaseServiceConfig{
 				Store: store, Tokens: tokens, LeaseDuration: leaseDuration,
 				ObserveLease: leaseObserver(metrics),
