@@ -22,6 +22,7 @@ var (
 type Keyring interface {
 	Get(service, account string) (string, error)
 	Set(service, account, value string) error
+	Delete(service, account string) error
 }
 
 type osKeyring struct{}
@@ -36,6 +37,14 @@ func (osKeyring) Get(service, account string) (string, error) {
 
 func (osKeyring) Set(service, account, value string) error {
 	return keyring.Set(service, account, value)
+}
+
+func (osKeyring) Delete(service, account string) error {
+	err := keyring.Delete(service, account)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return nil
+	}
+	return err
 }
 
 type Resolver struct {
@@ -89,6 +98,41 @@ func (r Resolver) Store(ref config.CredentialRef, value string) error {
 	}
 }
 
+func (r Resolver) Delete(ref config.CredentialRef) error {
+	switch ref.Mode {
+	case config.CredentialKeyring:
+		if err := r.keyring().Delete(r.service(), ref.Reference); err != nil {
+			return fmt.Errorf("delete keyring credential %q: %w", ref.Reference, err)
+		}
+		return nil
+	case config.CredentialFile:
+		info, err := os.Lstat(ref.Reference)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("inspect token file %q: %w", ref.Reference, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("token file %q must not be a symbolic link", ref.Reference)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("token file %q must be a regular file", ref.Reference)
+		}
+		if info.Mode().Perm()&0o077 != 0 {
+			return fmt.Errorf("%w: token file %s is %#o; run chmod 600 %s", ErrInsecurePermissions, ref.Reference, info.Mode().Perm(), ref.Reference)
+		}
+		if err := os.Remove(ref.Reference); err != nil {
+			return fmt.Errorf("delete token file %q: %w", ref.Reference, err)
+		}
+		return nil
+	case config.CredentialEnv:
+		return fmt.Errorf("environment credential %q: %w", ref.Reference, ErrReadOnlyMode)
+	default:
+		return fmt.Errorf("unsupported credential mode %q", ref.Mode)
+	}
+}
+
 func (r Resolver) keyring() Keyring {
 	if r.Keyring != nil {
 		return r.Keyring
@@ -128,6 +172,9 @@ func readFile(path string) (string, error) {
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		return "", fmt.Errorf("token file %q must not be a symbolic link", path)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("token file %q must be a regular file", path)
 	}
 	if info.Mode().Perm()&0o077 != 0 {
 		return "", fmt.Errorf("%w: token file %s is %#o; run chmod 600 %s", ErrInsecurePermissions, path, info.Mode().Perm(), path)

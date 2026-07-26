@@ -72,6 +72,18 @@ func TestStoreRejectsConfigReadableByOtherUsers(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsNonRegularConfigFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+
+	_, err := (config.Store{Path: path}).Load()
+	if err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("Load() error = %v, want regular-file rejection", err)
+	}
+}
+
 func TestProfileValidationRejectsUnusableReferences(t *testing.T) {
 	tests := []struct {
 		name    string

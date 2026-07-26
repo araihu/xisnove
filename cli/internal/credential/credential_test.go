@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/araihu/xisnove/cli/internal/config"
@@ -27,6 +28,11 @@ func (m *memoryKeyring) Set(service, account, value string) error {
 		m.values = map[string]string{}
 	}
 	m.values[service+"/"+account] = value
+	return nil
+}
+
+func (m *memoryKeyring) Delete(service, account string) error {
+	delete(m.values, service+"/"+account)
 	return nil
 }
 
@@ -73,6 +79,25 @@ func TestResolverRejectsBroadTokenFilePermissions(t *testing.T) {
 	}
 }
 
+func TestResolverRejectsNonRegularTokenFilesWithoutDeletingThem(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "token-directory")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+	ref := config.CredentialRef{Mode: config.CredentialFile, Reference: path}
+	resolver := credential.Resolver{}
+
+	if _, err := resolver.Lookup(ref); err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("Lookup() error = %v, want regular-file rejection", err)
+	}
+	if err := resolver.Delete(ref); err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("Delete() error = %v, want regular-file rejection", err)
+	}
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		t.Fatalf("token directory was removed or replaced: info=%v err=%v", info, err)
+	}
+}
+
 func TestResolverStoresFileTokenPrivatelyAndTrimsReads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "token")
 	resolver := credential.Resolver{}
@@ -109,5 +134,29 @@ func TestDefaultReferencePrefersOSKeyring(t *testing.T) {
 	want := config.CredentialRef{Mode: config.CredentialKeyring, Reference: "production"}
 	if got != want {
 		t.Fatalf("DefaultReference() = %#v, want %#v", got, want)
+	}
+}
+
+func TestResolverDeletesWritableCredentials(t *testing.T) {
+	ring := &memoryKeyring{values: map[string]string{"xisnove-cli/prod": "token"}}
+	resolver := credential.Resolver{Keyring: ring}
+	if err := resolver.Delete(config.CredentialRef{Mode: config.CredentialKeyring, Reference: "prod"}); err != nil {
+		t.Fatalf("Delete(keyring) error = %v", err)
+	}
+	if _, ok := ring.values["xisnove-cli/prod"]; ok {
+		t.Fatal("keyring credential still exists")
+	}
+	path := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(path, []byte("token\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := resolver.Delete(config.CredentialRef{Mode: config.CredentialFile, Reference: path}); err != nil {
+		t.Fatalf("Delete(file) error = %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("token file still exists: %v", err)
+	}
+	if err := resolver.Delete(config.CredentialRef{Mode: config.CredentialEnv, Reference: "TOKEN"}); !errors.Is(err, credential.ErrReadOnlyMode) {
+		t.Fatalf("Delete(env) error = %v, want ErrReadOnlyMode", err)
 	}
 }

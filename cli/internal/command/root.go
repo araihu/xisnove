@@ -14,6 +14,7 @@ import (
 	"github.com/araihu/xisnove/cli/internal/output"
 	"github.com/araihu/xisnove/cli/internal/problem"
 	"github.com/araihu/xisnove/cli/internal/session"
+	"github.com/araihu/xisnove/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -23,13 +24,17 @@ type Family interface {
 }
 
 type Runtime struct {
+	Stdin           io.Reader
 	Stdout          io.Writer
 	Stderr          io.Writer
 	ConfigPath      *string
 	ProfileOverride *string
 	OutputFormat    *string
 	Credentials     credential.Resolver
+	ClientFactory   ClientFactory
 }
+
+type ClientFactory func(string, ...sdk.ClientOption) (*sdk.ClientWithResponses, error)
 
 func (r Runtime) OpenSession() (session.Session, error) {
 	return (session.Resolver{
@@ -38,11 +43,41 @@ func (r Runtime) OpenSession() (session.Session, error) {
 	}).Open(*r.ProfileOverride)
 }
 
+func (r Runtime) OpenClient(authenticated bool) (*sdk.ClientWithResponses, session.Profile, error) {
+	resolver := session.Resolver{
+		Store:       config.Store{Path: *r.ConfigPath},
+		Credentials: r.Credentials,
+	}
+	profile, err := resolver.Profile(*r.ProfileOverride)
+	if err != nil {
+		return nil, session.Profile{}, err
+	}
+	options := []sdk.ClientOption{}
+	if authenticated {
+		opened, err := resolver.Open(*r.ProfileOverride)
+		if err != nil {
+			return nil, session.Profile{}, err
+		}
+		options = append(options, sdk.WithRequestEditorFn(sdk.WithBearerToken(opened.Token)))
+	}
+	factory := r.ClientFactory
+	if factory == nil {
+		factory = sdk.NewClientWithResponses
+	}
+	client, err := factory(profile.URL, options...)
+	if err != nil {
+		return nil, session.Profile{}, fmt.Errorf("create SDK client: %w", err)
+	}
+	return client, profile, nil
+}
+
 type Runner struct {
-	Stdout      io.Writer
-	Stderr      io.Writer
-	Families    []Family
-	Credentials credential.Resolver
+	Stdin         io.Reader
+	Stdout        io.Writer
+	Stderr        io.Writer
+	Families      []Family
+	Credentials   credential.Resolver
+	ClientFactory ClientFactory
 }
 
 func (r Runner) Run(ctx context.Context, args []string) int {
@@ -54,8 +89,12 @@ func (r Runner) Run(ctx context.Context, args []string) int {
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	state := rootState{stdout: stdout, stderr: stderr, configPath: defaultConfigPath(), outputFormat: string(output.TableFormat)}
-	root := newRoot(&state, r.Families, r.Credentials)
+	stdin := r.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	state := rootState{stdin: stdin, stdout: stdout, stderr: stderr, configPath: defaultConfigPath(), outputFormat: string(output.TableFormat)}
+	root := newRoot(&state, r.Families, r.Credentials, r.ClientFactory)
 	root.SetArgs(args)
 	err := root.ExecuteContext(ctx)
 	if err == nil {
@@ -76,6 +115,7 @@ func (r Runner) Run(ctx context.Context, args []string) int {
 }
 
 type rootState struct {
+	stdin            io.Reader
 	stdout           io.Writer
 	stderr           io.Writer
 	configPath       string
@@ -84,7 +124,7 @@ type rootState struct {
 	executionStarted bool
 }
 
-func newRoot(state *rootState, families []Family, credentials credential.Resolver) *cobra.Command {
+func newRoot(state *rootState, families []Family, credentials credential.Resolver, clientFactory ClientFactory) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "xisnove",
 		Short:         "Human client for the Xisnove control plane",
@@ -106,18 +146,28 @@ func newRoot(state *rootState, families []Family, credentials credential.Resolve
 	root.PersistentFlags().StringVar(&state.profileOverride, "profile", "", "named profile override")
 	root.PersistentFlags().StringVarP(&state.outputFormat, "output", "o", state.outputFormat, "output format: table, json, or yaml")
 	runtime := Runtime{
+		Stdin:           state.stdin,
 		Stdout:          state.stdout,
 		Stderr:          state.stderr,
 		ConfigPath:      &state.configPath,
 		ProfileOverride: &state.profileOverride,
 		OutputFormat:    &state.outputFormat,
 		Credentials:     credentials,
+		ClientFactory:   clientFactory,
 	}
 	root.AddCommand(newProfileCommand(runtime))
 	if len(families) == 0 {
-		for _, name := range []string{"auth", "monitor", "location", "agent", "incident", "notification", "discovery", "status"} {
-			root.AddCommand(unavailableCommand(name))
-		}
+		root.AddCommand(
+			newAuthCommand(runtime),
+			newStatusCommand(runtime),
+			newMonitorCommand(runtime),
+			newLocationCommand(runtime),
+			newAgentCommand(runtime),
+			newIncidentCommand(runtime),
+			newNotificationCommand(runtime),
+			newDiscoveryCommand(runtime),
+			newMaintenanceCommand(runtime),
+		)
 	} else {
 		for _, family := range families {
 			root.AddCommand(family.Command(runtime))

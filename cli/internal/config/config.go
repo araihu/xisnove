@@ -118,6 +118,9 @@ func (s Store) Load() (Config, error) {
 	if info.Mode()&os.ModeSymlink != 0 {
 		return Config{}, errors.New("config must not be a symbolic link")
 	}
+	if !info.Mode().IsRegular() {
+		return Config{}, errors.New("config must be a regular file")
+	}
 	if info.Mode().Perm()&0o077 != 0 {
 		return Config{}, fmt.Errorf("%w: config %s is %#o; run chmod 600 %s", ErrInsecurePermissions, s.Path, info.Mode().Perm(), s.Path)
 	}
