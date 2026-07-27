@@ -97,13 +97,13 @@
       "name": "checksums",
       "kind": "checksums",
       "format": "sha256",
-      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-platform-manifests", "sboms", "canonical-manifest"]
+      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-manifests", "oci-platform-manifests", "sboms", "canonical-manifest"]
     },
     {
       "name": "sboms",
       "kind": "sbom-set",
       "format": "spdx-json",
-      "subjects": ["archives", "charts", "oci-indexes", "oci-platform-manifests"]
+      "subjects": ["archives", "charts", "oci-indexes", "oci-manifests", "oci-platform-manifests"]
     },
     {
       "name": "licenses",
@@ -121,7 +121,7 @@
       "name": "canonical-manifest",
       "kind": "digest-manifest",
       "format": "canonical-json",
-      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-platform-manifests", "sboms", "licenses", "toolchain-lock"]
+      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-manifests", "oci-platform-manifests", "sboms", "licenses", "toolchain-lock"]
     }
   ]
 }

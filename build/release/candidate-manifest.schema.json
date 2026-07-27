@@ -18,7 +18,7 @@
         "additionalProperties": false,
         "required": ["kind", "name", "locator", "sha256", "size"],
         "properties": {
-          "kind": {"enum": ["archive", "chart", "bundle", "sbom", "metadata", "oci-index", "oci-platform-manifest"]},
+          "kind": {"enum": ["archive", "chart", "bundle", "sbom", "metadata", "oci-index", "oci-manifest", "oci-platform-manifest"]},
           "name": {"type": "string", "minLength": 1},
           "locator": {"type": "string", "minLength": 1},
           "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
