@@ -44,27 +44,20 @@ func readPrivateRegularFile(path string, limit int64) ([]byte, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("secret file path is required")
 	}
-	before, err := os.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return nil, errors.New("secret file must be a regular non-symlink file")
-	}
-	if before.Mode().Perm()&0o077 != 0 {
-		return nil, errors.New("secret file permissions must not grant group or other access")
-	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, sanitizePathError(err)
 	}
 	defer file.Close()
-	after, err := file.Stat()
+	info, err := file.Stat()
 	if err != nil {
-		return nil, err
+		return nil, sanitizePathError(err)
 	}
-	if !after.Mode().IsRegular() || !os.SameFile(before, after) {
-		return nil, errors.New("secret file changed while opening")
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("secret file target must be regular")
+	}
+	if info.Mode().Perm()&0o037 != 0 || info.Mode().Perm()&0o440 == 0 {
+		return nil, errors.New("secret file permissions exceed workload read access")
 	}
 	contents, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
@@ -74,4 +67,12 @@ func readPrivateRegularFile(path string, limit int64) ([]byte, error) {
 		return nil, errors.New("secret file exceeds size limit")
 	}
 	return contents, nil
+}
+
+func sanitizePathError(err error) error {
+	var pathError *os.PathError
+	if errors.As(err, &pathError) {
+		return pathError.Err
+	}
+	return err
 }

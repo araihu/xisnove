@@ -145,21 +145,14 @@ func loadCookieSecret(getenv func(string) string) ([]byte, error) {
 	if path == "" {
 		return decodeSecret(direct)
 	}
-	info, err := os.Lstat(path)
-	if err != nil {
-		return nil, errors.New("cookie secret file is unavailable")
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("cookie secret file must be regular, owner-readable, and owner-only")
-	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, errors.New("cookie secret file is unavailable")
 	}
 	defer file.Close()
 	openedInfo, err := file.Stat()
-	if err != nil || !os.SameFile(info, openedInfo) || !openedInfo.Mode().IsRegular() || openedInfo.Mode().Perm()&0o077 != 0 || openedInfo.Mode().Perm()&0o400 == 0 {
-		return nil, errors.New("cookie secret file must be regular, owner-readable, and owner-only")
+	if err != nil || !openedInfo.Mode().IsRegular() || openedInfo.Mode().Perm()&0o037 != 0 || openedInfo.Mode().Perm()&0o440 == 0 {
+		return nil, errors.New("cookie secret file must be regular and workload-read-only")
 	}
 	contents, err := io.ReadAll(io.LimitReader(file, 16*1024+1))
 	if err != nil {

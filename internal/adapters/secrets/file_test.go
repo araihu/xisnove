@@ -29,6 +29,20 @@ func TestFileResolverTrimsOneFinalNewlineOnly(t *testing.T) {
 	}
 }
 
+func TestFileResolverAcceptsProjectedReadOnlySecret(t *testing.T) {
+	target := writeSecret(t, "projected-value\n", 0o640)
+	link := filepath.Join(t.TempDir(), "secret")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := (secrets.FileResolver{}).Resolve(context.Background(), port.SecretReference{
+		Kind: port.SecretReferenceFile, Locator: link,
+	})
+	if err != nil || string(resolved) != "projected-value" {
+		t.Fatalf("Resolve() = %q, %v", resolved, err)
+	}
+}
+
 func TestFileResolverRejectsUnsafeFilesWithoutLeakingContent(t *testing.T) {
 	secret := "must-not-appear-in-errors"
 	tests := []struct {
@@ -39,14 +53,7 @@ func TestFileResolverRejectsUnsafeFilesWithoutLeakingContent(t *testing.T) {
 		{"permissive", func(t *testing.T) string { return writeSecret(t, secret, 0o644) }},
 		{"oversized", func(t *testing.T) string { return writeSecret(t, strings.Repeat("x", 64<<10+1), 0o600) }},
 		{"directory", func(t *testing.T) string { return t.TempDir() }},
-		{"symlink", func(t *testing.T) string {
-			target := writeSecret(t, secret, 0o600)
-			link := filepath.Join(t.TempDir(), "secret")
-			if err := os.Symlink(target, link); err != nil {
-				t.Fatal(err)
-			}
-			return link
-		}},
+		{"group-writable", func(t *testing.T) string { return writeSecret(t, secret, 0o660) }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

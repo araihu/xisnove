@@ -133,19 +133,33 @@ func TestLoadConfigPrefersOwnerOnlyCookieSecretFile(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAcceptsProjectedReadOnlyCookieSecret(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "cookie-secret")
+	encoded := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	if err := os.WriteFile(target, []byte(encoded+"\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "projected-cookie-secret")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	secret, err := loadCookieSecret(testEnv(map[string]string{"XISNOVE_UI_COOKIE_SECRET_FILE": link}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(secret) != "0123456789abcdef0123456789abcdef" {
+		t.Fatal("projected cookie secret not loaded")
+	}
+}
+
 func TestLoadConfigRejectsAmbiguousOrUnsafeCookieSecretFile(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "cookie-secret")
 	encoded := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 	if err := os.WriteFile(path, []byte(encoded), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	target := filepath.Join(directory, "target-secret")
-	if err := os.WriteFile(target, []byte(encoded), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	symlink := filepath.Join(directory, "linked-secret")
-	if err := os.Symlink(target, symlink); err != nil {
 		t.Fatal(err)
 	}
 	for _, values := range []map[string]string{
@@ -154,13 +168,12 @@ func TestLoadConfigRejectsAmbiguousOrUnsafeCookieSecretFile(t *testing.T) {
 			"XISNOVE_UI_COOKIE_SECRET_FILE": path,
 		},
 		{"XISNOVE_UI_COOKIE_SECRET_FILE": path},
-		{"XISNOVE_UI_COOKIE_SECRET_FILE": symlink},
 	} {
 		_, err := loadConfig(testEnv(values))
 		if err == nil {
 			t.Fatal("loadConfig error = nil")
 		}
-		if strings.Contains(err.Error(), path) || strings.Contains(err.Error(), symlink) || strings.Contains(err.Error(), encoded) {
+		if strings.Contains(err.Error(), path) || strings.Contains(err.Error(), encoded) {
 			t.Fatalf("error leaks secret source: %v", err)
 		}
 	}

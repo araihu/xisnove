@@ -37,7 +37,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	if err := parseCommandFlags(flags, args); err != nil {
 		return err
 	}
-	config, err := databaseFlags.config()
+	config, err := databaseFlags.configContext(parent)
 	if err != nil {
 		return err
 	}

@@ -25,7 +25,7 @@ func bootstrapCommand(ctx context.Context, args []string) error {
 	if *email == "" || *passwordFile == "" {
 		return fmt.Errorf("--email and --password-file are required")
 	}
-	config, err := databaseFlags.config()
+	config, err := databaseFlags.configContext(ctx)
 	if err != nil {
 		return err
 	}

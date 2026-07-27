@@ -66,10 +66,39 @@ func TestDatabaseFlagsKeepDeprecatedSQLiteAlias(t *testing.T) {
 	}
 }
 
+func TestDatabaseFlagsLoadProjectedDatabaseURLFile(t *testing.T) {
+	t.Parallel()
+	target := filepath.Join(t.TempDir(), "database-url")
+	if err := os.WriteFile(target, []byte("postgres://user:secret@example.test/xisnove\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "projected-database-url")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	flags := flag.NewFlagSet("test", flag.ContinueOnError)
+	values := addDatabaseFlags(flags)
+	if err := flags.Parse([]string{"--database-profile", "postgres", "--database-url-file", link}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := values.config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.URL != "postgres://user:secret@example.test/xisnove" {
+		t.Fatalf("database URL = %q", got.URL)
+	}
+}
+
 func TestDatabaseFlagsRejectAmbiguousOrUnsafeInputs(t *testing.T) {
 	t.Parallel()
 	tests := [][]string{
 		{"--database", "legacy.db", "--database-url", "new.db"},
+		{"--database-url", "new.db", "--database-url-file", "database-url"},
+		{"--database", "legacy.db", "--database-url-file", "database-url"},
 		{"--database-profile", "postgres", "--database", "legacy.db"},
 		{"--database-profile", "sqlite", "--database-url", "local.db", "--database-auth-token-file", "token"},
 		{"--database-profile", "unknown", "--database-url", "value"},

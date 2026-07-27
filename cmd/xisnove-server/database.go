@@ -29,7 +29,7 @@ func migrateCommand(ctx context.Context, args []string) error {
 	if *lockTimeout <= 0 {
 		return newCommandUsageError(fmt.Errorf("migration lock timeout must be positive"))
 	}
-	config, err := databaseFlags.config()
+	config, err := databaseFlags.configContext(ctx)
 	if err != nil {
 		return err
 	}

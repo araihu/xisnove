@@ -99,7 +99,7 @@ func rotateNotificationKeysCommand(ctx context.Context, args []string) error {
 	if sealer == nil {
 		return errors.New("--notification-master-key-file or XISNOVE_NOTIFICATION_MASTER_KEY_FILE is required")
 	}
-	config, err := databaseFlags.config()
+	config, err := databaseFlags.configContext(ctx)
 	if err != nil {
 		return err
 	}

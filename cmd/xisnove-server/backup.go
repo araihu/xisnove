@@ -18,7 +18,7 @@ func backupCommand(ctx context.Context, args []string) error {
 	if *output == "" {
 		return fmt.Errorf("--output is required")
 	}
-	config, err := databaseFlags.config()
+	config, err := databaseFlags.configContext(ctx)
 	if err != nil {
 		return err
 	}
