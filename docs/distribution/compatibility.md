@@ -14,6 +14,13 @@ and N. Contract migrations run separately only after every live N-1 process
 lease is gone. Readiness accepts the documented schema interval and fails
 closed outside it.
 
+The frozen portable fixture lives under
+`integration/testdata/migration-n-minus-one`. Its checksum-anchored standalone
+source builds a native probe without network access or Git history. The gate
+creates schema 10, expands to schema 11, and proves both the N-1 interval and
+the current runtime remain ready. Any fixture or manifest change requires an
+explicit checksum and compatibility-contract update.
+
 PostgreSQL and managed Turso allow N-1 and N replicas during the expand window.
 SQLite and local Turso use a singleton downtime upgrade: stop old process,
 acquire ownership, migrate, then start new process. They never claim rolling

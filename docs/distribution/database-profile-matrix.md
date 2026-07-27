@@ -19,8 +19,12 @@ bounded migration init container, then starts the replacement. Local Turso
 uses the equivalent single-process raw/Compose sequence.
 
 Expand migrations preserve the N-1 readable interval. Contract migration waits
-until no live incompatible process-version lease remains. Contention returns a
-stable retryable exit class; migration errors fail closed. Remote profiles use
-provider-native backup/restore. SQLite/local Turso require a consistent file
-backup while the singleton is stopped or through the documented online backup
-command.
+until no live incompatible process-version lease remains. `serve` and
+`db migrate` must receive the same stable `--installation-id`; its default is
+`default`. Active servers heartbeat a 45-second lease every 15 seconds and
+release it during clean shutdown. Lease failure removes readiness and stops the
+server. Migration contention and lock timeout exit with retryable status `75`
+(`EX_TEMPFAIL`); incompatible schema or live-process fences exit `1` and fail
+closed. Remote profiles use provider-native backup/restore. SQLite/local Turso
+require a consistent file backup while the singleton is stopped or through the
+documented online backup command.

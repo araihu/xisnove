@@ -23,6 +23,13 @@ Dependency loss moves ready services to degraded/not-ready without making
 process event loop can serve requests. Shutdown first makes readiness fail,
 then rejects new work, drains within its budget, and exits.
 
+Each server process acquires a database-backed version lease after database
+readiness, heartbeats it every 15 seconds with a 45-second TTL, and releases it
+during clean shutdown. `--installation-id` namespaces leases when one remote
+database contains more than one installation. Heartbeat failure makes
+`/readyz` fail and initiates shutdown; contract migration cannot pass a live
+incompatible lease.
+
 All five binaries implement `--version` without initializing dependencies.
 Stable output is one line:
 
