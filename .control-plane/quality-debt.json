@@ -46,7 +46,7 @@
       "id": "QD-2026-07-27-002",
       "status": "open",
       "feature": "M6.2A production OCI images native amd64 runtime certification",
-      "exact_sha": "3748881dd11afbbd0dce5caa22f8a6aaa3242278",
+      "exact_sha": "29eadad666557382d20e5ed9f15f6ac870d9243f",
       "skipped_gate": "execute all four linux/amd64 images and packaged server database profiles on a native linux/amd64 Docker runner",
       "reason": "The available development host is native arm64. amd64 build/load and runtime passed under emulation, but the plan correctly forbids treating emulation as native platform evidence.",
       "risk": "medium",
@@ -74,7 +74,7 @@
       "id": "QD-2026-07-27-003",
       "status": "open",
       "feature": "M6.2A packaged managed Turso acceptance",
-      "exact_sha": "3748881dd11afbbd0dce5caa22f8a6aaa3242278",
+      "exact_sha": "29eadad666557382d20e5ed9f15f6ac870d9243f",
       "skipped_gate": "run the packaged server image against a disposable managed Turso database with protected credentials",
       "reason": "Credentialed provider acceptance is isolated from local feature delivery and requires protected external credentials. It is scheduled in the release/provider acceptance lane.",
       "risk": "medium",
@@ -150,6 +150,64 @@
       "trigger": "M6.4 upgrade certification before release publication",
       "owner": "Xisnove release workflow",
       "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-005"
+    },
+    {
+      "id": "QD-2026-07-27-006",
+      "status": "open",
+      "feature": "M6.2C credentialed managed Turso Compose acceptance",
+      "exact_sha": "6254d3c4d6550fde6eab8f2a119763972c207189",
+      "skipped_gate": "bootstrap and run the Compose managed-Turso profile against a disposable remote database using protected credentials",
+      "reason": "The local delivery gate validates the managed-Turso configuration and raw database behavior; provider-backed Compose acceptance requires protected credentials and disposable remote resource lifecycle.",
+      "risk": "medium",
+      "affected_paths": [
+        "deploy/compose/compose.yaml",
+        "deploy/compose/managed-turso.env.example",
+        "deploy/raw/turso-cloud.env.example"
+      ],
+      "current_evidence": [
+        "the managed-Turso Compose profile renders successfully",
+        "remote server services mount no local database volume",
+        "managed-Turso storage conformance passes with disposable database lifecycle outside the Compose node",
+        "database URL and token inputs support private file references"
+      ],
+      "acceptance": [
+        "create a disposable managed Turso database using protected credentials",
+        "bootstrap the Compose managed-Turso profile and run two server replicas",
+        "prove migration, administrator login, API persistence, restart recovery, and absence of a local database mount",
+        "tear down Compose and the remote database without credential or resource residue",
+        "close this receipt against the verified descendant SHA"
+      ],
+      "trigger": "M6.4 protected provider acceptance before release publication",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-006"
+    },
+    {
+      "id": "QD-2026-07-27-007",
+      "status": "open",
+      "feature": "M6.2C systemd virtual-machine boot acceptance",
+      "exact_sha": "6254d3c4d6550fde6eab8f2a119763972c207189",
+      "skipped_gate": "install and boot the raw distribution under systemd on a supported Linux virtual machine",
+      "reason": "Static unit verification and raw runtime journeys passed, but this macOS host cannot provide a real systemd boot lifecycle. Platform-backed acceptance belongs to the release certification lane.",
+      "risk": "medium",
+      "affected_paths": [
+        "deploy/systemd/**",
+        "deploy/raw/**",
+        "docs/operations/raw-deployment.md"
+      ],
+      "current_evidence": [
+        "systemd-analyze verify, systemd-sysusers, and systemd-tmpfiles passed in a disposable Ubuntu environment",
+        "raw SQLite, local Turso, PostgreSQL, restart, interruption, and singleton journeys pass",
+        "all owned deployment scripts pass ShellCheck 0.11"
+      ],
+      "acceptance": [
+        "install the release binaries, helpers, identities, directories, environment files, and units on a supported Linux virtual machine",
+        "prove migration ordering, server/UI/Agent readiness, restart recovery, singleton rejection, and bounded shutdown",
+        "inspect the journal for secret leakage and prove clean uninstall or virtual-machine teardown",
+        "close this receipt against the verified descendant SHA"
+      ],
+      "trigger": "M6.4 Linux platform acceptance before release publication",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-007"
     }
   ]
 }
