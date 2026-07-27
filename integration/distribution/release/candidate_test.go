@@ -172,6 +172,45 @@ cp "$input" "$output"
 	}
 }
 
+func TestCandidateChartOCISBOMIndexesChartLayerBlob(t *testing.T) {
+	tool := buildCandidatePlanTool(t)
+	root := t.TempDir()
+	chart := filepath.Join(root, "xisnove.tgz")
+	mustWriteFile(t, chart, "exact chart package", 0o644)
+	layout := filepath.Join(root, "layout")
+	writeSyntheticChartLayout(t, layout, chart)
+	chartDigest := sha256.Sum256(mustReadFile(t, chart))
+	wantSource := "file:" + filepath.Join(layout, "blobs", "sha256", hex.EncodeToString(chartDigest[:]))
+
+	capture := filepath.Join(root, "syft.log")
+	fakeSyft := filepath.Join(root, "syft")
+	mustWriteFile(t, fakeSyft, `#!/bin/sh
+set -eu
+printf '%s\n' "$*" > "$CAPTURE"
+for arg in "$@"; do case "$arg" in spdx-json=*) output=${arg#spdx-json=} ;; esac; done
+printf '%s\n' '{"spdxVersion":"SPDX-2.3","packages":[]}' > "$output"
+`, 0o755)
+	fakeReleasebundle := filepath.Join(root, "releasebundle")
+	mustWriteFile(t, fakeReleasebundle, `#!/bin/sh
+set -eu
+shift
+while [ "$#" -gt 0 ]; do case "$1" in --input) input=$2; shift 2 ;; --output) output=$2; shift 2 ;; *) shift ;; esac; done
+cp "$input" "$output"
+`, 0o755)
+	output := filepath.Join(root, "sboms")
+	cmd := exec.Command(tool, "sbom-oci", "--layout-dir", layout, "--kind", "oci-manifest", "--name", "xisnove", "--output-dir", output, "--source-date-epoch", releaseEpoch, "--syft", fakeSyft, "--releasebundle", fakeReleasebundle, "--platforms=false")
+	cmd.Env = append(os.Environ(), "CAPTURE="+capture)
+	if combined, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("sbom-oci: %v\n%s", err, combined)
+	}
+	if got := strings.TrimSpace(string(mustReadFile(t, capture))); !strings.HasPrefix(got, wantSource+" ") {
+		t.Fatalf("Syft chart source = %q, want exact chart layer %q", got, wantSource)
+	}
+	if _, err := os.Stat(filepath.Join(output, "oci-manifest--xisnove.spdx.json")); err != nil {
+		t.Fatalf("missing chart OCI SBOM: %v", err)
+	}
+}
+
 func TestCandidatePlanRequiresExact64SubjectClosure(t *testing.T) {
 	tool := buildCandidatePlanTool(t)
 	root := t.TempDir()

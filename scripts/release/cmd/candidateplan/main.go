@@ -506,9 +506,13 @@ func sbomOCI(args []string) error {
 		return err
 	}
 	root, indexBytes, platforms, err := selectImageSubjects(blobs, top)
+	syftSource := "oci-dir:" + *layoutDir
 	if !*platformsRequired {
 		root, indexBytes, err = selectArtifactSubject(blobs, top)
 		platforms = nil
+		if err == nil {
+			syftSource, err = artifactLayerSource(*layoutDir, blobs, indexBytes)
+		}
 	}
 	if err != nil {
 		return err
@@ -541,7 +545,7 @@ func sbomOCI(args []string) error {
 		formula := formulaKind + "--" + *name + platformSuffix
 		raw := filepath.Join(*outputDir, "."+formula+".raw.json")
 		output := filepath.Join(*outputDir, formula+".spdx.json")
-		syftArgs := []string{"oci-dir:" + *layoutDir}
+		syftArgs := []string{syftSource}
 		if item.platform != "" {
 			syftArgs = append(syftArgs, "--platform", item.platform)
 		}
@@ -605,6 +609,30 @@ func sbomOCI(args []string) error {
 		}
 	}
 	return nil
+}
+
+func artifactLayerSource(layoutDir string, blobs map[string][]byte, manifestBytes []byte) (string, error) {
+	var manifest imageManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return "", err
+	}
+	var selected descriptor
+	for _, layer := range manifest.Layers {
+		if !strings.Contains(layer.MediaType, "helm.chart.content") {
+			continue
+		}
+		if selected.Digest != "" {
+			return "", errors.New("artifact manifest has multiple Helm chart layers")
+		}
+		selected = layer
+	}
+	if selected.Digest == "" {
+		return "", errors.New("artifact manifest has no Helm chart layer")
+	}
+	if _, ok := blobs[blobPath(selected.Digest)]; !ok {
+		return "", fmt.Errorf("artifact layer %s missing", selected.Digest)
+	}
+	return "file:" + filepath.Join(layoutDir, filepath.FromSlash(blobPath(selected.Digest))), nil
 }
 
 func validateSubjectName(name string) error {
