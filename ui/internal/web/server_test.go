@@ -77,7 +77,7 @@ func TestHandlerServesPinnedAraiHuThemeAsImmutableCSS(t *testing.T) {
 
 func TestHandlerServesCanonicalVersionedXisnoveFavicon(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/xisnove-bffc2ac.svg", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/xisnove-ab01f1a.svg", nil)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, request)
@@ -91,8 +91,40 @@ func TestHandlerServesCanonicalVersionedXisnoveFavicon(t *testing.T) {
 	if got := recorder.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
 		t.Fatalf("favicon Cache-Control = %q", got)
 	}
-	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "4df17d9b60b9999bed10e1e937ac5fdce433245ff5c4bdf43bd81605a4372d61"; got != want {
+	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "243b21be750d9187318675dc1088d6cd45415758efc2d4bc958b024a6f18c1b8"; got != want {
 		t.Fatalf("canonical Xisnove favicon SHA-256 = %s, want %s", got, want)
+	}
+}
+
+func TestHandlerServesCanonicalV10XisnoveIdentityAssets(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	for assetPath, wantHash := range map[string]string{
+		"/ui/xisnove-logo-ab01f1a.svg":         "c1d9947e502f4018992f77c9466f7f85d95e8fef4d482b676de9ad0f9470ca3c",
+		"/ui/xisnove-mark-ab01f1a.svg":         "0c55914d3d07d8cdab04a6d05da6bc0c7a977ea2f5bf56ff2a3f93ee4e3290bb",
+		"/ui/xisnove-mark-reverse-ab01f1a.svg": "57c90a71fadace5136df01230c1aa8cd210071263ac04249cd3aaa694a8ff952",
+	} {
+		request := httptest.NewRequest(http.MethodGet, "https://ui.example.test"+assetPath, nil)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK || recorder.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Errorf("GET %s = %d cache=%q", assetPath, recorder.Code, recorder.Header().Get("Cache-Control"))
+		}
+		if got := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())); got != wantHash {
+			t.Errorf("GET %s SHA-256 = %s, want %s", assetPath, got, wantHash)
+		}
+	}
+}
+
+func TestHandlerRetainsPreviousV3XisnoveFaviconDuringRollout(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/xisnove-bffc2ac.svg", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("previous v3 favicon status = %d", recorder.Code)
+	}
+	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "4df17d9b60b9999bed10e1e937ac5fdce433245ff5c4bdf43bd81605a4372d61"; got != want {
+		t.Fatalf("previous v3 Xisnove favicon SHA-256 = %s, want %s", got, want)
 	}
 }
 
@@ -122,7 +154,7 @@ func TestLoginPageUsesBundledHeadAndDoesNotRenderCredentials(t *testing.T) {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-f841fe90.css`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
+	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-f841fe90.css`, `/ui/xisnove-ab01f1a.svg`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("login body missing %q", want)
 		}

@@ -86,7 +86,7 @@ func Document(title string, content templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · X-9</title><link rel=\"icon\" type=\"image/svg+xml\" href=\"/ui/xisnove-bffc2ac.svg\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · X-9</title><link rel=\"icon\" type=\"image/svg+xml\" href=\"/ui/xisnove-ab01f1a.svg\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -79,7 +79,11 @@ func New(cfg Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
 	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
-	mux.HandleFunc("GET /ui/xisnove-bffc2ac.svg", serveXisnoveFavicon)
+	mux.HandleFunc("GET /ui/xisnove-ab01f1a.svg", serveXisnoveFavicon)
+	mux.HandleFunc("GET /ui/xisnove-logo-ab01f1a.svg", serveXisnoveLogo)
+	mux.HandleFunc("GET /ui/xisnove-mark-ab01f1a.svg", serveXisnoveMark)
+	mux.HandleFunc("GET /ui/xisnove-mark-reverse-ab01f1a.svg", serveXisnoveReverseMark)
+	mux.HandleFunc("GET /ui/xisnove-bffc2ac.svg", servePreviousV3XisnoveFavicon)
 	mux.HandleFunc("GET /ui/xisnove-81300f5.svg", servePreviousXisnoveFavicon)
 	mux.HandleFunc("GET /ui/app.js", serveApplicationJS)
 	mux.HandleFunc("/", s.route)
@@ -99,19 +103,49 @@ var araiHuThemeCSS string
 //go:embed static/xisnove-favicon.svg
 var xisnoveFavicon string
 
+//go:embed static/xisnove-logo.svg
+var xisnoveLogo string
+
+//go:embed static/xisnove-mark.svg
+var xisnoveMark string
+
+//go:embed static/xisnove-mark-reverse.svg
+var xisnoveReverseMark string
+
+//go:embed static/xisnove-favicon-bffc2ac.svg
+var previousV3XisnoveFavicon string
+
 //go:embed static/xisnove-favicon-81300f5.svg
 var previousXisnoveFavicon string
 
 func serveXisnoveFavicon(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableSVG(w, xisnoveFavicon)
+}
+
+func serveXisnoveLogo(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableSVG(w, xisnoveLogo)
+}
+
+func serveXisnoveMark(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableSVG(w, xisnoveMark)
+}
+
+func serveXisnoveReverseMark(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableSVG(w, xisnoveReverseMark)
+}
+
+func servePreviousV3XisnoveFavicon(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableSVG(w, previousV3XisnoveFavicon)
+}
+
+func serveImmutableSVG(w http.ResponseWriter, body string) {
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	_, _ = io.WriteString(w, xisnoveFavicon)
+	_, _ = io.WriteString(w, body)
 }
 
 func servePreviousXisnoveFavicon(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	_, _ = io.WriteString(w, previousXisnoveFavicon)
+	serveImmutableSVG(w, previousXisnoveFavicon)
 }
 
 func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {

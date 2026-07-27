@@ -25,7 +25,7 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 		t.Fatalf("render document: %v", err)
 	}
 	body := rendered.String()
-	if !strings.Contains(body, `<link rel="icon" type="image/svg+xml" href="/ui/xisnove-bffc2ac.svg">`) {
+	if !strings.Contains(body, `<link rel="icon" type="image/svg+xml" href="/ui/xisnove-ab01f1a.svg">`) {
 		t.Fatalf("document does not reference the canonical versioned Xisnove favicon: %s", body)
 	}
 	goshtoso := strings.Index(body, `/assets/styles.css`)
