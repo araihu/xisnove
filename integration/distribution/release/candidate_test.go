@@ -463,6 +463,31 @@ cp "$output/candidate-manifest.json.sha256" "$output/checksums.txt"
 	if err == nil || !strings.Contains(string(output), "candidate manifests differ") {
 		t.Fatalf("nondeterministic gate = %v, output=%s", err, output)
 	}
+
+	mustWriteFile(t, filepath.Join(root, "scripts", "release", "build-candidate.sh"), writeBuilder("stable\nprintf '%s\\n' \"$rootarg\" > \"$output/aux.txt\""), 0o755)
+	runCommandIn(t, root, nil, "git", "add", ".")
+	runCommandIn(t, root, nil, "git", "commit", "--quiet", "-m", "nondeterministic auxiliary artifact")
+	commit = strings.TrimSpace(commandOutput(t, root, "git", "rev-parse", "HEAD"))
+	args = []string{script, "--root", root, "--version", "1.2.3", "--commit", commit, "--source-date-epoch", releaseEpoch}
+	command = exec.Command("bash", args...)
+	command.Dir = root
+	diagnosticsRoot := t.TempDir()
+	command.Env = append(os.Environ(), "XISNOVE_RELEASE_KEEP_TMP=1", "XISNOVE_RELEASE_TMPDIR="+diagnosticsRoot)
+	output, err = command.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "candidate trees differ") ||
+		!strings.Contains(string(output), "aux.txt") ||
+		!strings.Contains(string(output), "reproducibility evidence preserved:") {
+		t.Fatalf("auxiliary nondeterminism diagnostics = %v, output=%s", err, output)
+	}
+	entries, err := os.ReadDir(diagnosticsRoot)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("preserved diagnostics entries=%d err=%v", len(entries), err)
+	}
+	for _, name := range []string{"inventory-a.json", "inventory-b.json"} {
+		if _, err := os.Stat(filepath.Join(diagnosticsRoot, entries[0].Name(), name)); err != nil {
+			t.Errorf("preserved diagnostic %s: %v", name, err)
+		}
+	}
 }
 
 func buildCandidatePlanTool(t *testing.T) string {

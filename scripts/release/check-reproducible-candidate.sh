@@ -27,6 +27,8 @@ root=$(cd "$root" && pwd)
 [[ -z "$(git -C "$root" status --porcelain=v1 --untracked-files=all)" ]] || { echo "working tree must be clean" >&2; exit 1; }
 
 reproducibility_tmp_root=${XISNOVE_RELEASE_TMPDIR:-$(dirname "$root")}
+keep_tmp=${XISNOVE_RELEASE_KEEP_TMP:-0}
+[[ "$keep_tmp" == 0 || "$keep_tmp" == 1 ]] || { echo "XISNOVE_RELEASE_KEEP_TMP must be 0 or 1" >&2; exit 2; }
 work_root=$(mktemp -d "$reproducibility_tmp_root/xisnove-reproducibility.XXXXXXXX")
 work_root=$(cd "$work_root" && pwd -P)
 work_a="$work_root/work-a"
@@ -38,7 +40,11 @@ cleanup() {
   trap - EXIT INT TERM
   git -C "$root" worktree remove --force "$work_a" >/dev/null 2>&1 || true
   git -C "$root" worktree remove --force "$work_b" >/dev/null 2>&1 || true
-  rm -rf "$work_root"
+  if [[ "$status" -ne 0 && "$keep_tmp" == 1 ]]; then
+    echo "reproducibility evidence preserved: $work_root" >&2
+  else
+    rm -rf "$work_root"
+  fi
   exit "$status"
 }
 trap cleanup EXIT INT TERM
@@ -88,6 +94,17 @@ inventory "$out_a" "$work_root/inventory-a.json"
 inventory "$out_b" "$work_root/inventory-b.json"
 if ! cmp --silent "$work_root/inventory-a.json" "$work_root/inventory-b.json"; then
   echo "candidate trees differ" >&2
+  python3 - "$work_root/inventory-a.json" "$work_root/inventory-b.json" <<'PY' >&2
+import json, sys
+
+left = {record["path"]: record for record in json.load(open(sys.argv[1]))}
+right = {record["path"]: record for record in json.load(open(sys.argv[2]))}
+for path in sorted(left.keys() | right.keys()):
+    if left.get(path) != right.get(path):
+        a = left.get(path, {}).get("sha256", "missing")
+        b = right.get(path, {}).get("sha256", "missing")
+        print(f"  {path}: candidate-a={a} candidate-b={b}")
+PY
   exit 1
 fi
 printf 'reproducible candidate: %s\n' "$commit"
