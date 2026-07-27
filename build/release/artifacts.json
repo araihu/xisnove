@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "version": {
+    "source": "git-tag",
+    "pattern": "vX.Y.Z",
+    "value": "X.Y.Z",
+    "reference": "release.version"
+  },
+  "binaries": [
+    {
+      "name": "xisnove-server",
+      "entrypoint": "./cmd/xisnove-server",
+      "targets": ["linux-amd64-glibc2.35", "linux-arm64-glibc2.35"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-ui",
+      "entrypoint": "./ui/cmd/server",
+      "targets": ["linux-amd64", "linux-arm64"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-agent",
+      "entrypoint": "./agent/cmd/xisnove-agent",
+      "targets": ["linux-amd64", "linux-arm64"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-operator",
+      "entrypoint": "./operator/cmd/xisnove-operator",
+      "targets": ["linux-amd64", "linux-arm64"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove",
+      "entrypoint": "./cli/cmd/xisnove",
+      "targets": ["linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64", "windows-amd64", "windows-arm64"],
+      "version_ref": "release.version"
+    }
+  ],
+  "images": [
+    {
+      "name": "xisnove-server",
+      "repository": "ghcr.io/araihu/xisnove-server",
+      "targets": ["linux-amd64", "linux-arm64"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-ui",
+      "repository": "ghcr.io/araihu/xisnove-ui",
+      "targets": ["linux-amd64", "linux-arm64"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-agent",
+      "repository": "ghcr.io/araihu/xisnove-agent",
+      "targets": ["linux-amd64", "linux-arm64"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-operator",
+      "repository": "ghcr.io/araihu/xisnove-operator",
+      "targets": ["linux-amd64", "linux-arm64"],
+      "version_ref": "release.version"
+    }
+  ],
+  "charts": [
+    {
+      "name": "xisnove",
+      "repository": "oci://ghcr.io/araihu/charts/xisnove",
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-edge",
+      "repository": "oci://ghcr.io/araihu/charts/xisnove-edge",
+      "version_ref": "release.version"
+    }
+  ]
+}

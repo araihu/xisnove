@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "actions": [
+    {
+      "name": "actions/checkout",
+      "sha": "11d5960a326750d5838078e36cf38b85af677262"
+    },
+    {
+      "name": "actions/setup-go",
+      "sha": "924ae3a1cded613372ab5595356fb5720e22ba16"
+    },
+    {
+      "name": "actions/upload-artifact",
+      "sha": "b7c566a772e6b6bfb58ed0dc250532a479d7789f"
+    }
+  ],
+  "tools": [
+    {
+      "name": "go",
+      "version": "1.26.5",
+      "source": "https://go.dev/dl/",
+      "checksums": {
+        "linux-amd64": "5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053",
+        "linux-arm64": "fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49"
+      }
+    },
+    {
+      "name": "helm",
+      "version": "3.16.4",
+      "source": "https://get.helm.sh/",
+      "checksums": {
+        "linux-amd64": "fc307327959aa38ed8f9f7e66d45492bb022a66c3e5da6063958254b9767d179",
+        "linux-arm64": "d3f8f15b3d9ec8c8678fbf3280c3e5902efabe5912e2f9fcf29107efbc8ead69"
+      }
+    },
+    {
+      "name": "kind",
+      "version": "0.31.0",
+      "source": "https://github.com/kubernetes-sigs/kind/releases/tag/v0.31.0",
+      "checksums": {
+        "linux-amd64": "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa",
+        "linux-arm64": "8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4"
+      }
+    },
+    {
+      "name": "kubectl",
+      "version": "1.35.4",
+      "source": "https://dl.k8s.io/release/v1.35.4/",
+      "checksums": {
+        "linux-amd64": "b529430df69a688fd61b64ad2299edb5fd71cb58be2a4779dba624c7d3510efd",
+        "linux-arm64": "6a5a4cc4e396d7626a7a693a3044b51c75520f81db30fe6816c2554e53be336f"
+      }
+    },
+    {
+      "name": "gotestsum",
+      "version": "1.13.0",
+      "source": "https://github.com/gotestyourself/gotestsum/releases/tag/v1.13.0",
+      "checksums": {
+        "linux-amd64": "11ccddeaf708ef228889f9fe2f68291a75b27013ddfc3b18156e094f5f40e8ee",
+        "linux-arm64": "7644a4c5cd1bb978d56245aeab25a586ac5ac62adebed20a399548867c13499d",
+        "darwin-amd64": "99529350f4c7b780b1efc543ca0d9721b09f0a4228f0efa9281261f58fefa05a",
+        "darwin-arm64": "509cb27aef747f48faf9bce424f59dcf79572c905204b990ee935bbfcc7fa0e9"
+      }
+    },
+    {
+      "name": "goreleaser",
+      "version": "2.17.1",
+      "source": "https://github.com/goreleaser/goreleaser/releases/tag/v2.17.1",
+      "checksums": {
+        "linux-amd64": "a99bbc7ae0d8d897b07c4c497a9b62f222558804715ef219d1af05a7e417bc80",
+        "linux-arm64": "702f03769ac8bcb0e47839c82243cc614ae995633599a98c63062e13ea85f829",
+        "darwin-amd64": "a92a68c61a6833ff67748f532cbebc7b8e49ba30de062ab463b221211ee6368f",
+        "darwin-arm64": "b65624885c25da9a677b7ad11cf86a02123cc5a56af66f6b4ebb574658eada2e"
+      }
+    },
+    {
+      "name": "cosign",
+      "version": "3.1.2",
+      "source": "https://github.com/sigstore/cosign/releases/tag/v3.1.2",
+      "checksums": {
+        "linux-amd64": "f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf",
+        "linux-arm64": "90e7ae0b5dfd60f20816b52c012addf7fc055ebcc7bea4ce81c428ca8518c302"
+      }
+    },
+    {
+      "name": "syft",
+      "version": "1.49.0",
+      "source": "https://github.com/anchore/syft/releases/tag/v1.49.0",
+      "checksums": {
+        "linux-amd64": "7aa2f03ee92739cf643279ba3990548b9925d4e22cae13f46831ee62821147fe",
+        "linux-arm64": "c7c32de183c32368de197edba75e8dba7632915f7761bacd55149a9ca7fe0fa4"
+      }
+    },
+    {
+      "name": "trivy",
+      "version": "0.72.0",
+      "source": "https://github.com/aquasecurity/trivy/releases/tag/v0.72.0",
+      "checksums": {
+        "linux-amd64": "bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea",
+        "linux-arm64": "2ca2c023109c2db6b2b77366b6717291452d4531167377d95c79547f0c8e3467"
+      }
+    }
+  ],
+  "go_module_tools": [
+    {
+      "name": "vacuum",
+      "module": "github.com/daveshanley/vacuum",
+      "version": "0.30.0",
+      "verification": "go.sum"
+    },
+    {
+      "name": "oapi-codegen",
+      "module": "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen",
+      "version": "2.8.0",
+      "verification": "go.sum"
+    },
+    {
+      "name": "oasdiff",
+      "module": "github.com/oasdiff/oasdiff",
+      "version": "1.26.0",
+      "verification": "go.sum"
+    },
+    {
+      "name": "sqlc",
+      "module": "github.com/sqlc-dev/sqlc/cmd/sqlc",
+      "version": "1.31.1",
+      "verification": "go.sum"
+    },
+    {
+      "name": "templ",
+      "module": "github.com/a-h/templ/cmd/templ",
+      "version": "0.3.1020",
+      "verification": "go.sum"
+    },
+    {
+      "name": "setup-envtest",
+      "module": "sigs.k8s.io/controller-runtime/tools/setup-envtest",
+      "version": "0.24.1",
+      "verification": "go.sum"
+    },
+    {
+      "name": "controller-gen",
+      "module": "sigs.k8s.io/controller-tools/cmd/controller-gen",
+      "version": "0.21.0",
+      "verification": "go.sum"
+    }
+  ],
+  "images": [
+    {
+      "name": "ubuntu:22.04",
+      "use": "builder",
+      "digest": "sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982"
+    },
+    {
+      "name": "ubuntu:22.04",
+      "use": "runtime-base",
+      "digest": "sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982"
+    },
+    {
+      "name": "postgres:18.3-alpine3.23",
+      "use": "database-service",
+      "digest": "sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7"
+    },
+    {
+      "name": "kindest/node:v1.35.0",
+      "use": "test-cluster",
+      "digest": "sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f"
+    }
+  ],
+  "scanner_database": {
+    "mode": "pinned-snapshot",
+    "maximum_age_hours": 24,
+    "record_resolved_at": true,
+    "offline_fallback": "fail-closed when the recorded database snapshot is absent or older than maximum_age_hours"
+  },
+  "vulnerability_exception_schema": {
+    "required": ["id", "package", "vulnerability", "reason", "owner", "approved_at", "expires_at"],
+    "maximum_lifetime_days": 30,
+    "expired_policy": "fail"
+  },
+  "vulnerability_exceptions": []
+}
