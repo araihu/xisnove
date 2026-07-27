@@ -58,3 +58,8 @@ awk -v dist="$XISNOVE_RELEASE_OUTPUT" '
 ' .goreleaser.yaml >"$goreleaser_config"
 
 "$goreleaser_bin" release --snapshot --clean --config "$goreleaser_config"
+
+# GoReleaser writes run-local metadata: wall-clock time in metadata.json and
+# completion-ordered entries in artifacts.json. Release subjects use Xisnove's
+# canonical manifest instead, so do not retain these volatile internal files.
+rm -f -- "$XISNOVE_RELEASE_OUTPUT/metadata.json" "$XISNOVE_RELEASE_OUTPUT/artifacts.json"

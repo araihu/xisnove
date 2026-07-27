@@ -139,6 +139,7 @@ func TestBinaryBuildScriptDerivesStableReleaseMetadata(t *testing.T) {
 	temporary := t.TempDir()
 	capture := filepath.Join(temporary, "capture")
 	fake := filepath.Join(temporary, "goreleaser")
+	candidateOutput := filepath.Join(temporary, "archives")
 	script := `#!/bin/sh
 set -eu
 config=
@@ -147,7 +148,11 @@ for argument in "$@"; do
   if [ "$previous" = --config ]; then config=$argument; fi
   previous=$argument
 done
-printf '%s\n' "$*" "$(awk '$1 == "dist:" { print; exit }' "$config")" "$XISNOVE_RELEASE_VERSION" "$XISNOVE_RELEASE_COMMIT" "$XISNOVE_BUILD_DATE" "$SOURCE_DATE_EPOCH" > "$CAPTURE"
+dist=$(awk '$1 == "dist:" { gsub(/^dist: *"|"$/, ""); print; exit }' "$config")
+mkdir -p "$dist"
+printf '{"date":"now"}\n' > "$dist/metadata.json"
+printf '[{"path":"completion-order"}]\n' > "$dist/artifacts.json"
+printf '%s\n' "$*" "dist: \"$dist\"" "$XISNOVE_RELEASE_VERSION" "$XISNOVE_RELEASE_COMMIT" "$XISNOVE_BUILD_DATE" "$SOURCE_DATE_EPOCH" > "$CAPTURE"
 `
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -158,7 +163,7 @@ printf '%s\n' "$*" "$(awk '$1 == "dist:" { print; exit }' "$config")" "$XISNOVE_
 	command.Env = append(os.Environ(),
 		"GORELEASER_BIN="+fake,
 		"CAPTURE="+capture,
-		"XISNOVE_RELEASE_OUTPUT=dist/candidate/archives",
+		"XISNOVE_RELEASE_OUTPUT="+candidateOutput,
 		"XISNOVE_RELEASE_VERSION=1.2.3-rc.1",
 		"XISNOVE_RELEASE_COMMIT=0123456789abcdef0123456789abcdef01234567",
 		"SOURCE_DATE_EPOCH=1785121445",
@@ -171,7 +176,13 @@ printf '%s\n' "$*" "$(awk '$1 == "dist:" { print; exit }' "$config")" "$XISNOVE_
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(contents)), "\n")
-	if len(lines) != 6 || !strings.HasPrefix(lines[0], "release --snapshot --clean --config ") || strings.Contains(lines[0], "--output") || lines[1] != `dist: "dist/candidate/archives"` || lines[2] != "1.2.3-rc.1" || lines[3] != "0123456789abcdef0123456789abcdef01234567" || lines[4] != "2026-07-27T03:04:05Z" || lines[5] != "1785121445" {
+	if len(lines) != 6 || !strings.HasPrefix(lines[0], "release --snapshot --clean --config ") || strings.Contains(lines[0], "--output") || lines[1] != `dist: "`+candidateOutput+`"` || lines[2] != "1.2.3-rc.1" || lines[3] != "0123456789abcdef0123456789abcdef01234567" || lines[4] != "2026-07-27T03:04:05Z" || lines[5] != "1785121445" {
 		t.Fatalf("captured invocation:\n%s", contents)
+	}
+	for _, name := range []string{"metadata.json", "artifacts.json"} {
+		path := filepath.Join(candidateOutput, name)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("volatile GoReleaser metadata retained at %s: %v", path, err)
+		}
 	}
 }
