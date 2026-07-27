@@ -4,14 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/araihu/xisnove/application"
+	"github.com/araihu/xisnove/application/port"
 	xiscrypto "github.com/araihu/xisnove/internal/adapters/crypto"
 	"github.com/araihu/xisnove/internal/adapters/database"
 	"github.com/araihu/xisnove/internal/adapters/ids"
+	"github.com/araihu/xisnove/internal/adapters/secrets"
 )
 
 func bootstrapCommand(ctx context.Context, args []string) error {
@@ -29,9 +30,9 @@ func bootstrapCommand(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	password, err := os.ReadFile(*passwordFile)
+	password, err := readBootstrapPassword(ctx, *passwordFile)
 	if err != nil {
-		return fmt.Errorf("read password file: %w", err)
+		return err
 	}
 	handle, err := database.Open(ctx, config)
 	if err != nil {
@@ -46,5 +47,19 @@ func bootstrapCommand(ctx context.Context, args []string) error {
 		Tokens: xiscrypto.NewProductionTokenIssuer(), SessionDuration: 24 * time.Hour,
 		Now: time.Now, NewID: ids.NewUUID,
 	})
-	return service.BootstrapAdmin(ctx, *email, strings.TrimSpace(string(password)))
+	return service.BootstrapAdmin(ctx, *email, password)
+}
+
+func readBootstrapPassword(ctx context.Context, path string) (string, error) {
+	contents, err := (secrets.FileResolver{}).Resolve(ctx, port.SecretReference{
+		Kind: port.SecretReferenceFile, Locator: path,
+	})
+	if err != nil {
+		return "", fmt.Errorf("read password file: secret is unavailable or unsafe")
+	}
+	password := strings.TrimSpace(string(contents))
+	if password == "" {
+		return "", fmt.Errorf("read password file: secret is empty")
+	}
+	return password, nil
 }

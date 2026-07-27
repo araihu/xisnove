@@ -124,6 +124,10 @@ func (s *AuthService) BootstrapAdmin(
 			return fmt.Errorf("count administrators: %w", err)
 		}
 		if count != 0 {
+			existing, findErr := repositories.Admins.FindByEmail(ctx, normalizedEmail)
+			if findErr == nil && s.passwords.Verify(existing.PasswordHash, password) {
+				return nil
+			}
 			return ErrAlreadyBootstrapped
 		}
 		if err := repositories.Admins.Create(ctx, record); err != nil {

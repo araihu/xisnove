@@ -34,6 +34,20 @@ func TestBootstrapAdminRefusesSecondAdministrator(t *testing.T) {
 	}
 }
 
+func TestBootstrapAdminSameCredentialsIsIdempotent(t *testing.T) {
+	service, store := newAuthServiceForTest()
+	ctx := context.Background()
+	if err := service.BootstrapAdmin(ctx, " Admin@Example.COM ", testPassword); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.BootstrapAdmin(ctx, "admin@example.com", testPassword); err != nil {
+		t.Fatalf("idempotent bootstrap: %v", err)
+	}
+	if len(store.admins.records) != 1 {
+		t.Fatalf("administrator count = %d, want 1", len(store.admins.records))
+	}
+}
+
 func TestCreateAndAuthenticateSession(t *testing.T) {
 	service, _ := newAuthServiceForTest()
 	ctx := context.Background()
