@@ -377,6 +377,14 @@ func TestAgentDeploymentUsesNamedObservabilityPortAndBoundedProbes(t *testing.T)
 	if deployment.Spec.Template.Spec.TerminationGracePeriodSeconds == nil || *deployment.Spec.Template.Spec.TerminationGracePeriodSeconds != 15 {
 		t.Fatalf("termination grace = %v", deployment.Spec.Template.Spec.TerminationGracePeriodSeconds)
 	}
+	volumes := deployment.Spec.Template.Spec.Volumes
+	if len(volumes) != 1 || volumes[0].Secret == nil || volumes[0].Secret.DefaultMode == nil || *volumes[0].Secret.DefaultMode != 0o440 {
+		t.Fatalf("credential Secret mode = %#v, want 0440", volumes)
+	}
+	podSecurity := deployment.Spec.Template.Spec.SecurityContext
+	if podSecurity == nil || podSecurity.RunAsUser == nil || *podSecurity.RunAsUser != 100 || podSecurity.RunAsGroup == nil || *podSecurity.RunAsGroup != 101 || podSecurity.FSGroup == nil || *podSecurity.FSGroup != 101 {
+		t.Fatalf("Agent pod security context = %#v", podSecurity)
+	}
 }
 
 func hasEnv(values []corev1.EnvVar, name, want string) bool {

@@ -38,6 +38,98 @@ func TestFileProviderReadsCoherentBundleAfterReplacement(t *testing.T) {
 	}
 }
 
+func TestFileProviderReadsProjectedSecretAfterAtomicReplacement(t *testing.T) {
+	root := t.TempDir()
+	firstData := filepath.Join(root, "..2026_07_27_01")
+	secondData := filepath.Join(root, "..2026_07_27_02")
+	if err := os.Mkdir(firstData, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(secondData, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeBundle(t, filepath.Join(firstData, "credential"), `{"credential":"first-credential","generation":7}`)
+	writeBundle(t, filepath.Join(secondData, "credential"), `{"credential":"second-credential","generation":8}`)
+	if err := os.Chmod(filepath.Join(firstData, "credential"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(secondData, "credential"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Base(firstData), filepath.Join(root, "..data")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "credential")
+	if err := os.Symlink(filepath.Join("..data", "credential"), path); err != nil {
+		t.Fatal(err)
+	}
+	provider := credentials.FileProvider{Path: path}
+
+	first, err := provider.Current(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Generation != 7 {
+		t.Fatalf("first generation = %d", first.Generation)
+	}
+
+	replacement := filepath.Join(root, "..data-replacement")
+	if err := os.Symlink(filepath.Base(secondData), replacement); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, filepath.Join(root, "..data")); err != nil {
+		t.Fatal(err)
+	}
+	second, err := provider.Current(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second != (credentials.Bundle{Credential: "second-credential", Generation: 8}) {
+		t.Fatalf("second bundle = %#v", second)
+	}
+}
+
+func TestFileProviderAcceptsWorkloadGroupRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "credential.json")
+	writeBundle(t, path, `{"credential":"credential","generation":1}`)
+	if err := os.Chmod(path, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (credentials.FileProvider{Path: path}).Current(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFileProviderRejectsGroupMutationOrWorldPermissionsWithoutLeakingPath(t *testing.T) {
+	for _, mode := range []os.FileMode{0o620, 0o610, 0o604, 0o644} {
+		t.Run(mode.String(), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "sensitive-path-and-name.json")
+			writeBundle(t, path, `{"credential":"do-not-log-this-agent-credential","generation":1}`)
+			if err := os.Chmod(path, mode); err != nil {
+				t.Fatal(err)
+			}
+			_, err := (credentials.FileProvider{Path: path}).Current(context.Background())
+			if !errors.Is(err, credentials.ErrInsecurePermissions) {
+				t.Fatalf("error = %v", err)
+			}
+			if strings.Contains(err.Error(), path) || strings.Contains(err.Error(), "do-not-log-this-agent-credential") {
+				t.Fatalf("error leaked sensitive content: %v", err)
+			}
+		})
+	}
+}
+
+func TestFileProviderRejectsNonRegularOpenedTarget(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "credential")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (credentials.FileProvider{Path: path}).Current(context.Background())
+	if !errors.Is(err, credentials.ErrNotRegular) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestFileProviderRejectsInvalidBundlesWithoutLeakingCredential(t *testing.T) {
 	secret := "do-not-log-this-agent-credential"
 	tests := map[string]string{

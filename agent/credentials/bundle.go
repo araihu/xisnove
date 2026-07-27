@@ -14,7 +14,11 @@ import (
 
 const MaxBundleSize = 64 << 10
 
-var ErrBundleTooLarge = errors.New("credential bundle exceeds maximum size")
+var (
+	ErrBundleTooLarge      = errors.New("credential bundle exceeds maximum size")
+	ErrInsecurePermissions = errors.New("credential bundle permissions exceed workload read access")
+	ErrNotRegular          = errors.New("credential bundle target is not a regular file")
+)
 
 type Bundle struct {
 	Credential string `json:"credential"`
@@ -38,13 +42,23 @@ func (provider FileProvider) Current(ctx context.Context) (Bundle, error) {
 	}
 	file, err := os.Open(provider.Path)
 	if err != nil {
-		return Bundle{}, fmt.Errorf("open credential bundle: %w", err)
+		return Bundle{}, sanitizedFileError("open credential bundle", err)
 	}
 	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return Bundle{}, sanitizedFileError("inspect credential bundle", err)
+	}
+	if !info.Mode().IsRegular() {
+		return Bundle{}, ErrNotRegular
+	}
+	if info.Mode().Perm()&0o037 != 0 {
+		return Bundle{}, ErrInsecurePermissions
+	}
 
 	contents, err := io.ReadAll(io.LimitReader(file, MaxBundleSize+1))
 	if err != nil {
-		return Bundle{}, fmt.Errorf("read credential bundle: %w", err)
+		return Bundle{}, sanitizedFileError("read credential bundle", err)
 	}
 	defer clear(contents)
 	if err := ctx.Err(); err != nil {
@@ -70,4 +84,12 @@ func (provider FileProvider) Current(ctx context.Context) (Bundle, error) {
 		return Bundle{}, errors.New("credential bundle has invalid generation")
 	}
 	return bundle, nil
+}
+
+func sanitizedFileError(operation string, err error) error {
+	var pathError *os.PathError
+	if errors.As(err, &pathError) {
+		err = pathError.Err
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
