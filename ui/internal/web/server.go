@@ -79,6 +79,7 @@ func New(cfg Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
 	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
+	mux.HandleFunc("GET /ui/xisnove-81300f5.svg", serveXisnoveFavicon)
 	mux.HandleFunc("GET /ui/app.js", serveApplicationJS)
 	mux.HandleFunc("/", s.route)
 
@@ -93,6 +94,15 @@ func New(cfg Config) (http.Handler, error) {
 
 //go:embed static/araihu-f841fe90.css
 var araiHuThemeCSS string
+
+//go:embed static/xisnove-favicon.svg
+var xisnoveFavicon string
+
+func serveXisnoveFavicon(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	_, _ = io.WriteString(w, xisnoveFavicon)
+}
 
 func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")

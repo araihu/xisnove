@@ -18,6 +18,9 @@ same-origin as `/ui/araihu-f841fe90.css` after Goshtoso's stylesheet. The
 Goshtoso and Minimal base themes remain available through the theme selector
 and are not modified. The shared repository is public and licenses the theme
 under Apache-2.0 as of commit `a5e1afb1f3df2cc50aa88c9558370fd8fd177e9b`.
+The Xisnove favicon is likewise pinned from the canonical
+`logos/xisnove-favicon.svg` at `araihu/assets` commit `81300f5ccb108f36d63cb02113eeebd025583045`
+and served from the immutable, versioned `/ui/xisnove-81300f5.svg` URL.
 
 ## Development
 
