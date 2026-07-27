@@ -1,0 +1,251 @@
+{{- if eq .Values.database.profile "sqlite" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "xisnove.fullname" . }}-server
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  serviceName: {{ include "xisnove.fullname" . }}-server
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "xisnove.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "xisnove.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+      annotations:
+        checksum/profile: {{ toJson .Values.database | sha256sum }}
+        {{- with .Values.server.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      serviceAccountName: {{ include "xisnove.serverServiceAccount" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: migrate
+          image: {{ include "xisnove.serverImage" . }}
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          args:
+            - db
+            - migrate
+            {{- include "xisnove.databaseArgs" . | nindent 12 }}
+            - --phase
+            - expand
+            - --lock-timeout
+            - {{ .Values.database.migration.lockTimeout | quote }}
+            - --timeout
+            - {{ .Values.database.migration.timeout | quote }}
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources: {{ toYaml .Values.server.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "xisnove.databaseVolumeMount" . | nindent 12 }}
+        {{- if .Values.bootstrap.enabled }}
+        - name: bootstrap
+          image: {{ include "xisnove.serverImage" . }}
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          args:
+            - admin
+            - bootstrap
+            {{- include "xisnove.databaseArgs" . | nindent 12 }}
+            - --email
+            - {{ .Values.secrets.admin.email | quote }}
+            - --password-file
+            - /var/run/secrets/xisnove/admin/password
+            - --timeout
+            - {{ .Values.bootstrap.timeout | quote }}
+          securityContext: *containerSecurity
+          resources: {{ toYaml .Values.server.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "xisnove.databaseVolumeMount" . | nindent 12 }}
+            - name: admin-secret
+              mountPath: /var/run/secrets/xisnove/admin
+              readOnly: true
+        {{- end }}
+      containers:
+        - name: server
+          image: {{ include "xisnove.serverImage" . }}
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          args:
+            - serve
+            {{- include "xisnove.databaseArgs" . | nindent 12 }}
+            - --listen
+            - 0.0.0.0:8080
+            - --replicas
+            - "1"
+            - --cursor-signing-key-file
+            - /var/run/secrets/xisnove/server/cursor-signing-key
+            - --notification-master-key-file
+            - /var/run/secrets/xisnove/server/notification-master-key
+          ports:
+            - {name: http, containerPort: 8080, protocol: TCP}
+          livenessProbe: &serverLive
+            httpGet: {path: /livez, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+          readinessProbe: &serverReady
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
+          startupProbe:
+            httpGet: {path: /livez, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          securityContext: *containerSecurity
+          resources: {{ toYaml .Values.server.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "xisnove.databaseVolumeMount" . | nindent 12 }}
+            - name: server-secret
+              mountPath: /var/run/secrets/xisnove/server
+              readOnly: true
+      volumes:
+        {{- include "xisnove.serverSecretVolume" . | nindent 8 }}
+        {{- if .Values.bootstrap.enabled }}
+        - name: admin-secret
+          secret:
+            secretName: {{ required "secrets.admin.existingSecret.name is required" .Values.secrets.admin.existingSecret.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.admin.existingSecret.passwordKey }}
+                path: password
+        {{- end }}
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "xisnove.labels" . | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.database.sqlite.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.database.sqlite.size }}
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xisnove.fullname" . }}-server
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      {{- include "xisnove.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "xisnove.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+      annotations:
+        checksum/profile: {{ toJson .Values.database | sha256sum }}
+        {{- with .Values.server.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      serviceAccountName: {{ include "xisnove.serverServiceAccount" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: server
+          image: {{ include "xisnove.serverImage" . }}
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          args:
+            - serve
+            {{- include "xisnove.databaseArgs" . | nindent 12 }}
+            - --listen
+            - 0.0.0.0:8080
+            - --replicas
+            - {{ .Values.server.replicas | quote }}
+            - --cursor-signing-key-file
+            - /var/run/secrets/xisnove/server/cursor-signing-key
+            - --notification-master-key-file
+            - /var/run/secrets/xisnove/server/notification-master-key
+          ports:
+            - {name: http, containerPort: 8080, protocol: TCP}
+          livenessProbe:
+            httpGet: {path: /livez, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 1
+          startupProbe:
+            httpGet: {path: /livez, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources: {{ toYaml .Values.server.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "xisnove.databaseVolumeMount" . | nindent 12 }}
+            - name: server-secret
+              mountPath: /var/run/secrets/xisnove/server
+              readOnly: true
+      volumes:
+        {{- include "xisnove.databaseSecretVolume" . | nindent 8 }}
+        {{- include "xisnove.serverSecretVolume" . | nindent 8 }}
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

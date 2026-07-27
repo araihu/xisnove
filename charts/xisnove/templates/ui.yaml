@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xisnove.fullname" . }}-ui
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  replicas: {{ .Values.ui.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      {{- include "xisnove.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ui
+  template:
+    metadata:
+      labels:
+        {{- include "xisnove.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ui
+      annotations:
+        checksum/cookie-secret-reference: {{ toJson .Values.secrets.ui.existingSecret | sha256sum }}
+        {{- with .Values.ui.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      serviceAccountName: {{ include "xisnove.uiServiceAccount" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ui
+          image: {{ include "xisnove.uiImage" . }}
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          env:
+            - {name: XISNOVE_UI_ADDR, value: "0.0.0.0:8081"}
+            - {name: XISNOVE_UI_API_BASE_URL, value: {{ printf "http://%s-server:%v" (include "xisnove.fullname" .) .Values.server.service.port | quote }}}
+            - {name: XISNOVE_UI_COOKIE_SECRET_FILE, value: /var/run/secrets/xisnove/ui/cookie-secret}
+            - {name: XISNOVE_UI_COOKIE_SECURE, value: {{ .Values.ui.cookieSecure | quote }}}
+          ports:
+            - {name: http, containerPort: 8081, protocol: TCP}
+          livenessProbe:
+            httpGet: {path: /livez, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 1
+          startupProbe:
+            httpGet: {path: /livez, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources: {{ toYaml .Values.ui.resources | nindent 12 }}
+          volumeMounts:
+            - name: ui-secret
+              mountPath: /var/run/secrets/xisnove/ui
+              readOnly: true
+      volumes:
+        - name: ui-secret
+          secret:
+            secretName: {{ required "secrets.ui.existingSecret.name is required" .Values.secrets.ui.existingSecret.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.ui.existingSecret.cookieSecretKey }}
+                path: cookie-secret
+      {{- with .Values.ui.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ui.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ui.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ui.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,15 @@
+database:
+  profile: sqlite
+server:
+  replicas: 1
+secrets:
+  server:
+    existingSecret:
+      name: xisnove-server
+  admin:
+    email: admin@example.test
+    existingSecret:
+      name: xisnove-admin
+  ui:
+    existingSecret:
+      name: xisnove-ui

@@ -1,0 +1,161 @@
+{{- if .Values.agent.enabled }}
+apiVersion: apps/v1
+kind: {{ if .Values.agent.enrollment.enabled }}StatefulSet{{ else }}Deployment{{ end }}
+metadata:
+  name: {{ include "xisnove.fullname" . }}-agent
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  replicas: 1
+  {{- if .Values.agent.enrollment.enabled }}
+  serviceName: {{ include "xisnove.fullname" . }}-agent
+  podManagementPolicy: OrderedReady
+  updateStrategy: {type: RollingUpdate}
+  {{- else }}
+  strategy: {type: Recreate}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "xisnove.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: agent
+  template:
+    metadata:
+      labels:
+        {{- include "xisnove.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agent
+      annotations:
+        checksum/credential-reference: {{ toJson (ternary .Values.agent.enrollment.existingSecret .Values.agent.existingSecret .Values.agent.enrollment.enabled) | sha256sum }}
+        {{- with .Values.agent.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      serviceAccountName: {{ include "xisnove.agentServiceAccount" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.agent.enrollment.enabled }}
+      initContainers:
+        - name: enroll
+          image: {{ include "xisnove.agentImage" . }}
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          args:
+            - enroll
+            - --url
+            - {{ printf "http://%s-server:%v" (include "xisnove.fullname" .) .Values.server.service.port | quote }}
+            - --token-file
+            - /var/run/secrets/xisnove/agent-enrollment/token
+            - --credential-file
+            - /var/lib/xisnove-agent/credential.json
+            - --name
+            - {{ .Values.agent.name | quote }}
+            - --capabilities
+            - {{ join "," .Values.agent.capabilities | quote }}
+            - --timeout
+            - {{ .Values.agent.enrollment.timeout | quote }}
+          securityContext: &agentSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources: {{ toYaml .Values.agent.resources | nindent 12 }}
+          volumeMounts:
+            - name: credential-data
+              mountPath: /var/lib/xisnove-agent
+            - name: enrollment-token
+              mountPath: /var/run/secrets/xisnove/agent-enrollment
+              readOnly: true
+      {{- end }}
+      containers:
+        - name: agent
+          image: {{ include "xisnove.agentImage" . }}
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          env:
+            - {name: XISNOVE_URL, value: {{ printf "http://%s-server:%v" (include "xisnove.fullname" .) .Values.server.service.port | quote }}}
+            - {name: XISNOVE_AGENT_CREDENTIAL_FILE, value: {{ if .Values.agent.enrollment.enabled }}/var/lib/xisnove-agent/credential.json{{ else }}/var/run/secrets/xisnove/agent/credential{{ end }}}
+            - {name: XISNOVE_AGENT_OBSERVABILITY_ADDRESS, value: "0.0.0.0:9090"}
+            - {name: XISNOVE_AGENT_CAPABILITIES, value: {{ join "," .Values.agent.capabilities | quote }}}
+            - {name: XISNOVE_AGENT_ALLOWED_PRIVATE_CIDRS, value: {{ join "," .Values.agent.allowedPrivateCIDRs | quote }}}
+          ports:
+            - {name: observability, containerPort: 9090, protocol: TCP}
+          livenessProbe:
+            httpGet: {path: /livez, port: observability}
+            periodSeconds: 10
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet: {path: /readyz, port: observability}
+            periodSeconds: 5
+            timeoutSeconds: 1
+          startupProbe:
+            httpGet: {path: /livez, port: observability}
+            periodSeconds: 2
+            failureThreshold: 30
+          securityContext: {{ if .Values.agent.enrollment.enabled }}*agentSecurity{{ else }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          {{- end }}
+          resources: {{ toYaml .Values.agent.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.agent.enrollment.enabled }}
+            - name: credential-data
+              mountPath: /var/lib/xisnove-agent
+            {{- else }}
+            - name: agent-secret
+              mountPath: /var/run/secrets/xisnove/agent
+              readOnly: true
+            {{- end }}
+      volumes:
+        {{- if .Values.agent.enrollment.enabled }}
+        - name: enrollment-token
+          secret:
+            secretName: {{ required "agent.enrollment.existingSecret.name is required when enrollment is enabled" .Values.agent.enrollment.existingSecret.name }}
+            optional: true
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.agent.enrollment.existingSecret.tokenKey }}
+                path: token
+        {{- else }}
+        - name: agent-secret
+          secret:
+            secretName: {{ required "agent.existingSecret.name is required when agent.enabled=true" .Values.agent.existingSecret.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.agent.existingSecret.credentialKey }}
+                path: credential
+        {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.agent.enrollment.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: credential-data
+        labels:
+          {{- include "xisnove.labels" . | nindent 10 }}
+          app.kubernetes.io/component: agent
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.agent.enrollment.storage.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.agent.enrollment.storage.size }}
+  {{- end }}
+{{- end }}

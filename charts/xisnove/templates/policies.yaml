@@ -1,0 +1,60 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- range $component := list "server" "ui" "agent" }}
+{{- if or (ne $component "agent") $.Values.agent.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "xisnove.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "xisnove.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "xisnove.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        {{- with $.Values.networkPolicy.ingressNamespaceSelector }}
+        - namespaceSelector: {{ toYaml . | nindent 12 }}
+        {{- end }}
+      ports:
+        - port: {{ if eq $component "server" }}8080{{ else if eq $component "ui" }}8081{{ else }}9090{{ end }}
+          protocol: TCP
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "xisnove.fullname" . }}-server
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "xisnove.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+{{- end }}
+{{- if .Values.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "xisnove.fullname" . }}
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}{{ toYaml . | nindent 4 }}{{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "xisnove.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  endpoints:
+    - {port: http, path: /metrics, interval: {{ .Values.serviceMonitor.interval }}}
+{{- end }}

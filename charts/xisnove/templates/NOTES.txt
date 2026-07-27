@@ -1,0 +1,5 @@
+Xisnove {{ .Chart.AppVersion }} rendered with database profile {{ .Values.database.profile }}.
+UI service: {{ include "xisnove.fullname" . }}-ui:{{ .Values.ui.service.port }}
+API service: {{ include "xisnove.fullname" . }}-server:{{ .Values.server.service.port }}
+
+All referenced Secrets must exist before install. This chart never creates Secret values.

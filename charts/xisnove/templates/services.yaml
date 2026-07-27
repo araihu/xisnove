@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xisnove.fullname" . }}-server
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  type: {{ .Values.server.service.type }}
+  selector:
+    {{- include "xisnove.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+  ports:
+    - {name: http, port: {{ .Values.server.service.port }}, targetPort: http, protocol: TCP}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xisnove.fullname" . }}-ui
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  type: {{ .Values.ui.service.type }}
+  selector:
+    {{- include "xisnove.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+  ports:
+    - {name: http, port: {{ .Values.ui.service.port }}, targetPort: http, protocol: TCP}
+{{- if .Values.agent.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xisnove.fullname" . }}-agent
+  labels:
+    {{- include "xisnove.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  selector:
+    {{- include "xisnove.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+  ports:
+    - {name: observability, port: 9090, targetPort: observability, protocol: TCP}
+{{- end }}

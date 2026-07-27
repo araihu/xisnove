@@ -1,0 +1,21 @@
+{{- if and (eq .Values.database.profile "sqlite") (ne (int .Values.server.replicas) 1) -}}
+{{- fail "server.replicas must equal 1 when database.profile=sqlite" -}}
+{{- end -}}
+{{- if and .Values.ingress.enabled .Values.gateway.enabled -}}
+{{- fail "ingress.enabled and gateway.enabled are mutually exclusive" -}}
+{{- end -}}
+{{- if and .Values.pdb.enabled (eq .Values.database.profile "sqlite") -}}
+{{- fail "pdb.enabled is unsafe for the SQLite singleton" -}}
+{{- end -}}
+{{- if and (not .Values.server.serviceAccount.create) (empty .Values.server.serviceAccount.name) -}}
+{{- fail "server.serviceAccount.name is required when server.serviceAccount.create=false" -}}
+{{- end -}}
+{{- if and (not .Values.ui.serviceAccount.create) (empty .Values.ui.serviceAccount.name) -}}
+{{- fail "ui.serviceAccount.name is required when ui.serviceAccount.create=false" -}}
+{{- end -}}
+{{- if and .Values.agent.enabled (not .Values.agent.serviceAccount.create) (empty .Values.agent.serviceAccount.name) -}}
+{{- fail "agent.serviceAccount.name is required when agent.serviceAccount.create=false" -}}
+{{- end -}}
+{{- if and .Values.agent.enabled .Values.agent.enrollment.enabled (empty .Values.agent.enrollment.existingSecret.name) -}}
+{{- fail "agent.enrollment.existingSecret.name is required when Agent enrollment is enabled" -}}
+{{- end -}}

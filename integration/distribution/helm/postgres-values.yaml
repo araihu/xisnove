@@ -1,0 +1,18 @@
+database:
+  profile: postgres
+  postgres:
+    existingSecret:
+      name: xisnove-postgres
+server:
+  replicas: 3
+secrets:
+  server:
+    existingSecret:
+      name: xisnove-server
+  admin:
+    email: admin@example.test
+    existingSecret:
+      name: xisnove-admin
+  ui:
+    existingSecret:
+      name: xisnove-ui
