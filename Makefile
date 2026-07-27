@@ -30,7 +30,7 @@ distribution-image-native-check:
 
 distribution-image-oci-check:
 	docker buildx bake oci-layout
-	go test -race ./integration/distribution/images -run '^TestOCILayout' -count=1
+	XISNOVE_REQUIRE_OCI_LAYOUT=1 go test -race ./integration/distribution/images -run '^TestOCILayout' -count=1
 
 distribution-helm-check:
 	helm lint charts/xisnove

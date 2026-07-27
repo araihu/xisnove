@@ -33,6 +33,9 @@ type imageManifest struct {
 }
 
 func TestOCILayoutContainsExecutableLicensedPlatformImages(t *testing.T) {
+	if os.Getenv("XISNOVE_REQUIRE_OCI_LAYOUT") != "1" {
+		t.Skip("OCI layouts are generated and required by distribution-image-oci-check")
+	}
 	for _, name := range []string{"server", "ui", "agent", "operator"} {
 		t.Run(name, func(t *testing.T) {
 			blobs := readOCILayout(t, filepath.Join("..", "..", "..", ".artifacts", "oci", "xisnove-"+name+".tar"))

@@ -219,6 +219,7 @@ func TestM62DistributionGatesAreWired(t *testing.T) {
 		"docker buildx bake test-$(DISTRIBUTION_ARCH) --load",
 		"docker buildx bake oci-layout",
 		"go test -race ./integration/distribution/images",
+		"XISNOVE_REQUIRE_OCI_LAYOUT=1 go test -race ./integration/distribution/images -run '^TestOCILayout'",
 		"helm lint charts/xisnove",
 		"go test -race ./integration/distribution/helm",
 		"systemd-analyze verify deploy/systemd/*.service",
