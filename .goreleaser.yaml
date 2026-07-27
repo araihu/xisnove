@@ -1,0 +1,123 @@
+version: 2
+project_name: xisnove
+
+builds:
+  - id: xisnove-server
+    dir: .
+    main: ./cmd/xisnove-server
+    binary: xisnove-server
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath, -buildvcs=false]
+    ldflags:
+      - -s -w -buildid=
+      - -X github.com/araihu/xisnove/internal/buildinfo.Version={{ .Env.XISNOVE_RELEASE_VERSION }}
+      - -X github.com/araihu/xisnove/internal/buildinfo.Commit={{ .Env.XISNOVE_RELEASE_COMMIT }}
+      - -X github.com/araihu/xisnove/internal/buildinfo.BuildDate={{ .Env.XISNOVE_BUILD_DATE }}
+      - -X github.com/araihu/xisnove/internal/buildinfo.Dirty=false
+    goos: [linux]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .Env.SOURCE_DATE_EPOCH }}"
+
+  - id: xisnove-ui
+    dir: ui
+    main: ./cmd/server
+    binary: xisnove-ui
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath, -buildvcs=false]
+    ldflags:
+      - -s -w -buildid=
+      - -X github.com/araihu/xisnove/ui/internal/buildinfo.Version={{ .Env.XISNOVE_RELEASE_VERSION }}
+      - -X github.com/araihu/xisnove/ui/internal/buildinfo.Commit={{ .Env.XISNOVE_RELEASE_COMMIT }}
+      - -X github.com/araihu/xisnove/ui/internal/buildinfo.BuildDate={{ .Env.XISNOVE_BUILD_DATE }}
+      - -X github.com/araihu/xisnove/ui/internal/buildinfo.Dirty=false
+    goos: [linux]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .Env.SOURCE_DATE_EPOCH }}"
+
+  - id: xisnove-agent
+    dir: agent
+    main: ./cmd/xisnove-agent
+    binary: xisnove-agent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath, -buildvcs=false]
+    ldflags:
+      - -s -w -buildid=
+      - -X github.com/araihu/xisnove/agent/internal/buildinfo.Version={{ .Env.XISNOVE_RELEASE_VERSION }}
+      - -X github.com/araihu/xisnove/agent/internal/buildinfo.Commit={{ .Env.XISNOVE_RELEASE_COMMIT }}
+      - -X github.com/araihu/xisnove/agent/internal/buildinfo.BuildDate={{ .Env.XISNOVE_BUILD_DATE }}
+      - -X github.com/araihu/xisnove/agent/internal/buildinfo.Dirty=false
+    goos: [linux]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .Env.SOURCE_DATE_EPOCH }}"
+
+  - id: xisnove-operator
+    dir: operator
+    main: ./cmd/xisnove-operator
+    binary: xisnove-operator
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath, -buildvcs=false]
+    ldflags:
+      - -s -w -buildid=
+      - -X github.com/araihu/xisnove/operator/internal/buildinfo.Version={{ .Env.XISNOVE_RELEASE_VERSION }}
+      - -X github.com/araihu/xisnove/operator/internal/buildinfo.Commit={{ .Env.XISNOVE_RELEASE_COMMIT }}
+      - -X github.com/araihu/xisnove/operator/internal/buildinfo.BuildDate={{ .Env.XISNOVE_BUILD_DATE }}
+      - -X github.com/araihu/xisnove/operator/internal/buildinfo.Dirty=false
+    goos: [linux]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .Env.SOURCE_DATE_EPOCH }}"
+
+  - id: xisnove
+    dir: cli
+    main: ./cmd/xisnove
+    binary: xisnove
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath, -buildvcs=false]
+    ldflags:
+      - -s -w -buildid=
+      - -X github.com/araihu/xisnove/cli/internal/buildinfo.Version={{ .Env.XISNOVE_RELEASE_VERSION }}
+      - -X github.com/araihu/xisnove/cli/internal/buildinfo.Commit={{ .Env.XISNOVE_RELEASE_COMMIT }}
+      - -X github.com/araihu/xisnove/cli/internal/buildinfo.BuildDate={{ .Env.XISNOVE_BUILD_DATE }}
+      - -X github.com/araihu/xisnove/cli/internal/buildinfo.Dirty=false
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .Env.SOURCE_DATE_EPOCH }}"
+
+archives:
+  - &archive
+    id: xisnove-server
+    ids: [xisnove-server]
+    formats: [tar.gz]
+    name_template: "{{ .Binary }}_{{ .Env.XISNOVE_RELEASE_VERSION }}_{{ .Os }}_{{ .Arch }}"
+    builds_info: &builds_info
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .Env.XISNOVE_BUILD_DATE }}"
+    files: &legal_files
+      - src: LICENSE
+        info: &legal_info
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .Env.XISNOVE_BUILD_DATE }}"
+      - src: NOTICE
+        info: *legal_info
+  - <<: *archive
+    id: xisnove-ui
+    ids: [xisnove-ui]
+  - <<: *archive
+    id: xisnove-agent
+    ids: [xisnove-agent]
+  - <<: *archive
+    id: xisnove-operator
+    ids: [xisnove-operator]
+  - <<: *archive
+    id: xisnove
+    ids: [xisnove]
+
+checksum:
+  disable: true
+changelog:
+  disable: true
+release:
+  disable: true
