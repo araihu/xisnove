@@ -5,14 +5,17 @@ on:
   push:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
   root:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
     services:
       postgres:
-        image: postgres:18.3-alpine3.23
+        image: postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
         env:
           POSTGRES_DB: xisnove
           POSTGRES_PASSWORD: xisnove
@@ -26,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -34,11 +38,14 @@ jobs:
             go.sum
             agent/go.sum
             cli/go.sum
+            operator/go.sum
             ui/go.sum
       - name: Verify generated artifacts and API contracts
         run: make generated-check
       - name: Verify external-module isolation
         run: make module-check
+      - name: Verify release workspace and distribution contracts
+        run: make distribution-contract-check
       - name: Verify SQLite, local Turso, and PostgreSQL operations journeys
         run: make storage-check
       - name: Verify notification faults, recovery, retention, observability, and lifecycle
@@ -67,12 +74,14 @@ jobs:
           fi
 
   agent:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: agent
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26.5"
@@ -83,9 +92,11 @@ jobs:
       - run: GOWORK=off go test -race ./...
 
   agent-workspace:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26.5"
@@ -95,9 +106,11 @@ jobs:
       - run: go test -race ./agent/...
 
   operator:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26.5"
@@ -112,11 +125,15 @@ jobs:
         run: GOWORK=off go -C operator test -race ./...
       - name: Vet standalone operator module
         run: GOWORK=off go -C operator vet ./...
+      - name: Compile and test operator against the repository-local SDK
+        run: go test -race ./operator/...
 
   kubernetes-edge:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26.5"
@@ -126,24 +143,50 @@ jobs:
             operator/go.sum
       - name: Install pinned kind and Helm clients
         run: |
-          go install sigs.k8s.io/kind@v0.31.0
-          go install helm.sh/helm/v3/cmd/helm@v3.16.4
+          set -euo pipefail
+          lock=build/release/toolchain.lock.json
+          tool_dir="$(mktemp -d)"
+          trap 'rm -rf "$tool_dir"' EXIT
+
+          kind_version="$(jq -er '.tools[] | select(.name == "kind") | .version' "$lock")"
+          kind_checksum="$(jq -er '.tools[] | select(.name == "kind") | .checksums["linux-amd64"]' "$lock")"
+          curl --fail --location --silent --show-error \
+            --output "$tool_dir/kind" \
+            "https://github.com/kubernetes-sigs/kind/releases/download/v${kind_version}/kind-linux-amd64"
+          printf '%s  %s\n' "$kind_checksum" "$tool_dir/kind" | sha256sum --check
+          install -m 0755 "$tool_dir/kind" "$(go env GOPATH)/bin/kind"
+
+          helm_version="$(jq -er '.tools[] | select(.name == "helm") | .version' "$lock")"
+          helm_checksum="$(jq -er '.tools[] | select(.name == "helm") | .checksums["linux-amd64"]' "$lock")"
+          helm_archive="$tool_dir/helm.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$helm_archive" \
+            "https://get.helm.sh/helm-v${helm_version}-linux-amd64.tar.gz"
+          printf '%s  %s\n' "$helm_checksum" "$helm_archive" | sha256sum --check
+          tar -xzf "$helm_archive" -C "$tool_dir"
+          install -m 0755 "$tool_dir/linux-amd64/helm" "$(go env GOPATH)/bin/helm"
       - name: Install checksum-verified kubectl
-        env:
-          KUBECTL_VERSION: v1.35.4
         run: |
-          curl --fail --location --silent --show-error --output kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          curl --fail --location --silent --show-error --output kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
-          printf '%s  %s\n' "$(cat kubectl.sha256)" kubectl | sha256sum --check
-          install -m 0755 kubectl "$(go env GOPATH)/bin/kubectl"
+          set -euo pipefail
+          lock=build/release/toolchain.lock.json
+          tool_dir="$(mktemp -d)"
+          trap 'rm -rf "$tool_dir"' EXIT
+          kubectl_version="$(jq -er '.tools[] | select(.name == "kubectl") | .version' "$lock")"
+          kubectl_checksum="$(jq -er '.tools[] | select(.name == "kubectl") | .checksums["linux-amd64"]' "$lock")"
+          curl --fail --location --silent --show-error \
+            --output "$tool_dir/kubectl" \
+            "https://dl.k8s.io/release/v${kubectl_version}/bin/linux/amd64/kubectl"
+          printf '%s  %s\n' "$kubectl_checksum" "$tool_dir/kubectl" | sha256sum --check
+          install -m 0755 "$tool_dir/kubectl" "$(go env GOPATH)/bin/kubectl"
       - name: Run external-control-plane Kubernetes edge journey
         run: make kind-edge-e2e
 
   cli:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -153,10 +196,11 @@ jobs:
         run: make cli-check
 
   cli-workspace:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -168,14 +212,18 @@ jobs:
         run: make cli-workspace-check
 
   ui:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.26.5"
           cache-dependency-path: ui/go.sum
       - name: Verify standalone UI module and generated templ
         run: make ui-check
+      - name: Compile and test UI against the repository-local SDK
+        run: go test -race ./ui/...
       - name: Run frozen mock browser smoke
         run: make ui-browser-smoke

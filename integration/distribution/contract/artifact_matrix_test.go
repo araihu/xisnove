@@ -13,8 +13,10 @@ import (
 type releaseManifest struct {
 	SchemaVersion int `json:"schema_version"`
 	Version       struct {
-		Source  string `json:"source"`
-		Pattern string `json:"pattern"`
+		Source    string `json:"source"`
+		Pattern   string `json:"pattern"`
+		Value     string `json:"value"`
+		Reference string `json:"reference"`
 	} `json:"version"`
 	Binaries []struct {
 		Name       string   `json:"name"`
@@ -40,8 +42,11 @@ func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	if manifest.SchemaVersion != 1 {
 		t.Fatalf("schema_version = %d, want 1", manifest.SchemaVersion)
 	}
-	if manifest.Version.Source != "git-tag" || manifest.Version.Pattern != "vX.Y.Z" {
-		t.Fatalf("version = %#v, want one vX.Y.Z git-tag source", manifest.Version)
+	if manifest.Version.Source != "git-tag" || manifest.Version.Pattern != "vX.Y.Z[-<identifier>]" {
+		t.Fatalf("version = %#v, want one stable-or-prerelease git-tag source", manifest.Version)
+	}
+	if manifest.Version.Value != "X.Y.Z[-<identifier>]" || manifest.Version.Reference != "release.version" {
+		t.Fatalf("version = %#v, want prerelease-preserving canonical release.version", manifest.Version)
 	}
 
 	wantBinaries := map[string][]string{
@@ -53,6 +58,10 @@ func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	}
 	gotBinaries := make(map[string][]string, len(manifest.Binaries))
 	for _, artifact := range manifest.Binaries {
+		if _, exists := gotBinaries[artifact.Name]; exists {
+			t.Errorf("duplicate binary artifact %q", artifact.Name)
+			continue
+		}
 		if artifact.Entrypoint == "" {
 			t.Errorf("binary %q has no entrypoint", artifact.Name)
 		}
@@ -71,6 +80,10 @@ func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	}
 	gotImages := make(map[string][]string, len(manifest.Images))
 	for _, artifact := range manifest.Images {
+		if _, exists := gotImages[artifact.Name]; exists {
+			t.Errorf("duplicate image artifact %q", artifact.Name)
+			continue
+		}
 		if artifact.Repository == "" {
 			t.Errorf("image %q has no repository", artifact.Name)
 		}
@@ -87,6 +100,10 @@ func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	}
 	gotCharts := make(map[string]string, len(manifest.Charts))
 	for _, artifact := range manifest.Charts {
+		if _, exists := gotCharts[artifact.Name]; exists {
+			t.Errorf("duplicate chart artifact %q", artifact.Name)
+			continue
+		}
 		assertVersionRef(t, artifact.Name, artifact.VersionRef)
 		gotCharts[artifact.Name] = artifact.Repository
 	}

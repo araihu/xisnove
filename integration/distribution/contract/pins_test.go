@@ -67,7 +67,12 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 	checksum := regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 	wantActions := set("actions/checkout", "actions/setup-go", "actions/upload-artifact")
+	seenActions := make(map[string]bool, len(manifest.Actions))
 	for _, pin := range manifest.Actions {
+		if seenActions[pin.Name] {
+			t.Errorf("duplicate action pin %q", pin.Name)
+		}
+		seenActions[pin.Name] = true
 		if !sha.MatchString(pin.SHA) {
 			t.Errorf("action %q SHA %q is not immutable", pin.Name, pin.SHA)
 		}
@@ -78,7 +83,12 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 	}
 
 	wantTools := set("go", "helm", "kind", "kubectl", "gotestsum", "goreleaser", "cosign", "syft", "trivy")
+	seenTools := make(map[string]bool, len(manifest.Tools))
 	for _, pin := range manifest.Tools {
+		if seenTools[pin.Name] {
+			t.Errorf("duplicate tool pin %q", pin.Name)
+		}
+		seenTools[pin.Name] = true
 		if pin.Version == "" || len(pin.Checksums) == 0 {
 			t.Errorf("tool %q must pin version and release checksums", pin.Name)
 		}
@@ -98,7 +108,12 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 		t.Errorf("missing tool pins: %v", wantTools)
 	}
 	wantModuleTools := set("vacuum", "oapi-codegen", "oasdiff", "sqlc", "templ", "setup-envtest", "controller-gen")
+	seenModuleTools := make(map[string]bool, len(manifest.GoModuleTools))
 	for _, pin := range manifest.GoModuleTools {
+		if seenModuleTools[pin.Name] {
+			t.Errorf("duplicate Go module tool pin %q", pin.Name)
+		}
+		seenModuleTools[pin.Name] = true
 		if pin.Module == "" || pin.Version == "" || pin.Verification != "go.sum" {
 			t.Errorf("Go module tool %q is not versioned through go.sum: %#v", pin.Name, pin)
 		}
@@ -109,7 +124,12 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 	}
 
 	wantImageUses := set("builder", "runtime-base", "database-service")
+	seenImageUses := make(map[string]bool, len(manifest.Images))
 	for _, pin := range manifest.Images {
+		if seenImageUses[pin.Use] {
+			t.Errorf("duplicate image use %q", pin.Use)
+		}
+		seenImageUses[pin.Use] = true
 		if !digest.MatchString(pin.Digest) {
 			t.Errorf("image %q digest %q is not immutable", pin.Name, pin.Digest)
 		}

@@ -1,4 +1,4 @@
-.PHONY: generate generated-check test module-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke kind-edge-e2e check
+.PHONY: generate generated-check test module-check distribution-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke kind-edge-e2e check
 
 generate:
 	go generate ./...
@@ -16,6 +16,9 @@ generated-check: generate
 
 module-check:
 	cd integration/testdata/external-module && GOWORK=off go test ./...
+
+distribution-contract-check:
+	go test ./integration/distribution/contract -count=1
 
 storage-check:
 	go test -race ./integration -run '^(TestStorageMatrix|TestRetentionUptimeStorageMatrix|TestWorkerRecoveryStorageMatrix)/(SQLite|TursoLocal)$$' -count=1
@@ -53,4 +56,4 @@ ui-browser-smoke:
 kind-edge-e2e:
 	bash scripts/kind-edge-e2e.sh
 
-check: generated-check module-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check
+check: generated-check module-check distribution-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check

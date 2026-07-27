@@ -12,18 +12,22 @@ retention publishes daily uptime aggregates. Structured logs, bounded metrics,
 optional tracing, readiness, and ordered shutdown provide the operations
 surface for a self-hosted installation.
 
-The repository also contains separately buildable UI/BFF and CLI modules. The
+The repository also contains separately buildable UI/BFF, CLI, Agent, and
+Kubernetes operator modules. The
 UI consumes the public generated SDK and never accesses storage directly; the
 CLI provides profile, authentication, monitor, location, Agent, incident,
 discovery, notification, maintenance, and public-status workflows through that
-same SDK. Kubernetes discovery and CRDs, recurring maintenance, and release
-packaging remain future milestones.
+same SDK. The operator reconciles Monitor and Agent CRDs into the external,
+relationally backed control plane; an in-cluster Agent can discover Services,
+Ingresses, and HTTPRoutes without moving monitoring history into Kubernetes.
+Release packaging is the active milestone.
 
 The public contract is [api/openapi.yaml](api/openapi.yaml). Root code contains
 the control plane, public Go SDK, and importable Open Core surface in `domain`,
 `application`, `application/port`, and `contracttest`; self-hosted adapters stay
-internal. `agent/`, `cli/`, and `ui/` are independently buildable Go modules
-that know the control plane only through its generated API client.
+internal. `agent/`, `cli/`, `operator/`, and `ui/` are independently buildable
+Go modules. Release builds use the repository workspace so every consumer
+resolves the SDK and OpenAPI-generated code from the same checkout.
 
 - [v1 architecture](docs/superpowers/specs/2026-07-24-xisnove-v1-design.md)
 - [Open Core extension surface](docs/architecture/open-core.md)
@@ -38,11 +42,17 @@ that know the control plane only through its generated API client.
 - [database profiles](docs/operations/database-profiles.md)
 - [persistence conformance](docs/operations/persistence-conformance.md)
 - [backup and restore](docs/operations/backup-restore.md)
+- [release versioning](docs/distribution/versioning.md)
+- [compatibility policy](docs/distribution/compatibility.md)
+- [artifact matrix](docs/distribution/artifact-matrix.md)
+- [runtime contracts](docs/distribution/runtime-contracts.md)
+- [database profile matrix](docs/distribution/database-profile-matrix.md)
 
 Quick verification:
 
 ```bash
 make check
+make distribution-contract-check
 make storage-check
 make operations-check
 make cli-check

@@ -4,5 +4,6 @@ use (
 	.
 	./agent
 	./cli
+	./operator
 	./ui
 )

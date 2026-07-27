@@ -1,8 +1,10 @@
 # Release versioning
 
 Xisnove uses one release version for every binary, OCI image, and Helm chart.
-The only release version source is an annotated Git tag shaped `vX.Y.Z`; its
-artifact value is `X.Y.Z` and its manifest reference is `release.version`.
+The only release version source is an annotated Git tag shaped `vX.Y.Z` or
+`vX.Y.Z-<identifier>`; its artifact value preserves the optional prerelease
+suffix as `X.Y.Z[-<identifier>]` and its manifest reference is
+`release.version`.
 Module dependency versions are inputs, never competing product versions.
 
 Releases follow semantic versioning. A major version may change supported Go,

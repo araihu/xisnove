@@ -2,8 +2,8 @@
   "schema_version": 1,
   "version": {
     "source": "git-tag",
-    "pattern": "vX.Y.Z",
-    "value": "X.Y.Z",
+    "pattern": "vX.Y.Z[-<identifier>]",
+    "value": "X.Y.Z[-<identifier>]",
     "reference": "release.version"
   },
   "binaries": [

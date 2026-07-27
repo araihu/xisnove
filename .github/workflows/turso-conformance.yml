@@ -20,7 +20,7 @@ jobs:
   conformance:
     outputs:
       database_name: ${{ steps.database-name.outputs.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Select deterministic disposable database name
@@ -28,12 +28,27 @@ jobs:
         shell: bash
         run: printf 'name=xisnove-ci-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >>"$GITHUB_OUTPUT"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: "1.26.1"
+          go-version: "1.26.5"
           cache-dependency-path: go.sum
       - name: Install pinned test reporter
-        run: go install gotest.tools/gotestsum@v1.13.0
+        run: |
+          set -euo pipefail
+          lock=build/release/toolchain.lock.json
+          tool_dir="$(mktemp -d)"
+          trap 'rm -rf "$tool_dir"' EXIT
+          version="$(jq -er '.tools[] | select(.name == "gotestsum") | .version' "$lock")"
+          checksum="$(jq -er '.tools[] | select(.name == "gotestsum") | .checksums["linux-amd64"]' "$lock")"
+          archive="$tool_dir/gotestsum.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            "https://github.com/gotestyourself/gotestsum/releases/download/v${version}/gotestsum_${version}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check
+          tar -xzf "$archive" -C "$tool_dir"
+          install -m 0755 "$tool_dir/gotestsum" "$(go env GOPATH)/bin/gotestsum"
       - name: Provision one disposable managed Turso database
         id: provision
         shell: bash
@@ -132,7 +147,7 @@ jobs:
   cleanup:
     if: ${{ always() && needs.conformance.outputs.database_name != '' }}
     needs: conformance
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Delete disposable managed Turso database and verify absence
