@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/netip"
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -16,7 +19,9 @@ import (
 	"github.com/araihu/xisnove/agent/credentials"
 	"github.com/araihu/xisnove/agent/discovery"
 	kubernetesdiscovery "github.com/araihu/xisnove/agent/discovery/kubernetes"
+	"github.com/araihu/xisnove/agent/internal/buildinfo"
 	"github.com/araihu/xisnove/agent/internal/controlplane"
+	"github.com/araihu/xisnove/agent/internal/observability"
 	"github.com/araihu/xisnove/agent/probe"
 	"github.com/araihu/xisnove/agent/worker"
 	"k8s.io/client-go/dynamic"
@@ -24,14 +29,13 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var version = "dev"
-
 type config struct {
-	controlPlaneURL     string
-	credentialFile      string
-	allowedPrivate      []netip.Prefix
-	capabilities        []controlplane.AgentCapability
-	kubernetesDiscovery kubernetesDiscoveryConfig
+	controlPlaneURL      string
+	credentialFile       string
+	observabilityAddress string
+	allowedPrivate       []netip.Prefix
+	capabilities         []controlplane.AgentCapability
+	kubernetesDiscovery  kubernetesDiscoveryConfig
 }
 
 type kubernetesDiscoveryConfig struct {
@@ -42,21 +46,68 @@ type kubernetesDiscoveryConfig struct {
 }
 
 func main() {
-	if err := run(); err != nil {
-		slog.Error("agent stopped", "error", err)
-		os.Exit(1)
-	}
+	os.Exit(execute(os.Args[1:], os.Stdout, os.Stderr, os.Getenv, run))
 }
 
-func run() error {
-	config, err := loadConfig(os.Getenv)
+func execute(args []string, stdout, stderr io.Writer, getenv func(string) string, runtime func(config) error) int {
+	if len(args) == 1 && args[0] == "--version" {
+		value, err := buildinfo.String("xisnove-agent")
+		if err != nil {
+			fmt.Fprintln(stderr, "xisnove-agent: invalid release metadata")
+			return 2
+		}
+		fmt.Fprintln(stdout, value)
+		return 0
+	}
+	if len(args) != 0 {
+		fmt.Fprintln(stderr, "usage: xisnove-agent [--version]")
+		return 2
+	}
+	config, err := loadConfig(getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "invalid Agent configuration: %v\n", err)
+		return 2
+	}
+	if err := runtime(config); err != nil {
+		fmt.Fprintf(stderr, "agent stopped: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func run(config config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return runWithContext(ctx, config, observability.NewState())
+}
+
+func runWithContext(ctx context.Context, config config, state *observability.State) error {
+	observabilityServer, err := observability.Listen(config.observabilityAddress, state)
 	if err != nil {
 		return err
 	}
+	observabilityCtx, stopObservability := context.WithCancel(context.Background())
+	observabilityDone := make(chan error, 1)
+	go func() { observabilityDone <- observabilityServer.Serve(observabilityCtx) }()
+	shutdownObservability := func() error {
+		state.BeginDrain()
+		stopObservability()
+		return <-observabilityDone
+	}
+
+	provider := credentialProvider(config)
+	if _, err := provider.Current(ctx); err != nil {
+		_ = shutdownObservability()
+		return fmt.Errorf("load Agent credential: %w", err)
+	}
+	state.MarkCredentialLoaded()
+
 	client, err := controlplane.NewClientWithResponses(config.controlPlaneURL)
 	if err != nil {
+		_ = shutdownObservability()
 		return fmt.Errorf("create control-plane client: %w", err)
 	}
+	state.MarkClientInitialized()
 
 	policy := probe.DefaultPolicy()
 	policy.AllowedPrivate = config.allowedPrivate
@@ -73,35 +124,73 @@ func run() error {
 			dnsExecutor = probe.NewDNSExecutor(policy)
 		}
 	}
+	agentVersion := buildinfo.Version
+	if agentVersion == "" {
+		agentVersion = "dev"
+	}
 	probeWorker := &worker.Worker{
 		Client:       client,
-		Credentials:  credentialProvider(config),
+		Credentials:  provider,
 		Executor:     probe.NewDispatcher(httpExecutor, tcpExecutor, dnsExecutor),
 		Capabilities: config.capabilities,
-		Version:      version,
+		Version:      agentVersion,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	workCtx, stopWork := context.WithCancel(context.Background())
+	defer stopWork()
+	watchDone := make(chan struct{})
+	stopWatch := make(chan struct{})
+	defer close(stopWatch)
+	go func() {
+		defer close(watchDone)
+		select {
+		case <-ctx.Done():
+			state.BeginDrain()
+			stopWork()
+		case <-stopWatch:
+		}
+	}()
+	state.SetAcceptingLeases(true)
 	if config.kubernetesDiscovery.enabled {
 		go func() {
-			if err := runKubernetesDiscovery(ctx, config, client); err != nil && ctx.Err() == nil {
+			if err := runKubernetesDiscovery(workCtx, config, client); err != nil && workCtx.Err() == nil {
 				slog.Warn("Kubernetes discovery stopped", "error", err)
 			}
 		}()
 	}
-	for ctx.Err() == nil {
-		if err := probeWorker.RunOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	for workCtx.Err() == nil {
+		select {
+		case err := <-observabilityDone:
+			state.BeginDrain()
+			stopWork()
+			return err
+		default:
+		}
+		_, err := provider.Current(workCtx)
+		if err == nil {
+			state.SetAcceptingLeases(true)
+			err = probeWorker.RunOnce(workCtx)
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			state.SetAcceptingLeases(false)
 			slog.Warn("agent iteration failed", "error", err)
 			timer := time.NewTimer(time.Second)
 			select {
-			case <-ctx.Done():
+			case <-workCtx.Done():
 				timer.Stop()
+			case err := <-observabilityDone:
+				timer.Stop()
+				state.BeginDrain()
+				stopWork()
+				return err
 			case <-timer.C:
 			}
 		}
 	}
-	return nil
+	state.BeginDrain()
+	stopWork()
+	<-watchDone
+	return shutdownObservability()
 }
 
 func credentialProvider(config config) credentials.Provider {
@@ -120,6 +209,18 @@ func loadConfig(getenv func(string) string) (config, error) {
 	credentialFile := strings.TrimSpace(getenv("XISNOVE_AGENT_CREDENTIAL_FILE"))
 	if credentialFile == "" {
 		return config{}, errors.New("XISNOVE_AGENT_CREDENTIAL_FILE is required")
+	}
+	observabilityAddress := strings.TrimSpace(getenv("XISNOVE_AGENT_OBSERVABILITY_ADDRESS"))
+	if observabilityAddress == "" {
+		observabilityAddress = "127.0.0.1:9090"
+	}
+	host, rawPort, err := net.SplitHostPort(observabilityAddress)
+	port, portErr := strconv.Atoi(rawPort)
+	if err != nil || portErr != nil || port < 1 || port > 65535 {
+		return config{}, errors.New("XISNOVE_AGENT_OBSERVABILITY_ADDRESS must be an IP address and TCP port")
+	}
+	if _, err := netip.ParseAddr(host); err != nil {
+		return config{}, errors.New("XISNOVE_AGENT_OBSERVABILITY_ADDRESS must be an IP address and TCP port")
 	}
 
 	var allowedPrivate []netip.Prefix
@@ -151,11 +252,12 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 
 	return config{
-		controlPlaneURL:     strings.TrimRight(controlPlaneURL.String(), "/"),
-		credentialFile:      credentialFile,
-		allowedPrivate:      allowedPrivate,
-		capabilities:        capabilities,
-		kubernetesDiscovery: kubernetesDiscovery,
+		controlPlaneURL:      strings.TrimRight(controlPlaneURL.String(), "/"),
+		credentialFile:       credentialFile,
+		observabilityAddress: observabilityAddress,
+		allowedPrivate:       allowedPrivate,
+		capabilities:         capabilities,
+		kubernetesDiscovery:  kubernetesDiscovery,
 	}, nil
 }
 

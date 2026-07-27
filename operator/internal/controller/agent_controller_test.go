@@ -347,6 +347,47 @@ func TestAgentConditionsUseDeploymentAndFreshnessObservations(t *testing.T) {
 	assertCondition(t, agent.Status.Conditions, ConditionDegraded, metav1.ConditionTrue, "HeartbeatStale")
 }
 
+func TestAgentDeploymentUsesNamedObservabilityPortAndBoundedProbes(t *testing.T) {
+	t.Parallel()
+	scheme := agentScheme(t)
+	agent := validAgent("observed-runtime")
+	kube := fake.NewClientBuilder().WithScheme(scheme).WithObjects(agent).Build()
+	reconciler := testAgentReconciler(kube, scheme, &fakeControlPlane{})
+
+	deployment, err := reconciler.applyAgentDeployment(context.Background(), agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	container := deployment.Spec.Template.Spec.Containers[0]
+	if len(container.Ports) != 1 || container.Ports[0].Name != "observability" || container.Ports[0].ContainerPort != 9090 {
+		t.Fatalf("Agent ports = %#v", container.Ports)
+	}
+	if !hasEnv(container.Env, "XISNOVE_AGENT_OBSERVABILITY_ADDRESS", "0.0.0.0:9090") {
+		t.Fatalf("Agent env = %#v", container.Env)
+	}
+	if container.LivenessProbe == nil || container.ReadinessProbe == nil {
+		t.Fatalf("Agent probes = live %#v ready %#v", container.LivenessProbe, container.ReadinessProbe)
+	}
+	if container.LivenessProbe.HTTPGet.Path != "/livez" || container.ReadinessProbe.HTTPGet.Path != "/readyz" {
+		t.Fatalf("Agent probe paths = live %q ready %q", container.LivenessProbe.HTTPGet.Path, container.ReadinessProbe.HTTPGet.Path)
+	}
+	if container.LivenessProbe.HTTPGet.Port.StrVal != "observability" || container.ReadinessProbe.HTTPGet.Port.StrVal != "observability" {
+		t.Fatalf("Agent probe ports = live %v ready %v", container.LivenessProbe.HTTPGet.Port, container.ReadinessProbe.HTTPGet.Port)
+	}
+	if deployment.Spec.Template.Spec.TerminationGracePeriodSeconds == nil || *deployment.Spec.Template.Spec.TerminationGracePeriodSeconds != 15 {
+		t.Fatalf("termination grace = %v", deployment.Spec.Template.Spec.TerminationGracePeriodSeconds)
+	}
+}
+
+func hasEnv(values []corev1.EnvVar, name, want string) bool {
+	for _, value := range values {
+		if value.Name == name && value.Value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestConditionMessagesAndCountAreBounded(t *testing.T) {
 	t.Parallel()
 	conditions := make([]metav1.Condition, 8)

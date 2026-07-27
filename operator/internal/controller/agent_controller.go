@@ -19,6 +19,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -31,6 +32,9 @@ const (
 	CredentialGenerationAnnotation         = "monitoring.xisnove.io/credential-generation"
 	PreviousCredentialGenerationAnnotation = "monitoring.xisnove.io/previous-credential-generation"
 	credentialMountPath                    = "/var/run/xisnove"
+	agentObservabilityPortName             = "observability"
+	agentObservabilityPort                 = 9090
+	agentTerminationGracePeriodSeconds     = 15
 )
 
 type credentialBundle struct {
@@ -358,10 +362,12 @@ func (r *AgentReconciler) applyAgentDeployment(ctx context.Context, agent *monit
 		automount, runAsNonRoot, readOnlyRoot, allowPrivilegeEscalation := true, true, true, false
 		seccomp := corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
 		deployment.Labels = cloneStringMap(labels)
+		terminationGracePeriod := int64(agentTerminationGracePeriodSeconds)
+		probePort := intstr.FromString(agentObservabilityPortName)
 		deployment.Spec = appsv1.DeploymentSpec{Replicas: &replicas, Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType}, Selector: &metav1.LabelSelector{MatchLabels: cloneStringMap(labels)}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: cloneStringMap(labels)}, Spec: corev1.PodSpec{
 			ServiceAccountName: agent.Spec.Workload.ServiceAccountName, AutomountServiceAccountToken: &automount,
-			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, SeccompProfile: &seccomp}, NodeSelector: cloneStringMap(agent.Spec.Workload.NodeSelector), Tolerations: append([]corev1.Toleration(nil), agent.Spec.Workload.Tolerations...), Affinity: agent.Spec.Workload.Affinity.DeepCopy(),
-			Containers: []corev1.Container{{Name: "agent", Image: image, ImagePullPolicy: corev1.PullIfNotPresent, Env: []corev1.EnvVar{{Name: "XISNOVE_URL", Value: r.ControlPlaneURL}, {Name: "XISNOVE_AGENT_ID", Value: agent.Status.ExternalID}, {Name: "XISNOVE_AGENT_CREDENTIAL_FILE", Value: credentialMountPath + "/" + credentialKey(agent)}, {Name: "XISNOVE_AGENT_CAPABILITIES", Value: joinCapabilities(agent.Spec.Capabilities)}, {Name: "XISNOVE_DISCOVERY_NAMESPACES", Value: joinNamespaces(agent)}, {Name: "XISNOVE_DISCOVERY_RESOURCES", Value: joinDiscoveryResources(agent.Spec.Discovery.Resources)}}, Resources: *agent.Spec.Workload.Resources.DeepCopy(), SecurityContext: &corev1.SecurityContext{ReadOnlyRootFilesystem: &readOnlyRoot, AllowPrivilegeEscalation: &allowPrivilegeEscalation, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, VolumeMounts: []corev1.VolumeMount{{Name: "credential", MountPath: credentialMountPath, ReadOnly: true}}}},
+			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: &runAsNonRoot, SeccompProfile: &seccomp}, NodeSelector: cloneStringMap(agent.Spec.Workload.NodeSelector), Tolerations: append([]corev1.Toleration(nil), agent.Spec.Workload.Tolerations...), Affinity: agent.Spec.Workload.Affinity.DeepCopy(), TerminationGracePeriodSeconds: &terminationGracePeriod,
+			Containers: []corev1.Container{{Name: "agent", Image: image, ImagePullPolicy: corev1.PullIfNotPresent, Ports: []corev1.ContainerPort{{Name: agentObservabilityPortName, ContainerPort: agentObservabilityPort, Protocol: corev1.ProtocolTCP}}, Env: []corev1.EnvVar{{Name: "XISNOVE_URL", Value: r.ControlPlaneURL}, {Name: "XISNOVE_AGENT_ID", Value: agent.Status.ExternalID}, {Name: "XISNOVE_AGENT_CREDENTIAL_FILE", Value: credentialMountPath + "/" + credentialKey(agent)}, {Name: "XISNOVE_AGENT_OBSERVABILITY_ADDRESS", Value: "0.0.0.0:9090"}, {Name: "XISNOVE_AGENT_CAPABILITIES", Value: joinCapabilities(agent.Spec.Capabilities)}, {Name: "XISNOVE_DISCOVERY_NAMESPACES", Value: joinNamespaces(agent)}, {Name: "XISNOVE_DISCOVERY_RESOURCES", Value: joinDiscoveryResources(agent.Spec.Discovery.Resources)}}, LivenessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: probePort}}, InitialDelaySeconds: 2, TimeoutSeconds: 1, PeriodSeconds: 10, FailureThreshold: 3}, ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: probePort}}, InitialDelaySeconds: 1, TimeoutSeconds: 1, PeriodSeconds: 2, FailureThreshold: 3}, Resources: *agent.Spec.Workload.Resources.DeepCopy(), SecurityContext: &corev1.SecurityContext{ReadOnlyRootFilesystem: &readOnlyRoot, AllowPrivilegeEscalation: &allowPrivilegeEscalation, Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, VolumeMounts: []corev1.VolumeMount{{Name: "credential", MountPath: credentialMountPath, ReadOnly: true}}}},
 			Volumes:    []corev1.Volume{{Name: "credential", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: agent.Spec.CredentialSecretRef.Name, Items: []corev1.KeyToPath{{Key: credentialKey(agent), Path: credentialKey(agent)}}}}}},
 		}}}
 		return nil

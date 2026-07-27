@@ -38,6 +38,15 @@ larger so Kubernetes does not terminate the process before controller-runtime
 finishes. The chart rejects more than one operator replica when leader election
 is disabled.
 
+Every Agent Deployment materialized by the operator exposes one named
+`observability` container port on `9090`. Kubernetes liveness and readiness
+probes call `/livez` and `/readyz` through that named port. The container binds
+`0.0.0.0:9090` explicitly; raw Agent processes default to loopback. These
+unauthenticated probe and Prometheus endpoints are an internal cluster surface,
+not a public control API. On `SIGINT` or `SIGTERM`, readiness fails before lease
+claims stop and the Agent receives a 15-second pod grace period for its bounded
+10-second drain.
+
 `values.schema.json` rejects YAML-coerced Secret names/keys, non-boolean leader
 election values, fractional/zero replicas, and non-positive shutdown budgets
 before templates render. Secret names and keys must contain a non-whitespace
