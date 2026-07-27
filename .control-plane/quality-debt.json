@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "QD-2026-07-27-001",
+      "status": "open",
+      "feature": "Goshtoso v0.0.13 UI authoritative history and interaction hardening",
+      "exact_sha": "01043fa3544d44b298b36eec1e2922f0999471ea",
+      "skipped_gate": "repeat full-repository `make check` after the isolated UI correction",
+      "reason": "The same candidate lineage passed `make check` before the correction; the correction changes only UI code, generated templ, UI tests, and UI docs. Exact-candidate UI generation, unit, vet, race, ordering, and full browser gates passed.",
+      "risk": "low",
+      "affected_paths": [
+        "ui/internal/view/pages.templ",
+        "ui/internal/view/pages_templ.go",
+        "ui/internal/web/server.go",
+        "ui/tests/browser/smoke_test.go",
+        "docs/ui/goshtoso-snags.md",
+        "docs/ui/state-action-ledger.md",
+        "docs/ui/visual-acceptance.md"
+      ],
+      "current_evidence": [
+        "`make check` passed on parent candidate 488f9e3c34f9a2f4fb09cd6e6fa137824021eef0",
+        "`make ui-check` passed on 01043fa3544d44b298b36eec1e2922f0999471ea",
+        "UI `go test -race ./...` and `go mod tidy -diff` passed on 01043fa3544d44b298b36eec1e2922f0999471ea",
+        "full 136-artifact browser matrix passed in 78.36s on 01043fa3544d44b298b36eec1e2922f0999471ea"
+      ],
+      "acceptance": [
+        "run `make check` at a descendant containing 01043fa3544d44b298b36eec1e2922f0999471ea",
+        "all generated, storage, operations, race, Agent, CLI, and UI checks exit zero",
+        "close this receipt in the same commit or a following parent-owned control-plane commit"
+      ],
+      "trigger": "before freezing Milestone 6.0 or merging this branch into the primary branch",
+      "owner": "Xisnove control plane",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-001"
+    }
+  ]
+}

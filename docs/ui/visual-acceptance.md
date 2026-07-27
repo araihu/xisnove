@@ -57,14 +57,16 @@ than axe. It runs after every one of the 136 captures and fails on missing
 accessible names, broken labels, duplicate IDs, invalid main/banner landmarks,
 nested headers, invalid ARIA values, incoherent selected URL/row/detail identity,
 controls or action boundaries below 3:1, text/action contrast, mobile targets
-below 44 by 44 CSS pixels, and missing focus indicators. Focus and hover action
-states are exercised separately for every visible enabled button and link;
-states without a primary action are not skipped. The harness performs one
-natural Tab traversal, requires a >=3:1 focus indicator for every action, then
-scrolls each action into view, recomputes its bounding box immediately before
-moving the pointer, and requires `:hover` before measuring. The off-canvas skip
-link is excluded only from pointer acceptance and retains its dedicated
-keyboard/focus gate. Transparent backgrounds are
+below 44 by 44 CSS pixels, and missing focus indicators. Focus is exercised for
+every visible enabled button and link; hover is exercised for every visible
+pointer-enabled action. States without a primary action are not skipped. The
+harness performs one natural Tab traversal, requires a >=3:1 focus indicator
+for every action, then scrolls each pointer-enabled action into view, recomputes
+its bounding box immediately before moving the pointer, and requires `:hover`
+before measuring. The off-canvas skip link retains its dedicated keyboard/focus
+gate. The current-navigation link remains covered by focus and contrast, but is
+excluded from hover because its computed `pointer-events:none` intentionally
+prevents pointer interaction. Transparent backgrounds are
 alpha-composited through every rendered ancestor; a one-pixel canvas converts
 modern CSS colors such as `oklch()` into sRGB before WCAG luminance is measured.
 It passed Minimal light and all other required theme/mode/state combinations.
