@@ -363,7 +363,14 @@ func TestReleaseMakeTargetsWireCandidateIdentityAndReproducibilityGate(t *testin
 	root := repositoryRoot(t)
 	command := exec.Command("make", "--no-print-directory", "-n", "distribution-release-candidate", "distribution-release-check")
 	command.Dir = root
-	command.Env = append(os.Environ(),
+	for _, variable := range os.Environ() {
+		name, _, _ := strings.Cut(variable, "=")
+		if name == "MAKEFLAGS" || name == "MFLAGS" || name == "MAKEOVERRIDES" || name == "GNUMAKEFLAGS" {
+			continue
+		}
+		command.Env = append(command.Env, variable)
+	}
+	command.Env = append(command.Env,
 		"XISNOVE_RELEASE_VERSION=1.2.3",
 		"XISNOVE_RELEASE_COMMIT="+strings.Repeat("a", 40),
 		"SOURCE_DATE_EPOCH="+releaseEpoch,
