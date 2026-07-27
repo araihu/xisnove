@@ -16,7 +16,8 @@ The default theme is the organization-owned Arai Hû theme, pinned from
 `araihu/assets` commit `f841fe90b967b16ab2ad9efaee5aa636468e1afd` and served
 same-origin as `/ui/araihu-f841fe90.css` after Goshtoso's stylesheet. The
 Goshtoso and Minimal base themes remain available through the theme selector
-and are not modified.
+and are not modified. The shared repository is public and licenses the theme
+under Apache-2.0 as of commit `a5e1afb1f3df2cc50aa88c9558370fd8fd177e9b`.
 
 ## Development
 
