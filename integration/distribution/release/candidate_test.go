@@ -321,15 +321,40 @@ func TestCandidateBuilderPinsContainerAndToolInputs(t *testing.T) {
 		"sbom-oci", "org.opencontainers.image.created=${XISNOVE_BUILD_DATE}", "inventory-licenses.sh", "candidate-manifest.json.sha256", "verify --root",
 		`git_common_dir=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)`,
 		`git_mount=("-v" "$git_common_dir:$git_common_dir:ro")`,
+		`export VERSION="$version" COMMIT="$commit" BUILD_DATE="$build_date" SOURCE_DATE_EPOCH="$source_date_epoch"`,
+		`--provenance=false`, `type=oci,dest=$layouts/xisnove-server.tar,rewrite-timestamp=true`,
 	} {
 		if !strings.Contains(script, required) {
 			t.Errorf("candidate builder lacks %q", required)
+		}
+	}
+	bake := string(mustReadFile(t, filepath.Join(repositoryRoot(t), "docker-bake.hcl")))
+	for _, required := range []string{`variable "SOURCE_DATE_EPOCH"`, `SOURCE_DATE_EPOCH = SOURCE_DATE_EPOCH`, `rewrite-timestamp=true`} {
+		if !strings.Contains(bake, required) {
+			t.Errorf("OCI bake lacks reproducibility setting %q", required)
 		}
 	}
 	helper := string(mustReadFile(t, filepath.Join(repositoryRoot(t), "scripts", "release", "cmd", "candidateplan", "main.go")))
 	for _, required := range []string{"oci-dir:", `"--platform"`, "validateLayoutClosure"} {
 		if !strings.Contains(helper, required) {
 			t.Errorf("candidate helper lacks %q", required)
+		}
+	}
+}
+
+func TestRuntimeImagesRemoveVolatilePackageLogsAndAvoidUnstableExposeHistory(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, component := range []string{"server", "ui", "agent", "operator"} {
+		path := filepath.Join(root, "build", "package", "Dockerfile."+component)
+		dockerfile := string(mustReadFile(t, path))
+		if !strings.Contains(dockerfile, `rm -rf /var/lib/apt/lists/* /var/log/apt/* /var/log/dpkg.log`) {
+			t.Errorf("%s keeps volatile apt or dpkg logs in the runtime image", component)
+		}
+		for _, line := range strings.Split(dockerfile, "\n") {
+			fields := strings.Fields(line)
+			if len(fields) > 0 && fields[0] == "EXPOSE" {
+				t.Errorf("%s uses EXPOSE, whose pinned frontend history is nondeterministic: %q", component, line)
+			}
 		}
 	}
 }

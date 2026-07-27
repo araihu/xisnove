@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1.18@sha256:dabfc0969b935b2080555ace70ee69a5261af8a8f1b4df97b9e7fbcf6722eddf
+ARG SOURCE_DATE_EPOCH=0
 ARG UBUNTU_IMAGE=ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
 FROM ${UBUNTU_IMAGE} AS ubuntu-snapshot
 ARG UBUNTU_SNAPSHOT=20260701T000000Z
@@ -37,12 +38,11 @@ LABEL org.opencontainers.image.title="Xisnove UI" org.opencontainers.image.descr
 RUN printf '%s\n' "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy main universe" "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy-updates main universe" "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy-security main universe" > /etc/apt/sources.list \
     && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates wget \
     && groupadd --gid 101 xisnove && useradd --uid 101 --gid 101 --no-create-home --shell /usr/sbin/nologin xisnove \
-    && install -d -o 101 -g 101 /usr/share/licenses/xisnove && rm -rf /var/lib/apt/lists/*
+    && install -d -o 101 -g 101 /usr/share/licenses/xisnove && rm -rf /var/lib/apt/lists/* /var/log/apt/* /var/log/dpkg.log
 COPY --from=build --chown=101:101 /out/xisnove-ui /usr/local/bin/xisnove-ui
 COPY --chown=101:101 LICENSE NOTICE /usr/share/licenses/xisnove/
 USER 101:101
 ENV XISNOVE_UI_ADDR=0.0.0.0:8081
-EXPOSE 8081
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=10s --timeout=2s --start-period=10s --retries=3 CMD ["/usr/bin/wget", "--quiet", "--spider", "--timeout=1", "http://127.0.0.1:8081/livez"]
 ENTRYPOINT ["/usr/local/bin/xisnove-ui"]

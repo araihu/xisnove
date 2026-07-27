@@ -144,12 +144,12 @@ run_container=("$docker_bin" run --rm -e HOME=/tmp -e GOCACHE=/tmp/go-build -e G
   RELEASEBUNDLE_BIN=/out/tools/releasebundle scripts/release/assemble-bundle.sh --root /src --output-dir /out/bundles --version "$XISNOVE_RELEASE_VERSION" --source-date-epoch "$SOURCE_DATE_EPOCH"
 '
 
-export VERSION="$version" COMMIT="$commit" BUILD_DATE="$build_date"
-(cd "$root" && "$docker_bin" buildx bake --allow="fs.write=$layouts" --file "$root/docker-bake.hcl" \
-  --set "server-oci.output=type=oci,dest=$layouts/xisnove-server.tar" \
-  --set "ui-oci.output=type=oci,dest=$layouts/xisnove-ui.tar" \
-  --set "agent-oci.output=type=oci,dest=$layouts/xisnove-agent.tar" \
-  --set "operator-oci.output=type=oci,dest=$layouts/xisnove-operator.tar" \
+export VERSION="$version" COMMIT="$commit" BUILD_DATE="$build_date" SOURCE_DATE_EPOCH="$source_date_epoch"
+(cd "$root" && "$docker_bin" buildx bake --provenance=false --allow="fs.write=$layouts" --file "$root/docker-bake.hcl" \
+  --set "server-oci.output=type=oci,dest=$layouts/xisnove-server.tar,rewrite-timestamp=true" \
+  --set "ui-oci.output=type=oci,dest=$layouts/xisnove-ui.tar,rewrite-timestamp=true" \
+  --set "agent-oci.output=type=oci,dest=$layouts/xisnove-agent.tar,rewrite-timestamp=true" \
+  --set "operator-oci.output=type=oci,dest=$layouts/xisnove-operator.tar,rewrite-timestamp=true" \
   server-oci ui-oci agent-oci operator-oci)
 
 "$docker_bin" run --rm \

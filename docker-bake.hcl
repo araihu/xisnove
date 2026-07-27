@@ -1,6 +1,7 @@
 variable "VERSION" { default = "0.0.0" }
 variable "COMMIT" { default = "0000000000000000000000000000000000000000" }
 variable "BUILD_DATE" { default = "1970-01-01T00:00:00Z" }
+variable "SOURCE_DATE_EPOCH" { default = "0" }
 
 group "default" {
   targets = ["server", "ui", "agent", "operator"]
@@ -17,7 +18,7 @@ group "oci-layout" {
 
 target "common" {
   context = "."
-  args = { VERSION = VERSION, COMMIT = COMMIT, BUILD_DATE = BUILD_DATE }
+  args = { VERSION = VERSION, COMMIT = COMMIT, BUILD_DATE = BUILD_DATE, SOURCE_DATE_EPOCH = SOURCE_DATE_EPOCH }
 }
 
 target "server" {
@@ -97,17 +98,17 @@ target "operator-arm64" {
 
 target "server-oci" {
   inherits = ["server"]
-  output = ["type=oci,dest=.artifacts/oci/xisnove-server.tar"]
+  output = ["type=oci,dest=.artifacts/oci/xisnove-server.tar,rewrite-timestamp=true"]
 }
 target "ui-oci" {
   inherits = ["ui"]
-  output = ["type=oci,dest=.artifacts/oci/xisnove-ui.tar"]
+  output = ["type=oci,dest=.artifacts/oci/xisnove-ui.tar,rewrite-timestamp=true"]
 }
 target "agent-oci" {
   inherits = ["agent"]
-  output = ["type=oci,dest=.artifacts/oci/xisnove-agent.tar"]
+  output = ["type=oci,dest=.artifacts/oci/xisnove-agent.tar,rewrite-timestamp=true"]
 }
 target "operator-oci" {
   inherits = ["operator"]
-  output = ["type=oci,dest=.artifacts/oci/xisnove-operator.tar"]
+  output = ["type=oci,dest=.artifacts/oci/xisnove-operator.tar,rewrite-timestamp=true"]
 }
