@@ -1,0 +1,8 @@
+---
+version: 1
+slug: "ui-internal-view-pages-templ"
+primary_target: "ui/internal/view/pages.templ"
+related_targets: ["PRODUCT.md","DESIGN.md"]
+---
+
+<!-- THESIS: X-9 is a calm external dispatch room for mixed homelab infrastructure. OWN-WORLD: Signal Box Dispatch uses route logic, aligned evidence, and restrained semantic signals without railway costume. STORY: identify attention, query server-ranked infrastructure, inspect one resource without losing context. FIRST VIEWPORT: persistent nav and global server-backed Ctrl+K search, operational summary, monitor collection, selected detail drawer. FORM: compact AppShell, flat ruled list, viewport-owned overlays. SEED: 19633b70 -->

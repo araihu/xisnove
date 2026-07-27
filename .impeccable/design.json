@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-27T00:00:00-03:00",
+  "title": "Design System: X-9",
+  "extensions": {
+    "colorMeta": {
+      "signal": {"role": "primary", "displayName": "Dispatch Signal", "canonical": "var(--color-primary)"},
+      "surface": {"role": "neutral", "displayName": "Control Surface", "canonical": "var(--color-surface)"},
+      "ink": {"role": "neutral", "displayName": "Operational Ink", "canonical": "var(--color-on-surface-strong)"}
+    },
+    "typographyMeta": {
+      "headline": {"displayName": "Operational Headline", "purpose": "Page and workspace identity."},
+      "body": {"displayName": "Interface Body", "purpose": "Actions, descriptions, and evidence."},
+      "label": {"displayName": "Dispatch Label", "purpose": "Dense collection headings and state labels."}
+    },
+    "shadows": [],
+    "motion": [
+      {"name": "state-only", "value": "theme-owned", "purpose": "Use motion only to explain opening, closing, loading, or state change; respect reduced motion."}
+    ],
+    "breakpoints": [
+      {"name": "mobile", "value": "640px"},
+      {"name": "desktop-acceptance", "value": "1440px"}
+    ],
+    "narrative": {
+      "northStar": "Signal Box Dispatch",
+      "rules": [
+        "One selected identity across URL, row, drawer, focus, and ARIA state.",
+        "Primary color is a rare signal, not passive surface decoration.",
+        "Only viewport-owned layers receive elevation."
+      ],
+      "dos": [
+        "Show state, freshness, and next safe action.",
+        "Keep global search in the persistent shell."
+      ],
+      "donts": [
+        "Do not imply bounded search is exhaustive.",
+        "Do not turn railway logic into costume."
+      ]
+    }
+  }
+}

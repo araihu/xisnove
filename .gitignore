@@ -4,5 +4,6 @@
 !.env.example
 .superpowers/
 .worktrees/
+.impeccable/questions/
 deploy/compose/secrets/
 deploy/compose/.bootstrap-state/
