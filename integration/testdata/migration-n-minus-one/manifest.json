@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "runtime_version": "m6.0-n-minus-one",
+  "source": "probe/main.go",
+  "schema": {
+    "baseline": 10,
+    "expand": 11,
+    "minimum": 10,
+    "maximum": 11
+  },
+  "sha256": {
+    "probe/main.go": "37194e9b1866af0bcf36c3375b7afbca12be293494352f1599b57e9d1fa13fb3"
+  }
+}
