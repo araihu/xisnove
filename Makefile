@@ -1,4 +1,4 @@
-.PHONY: generate generated-check test module-check distribution-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke kind-edge-e2e check
+.PHONY: generate generated-check test module-check distribution-contract-check runtime-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke kind-edge-e2e check
 
 generate:
 	go generate ./...
@@ -19,6 +19,14 @@ module-check:
 
 distribution-contract-check:
 	go test ./integration/distribution/contract -count=1
+
+runtime-contract-check:
+	bash scripts/runtime-contract-check.sh
+	go test -race ./cmd/xisnove-server ./internal/buildinfo ./internal/adapters/database ./internal/adapters/migration
+	cd agent && GOWORK=off go test -race ./cmd/xisnove-agent ./internal/buildinfo ./internal/observability
+	cd cli && GOWORK=off go test -race ./cmd/xisnove ./internal/buildinfo
+	cd operator && GOWORK=off go test -race ./cmd/xisnove-operator ./internal/buildinfo
+	cd ui && GOWORK=off go test -race ./cmd/server ./internal/buildinfo
 
 storage-check:
 	go test -race ./integration -run '^(TestStorageMatrix|TestRetentionUptimeStorageMatrix|TestWorkerRecoveryStorageMatrix)/(SQLite|TursoLocal)$$' -count=1
@@ -56,4 +64,4 @@ ui-browser-smoke:
 kind-edge-e2e:
 	bash scripts/kind-edge-e2e.sh
 
-check: generated-check module-check distribution-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check
+check: generated-check module-check distribution-contract-check runtime-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check
