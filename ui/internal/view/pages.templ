@@ -45,12 +45,13 @@ type Problem struct {
 
 templ Document(title string, content templ.Component) {
 	<!doctype html>
-	<html lang="en" data-theme="goshtoso" x-data="{ theme: localStorage.getItem('xisnove-theme') || 'goshtoso', dark: localStorage.getItem('xisnove-mode') === 'dark' }" x-init="$el.dataset.theme = theme; $el.classList.toggle('dark', dark)">
+	<html lang="en" data-theme="araihu" x-data="{ theme: localStorage.getItem('xisnove-theme') || 'araihu', dark: localStorage.getItem('xisnove-mode') === 'dark' }" x-init="$el.dataset.theme = theme; localStorage.setItem('xisnove-theme', theme); $el.classList.toggle('dark', dark)">
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ title } · Xisnove</title>
+			<title>{ title } · X-9</title>
 			@head.Dependencies()
+			<link rel="stylesheet" href="/ui/araihu-f841fe90.css"/>
 			<script src="/ui/app.js" defer nonce={ templ.GetNonce(ctx) }></script>
 			<style>
 				:root { --xis-gap: 1rem; --xis-action-bg: var(--color-primary); --xis-action-fg: var(--color-on-primary); --xis-link: var(--color-primary); --xis-control-outline: var(--color-outline-strong, var(--color-outline)); }
@@ -132,12 +133,13 @@ templ Document(title string, content templ.Component) {
 	</html>
 }
 
-templ Brand() { <span class="xis-brand">Xisnove</span> }
+templ Brand() { <span class="xis-brand">X-9</span> }
 
 templ ThemeControls() {
 	<div class="xis-theme-controls" aria-label="Appearance controls">
 		<label class="xis-field" for="theme-choice">Theme
 			<select id="theme-choice" class="xis-select" x-model="theme" x-on:change="$root.dataset.theme = theme; localStorage.setItem('xisnove-theme', theme)">
+				<option value="araihu">Arai Hû</option>
 				<option value="goshtoso">Goshtoso</option>
 				<option value="minimal">Minimal</option>
 			</select>
@@ -160,7 +162,7 @@ templ LoginContent(csrfToken, errorMessage string) {
 			if errorMessage != "" {
 				@alert.Alert(alert.Config{Title: "Sign-in failed", Description: errorMessage, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 			}
-			@card.Card(card.Config{Title: "Administrator sign in", Description: "Use the local Xisnove administrator account. Credentials are sent only to this BFF.", Footer: LoginForm(csrfToken), RootClass: "max-w-none"})
+			@card.Card(card.Config{Title: "Administrator sign in", Description: "Use the local X-9 administrator account. Credentials are sent only to this BFF.", Footer: LoginForm(csrfToken), RootClass: "max-w-none"})
 			<a class="xis-native-link" href="/status">View public status</a>
 		</div>
 	</main>
@@ -207,7 +209,7 @@ templ Shell(csrfToken string, content templ.Component) {
 templ TopBar(csrfToken string) {
 	<div class="xis-topbar">
 		@MobileNavigation()
-		<a class="xis-brand xis-native-link" href="/monitors">Xisnove</a>
+		<a class="xis-brand xis-native-link" href="/monitors">X-9</a>
 		<div class="xis-topbar-actions">@ThemeControls() @LogoutForm(csrfToken)</div>
 	</div>
 }
@@ -359,7 +361,7 @@ templ PublicStatusShell(data sdk.PublicStatusPage) {
 templ StatusContent(data sdk.PublicStatusPage) {
 	<main id="status-content" aria-live="polite" class="xis-content xis-stack">
 		<div class="xis-status-header">
-			@pageheader.PageHeader(pageheader.Config{Title: "Xisnove status", Description: "Aggregate status for public monitors."})
+			@pageheader.PageHeader(pageheader.Config{Title: "X-9 status", Description: "Aggregate status for public monitors."})
 			<a class="xis-native-link" href="/status" hx-get="/status" hx-target="#status-content" hx-swap="outerHTML" hx-indicator="#status-loading">Refresh</a>
 		</div>
 		<div id="status-loading" class="htmx-indicator xis-skeleton xis-results-surface" aria-live="polite">@skeleton.Skeleton(skeleton.Config{Label: "Refreshing public status", Count: 3, RootClass: "min-h-64"})</div>
@@ -386,7 +388,7 @@ templ StatusContent(data sdk.PublicStatusPage) {
 
 templ PublicStatusError(problem Problem) {
 	<main id="status-content" aria-live="polite" class="xis-content xis-stack">
-		@pageheader.PageHeader(pageheader.Config{Title: "Xisnove status", Description: "Aggregate status for public monitors."})
+		@pageheader.PageHeader(pageheader.Config{Title: "X-9 status", Description: "Aggregate status for public monitors."})
 		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 		<a class="xis-native-link" href="/status" hx-get="/status" hx-target="#status-content" hx-swap="outerHTML">Retry</a>
 	</main>

@@ -167,3 +167,10 @@ consumer that expects password semantics to remain safe without Alpine.
     skip, so timeout pages provide a native `Return to sign in` link. The
     off-canvas AppShell skip link is deliberately excluded only from hover
     measurement and remains covered by its keyboard-specific contract.
+22. **An organization theme cannot be linked from a private asset repository.**
+    The canonical Arai Hû stylesheet is pinned at `araihu/assets` commit
+    `f841fe90b967b16ab2ad9efaee5aa636468e1afd`, but unauthenticated browsers
+    cannot load that repository and it currently declares no license. Xisnove
+    serves an attributed, same-origin pinned copy after Goshtoso's stylesheet;
+    the shared asset repository should become anonymously consumable and carry
+    an explicit license before release tooling treats it as a remote dependency.

@@ -12,6 +12,12 @@ served by `assets.Handler()`; it deliberately does not use local-only runtime
 mode because Xisnove is a networked BFF. See
 [`../docs/ui/goshtoso-snags.md`](../docs/ui/goshtoso-snags.md).
 
+The default theme is the organization-owned Arai Hû theme, pinned from
+`araihu/assets` commit `f841fe90b967b16ab2ad9efaee5aa636468e1afd` and served
+same-origin as `/ui/araihu-f841fe90.css` after Goshtoso's stylesheet. The
+Goshtoso and Minimal base themes remain available through the theme selector
+and are not modified.
+
 ## Development
 
 Generate a 32-byte cookie HMAC secret, keep the fake values server-side, and

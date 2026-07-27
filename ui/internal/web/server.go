@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -77,6 +78,7 @@ func New(cfg Config) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
+	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
 	mux.HandleFunc("GET /ui/app.js", serveApplicationJS)
 	mux.HandleFunc("/", s.route)
 
@@ -87,6 +89,15 @@ func New(cfg Config) (http.Handler, error) {
 	handler = s.requestTimeout(handler)
 	handler = s.correlation(handler)
 	return handler, nil
+}
+
+//go:embed static/araihu-f841fe90.css
+var araiHuThemeCSS string
+
+func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	_, _ = io.WriteString(w, araiHuThemeCSS)
 }
 
 const applicationJS = `(() => {
@@ -101,7 +112,7 @@ const applicationJS = `(() => {
     const explicit = main.querySelector("[data-autofocus]");
     (explicit || main).focus({preventScroll: true});
     const heading = main.querySelector("h1");
-    if (heading) document.title = heading.textContent.trim() + " · Xisnove";
+    if (heading) document.title = heading.textContent.trim() + " · X-9";
   }
 
   function rememberFocus(event) {

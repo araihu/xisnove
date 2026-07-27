@@ -9,6 +9,52 @@ import (
 	"github.com/google/uuid"
 )
 
+func TestBrandUsesX9DisplayName(t *testing.T) {
+	var rendered strings.Builder
+	if err := Brand().Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render brand: %v", err)
+	}
+	if body := rendered.String(); !strings.Contains(body, ">X-9<") || strings.Contains(body, "Xisnove") {
+		t.Fatalf("unexpected display brand: %s", body)
+	}
+}
+
+func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
+	var rendered strings.Builder
+	if err := Document("Theme contract", Brand()).Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render document: %v", err)
+	}
+	body := rendered.String()
+	goshtoso := strings.Index(body, `/assets/styles.css`)
+	araihu := strings.Index(body, `/ui/araihu-f841fe90.css`)
+	if goshtoso < 0 || araihu < 0 || araihu <= goshtoso {
+		t.Fatalf("Arai Hû stylesheet must follow Goshtoso: %s", body)
+	}
+	for _, want := range []string{
+		`data-theme="araihu"`,
+		`localStorage.getItem('xisnove-theme') || 'araihu'`,
+		`localStorage.setItem('xisnove-theme', theme)`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("theme document contract missing %q", want)
+		}
+	}
+
+	rendered.Reset()
+	if err := ThemeControls().Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render theme controls: %v", err)
+	}
+	for _, want := range []string{
+		`<option value="araihu">Arai Hû</option>`,
+		`<option value="goshtoso">Goshtoso</option>`,
+		`<option value="minimal">Minimal</option>`,
+	} {
+		if !strings.Contains(rendered.String(), want) {
+			t.Errorf("theme controls contract missing %q", want)
+		}
+	}
+}
+
 func TestLoginContentNamesItsMainRegionAndKeepsPasswordSafeWithoutJavaScript(t *testing.T) {
 	var rendered strings.Builder
 	if err := LoginContent("csrf-token", "").Render(t.Context(), &rendered); err != nil {

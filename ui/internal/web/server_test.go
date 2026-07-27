@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +44,37 @@ func TestHandlerMountsEveryGoshtosoRuntimeAssetDirectly(t *testing.T) {
 	}
 }
 
+func TestHandlerServesPinnedAraiHuThemeAsImmutableCSS(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/araihu-f841fe90.css", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("theme status = %d", recorder.Code)
+	}
+	if got := recorder.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
+		t.Fatalf("theme Content-Type = %q", got)
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("theme Cache-Control = %q", got)
+	}
+	for _, want := range []string{`[data-theme="araihu"]`, `--color-primary: #173b72`, `--color-primary-dark: #c7ff4a`} {
+		if !strings.Contains(recorder.Body.String(), want) {
+			t.Errorf("theme body missing %q", want)
+		}
+	}
+	canonicalStart := strings.Index(recorder.Body.String(), "@layer")
+	if canonicalStart < 0 {
+		t.Fatal("theme body omits canonical @layer block")
+	}
+	canonicalBody := recorder.Body.String()[canonicalStart:]
+	if got, want := fmt.Sprintf("%x", sha256.Sum256([]byte(canonicalBody))), "f44a204d777951b5ba140e56143cf22f887ca7b8be913ed1586a73aaa8047235"; got != want {
+		t.Fatalf("canonical Arai Hû body SHA-256 = %s, want %s", got, want)
+	}
+}
+
 func TestLoginPageUsesBundledHeadAndDoesNotRenderCredentials(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
 	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/login", nil)
@@ -54,7 +86,7 @@ func TestLoginPageUsesBundledHeadAndDoesNotRenderCredentials(t *testing.T) {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `type="password"`, `name="_csrf"`} {
+	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-f841fe90.css`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("login body missing %q", want)
 		}

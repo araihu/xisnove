@@ -167,6 +167,10 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
 		t.Fatal(err)
 	}
+	var defaultTheme bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.documentElement.dataset.theme === 'araihu' && localStorage.getItem('xisnove-theme') === 'araihu'`, &defaultTheme)); err != nil || !defaultTheme {
+		t.Fatalf("Arai Hû did not initialize as the default theme: applied=%t err=%v", defaultTheme, err)
+	}
 	assertSequentialKeyboardTraversal(t, ctx, "login")
 	assertKeyboardActivation(t, ctx, `a[href="/status"]`, "#status-content")
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
@@ -188,7 +192,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		t.Fatalf("timeout login evidence: %v", err)
 	}
 	captureState(t, ctx, screenshotDir, "login-timeout", "#problem-content")
-	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`localStorage.removeItem('xisnove-theme')`, nil), chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
 		t.Fatal(err)
 	}
 	if err := chromedp.Run(ctx,
@@ -198,6 +202,24 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		chromedp.WaitVisible("#monitor-content"),
 	); err != nil {
 		t.Fatalf("login: %v", err)
+	}
+	var defaultSelector bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('#theme-choice')?.value === 'araihu'`, &defaultSelector)); err != nil || !defaultSelector {
+		t.Fatalf("Arai Hû selector default did not survive login: selected=%t err=%v", defaultSelector, err)
+	}
+	awaitGoshtosoDependencies(t, ctx)
+	for _, theme := range []string{"goshtoso", "minimal", "araihu"} {
+		var persisted bool
+		script := fmt.Sprintf(`(()=>{const select=document.querySelector('#theme-choice');select.value=%q;select.dispatchEvent(new Event('change',{bubbles:true}));})()`, theme)
+		if err := chromedp.Run(ctx,
+			chromedp.Evaluate(script, nil),
+			chromedp.Poll(fmt.Sprintf(`localStorage.getItem('xisnove-theme')===%q`, theme), nil),
+			chromedp.Reload(),
+			chromedp.WaitVisible("#monitor-content"),
+			chromedp.Evaluate(fmt.Sprintf(`document.documentElement.dataset.theme===%q && localStorage.getItem('xisnove-theme')===%q && document.querySelector('#theme-choice')?.value===%q`, theme, theme, theme), &persisted),
+		); err != nil || !persisted {
+			t.Fatalf("theme selector did not persist %s through reload: persisted=%t err=%v", theme, persisted, err)
+		}
 	}
 	assertAccessibleSurface(t, ctx, "#monitor-content")
 	assertP1Accessibility(t, ctx)
@@ -276,7 +298,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		t.Fatal("HTMX result missing monitor or leaked bearer")
 	}
 	var afterSwapOK bool
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.id==='monitor-search' && document.querySelector('#monitor-search')?.selectionStart===1 && document.querySelector('#monitor-search')?.selectionEnd===2 && document.title==='Monitors · Xisnove'`, &afterSwapOK), chromedp.Evaluate(`(()=>{const spacer=document.createElement('div');spacer.style.height='2000px';spacer.id='history-scroll-fixture';document.querySelector('#monitor-results').append(spacer);document.querySelector('#main-content').scrollTop=200})()`, nil)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.id==='monitor-search' && document.querySelector('#monitor-search')?.selectionStart===1 && document.querySelector('#monitor-search')?.selectionEnd===2 && document.title==='Monitors · X-9'`, &afterSwapOK), chromedp.Evaluate(`(()=>{const spacer=document.createElement('div');spacer.style.height='2000px';spacer.id='history-scroll-fixture';document.querySelector('#monitor-results').append(spacer);document.querySelector('#main-content').scrollTop=200})()`, nil)); err != nil {
 		t.Fatal(err)
 	}
 	if !afterSwapOK {
@@ -287,7 +309,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		t.Fatalf("history back: %v", err)
 	}
 	var backOK bool
-	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='main-content'`, nil), chromedp.Evaluate(`document.title==='Monitors · Xisnove' && document.querySelector('#monitor-search')?.value==='' && document.querySelector('#main-content')?.scrollTop===0`, &backOK)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='main-content'`, nil), chromedp.Evaluate(`document.title==='Monitors · X-9' && document.querySelector('#monitor-search')?.value==='' && document.querySelector('#main-content')?.scrollTop===0`, &backOK)); err != nil {
 		t.Fatal(err)
 	}
 	if !backOK {
@@ -341,7 +363,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			t.Errorf("API calls %#v missing %q", calls, want)
 		}
 	}
-	expectedArtifacts := 136
+	expectedArtifacts := 204
 	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
 		expectedArtifacts = 17
 	}
@@ -476,9 +498,9 @@ func awaitTwoAnimationFrames(t *testing.T, ctx context.Context) {
 
 func acceptanceAxes() ([]int64, []string, []string) {
 	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
-		return []int64{390}, []string{"goshtoso"}, []string{"light"}
+		return []int64{390}, []string{"araihu"}, []string{"light"}
 	}
-	return []int64{390, 1440}, []string{"goshtoso", "minimal"}, []string{"light", "dark"}
+	return []int64{390, 1440}, []string{"araihu", "goshtoso", "minimal"}, []string{"light", "dark"}
 }
 
 func themeModeScript(theme, mode string) string {
