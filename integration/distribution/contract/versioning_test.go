@@ -14,6 +14,7 @@ func TestDistributionDocumentsFreezeRequiredContracts(t *testing.T) {
 		"artifact-matrix.md":         {"xisnove-server", "xisnove-ui", "xisnove-agent", "xisnove-operator", "xisnove-edge"},
 		"runtime-contracts.md":       {"/livez", "/readyz", "/metrics", "SIGTERM", "--version", "writable"},
 		"database-profile-matrix.md": {"SQLite", "local Turso", "PostgreSQL", "managed Turso", "singleton", "replica-safe"},
+		"secret-reference-matrix.md": {"cursor", "notification", "cookie", "administrator", "Agent", "owner-only"},
 	}
 	for name, fragments := range required {
 		contents, err := os.ReadFile(filepath.Join(distributionRoot(t), "docs", "distribution", name))

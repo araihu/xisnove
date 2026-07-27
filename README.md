@@ -47,6 +47,7 @@ resolves the SDK and OpenAPI-generated code from the same checkout.
 - [artifact matrix](docs/distribution/artifact-matrix.md)
 - [runtime contracts](docs/distribution/runtime-contracts.md)
 - [database profile matrix](docs/distribution/database-profile-matrix.md)
+- [secret and bootstrap reference matrix](docs/distribution/secret-reference-matrix.md)
 
 Quick verification:
 
