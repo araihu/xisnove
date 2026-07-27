@@ -122,6 +122,44 @@ func TestBuildCandidateRejectsInvalidIdentityBeforeDocker(t *testing.T) {
 	assertCandidateFailure(t, root, script, []string{"--root", root, "--version", "1.2.3", "--commit", commit, "--source-date-epoch", releaseEpoch}, "working tree must be clean")
 }
 
+func TestBuildCandidateUsesLocalChecksumVerifiedGoLicenseCache(t *testing.T) {
+	script := string(mustReadFile(t, filepath.Join(repositoryRoot(t), "scripts", "release", "build-candidate.sh")))
+	for _, required := range []string{
+		"GOWORK=off go mod download",
+		"SYFT_GOLANG_SEARCH_LOCAL_MOD_CACHE_LICENSES=true",
+		"SYFT_GOLANG_LOCAL_MOD_CACHE_DIR=/tmp/go-mod",
+		"SYFT_GOLANG_SEARCH_REMOTE_LICENSES=false",
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("candidate Go license cache contract missing %q", required)
+		}
+	}
+}
+
+func TestReleaseDockerfilesPinUbuntuSnapshot(t *testing.T) {
+	const snapshot = "20260701T000000Z"
+	root := repositoryRoot(t)
+	paths := []string{
+		"build/package/Dockerfile.agent",
+		"build/package/Dockerfile.operator",
+		"build/package/Dockerfile.server",
+		"build/package/Dockerfile.ui",
+		"build/release/Dockerfile.candidate-binaries",
+	}
+	for _, path := range paths {
+		contents := string(mustReadFile(t, filepath.Join(root, path)))
+		if !strings.Contains(contents, "ARG UBUNTU_SNAPSHOT="+snapshot) {
+			t.Errorf("%s does not pin Ubuntu snapshot %s", path, snapshot)
+		}
+		if installs := strings.Count(contents, "apt-get install"); installs == 0 || strings.Count(contents, "snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}") < installs {
+			t.Errorf("%s does not bind every apt install stage to the snapshot", path)
+		}
+		if !strings.Contains(contents, "ADD --checksum=sha256:6e8cdcc8c86103acd4fc14649eac62ff2037108389074a7b167567af33c32245") || !strings.Contains(contents, "ca-certificates_20260601~22.04.1_all.deb") {
+			t.Errorf("%s does not bootstrap the checksum-verified snapshot CA package", path)
+		}
+	}
+}
+
 func TestCandidateOCISBOMUsesCompleteLayoutAndExplicitPlatforms(t *testing.T) {
 	tool := buildCandidatePlanTool(t)
 	root := t.TempDir()
@@ -160,7 +198,7 @@ cp "$input" "$output"
 		t.Fatalf("Syft source contract not explicit:\n%s", log)
 	}
 	for _, line := range strings.Split(strings.TrimSpace(log), "\n") {
-		if !strings.Contains(line, "--platform") {
+		if !strings.Contains(line, "--platform") || !strings.Contains(line, "--enrich golang") {
 			t.Fatalf("image index used unqualified Syft call: %s", line)
 		}
 	}
@@ -203,7 +241,7 @@ cp "$input" "$output"
 	if combined, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("sbom-oci: %v\n%s", err, combined)
 	}
-	if got := strings.TrimSpace(string(mustReadFile(t, capture))); !strings.HasPrefix(got, wantSource+" ") {
+	if got := strings.TrimSpace(string(mustReadFile(t, capture))); !strings.HasPrefix(got, wantSource+" ") || !strings.Contains(got, "--enrich golang") {
 		t.Fatalf("Syft chart source = %q, want exact chart layer %q", got, wantSource)
 	}
 	if _, err := os.Stat(filepath.Join(output, "oci-manifest--xisnove.spdx.json")); err != nil {

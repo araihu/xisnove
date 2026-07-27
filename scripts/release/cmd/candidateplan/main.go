@@ -549,7 +549,7 @@ func sbomOCI(args []string) error {
 		if item.platform != "" {
 			syftArgs = append(syftArgs, "--platform", item.platform)
 		}
-		syftArgs = append(syftArgs, "-o", "spdx-json="+raw)
+		syftArgs = append(syftArgs, "--enrich", "golang", "-o", "spdx-json="+raw)
 		if combined, err := exec.Command(*syft, syftArgs...).CombinedOutput(); err != nil {
 			return fmt.Errorf("syft %s: %w: %s", item.suffix, err, strings.TrimSpace(string(combined)))
 		}

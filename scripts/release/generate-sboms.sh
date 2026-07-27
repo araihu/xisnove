@@ -38,7 +38,7 @@ for artifact in "$@"; do
   raw="$output_dir/.${name}.spdx.json.raw"
   output="$output_dir/${name}.spdx.json"
   subject_digest=$(sha256_file "$artifact")
-  "$syft" "file:$artifact" -o "spdx-json=$raw"
+  "$syft" "file:$artifact" --enrich golang -o "spdx-json=$raw"
   "$releasebundle" normalize-sbom \
     --input "$raw" \
     --output "$output" \

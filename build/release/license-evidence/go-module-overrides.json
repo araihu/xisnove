@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-07-27",
+  "scope": "Exact Go module PURLs and reported Syft expressions in the Xisnove release SBOMs",
+  "modules": [
+    {"purl":"pkg:golang/github.com/eclipse/paho.golang@v0.23.0","resolvedLicense":"EPL-2.0","files":[{"path":"LICENSE","sha256":"e2bcf9854f46a58b6e6f014d64e102a6b4e35a87d117094903e66fb68454a3fd"}],"note":"EPL dependency is permitted only at this exact PURL; modified EPL-covered source must remain available under EPL-2.0."},
+    {"purl":"pkg:golang/github.com/getkin/kin-openapi@v0.144.0","resolvedLicense":"MIT","files":[{"path":"LICENSE","sha256":"612a11e78c07e12765d9cf3866e3edc5f8212c541602721b14e465311afb3aa6"}],"note":"Syft treated openapi3/license.go as license evidence; it is Go source, not an additional license."},
+    {"purl":"pkg:golang/github.com/go-openapi/swag/jsonname@v0.27.0","resolvedLicense":"Apache-2.0","files":[{"path":"LICENSE","sha256":"cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"}]},
+    {"purl":"pkg:golang/github.com/gorilla/websocket@v1.5.4-0.20250319132907-e064f32e3674","resolvedLicense":"BSD-2-Clause","files":[{"path":"LICENSE","sha256":"2be1b548b0387ca8948e1bb9434e709126904d15f622cc2d0d8e7f186e4d122d"}]},
+    {"purl":"pkg:golang/github.com/jackc/pgx/v5@v5.10.0","resolvedLicense":"MIT","files":[{"path":"LICENSE","sha256":"467f95e074fe23079a5623ed652619682692041b8551da27e3c2ddb9659a1507"}]},
+    {"purl":"pkg:golang/github.com/lib/pq@v1.12.3","resolvedLicense":"MIT","files":[{"path":"LICENSE","sha256":"97124ae88383d1220994d57118d689e73a36401eb832c1ce7b15723984e716b7"}]},
+    {"purl":"pkg:golang/github.com/prometheus/client_golang@v1.24.1","resolvedLicense":"Apache-2.0 AND BSD-3-Clause","files":[{"path":"LICENSE","sha256":"c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"}]},
+    {"purl":"pkg:golang/github.com/prometheus/client_model@v0.6.2","resolvedLicense":"Apache-2.0","files":[{"path":"LICENSE","sha256":"c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"}]},
+    {"purl":"pkg:golang/github.com/prometheus/common@v0.70.1","resolvedLicense":"Apache-2.0","files":[{"path":"LICENSE","sha256":"c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"}]},
+    {"purl":"pkg:golang/github.com/prometheus/procfs@v0.21.1","resolvedLicense":"Apache-2.0","files":[{"path":"LICENSE","sha256":"c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"}]},
+    {"purl":"pkg:golang/k8s.io/kube-openapi@v0.0.0-20260317180543-43fb72c5454a","resolvedLicense":"Apache-2.0 AND BSD-3-Clause AND MIT","files":[{"path":"LICENSE","sha256":"cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"}]},
+    {"purl":"pkg:golang/k8s.io/kube-openapi@v0.0.0-20260427204847-8949caaa1199","resolvedLicense":"Apache-2.0 AND BSD-3-Clause AND MIT","files":[{"path":"LICENSE","sha256":"cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"}]},
+    {"purl":"pkg:golang/modernc.org/libc@v1.74.3","resolvedLicense":"BSD-3-Clause AND LGPL-2.1-or-later AND (GPL-3.0-only WITH GCC-exception-3.1)","files":[{"path":"LICENSE","sha256":"95ff867eb55a56935fa7492406cfa953fb7c13ca73f4c0a86ae05756b4605600"},{"path":"LICENSE-3RD-PARTY.md","sha256":"f597097efe3d97021f89170746bd3a0fb9a8b6fb26b82043ed68a4e0283bee6c"}],"note":"Generated libc bindings retain glibc LGPL notices and GCC runtime-exception notices; distribution must retain notices and corresponding source references."},
+    {"purl":"pkg:golang/modernc.org/memory@v1.11.0","resolvedLicense":"BSD-3-Clause","files":[{"path":"LICENSE","sha256":"59895e669f48f168b6b858358f6005779cdf40a265f7828813061b56af67b496"},{"path":"LICENSE-GO","sha256":"2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067"},{"path":"LICENSE-MMAP-GO","sha256":"c2eba69f20d05414538c3a5df7694dde392e065ff70882e1625e90f5d6659fff"}],"note":"Logo-only LicenseRef is not linked into distributed binaries."},
+    {"purl":"pkg:golang/sigs.k8s.io/randfill@v1.0.0","resolvedLicense":"Apache-2.0","files":[{"path":"LICENSE","sha256":"fafd604c0c068855ab2ec82d6d962d21fb0d08e13085f01ac4a8463053fa1138"}]}
+  ]
+}

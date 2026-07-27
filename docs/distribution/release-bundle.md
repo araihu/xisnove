@@ -62,9 +62,31 @@ releasebundle manifest \
 `generate-sboms.sh` invokes the checksum-verified Syft version from the release
 toolchain lock. It normalizes the SPDX creation time and namespace from the
 candidate epoch and subject digest. `inventory-licenses.sh` reads only those
-SBOMs and `build/release/licenses-policy.json`. Denied licenses and every
-unknown, `NONE`, or `NOASSERTION` classification fail the candidate. Policy
-expansion requires review; a missing classification is never silently allowed.
+SBOMs and the schema-v2 `build/release/licenses-policy.json`. Decisions are
+scoped by provenance: ordinary artifacts use the default SPDX-expression
+profile, Go modules use a stricter profile plus exact evidence-backed PURL
+overrides, and Ubuntu runtime packages must match the complete
+`ubuntu-runtime-lock.json` tuple of PURL, package verification code, reported
+license, resolved license, evidence digest, and obligations. Global AGPL and
+SSPL denials apply before and after any resolution. Every unknown, `NONE`,
+`NOASSERTION`, unlocked package, changed expression, or evidence drift fails
+the candidate.
+
+`propose-ubuntu-lock` deterministically derives a review proposal from the
+eight platform SBOMs. It does not broaden a profile: the committed lock is the
+review boundary. Raw `NOASSERTION` values remain visible in the inventory and
+are resolved only to a package-specific `LicenseRef-Ubuntu-<digest>` bound to
+the exact package closure. Copyleft entries carry corresponding-source and
+notice obligations. Exact Go exceptions retain the reported Syft expression,
+resolved expression, obligations, and the checksum-verified review record in
+`build/release/license-evidence/`.
+
+All Ubuntu package installs use snapshot `20260701T000000Z`. The pinned Ubuntu
+base does not contain a CA bundle, so each Dockerfile bootstraps the exact
+`ca-certificates_20260601~22.04.1_all.deb` from that snapshot with Dockerfile
+`ADD --checksum`, builds the initial trust bundle, and then lets APT verify the
+snapshot's signed metadata and packages. Moving Ubuntu repositories and TLS
+verification bypasses are forbidden.
 
 ## Clean consumer verification
 

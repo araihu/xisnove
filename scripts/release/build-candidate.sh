@@ -150,6 +150,13 @@ export VERSION="$version" COMMIT="$commit" BUILD_DATE="$build_date"
 "$docker_bin" run --rm \
   -e HOME=/tmp -e "XISNOVE_RELEASE_VERSION=$version" -e "XISNOVE_RELEASE_COMMIT=$commit" -e "SOURCE_DATE_EPOCH=$source_date_epoch" \
   -v "$root:/src:ro" -v "$staging:/out" -v "$layouts:/layouts:ro" "$builder_image" bash -euc '
+  export GOMODCACHE=/tmp/go-mod
+  for module_dir in /src /src/agent /src/cli /src/operator /src/ui; do
+    (cd "$module_dir" && GOWORK=off go mod download)
+  done
+  export SYFT_GOLANG_SEARCH_LOCAL_MOD_CACHE_LICENSES=true
+  export SYFT_GOLANG_LOCAL_MOD_CACHE_DIR=/tmp/go-mod
+  export SYFT_GOLANG_SEARCH_REMOTE_LICENSES=false
   for image in xisnove-server xisnove-ui xisnove-agent xisnove-operator; do
     /out/tools/candidateplan extract-oci --layout "/layouts/${image}.tar" --output-dir "/out/oci/images/${image}" --name "$image"
   done

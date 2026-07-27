@@ -76,7 +76,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("expected command: bundle, manifest, verify, normalize-sbom, or licenses")
+		return errors.New("expected command: bundle, manifest, verify, normalize-sbom, licenses, or propose-ubuntu-lock")
 	}
 	switch args[0] {
 	case "bundle":
@@ -89,6 +89,8 @@ func run(args []string) error {
 		return runNormalizeSBOM(args[1:])
 	case "licenses":
 		return runLicenses(args[1:])
+	case "propose-ubuntu-lock":
+		return runProposeUbuntuLock(args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -609,6 +611,7 @@ func runNormalizeSBOM(args []string) error {
 		document["creationInfo"] = creation
 	}
 	creation["created"] = epoch.Format(time.RFC3339)
+	applyFirstPartyLicense(document, *subjectDigest)
 	normalized, err := marshalCanonical(document)
 	if err != nil {
 		return err
@@ -616,18 +619,219 @@ func runNormalizeSBOM(args []string) error {
 	return atomicWrite(*output, normalized, 0o644)
 }
 
+func applyFirstPartyLicense(document map[string]any, subjectDigest string) {
+	packages, _ := document["packages"].([]any)
+	for _, value := range packages {
+		pkg, _ := value.(map[string]any)
+		if !packageHasFirstPartyPURL(pkg) && !packageHasSHA256(pkg, subjectDigest) {
+			continue
+		}
+		declared, _ := pkg["licenseDeclared"].(string)
+		concluded, _ := pkg["licenseConcluded"].(string)
+		if !unknownLicense(declared) || !unknownLicense(concluded) {
+			continue
+		}
+		pkg["licenseDeclared"] = "Apache-2.0"
+		pkg["licenseConcluded"] = "Apache-2.0"
+	}
+}
+
+func packageHasFirstPartyPURL(pkg map[string]any) bool {
+	const prefix = "pkg:golang/github.com/araihu/xisnove"
+	for _, purl := range packagePURLs(pkg) {
+		if purl == prefix || strings.HasPrefix(purl, prefix+"/") || strings.HasPrefix(purl, prefix+"@") {
+			return true
+		}
+	}
+	return false
+}
+
+func packagePURLs(pkg map[string]any) []string {
+	references, _ := pkg["externalRefs"].([]any)
+	var purls []string
+	for _, value := range references {
+		reference, _ := value.(map[string]any)
+		referenceType, _ := reference["referenceType"].(string)
+		locator, _ := reference["referenceLocator"].(string)
+		if referenceType == "purl" && locator != "" {
+			purls = append(purls, locator)
+		}
+	}
+	return purls
+}
+
+func packageHasSHA256(pkg map[string]any, subjectDigest string) bool {
+	checksums, _ := pkg["checksums"].([]any)
+	for _, value := range checksums {
+		checksum, _ := value.(map[string]any)
+		algorithm, _ := checksum["algorithm"].(string)
+		digest, _ := checksum["checksumValue"].(string)
+		if strings.EqualFold(algorithm, "SHA256") && digest == subjectDigest {
+			return true
+		}
+	}
+	return false
+}
+
+func unknownLicense(value string) bool {
+	return value == "" || value == "NOASSERTION" || value == "NONE"
+}
+
+type licenseProfile struct {
+	Allow     []string          `json:"allow"`
+	Deny      []string          `json:"deny"`
+	Overrides []licenseOverride `json:"overrides,omitempty"`
+}
+
+type licenseOverride struct {
+	PURL            string   `json:"purl"`
+	ReportedLicense string   `json:"reportedLicense"`
+	ResolvedLicense string   `json:"resolvedLicense"`
+	EvidenceFile    string   `json:"evidenceFile"`
+	EvidenceSHA256  string   `json:"evidenceSHA256"`
+	Obligations     []string `json:"obligations"`
+}
+
+type ubuntuLicenseProfile struct {
+	Distro   string `json:"distro"`
+	Snapshot string `json:"snapshot"`
+	Lock     string `json:"lock"`
+}
+
 type licensePolicy struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	Allow         []string `json:"allow"`
-	Deny          []string `json:"deny"`
+	SchemaVersion int                  `json:"schemaVersion"`
+	GlobalDeny    []string             `json:"globalDeny,omitempty"`
+	Default       licenseProfile       `json:"default"`
+	Golang        licenseProfile       `json:"golang"`
+	Ubuntu        ubuntuLicenseProfile `json:"ubuntu"`
+}
+
+type ubuntuPackageApproval struct {
+	PURL                    string   `json:"purl"`
+	PackageVerificationCode string   `json:"packageVerificationCode"`
+	ReportedLicense         string   `json:"reportedLicense"`
+	ResolvedLicense         string   `json:"resolvedLicense"`
+	EvidenceSHA256          string   `json:"evidenceSHA256"`
+	Obligations             []string `json:"obligations,omitempty"`
+}
+
+type ubuntuPackageLock struct {
+	SchemaVersion int                     `json:"schemaVersion"`
+	Packages      []ubuntuPackageApproval `json:"packages"`
+}
+
+func runProposeUbuntuLock(args []string) error {
+	flags := flag.NewFlagSet("propose-ubuntu-lock", flag.ContinueOnError)
+	output := flags.String("output", "", "proposed Ubuntu lock output")
+	var sboms stringList
+	flags.Var(&sboms, "sbom", "SPDX JSON input (repeatable)")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *output == "" || len(sboms) == 0 {
+		return errors.New("--output and at least one --sbom are required")
+	}
+	proposals := map[string]ubuntuPackageApproval{}
+	for _, sbomPath := range sboms {
+		contents, err := os.ReadFile(sbomPath)
+		if err != nil {
+			return err
+		}
+		var sbom struct {
+			Packages []struct {
+				Name             string `json:"name"`
+				LicenseDeclared  string `json:"licenseDeclared"`
+				LicenseConcluded string `json:"licenseConcluded"`
+				ExternalRefs     []struct {
+					ReferenceType    string `json:"referenceType"`
+					ReferenceLocator string `json:"referenceLocator"`
+				} `json:"externalRefs"`
+				PackageVerificationCode struct {
+					Value string `json:"packageVerificationCodeValue"`
+				} `json:"packageVerificationCode"`
+			} `json:"packages"`
+		}
+		if err := json.Unmarshal(contents, &sbom); err != nil {
+			return fmt.Errorf("decode SBOM %s: %w", sbomPath, err)
+		}
+		for _, pkg := range sbom.Packages {
+			var purls []string
+			for _, reference := range pkg.ExternalRefs {
+				if reference.ReferenceType == "purl" && strings.HasPrefix(reference.ReferenceLocator, "pkg:deb/ubuntu/") {
+					purls = append(purls, reference.ReferenceLocator)
+				}
+			}
+			if len(purls) == 0 {
+				continue
+			}
+			if len(purls) != 1 {
+				return fmt.Errorf("Ubuntu package %s must have exactly one purl", pkg.Name)
+			}
+			if pkg.PackageVerificationCode.Value == "" {
+				return fmt.Errorf("Ubuntu package %s missing packageVerificationCode", pkg.Name)
+			}
+			reported := preferredLicense(pkg.LicenseConcluded, pkg.LicenseDeclared)
+			evidence := sha256.Sum256([]byte(purls[0] + "\x00" + pkg.PackageVerificationCode.Value + "\x00" + reported))
+			resolved := reported
+			if unknownLicense(resolved) {
+				resolved = "LicenseRef-Ubuntu-" + hex.EncodeToString(evidence[:])
+			}
+			obligations := []string{"retain-license-notice"}
+			if expressionHasCopyleft(resolved) {
+				obligations = []string{"provide-corresponding-source-reference", "retain-license-notice"}
+			}
+			proposal := ubuntuPackageApproval{PURL: purls[0], PackageVerificationCode: pkg.PackageVerificationCode.Value, ReportedLicense: reported, ResolvedLicense: resolved, EvidenceSHA256: hex.EncodeToString(evidence[:]), Obligations: obligations}
+			if previous, exists := proposals[purls[0]]; exists && !sameUbuntuApproval(previous, proposal) {
+				return fmt.Errorf("conflicting Ubuntu package evidence for %q", purls[0])
+			}
+			proposals[purls[0]] = proposal
+		}
+	}
+	packages := make([]ubuntuPackageApproval, 0, len(proposals))
+	for _, proposal := range proposals {
+		packages = append(packages, proposal)
+	}
+	sort.Slice(packages, func(i, j int) bool { return packages[i].PURL < packages[j].PURL })
+	contents, err := marshalCanonical(ubuntuPackageLock{SchemaVersion: 1, Packages: packages})
+	if err != nil {
+		return err
+	}
+	return atomicWrite(*output, contents, 0o644)
+}
+
+func sameUbuntuApproval(left, right ubuntuPackageApproval) bool {
+	return left.PURL == right.PURL &&
+		left.PackageVerificationCode == right.PackageVerificationCode &&
+		left.ReportedLicense == right.ReportedLicense &&
+		left.ResolvedLicense == right.ResolvedLicense &&
+		left.EvidenceSHA256 == right.EvidenceSHA256 &&
+		strings.Join(left.Obligations, "\x00") == strings.Join(right.Obligations, "\x00")
+}
+
+func expressionHasCopyleft(expression string) bool {
+	tokens, err := tokenizeSPDX(expression)
+	if err != nil {
+		return false
+	}
+	for _, token := range tokens {
+		if strings.HasPrefix(token, "GPL-") || strings.HasPrefix(token, "LGPL-") || strings.HasPrefix(token, "AGPL-") {
+			return true
+		}
+	}
+	return false
 }
 
 type licenseRecord struct {
-	Package    string `json:"package"`
-	Version    string `json:"version,omitempty"`
-	License    string `json:"license"`
-	Status     string `json:"status"`
-	SourceSBOM string `json:"sourceSbom"`
+	Package         string   `json:"package"`
+	Version         string   `json:"version,omitempty"`
+	PURL            string   `json:"purl,omitempty"`
+	Ecosystem       string   `json:"ecosystem"`
+	ReportedLicense string   `json:"reportedLicense,omitempty"`
+	License         string   `json:"license"`
+	Status          string   `json:"status"`
+	Rule            string   `json:"rule"`
+	Obligations     []string `json:"obligations,omitempty"`
+	SourceSBOM      string   `json:"sourceSbom"`
 }
 
 type licenseInventory struct {
@@ -655,11 +859,14 @@ func runLicenses(args []string) error {
 	if err := decodeStrict(policyData, &policy); err != nil {
 		return fmt.Errorf("decode policy: %w", err)
 	}
-	if policy.SchemaVersion != 1 || len(policy.Allow) == 0 {
-		return errors.New("license policy must have schemaVersion 1 and non-empty allow list")
+	if err := validateLicensePolicy(policy); err != nil {
+		return err
 	}
-	allow := toSet(policy.Allow)
-	deny := toSet(policy.Deny)
+	ubuntuLock, err := loadUbuntuLock(filepath.Dir(*policyPath), policy.Ubuntu.Lock)
+	if err != nil {
+		return err
+	}
+	globalDeny := toSet(policy.GlobalDeny)
 	var records []licenseRecord
 	for _, sbomPath := range sboms {
 		data, err := os.ReadFile(sbomPath)
@@ -672,6 +879,13 @@ func runLicenses(args []string) error {
 				Version          string `json:"versionInfo"`
 				LicenseDeclared  string `json:"licenseDeclared"`
 				LicenseConcluded string `json:"licenseConcluded"`
+				ExternalRefs     []struct {
+					ReferenceType    string `json:"referenceType"`
+					ReferenceLocator string `json:"referenceLocator"`
+				} `json:"externalRefs"`
+				PackageVerificationCode struct {
+					Value string `json:"packageVerificationCodeValue"`
+				} `json:"packageVerificationCode"`
 			} `json:"packages"`
 		}
 		if err := json.Unmarshal(data, &sbom); err != nil {
@@ -679,17 +893,38 @@ func runLicenses(args []string) error {
 		}
 		for _, pkg := range sbom.Packages {
 			license := preferredLicense(pkg.LicenseConcluded, pkg.LicenseDeclared)
-			status := "unknown"
-			if _, denied := deny[license]; denied {
-				status = "denied"
-			} else if _, allowed := allow[license]; allowed {
-				status = "allowed"
+			purls := make([]string, 0, len(pkg.ExternalRefs))
+			for _, reference := range pkg.ExternalRefs {
+				if reference.ReferenceType == "purl" && reference.ReferenceLocator != "" {
+					purls = append(purls, reference.ReferenceLocator)
+				}
 			}
-			records = append(records, licenseRecord{Package: pkg.Name, Version: pkg.Version, License: license, Status: status, SourceSBOM: filepath.Base(sbomPath)})
+			if len(purls) > 1 {
+				return fmt.Errorf("package %s must have exactly one purl, got %d", pkg.Name, len(purls))
+			}
+			purl := ""
+			if len(purls) == 1 {
+				purl = purls[0]
+			}
+			ecosystem, status, rule, effectiveLicense, obligations, decisionErr := evaluatePackageLicense(
+				filepath.Dir(*policyPath), policy, ubuntuLock, globalDeny,
+				purl, pkg.PackageVerificationCode.Value, license,
+			)
+			if decisionErr != nil {
+				return fmt.Errorf("%w for %s", decisionErr, pkg.Name)
+			}
+			reportedLicense := ""
+			if effectiveLicense != license {
+				reportedLicense = license
+			}
+			records = append(records, licenseRecord{Package: pkg.Name, Version: pkg.Version, PURL: purl, Ecosystem: ecosystem, ReportedLicense: reportedLicense, License: effectiveLicense, Status: status, Rule: rule, Obligations: obligations, SourceSBOM: filepath.Base(sbomPath)})
 		}
 	}
 	sort.Slice(records, func(i, j int) bool {
 		left, right := records[i], records[j]
+		if left.PURL != right.PURL {
+			return left.PURL < right.PURL
+		}
 		if left.Package != right.Package {
 			return left.Package < right.Package
 		}
@@ -701,22 +936,284 @@ func runLicenses(args []string) error {
 		}
 		return left.SourceSBOM < right.SourceSBOM
 	})
-	contents, err := marshalCanonical(licenseInventory{SchemaVersion: 1, Records: records})
+	contents, err := marshalCanonical(licenseInventory{SchemaVersion: 2, Records: records})
 	if err != nil {
 		return err
 	}
 	if err := atomicWrite(*output, contents, 0o644); err != nil {
 		return err
 	}
-	for _, record := range records {
-		switch record.Status {
-		case "denied":
-			return fmt.Errorf("denied license %q for %s", record.License, record.Package)
-		case "unknown":
-			return fmt.Errorf("unknown license %q for %s", record.License, record.Package)
-		}
+	return nil
+}
+
+func validateLicensePolicy(policy licensePolicy) error {
+	if policy.SchemaVersion != 2 || len(policy.Default.Allow) == 0 || len(policy.Golang.Allow) == 0 {
+		return errors.New("license policy must have schemaVersion 2 and non-empty default and golang allow lists")
+	}
+	if policy.Ubuntu.Distro == "" || policy.Ubuntu.Snapshot == "" || policy.Ubuntu.Lock == "" {
+		return errors.New("license policy Ubuntu distro, snapshot, and lock are required")
+	}
+	if filepath.IsAbs(policy.Ubuntu.Lock) || strings.Contains(filepath.ToSlash(filepath.Clean(policy.Ubuntu.Lock)), "../") {
+		return errors.New("license policy Ubuntu lock must be a relative contained path")
 	}
 	return nil
+}
+
+func loadUbuntuLock(policyDir, lockPath string) (map[string]ubuntuPackageApproval, error) {
+	contents, err := os.ReadFile(filepath.Join(policyDir, lockPath))
+	if err != nil {
+		return nil, fmt.Errorf("read Ubuntu license lock: %w", err)
+	}
+	var lock ubuntuPackageLock
+	if err := decodeStrict(contents, &lock); err != nil {
+		return nil, fmt.Errorf("decode Ubuntu license lock: %w", err)
+	}
+	if lock.SchemaVersion != 1 {
+		return nil, errors.New("Ubuntu license lock must have schemaVersion 1")
+	}
+	approved := make(map[string]ubuntuPackageApproval, len(lock.Packages))
+	for _, pkg := range lock.Packages {
+		if pkg.PURL == "" || pkg.PackageVerificationCode == "" || pkg.ReportedLicense == "" || unknownLicense(pkg.ResolvedLicense) || !digestPattern.MatchString(pkg.EvidenceSHA256) {
+			return nil, errors.New("Ubuntu license lock entries require purl, packageVerificationCode, reportedLicense, resolvedLicense, and evidenceSHA256")
+		}
+		if _, duplicate := approved[pkg.PURL]; duplicate {
+			return nil, fmt.Errorf("duplicate Ubuntu license lock purl %q", pkg.PURL)
+		}
+		approved[pkg.PURL] = pkg
+	}
+	return approved, nil
+}
+
+func evaluatePackageLicense(policyDir string, policy licensePolicy, ubuntuLock map[string]ubuntuPackageApproval, globalDeny map[string]struct{}, purl, verificationCode, license string) (string, string, string, string, []string, error) {
+	if deniedExpressionAtom(license, globalDeny) {
+		return ecosystemForPURL(purl), "denied", "global-deny", license, nil, fmt.Errorf("denied license %q", license)
+	}
+	if strings.HasPrefix(purl, "pkg:deb/ubuntu/") {
+		if !strings.Contains(purl, "distro="+policy.Ubuntu.Distro) {
+			return "ubuntu", "unknown", "ubuntu-lock", license, nil, fmt.Errorf("Ubuntu package distro mismatch for %q", purl)
+		}
+		approved, ok := ubuntuLock[purl]
+		if !ok {
+			return "ubuntu", "unknown", "ubuntu-lock", license, nil, fmt.Errorf("Ubuntu package not locked: %q", purl)
+		}
+		if approved.PackageVerificationCode != verificationCode || approved.ReportedLicense != license {
+			return "ubuntu", "unknown", "ubuntu-lock", license, nil, fmt.Errorf("Ubuntu lock mismatch for %q", purl)
+		}
+		if deniedExpressionAtom(approved.ResolvedLicense, globalDeny) {
+			return "ubuntu", "denied", "global-deny", approved.ResolvedLicense, nil, fmt.Errorf("denied resolved license %q", approved.ResolvedLicense)
+		}
+		return "ubuntu", "allowed", "ubuntu-lock", approved.ResolvedLicense, approved.Obligations, nil
+	}
+	profile := policy.Default
+	ecosystem := ecosystemForPURL(purl)
+	rule := "default-expression"
+	if ecosystem == "golang" {
+		profile = policy.Golang
+		rule = "golang-expression"
+		for _, override := range profile.Overrides {
+			if override.PURL == purl && override.ReportedLicense == license {
+				if err := verifyLicenseEvidence(policyDir, override); err != nil {
+					return ecosystem, "unknown", "golang-override", license, nil, err
+				}
+				if unknownLicense(override.ResolvedLicense) || len(override.Obligations) == 0 {
+					return ecosystem, "unknown", "golang-override", license, nil, errors.New("license override requires resolvedLicense and obligations")
+				}
+				if deniedExpressionAtom(override.ResolvedLicense, globalDeny) {
+					return ecosystem, "denied", "global-deny", override.ResolvedLicense, nil, fmt.Errorf("denied resolved license %q", override.ResolvedLicense)
+				}
+				return ecosystem, "allowed", "golang-override", override.ResolvedLicense, override.Obligations, nil
+			}
+		}
+	}
+	decision, err := evaluateSPDXExpression(license, toSet(profile.Allow), toSet(profile.Deny))
+	if err != nil || decision == licenseUnknown {
+		return ecosystem, "unknown", rule, license, nil, fmt.Errorf("unknown license %q", license)
+	}
+	if decision == licenseDenied {
+		return ecosystem, "denied", rule, license, nil, fmt.Errorf("denied license %q", license)
+	}
+	return ecosystem, "allowed", rule, license, nil, nil
+}
+
+func verifyLicenseEvidence(policyDir string, override licenseOverride) error {
+	if override.EvidenceFile == "" || !digestPattern.MatchString(override.EvidenceSHA256) {
+		return errors.New("license override requires evidenceFile and lowercase SHA-256")
+	}
+	clean, err := cleanRelative(override.EvidenceFile)
+	if err != nil {
+		return fmt.Errorf("license override evidence: %w", err)
+	}
+	digest, _, err := digestFile(filepath.Join(policyDir, filepath.FromSlash(clean)))
+	if err != nil {
+		return fmt.Errorf("license override evidence: %w", err)
+	}
+	if digest != override.EvidenceSHA256 {
+		return errors.New("license override evidence SHA-256 mismatch")
+	}
+	return nil
+}
+
+func ecosystemForPURL(purl string) string {
+	switch {
+	case strings.HasPrefix(purl, "pkg:golang/"):
+		return "golang"
+	case strings.HasPrefix(purl, "pkg:deb/ubuntu/"):
+		return "ubuntu"
+	case purl == "":
+		return "artifact"
+	default:
+		return "default"
+	}
+}
+
+type licenseDecision uint8
+
+const (
+	licenseUnknown licenseDecision = iota
+	licenseAllowed
+	licenseDenied
+)
+
+type spdxParser struct {
+	tokens []string
+	index  int
+	allow  map[string]struct{}
+	deny   map[string]struct{}
+}
+
+func evaluateSPDXExpression(expression string, allow, deny map[string]struct{}) (licenseDecision, error) {
+	tokens, err := tokenizeSPDX(expression)
+	if err != nil {
+		return licenseUnknown, err
+	}
+	parser := spdxParser{tokens: tokens, allow: allow, deny: deny}
+	decision, err := parser.parseOR()
+	if err != nil {
+		return licenseUnknown, err
+	}
+	if parser.index != len(tokens) {
+		return licenseUnknown, errors.New("trailing SPDX tokens")
+	}
+	return decision, nil
+}
+
+func tokenizeSPDX(expression string) ([]string, error) {
+	if unknownLicense(expression) {
+		return nil, errors.New("unknown SPDX expression")
+	}
+	var tokens []string
+	for index := 0; index < len(expression); {
+		switch expression[index] {
+		case ' ', '\t', '\r', '\n':
+			index++
+		case '(', ')':
+			tokens = append(tokens, expression[index:index+1])
+			index++
+		default:
+			start := index
+			for index < len(expression) && !strings.ContainsRune(" ()\t\r\n", rune(expression[index])) {
+				index++
+			}
+			tokens = append(tokens, expression[start:index])
+		}
+	}
+	if len(tokens) == 0 {
+		return nil, errors.New("empty SPDX expression")
+	}
+	return tokens, nil
+}
+
+func (parser *spdxParser) parseOR() (licenseDecision, error) {
+	left, err := parser.parseAND()
+	for err == nil && parser.consume("OR") {
+		var right licenseDecision
+		right, err = parser.parseAND()
+		left = combineOR(left, right)
+	}
+	return left, err
+}
+
+func (parser *spdxParser) parseAND() (licenseDecision, error) {
+	left, err := parser.parseWITH()
+	for err == nil && parser.consume("AND") {
+		var right licenseDecision
+		right, err = parser.parseWITH()
+		left = combineAND(left, right)
+	}
+	return left, err
+}
+
+func (parser *spdxParser) parseWITH() (licenseDecision, error) {
+	left, err := parser.parsePrimary()
+	if err == nil && parser.consume("WITH") {
+		var right licenseDecision
+		right, err = parser.parsePrimary()
+		left = combineAND(left, right)
+	}
+	return left, err
+}
+
+func (parser *spdxParser) parsePrimary() (licenseDecision, error) {
+	if parser.consume("(") {
+		decision, err := parser.parseOR()
+		if err != nil || !parser.consume(")") {
+			return licenseUnknown, errors.New("unbalanced SPDX expression")
+		}
+		return decision, nil
+	}
+	if parser.index >= len(parser.tokens) || parser.tokens[parser.index] == ")" {
+		return licenseUnknown, errors.New("missing SPDX license identifier")
+	}
+	identifier := parser.tokens[parser.index]
+	parser.index++
+	if _, denied := parser.deny[identifier]; denied {
+		return licenseDenied, nil
+	}
+	if _, allowed := parser.allow[identifier]; allowed {
+		return licenseAllowed, nil
+	}
+	return licenseUnknown, nil
+}
+
+func (parser *spdxParser) consume(token string) bool {
+	if parser.index < len(parser.tokens) && parser.tokens[parser.index] == token {
+		parser.index++
+		return true
+	}
+	return false
+}
+
+func combineAND(left, right licenseDecision) licenseDecision {
+	if left == licenseDenied || right == licenseDenied {
+		return licenseDenied
+	}
+	if left == licenseAllowed && right == licenseAllowed {
+		return licenseAllowed
+	}
+	return licenseUnknown
+}
+
+func combineOR(left, right licenseDecision) licenseDecision {
+	if left == licenseAllowed || right == licenseAllowed {
+		return licenseAllowed
+	}
+	if left == licenseDenied && right == licenseDenied {
+		return licenseDenied
+	}
+	return licenseUnknown
+}
+
+func deniedExpressionAtom(expression string, deny map[string]struct{}) bool {
+	tokens, err := tokenizeSPDX(expression)
+	if err != nil {
+		return false
+	}
+	for _, token := range tokens {
+		if _, denied := deny[token]; denied {
+			return true
+		}
+	}
+	return false
 }
 
 func preferredLicense(concluded, declared string) string {

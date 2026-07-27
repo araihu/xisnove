@@ -1,12 +1,22 @@
 # syntax=docker/dockerfile:1.18@sha256:dabfc0969b935b2080555ace70ee69a5261af8a8f1b4df97b9e7fbcf6722eddf
 ARG UBUNTU_IMAGE=ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
-FROM ${UBUNTU_IMAGE} AS build
+FROM ${UBUNTU_IMAGE} AS ubuntu-snapshot
+ARG UBUNTU_SNAPSHOT=20260701T000000Z
+ADD --checksum=sha256:6e8cdcc8c86103acd4fc14649eac62ff2037108389074a7b167567af33c32245 https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}/pool/main/c/ca-certificates/ca-certificates_20260601~22.04.1_all.deb /tmp/ca-certificates.deb
+RUN dpkg-deb -x /tmp/ca-certificates.deb / \
+    && mkdir -p /etc/ssl/certs \
+    && LC_ALL=C sh -c 'for cert in /usr/share/ca-certificates/mozilla/*.crt; do cat "$cert"; done > /etc/ssl/certs/ca-certificates.crt' \
+    && rm /tmp/ca-certificates.deb
+
+FROM ubuntu-snapshot AS build
+ARG UBUNTU_SNAPSHOT=20260701T000000Z
 ARG TARGETARCH
 ARG VERSION=0.0.0
 ARG COMMIT=0000000000000000000000000000000000000000
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 ENV PATH=/usr/local/go/bin:$PATH
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN printf '%s\n' "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy main universe" "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy-updates main universe" "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy-security main universe" > /etc/apt/sources.list \
+    && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 RUN case "${TARGETARCH}" in amd64) sum=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053 ;; arm64) sum=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49 ;; *) exit 64 ;; esac \
     && curl -fsSLo /tmp/go.tgz "https://go.dev/dl/go1.26.5.linux-${TARGETARCH}.tar.gz" \
     && echo "${sum}  /tmp/go.tgz" | sha256sum -c - \
@@ -18,12 +28,14 @@ RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/g
     -ldflags="-s -w -X github.com/araihu/xisnove/ui/internal/buildinfo.Version=${VERSION} -X github.com/araihu/xisnove/ui/internal/buildinfo.Commit=${COMMIT} -X github.com/araihu/xisnove/ui/internal/buildinfo.BuildDate=${BUILD_DATE} -X github.com/araihu/xisnove/ui/internal/buildinfo.Dirty=false" \
     -o /out/xisnove-ui ./cmd/server
 
-FROM ${UBUNTU_IMAGE}
+FROM ubuntu-snapshot
+ARG UBUNTU_SNAPSHOT=20260701T000000Z
 ARG VERSION=0.0.0
 ARG COMMIT=0000000000000000000000000000000000000000
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 LABEL org.opencontainers.image.title="Xisnove UI" org.opencontainers.image.description="Xisnove API-backed web UI" org.opencontainers.image.source="https://github.com/araihu/xisnove" org.opencontainers.image.version="${VERSION}" org.opencontainers.image.revision="${COMMIT}" org.opencontainers.image.created="${BUILD_DATE}" org.opencontainers.image.licenses="Apache-2.0" org.opencontainers.image.vendor="AraiHu"
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates wget \
+RUN printf '%s\n' "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy main universe" "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy-updates main universe" "deb http://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT} jammy-security main universe" > /etc/apt/sources.list \
+    && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates wget \
     && groupadd --gid 101 xisnove && useradd --uid 101 --gid 101 --no-create-home --shell /usr/sbin/nologin xisnove \
     && install -d -o 101 -g 101 /usr/share/licenses/xisnove && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=101:101 /out/xisnove-ui /usr/local/bin/xisnove-ui

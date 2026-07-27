@@ -205,15 +205,42 @@ func TestSBOMNormalizationAndLicensePolicyFailClosed(t *testing.T) {
 	root := t.TempDir()
 	raw := filepath.Join(root, "raw.spdx.json")
 	normalized := filepath.Join(root, "normalized.spdx.json")
-	mustWriteFile(t, raw, `{"spdxVersion":"SPDX-2.3","documentNamespace":"urn:uuid:random","creationInfo":{"created":"2020-01-01T00:00:00Z","creators":["Tool: syft"]},"packages":[{"name":"allowed","versionInfo":"1.0.0","licenseDeclared":"MIT","licenseConcluded":"MIT"},{"name":"mystery","versionInfo":"2.0.0","licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"}]}`, 0o644)
-	runTool(t, tool, "normalize-sbom", "--input", raw, "--output", normalized, "--subject-sha256", strings.Repeat("b", 64), "--source-date-epoch", releaseEpoch)
+	subjectDigest := strings.Repeat("b", 64)
+	mustWriteFile(t, raw, `{"spdxVersion":"SPDX-2.3","documentNamespace":"urn:uuid:random","creationInfo":{"created":"2020-01-01T00:00:00Z","creators":["Tool: syft"]},"packages":[{"name":"allowed","versionInfo":"1.0.0","licenseDeclared":"MIT","licenseConcluded":"MIT"},{"name":"github.com/araihu/xisnove/agent","versionInfo":"UNKNOWN","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/github.com/araihu/xisnove/agent"}],"licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"},{"name":"github.com/araihu/xisnove-evil","versionInfo":"UNKNOWN","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/github.com/araihu/xisnove-evil"}],"licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"},{"name":"candidate-root","checksums":[{"algorithm":"SHA256","checksumValue":"`+subjectDigest+`"}],"licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"},{"name":"mystery","versionInfo":"2.0.0","licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"}]}`, 0o644)
+	runTool(t, tool, "normalize-sbom", "--input", raw, "--output", normalized, "--subject-sha256", subjectDigest, "--source-date-epoch", releaseEpoch)
 	contents := string(mustReadFile(t, normalized))
 	if !strings.Contains(contents, `"created":"2023-11-14T22:13:20Z"`) || !strings.Contains(contents, `"documentNamespace":"https://xisnove.dev/sbom/`+strings.Repeat("b", 64)+`"`) {
 		t.Fatalf("SBOM identity not normalized: %s", contents)
 	}
+	var normalizedDocument struct {
+		Packages []struct {
+			Name      string `json:"name"`
+			Declared  string `json:"licenseDeclared"`
+			Concluded string `json:"licenseConcluded"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal([]byte(contents), &normalizedDocument); err != nil {
+		t.Fatal(err)
+	}
+	licenses := map[string]string{}
+	for _, pkg := range normalizedDocument.Packages {
+		licenses[pkg.Name] = pkg.Declared + "/" + pkg.Concluded
+	}
+	for _, name := range []string{"github.com/araihu/xisnove/agent", "candidate-root"} {
+		if licenses[name] != "Apache-2.0/Apache-2.0" {
+			t.Errorf("first-party license for %s = %q", name, licenses[name])
+		}
+	}
+	if licenses["mystery"] != "NOASSERTION/NOASSERTION" {
+		t.Fatalf("third-party unknown license was weakened: %q", licenses["mystery"])
+	}
+	if licenses["github.com/araihu/xisnove-evil"] != "NOASSERTION/NOASSERTION" {
+		t.Fatalf("spoofed first-party prefix was licensed: %q", licenses["github.com/araihu/xisnove-evil"])
+	}
 
 	policy := filepath.Join(root, "policy.json")
-	mustWriteFile(t, policy, `{"schemaVersion":1,"allow":["MIT"],"deny":["AGPL-3.0-only"]}`, 0o644)
+	mustWriteFile(t, policy, `{"schemaVersion":2,"default":{"allow":["MIT"],"deny":["AGPL-3.0-only"]},"golang":{"allow":["MIT"],"deny":["AGPL-3.0-only"]},"ubuntu":{"distro":"ubuntu-22.04","snapshot":"20260701T000000Z","lock":"ubuntu-lock.json"}}`, 0o644)
+	mustWriteFile(t, filepath.Join(root, "ubuntu-lock.json"), `{"schemaVersion":1,"packages":[]}`, 0o644)
 	inventory := filepath.Join(root, "licenses.json")
 	cmd := exec.Command(tool, "licenses", "--sbom", normalized, "--policy", policy, "--output", inventory)
 	output, err := cmd.CombinedOutput()
@@ -230,14 +257,122 @@ func TestSBOMNormalizationAndLicensePolicyFailClosed(t *testing.T) {
 	}
 }
 
+func TestLicensePolicyV2ScopesGoAndUbuntuDecisions(t *testing.T) {
+	tool := buildReleaseBundleTool(t)
+	root := t.TempDir()
+	policy := filepath.Join(root, "policy.json")
+	lock := filepath.Join(root, "ubuntu-lock.json")
+	evidence := filepath.Join(root, "evidence", "apache.txt")
+	mustWriteFile(t, evidence, "reviewed Apache evidence\n", 0o644)
+	evidenceDigest := sha256.Sum256(mustReadFile(t, evidence))
+	mustWriteFile(t, policy, `{
+  "schemaVersion": 2,
+  "globalDeny":["AGPL-3.0-only","SSPL-1.0"],
+  "default": {"allow":["Apache-2.0","MIT"],"deny":["AGPL-3.0-only","SSPL-1.0"]},
+  "golang": {
+    "allow":["Apache-2.0","BSD-3-Clause","MIT"],
+    "deny":["AGPL-3.0-only","GPL-3.0-only","SSPL-1.0"],
+    "overrides":[{"purl":"pkg:golang/example.invalid/reviewed@v1.0.0","reportedLicense":"Apache-2.0 AND LicenseRef-reviewed","resolvedLicense":"Apache-2.0","evidenceFile":"evidence/apache.txt","evidenceSHA256":"`+hex.EncodeToString(evidenceDigest[:])+`","obligations":["retain-license-notice"]},{"purl":"pkg:golang/example.invalid/badresolved@v1.0.0","reportedLicense":"LicenseRef-reviewed","resolvedLicense":"AGPL-3.0-only","evidenceFile":"evidence/apache.txt","evidenceSHA256":"`+hex.EncodeToString(evidenceDigest[:])+`","obligations":["retain-license-notice"]}]
+  },
+  "ubuntu":{"distro":"ubuntu-22.04","snapshot":"20260701T000000Z","lock":"ubuntu-lock.json"}
+}`, 0o644)
+	mustWriteFile(t, lock, `{"schemaVersion":1,"packages":[{"purl":"pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04","packageVerificationCode":"abc123","reportedLicense":"GPL-2.0-or-later","resolvedLicense":"GPL-2.0-or-later","evidenceSHA256":"`+strings.Repeat("a", 64)+`"},{"purl":"pkg:deb/ubuntu/adduser@3.118ubuntu5?arch=all&distro=ubuntu-22.04","packageVerificationCode":"def456","reportedLicense":"LicenseRef-reviewed-adduser","resolvedLicense":"LicenseRef-reviewed-adduser","evidenceSHA256":"`+strings.Repeat("b", 64)+`"},{"purl":"pkg:deb/ubuntu/base-passwd@3.5.52build1?arch=arm64&distro=ubuntu-22.04","packageVerificationCode":"ghi789","reportedLicense":"NOASSERTION","resolvedLicense":"LicenseRef-Ubuntu-base-passwd","evidenceSHA256":"`+strings.Repeat("c", 64)+`"}]}`, 0o644)
+
+	good := filepath.Join(root, "good.spdx.json")
+	mustWriteFile(t, good, `{"spdxVersion":"SPDX-2.3","packages":[
+{"name":"go-composite","versionInfo":"v1.0.0","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.invalid/composite@v1.0.0"}],"licenseDeclared":"Apache-2.0 AND MIT","licenseConcluded":"Apache-2.0 AND MIT"},
+{"name":"go-reviewed","versionInfo":"v1.0.0","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.invalid/reviewed@v1.0.0"}],"licenseDeclared":"Apache-2.0 AND LicenseRef-reviewed","licenseConcluded":"Apache-2.0 AND LicenseRef-reviewed"},
+{"name":"apt","versionInfo":"2.4.14","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"abc123"},"licenseDeclared":"GPL-2.0-or-later","licenseConcluded":"GPL-2.0-or-later"},
+{"name":"adduser","versionInfo":"3.118ubuntu5","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/adduser@3.118ubuntu5?arch=all&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"def456"},"licenseDeclared":"NOASSERTION","licenseConcluded":"LicenseRef-reviewed-adduser"},
+{"name":"base-passwd","versionInfo":"3.5.52build1","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/base-passwd@3.5.52build1?arch=arm64&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"ghi789"},"licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"}
+]}`, 0o644)
+	inventory := filepath.Join(root, "licenses.json")
+	runTool(t, tool, "licenses", "--sbom", good, "--policy", policy, "--output", inventory)
+	contents := string(mustReadFile(t, inventory))
+	for _, rule := range []string{"golang-expression", "golang-override", "ubuntu-lock"} {
+		if !strings.Contains(contents, `"rule":"`+rule+`"`) {
+			t.Errorf("inventory missing decision rule %q: %s", rule, contents)
+		}
+	}
+	if !strings.Contains(contents, `"reportedLicense":"Apache-2.0 AND LicenseRef-reviewed"`) || !strings.Contains(contents, `"license":"Apache-2.0"`) || !strings.Contains(contents, `"obligations":["retain-license-notice"]`) {
+		t.Fatalf("Go override did not preserve resolution evidence: %s", contents)
+	}
+	if !strings.Contains(contents, `"license":"LicenseRef-Ubuntu-base-passwd"`) || !strings.Contains(contents, `"reportedLicense":"NOASSERTION"`) {
+		t.Fatalf("Ubuntu lock did not preserve raw and resolved license: %s", contents)
+	}
+
+	badCases := []struct {
+		name    string
+		pkg     string
+		message string
+	}{
+		{"go denied", `{"name":"copyleft-go","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.invalid/copyleft@v1.0.0"}],"licenseDeclared":"GPL-3.0-only","licenseConcluded":"GPL-3.0-only"}`, "denied license"},
+		{"go unknown", `{"name":"unknown-go","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.invalid/unknown@v1.0.0"}],"licenseDeclared":"LicenseRef-missing","licenseConcluded":"LicenseRef-missing"}`, "unknown license"},
+		{"resolved globally denied", `{"name":"bad-resolved","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.invalid/badresolved@v1.0.0"}],"licenseDeclared":"LicenseRef-reviewed","licenseConcluded":"LicenseRef-reviewed"}`, "denied resolved license"},
+		{"ubuntu drift", `{"name":"apt","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"changed"},"licenseDeclared":"GPL-2.0-or-later","licenseConcluded":"GPL-2.0-or-later"}`, "Ubuntu lock mismatch"},
+		{"unlocked Ubuntu", `{"name":"new-deb","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/new-deb@1?arch=arm64&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"new"},"licenseDeclared":"MIT","licenseConcluded":"MIT"}`, "Ubuntu package not locked"},
+		{"ambiguous purl", `{"name":"ambiguous","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/example.invalid/a@v1"},{"referenceType":"purl","referenceLocator":"pkg:golang/example.invalid/b@v1"}],"licenseDeclared":"MIT","licenseConcluded":"MIT"}`, "exactly one purl"},
+	}
+	for _, test := range badCases {
+		t.Run(test.name, func(t *testing.T) {
+			sbom := filepath.Join(t.TempDir(), "bad.spdx.json")
+			mustWriteFile(t, sbom, `{"spdxVersion":"SPDX-2.3","packages":[`+test.pkg+`]}`, 0o644)
+			cmd := exec.Command(tool, "licenses", "--sbom", sbom, "--policy", policy, "--output", filepath.Join(t.TempDir(), "out.json"))
+			output, err := cmd.CombinedOutput()
+			if err == nil || !strings.Contains(string(output), test.message) {
+				t.Fatalf("want %q failure: err=%v output=%s", test.message, err, output)
+			}
+		})
+	}
+}
+
+func TestUbuntuLicenseLockProposalIsDeterministicAndFailClosed(t *testing.T) {
+	tool := buildReleaseBundleTool(t)
+	root := t.TempDir()
+	sbom := filepath.Join(root, "runtime.spdx.json")
+	mustWriteFile(t, sbom, `{"spdxVersion":"SPDX-2.3","packages":[
+{"name":"base-passwd","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/base-passwd@1?arch=arm64&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"code-b"},"licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"},
+{"name":"apt","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/apt@1?arch=arm64&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"code-a"},"licenseDeclared":"GPL-2.0-or-later","licenseConcluded":"GPL-2.0-or-later"}
+]}`, 0o644)
+	one := filepath.Join(root, "one.json")
+	two := filepath.Join(root, "two.json")
+	for _, output := range []string{one, two} {
+		runTool(t, tool, "propose-ubuntu-lock", "--sbom", sbom, "--output", output)
+	}
+	if !reflect.DeepEqual(mustReadFile(t, one), mustReadFile(t, two)) {
+		t.Fatal("same Ubuntu SBOM produced different lock bytes")
+	}
+	contents := string(mustReadFile(t, one))
+	for _, required := range []string{
+		`"reportedLicense":"NOASSERTION"`,
+		`"resolvedLicense":"LicenseRef-Ubuntu-`,
+		`"reportedLicense":"GPL-2.0-or-later"`,
+		`"obligations":["provide-corresponding-source-reference","retain-license-notice"]`,
+	} {
+		if !strings.Contains(contents, required) {
+			t.Errorf("Ubuntu lock proposal missing %s: %s", required, contents)
+		}
+	}
+
+	bad := filepath.Join(root, "bad.spdx.json")
+	mustWriteFile(t, bad, `{"spdxVersion":"SPDX-2.3","packages":[{"name":"missing-code","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/missing@1?arch=arm64&distro=ubuntu-22.04"}],"licenseDeclared":"MIT","licenseConcluded":"MIT"}]}`, 0o644)
+	cmd := exec.Command(tool, "propose-ubuntu-lock", "--sbom", bad, "--output", filepath.Join(root, "bad.json"))
+	output, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "packageVerificationCode") {
+		t.Fatalf("missing Ubuntu evidence must fail: err=%v output=%s", err, output)
+	}
+}
+
 func TestSBOMAndLicenseScriptsUseExplicitToolsAndInputs(t *testing.T) {
 	tool := buildReleaseBundleTool(t)
 	root := t.TempDir()
 	artifact := filepath.Join(root, "server.tar.gz")
 	mustWriteFile(t, artifact, "artifact", 0o644)
 	fakeSyft := filepath.Join(root, "fake-syft")
+	capture := filepath.Join(root, "syft.log")
 	mustWriteFile(t, fakeSyft, `#!/bin/sh
 set -eu
+printf '%s\n' "$*" > "$CAPTURE"
 output=
 for argument in "$@"; do
   case "$argument" in
@@ -249,13 +384,17 @@ printf '%s\n' '{"spdxVersion":"SPDX-2.3","documentNamespace":"urn:uuid:random","
 `, 0o755)
 	sboms := filepath.Join(root, "sboms")
 	generate := filepath.Join(repositoryRoot(t), "scripts", "release", "generate-sboms.sh")
-	runCommandIn(t, root, []string{"RELEASEBUNDLE_BIN=" + tool, "SYFT_BIN=" + fakeSyft}, generate, "--output-dir", sboms, "--source-date-epoch", releaseEpoch, artifact)
+	runCommandIn(t, root, []string{"RELEASEBUNDLE_BIN=" + tool, "SYFT_BIN=" + fakeSyft, "CAPTURE=" + capture}, generate, "--output-dir", sboms, "--source-date-epoch", releaseEpoch, artifact)
+	if args := string(mustReadFile(t, capture)); !strings.Contains(args, "--enrich golang") {
+		t.Fatalf("Syft Go license enrichment not explicit: %s", args)
+	}
 	generated := filepath.Join(sboms, "server.tar.gz.spdx.json")
 	if _, err := os.Stat(generated); err != nil {
 		t.Fatal(err)
 	}
 	policy := filepath.Join(root, "policy.json")
-	mustWriteFile(t, policy, `{"schemaVersion":1,"allow":["MIT"],"deny":["AGPL-3.0-only"]}`, 0o644)
+	mustWriteFile(t, policy, `{"schemaVersion":2,"default":{"allow":["MIT"],"deny":["AGPL-3.0-only"]},"golang":{"allow":["MIT"],"deny":["AGPL-3.0-only"]},"ubuntu":{"distro":"ubuntu-22.04","snapshot":"20260701T000000Z","lock":"ubuntu-lock.json"}}`, 0o644)
+	mustWriteFile(t, filepath.Join(root, "ubuntu-lock.json"), `{"schemaVersion":1,"packages":[]}`, 0o644)
 	inventory := filepath.Join(root, "licenses.json")
 	inventoryScript := filepath.Join(repositoryRoot(t), "scripts", "release", "inventory-licenses.sh")
 	runCommandIn(t, root, []string{"RELEASEBUNDLE_BIN=" + tool}, inventoryScript, "--sbom-dir", sboms, "--policy", policy, "--output", inventory)
