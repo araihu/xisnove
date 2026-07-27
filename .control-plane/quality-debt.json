@@ -41,6 +41,61 @@
           "the verified SHA descends from 01043fa3544d44b298b36eec1e2922f0999471ea"
         ]
       }
+    },
+    {
+      "id": "QD-2026-07-27-002",
+      "status": "open",
+      "feature": "M6.2A production OCI images native amd64 runtime certification",
+      "exact_sha": "3748881dd11afbbd0dce5caa22f8a6aaa3242278",
+      "skipped_gate": "execute all four linux/amd64 images and packaged server database profiles on a native linux/amd64 Docker runner",
+      "reason": "The available development host is native arm64. amd64 build/load and runtime passed under emulation, but the plan correctly forbids treating emulation as native platform evidence.",
+      "risk": "medium",
+      "affected_paths": [
+        "build/package/**",
+        "docker-bake.hcl",
+        "integration/distribution/images/**"
+      ],
+      "current_evidence": [
+        "native arm64 runtime passed for server, UI, Agent, and operator",
+        "amd64 build/load and supplemental emulated runtime passed",
+        "the multi-platform OCI layout contains linux/amd64 and linux/arm64 manifests with exact static contracts"
+      ],
+      "acceptance": [
+        "on a native linux/amd64 runner, run `docker buildx bake test-amd64 --load`",
+        "run `go test -race ./integration/distribution/images -count=1` with native amd64 runtime enabled",
+        "prove SQLite, local Turso, PostgreSQL, probes, read-only root, licenses, secret-free history, and graceful shutdown",
+        "close this receipt against the verified descendant SHA"
+      ],
+      "trigger": "M6.3 release-candidate CI before any image publication",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-002"
+    },
+    {
+      "id": "QD-2026-07-27-003",
+      "status": "open",
+      "feature": "M6.2A packaged managed Turso acceptance",
+      "exact_sha": "3748881dd11afbbd0dce5caa22f8a6aaa3242278",
+      "skipped_gate": "run the packaged server image against a disposable managed Turso database with protected credentials",
+      "reason": "Credentialed provider acceptance is isolated from local feature delivery and requires protected external credentials. It is scheduled in the release/provider acceptance lane.",
+      "risk": "medium",
+      "affected_paths": [
+        "build/package/Dockerfile.server",
+        "integration/distribution/images/runtime_test.go"
+      ],
+      "current_evidence": [
+        "packaged server runtime passed for SQLite, local Turso, and PostgreSQL",
+        "managed Turso storage conformance passed outside the packaged-image node using disposable database lifecycle",
+        "database URL and managed Turso token are consumed through safe file references"
+      ],
+      "acceptance": [
+        "create a disposable managed Turso database using protected CI credentials",
+        "run packaged-image expand migration, serve, readiness, query, and graceful shutdown",
+        "tear down the database and prove no credential or resource residue",
+        "close this receipt against the verified descendant SHA"
+      ],
+      "trigger": "M6.3 protected provider acceptance before release publication",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-003"
     }
   ]
 }
