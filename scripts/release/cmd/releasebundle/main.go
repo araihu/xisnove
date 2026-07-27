@@ -964,7 +964,7 @@ func runLicenses(args []string) error {
 			if effectiveLicense != license {
 				reportedLicense = license
 			}
-			correspondingSourceID, err := correspondingSourceForDecision(policy, ubuntuLock, purl, license, obligations)
+			correspondingSourceID, err := correspondingSourceForDecision(policy, ubuntuLock, purl, license, effectiveLicense, obligations)
 			if err != nil {
 				return fmt.Errorf("%w for %s", err, pkg.Name)
 			}
@@ -1022,8 +1022,12 @@ func validateLicensePolicy(policy licensePolicy) error {
 	return nil
 }
 
-func correspondingSourceForDecision(policy licensePolicy, ubuntuLock map[string]ubuntuPackageApproval, purl, reportedLicense string, obligations []string) (string, error) {
-	required := containsString(obligations, "provide-corresponding-source-reference")
+func correspondingSourceForDecision(policy licensePolicy, ubuntuLock map[string]ubuntuPackageApproval, purl, reportedLicense, effectiveLicense string, obligations []string) (string, error) {
+	required := expressionHasCopyleft(effectiveLicense)
+	declared := containsString(obligations, "provide-corresponding-source-reference")
+	if required != declared {
+		return "", fmt.Errorf("copyleft source obligation mismatch for purl %q and resolved license %q", purl, effectiveLicense)
+	}
 	identifier := ""
 	if approved, ok := ubuntuLock[purl]; ok {
 		identifier = approved.CorrespondingSource
@@ -1055,7 +1059,13 @@ func containsString(values []string, target string) bool {
 
 func containedRelativePath(value string) bool {
 	clean := filepath.ToSlash(filepath.Clean(value))
-	return value != "" && !filepath.IsAbs(value) && clean != "." && clean != ".." && !strings.HasPrefix(clean, "../")
+	return value != "" &&
+		!filepath.IsAbs(value) &&
+		!strings.Contains(value, `\`) &&
+		value == clean &&
+		clean != "." &&
+		clean != ".." &&
+		!strings.HasPrefix(clean, "../")
 }
 
 func loadCorrespondingSourceLock(policyDir, lockPath string) (map[string]correspondingSource, error) {

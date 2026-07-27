@@ -312,9 +312,11 @@ func TestLicensePolicyV2ScopesGoAndUbuntuDecisions(t *testing.T) {
     "deny":["AGPL-3.0-only","GPL-3.0-only","SSPL-1.0"],
     "overrides":[{"purl":"pkg:golang/example.invalid/reviewed@v1.0.0","reportedLicense":"Apache-2.0 AND LicenseRef-reviewed","resolvedLicense":"Apache-2.0","evidenceFile":"evidence/apache.txt","evidenceSHA256":"`+hex.EncodeToString(evidenceDigest[:])+`","obligations":["retain-license-notice"]},{"purl":"pkg:golang/example.invalid/badresolved@v1.0.0","reportedLicense":"LicenseRef-reviewed","resolvedLicense":"AGPL-3.0-only","evidenceFile":"evidence/apache.txt","evidenceSHA256":"`+hex.EncodeToString(evidenceDigest[:])+`","obligations":["retain-license-notice"]}]
   },
-  "ubuntu":{"distro":"ubuntu-22.04","snapshot":"20260701T000000Z","lock":"ubuntu-lock.json"}
+	"ubuntu":{"distro":"ubuntu-22.04","snapshot":"20260701T000000Z","lock":"ubuntu-lock.json"},
+	"correspondingSources":"corresponding-sources.lock.json"
 }`, 0o644)
-	mustWriteFile(t, lock, `{"schemaVersion":1,"packages":[{"purl":"pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04","packageVerificationCode":"abc123","reportedLicense":"GPL-2.0-or-later","resolvedLicense":"GPL-2.0-or-later","evidenceSHA256":"`+strings.Repeat("a", 64)+`"},{"purl":"pkg:deb/ubuntu/adduser@3.118ubuntu5?arch=all&distro=ubuntu-22.04","packageVerificationCode":"def456","reportedLicense":"LicenseRef-reviewed-adduser","resolvedLicense":"LicenseRef-reviewed-adduser","evidenceSHA256":"`+strings.Repeat("b", 64)+`"},{"purl":"pkg:deb/ubuntu/base-passwd@3.5.52build1?arch=arm64&distro=ubuntu-22.04","packageVerificationCode":"ghi789","reportedLicense":"NOASSERTION","resolvedLicense":"LicenseRef-Ubuntu-base-passwd","evidenceSHA256":"`+strings.Repeat("c", 64)+`"}]}`, 0o644)
+	mustWriteFile(t, lock, `{"schemaVersion":1,"packages":[{"purl":"pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04","packageVerificationCode":"abc123","reportedLicense":"GPL-2.0-or-later","resolvedLicense":"GPL-2.0-or-later","evidenceSHA256":"`+strings.Repeat("a", 64)+`","obligations":["provide-corresponding-source-reference","retain-license-notice"],"correspondingSource":"ubuntu:apt@2.4.14"},{"purl":"pkg:deb/ubuntu/adduser@3.118ubuntu5?arch=all&distro=ubuntu-22.04","packageVerificationCode":"def456","reportedLicense":"LicenseRef-reviewed-adduser","resolvedLicense":"LicenseRef-reviewed-adduser","evidenceSHA256":"`+strings.Repeat("b", 64)+`"},{"purl":"pkg:deb/ubuntu/base-passwd@3.5.52build1?arch=arm64&distro=ubuntu-22.04","packageVerificationCode":"ghi789","reportedLicense":"NOASSERTION","resolvedLicense":"LicenseRef-Ubuntu-base-passwd","evidenceSHA256":"`+strings.Repeat("c", 64)+`"}]}`, 0o644)
+	mustWriteFile(t, filepath.Join(root, "corresponding-sources.lock.json"), `{"schemaVersion":1,"sources":[{"id":"ubuntu:apt@2.4.14","purls":["pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04"],"files":[{"path":"ubuntu/apt/apt.dsc","url":"https://example.invalid/apt.dsc","sha256":"`+strings.Repeat("d", 64)+`","size":1}]}]}`, 0o644)
 
 	good := filepath.Join(root, "good.spdx.json")
 	mustWriteFile(t, good, `{"spdxVersion":"SPDX-2.3","packages":[
@@ -431,12 +433,58 @@ func TestCorrespondingSourcesAreExactFailClosedAndMaterialized(t *testing.T) {
 		t.Fatalf("failed materialization exposed partial output: %v", statErr)
 	}
 
+	for _, test := range []struct {
+		name  string
+		files string
+	}{
+		{name: "parent alias", files: `[{"path":"alias/../same.txt","url":"` + server.URL + `/ubuntu/apt.dsc","sha256":"` + hex.EncodeToString(ubuntuDigest[:]) + `","size":` + fmt.Sprint(len(ubuntuPayload)) + `}]`},
+		{name: "dot alias", files: `[{"path":"./same.txt","url":"` + server.URL + `/ubuntu/apt.dsc","sha256":"` + hex.EncodeToString(ubuntuDigest[:]) + `","size":` + fmt.Sprint(len(ubuntuPayload)) + `}]`},
+		{name: "platform separator alias", files: `[{"path":"alias\\same.txt","url":"` + server.URL + `/ubuntu/apt.dsc","sha256":"` + hex.EncodeToString(ubuntuDigest[:]) + `","size":` + fmt.Sprint(len(ubuntuPayload)) + `}]`},
+		{name: "duplicate normalized target", files: `[{"path":"alias/../same.txt","url":"` + server.URL + `/ubuntu/apt.dsc","sha256":"` + hex.EncodeToString(ubuntuDigest[:]) + `","size":` + fmt.Sprint(len(ubuntuPayload)) + `},{"path":"same.txt","url":"` + server.URL + `/ubuntu/apt.dsc","sha256":"` + hex.EncodeToString(ubuntuDigest[:]) + `","size":` + fmt.Sprint(len(ubuntuPayload)) + `}]`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			aliasLock := filepath.Join(root, strings.ReplaceAll(test.name, " ", "-")+".lock.json")
+			mustWriteFile(t, aliasLock, `{"schemaVersion":1,"sources":[{"id":"alias:test@1","purls":["pkg:generic/alias@1"],"files":`+test.files+`}]}`, 0o644)
+			aliasOutput := filepath.Join(root, strings.ReplaceAll(test.name, " ", "-")+"-output")
+			aliasCmd := exec.Command(tool, "corresponding-sources", "--lock", aliasLock, "--output-root", aliasOutput)
+			aliasCommandOutput, aliasErr := aliasCmd.CombinedOutput()
+			if aliasErr == nil || !strings.Contains(string(aliasCommandOutput), "contained path") {
+				t.Fatalf("noncanonical source path must fail closed: err=%v output=%s", aliasErr, aliasCommandOutput)
+			}
+			if _, statErr := os.Stat(aliasOutput); !os.IsNotExist(statErr) {
+				t.Fatalf("noncanonical source path exposed partial output: %v", statErr)
+			}
+		})
+	}
+
 	badPolicy := filepath.Join(root, "bad-policy.json")
 	mustWriteFile(t, badPolicy, strings.ReplaceAll(string(mustReadFile(t, policy)), `"correspondingSource":"golang:modernc.org/libc@v1.74.3"`, `"correspondingSource":"ubuntu:apt@2.4.14"`), 0o644)
 	cmd = exec.Command(tool, "licenses", "--sbom", sbom, "--policy", badPolicy, "--output", filepath.Join(root, "bad-licenses.json"))
 	output, err = cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(output), "does not cover purl") {
 		t.Fatalf("wrong corresponding source must fail closed: err=%v output=%s", err, output)
+	}
+
+	ubuntuDowngrade := filepath.Join(root, "ubuntu-downgrade.json")
+	ubuntuLockText := string(mustReadFile(t, filepath.Join(root, "ubuntu-lock.json")))
+	ubuntuLockText = strings.ReplaceAll(ubuntuLockText, `"obligations":["provide-corresponding-source-reference","retain-license-notice"],"correspondingSource":"ubuntu:apt@2.4.14"`, `"obligations":["retain-license-notice"]`)
+	mustWriteFile(t, ubuntuDowngrade, ubuntuLockText, 0o644)
+	ubuntuDowngradePolicy := filepath.Join(root, "ubuntu-downgrade-policy.json")
+	mustWriteFile(t, ubuntuDowngradePolicy, strings.ReplaceAll(string(mustReadFile(t, policy)), `"lock":"ubuntu-lock.json"`, `"lock":"ubuntu-downgrade.json"`), 0o644)
+	cmd = exec.Command(tool, "licenses", "--sbom", sbom, "--policy", ubuntuDowngradePolicy, "--output", filepath.Join(root, "ubuntu-downgrade-licenses.json"))
+	output, err = cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "copyleft source obligation mismatch") {
+		t.Fatalf("removing Ubuntu copyleft source obligation must fail closed: err=%v output=%s", err, output)
+	}
+
+	goDowngrade := filepath.Join(root, "go-downgrade-policy.json")
+	goPolicyText := string(mustReadFile(t, policy))
+	goPolicyText = strings.ReplaceAll(goPolicyText, `"obligations":["provide-corresponding-source-reference","retain-license-notice"],"correspondingSource":"golang:modernc.org/libc@v1.74.3"`, `"obligations":["retain-license-notice"]`)
+	mustWriteFile(t, goDowngrade, goPolicyText, 0o644)
+	cmd = exec.Command(tool, "licenses", "--sbom", sbom, "--policy", goDowngrade, "--output", filepath.Join(root, "go-downgrade-licenses.json"))
+	output, err = cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "copyleft source obligation mismatch") {
+		t.Fatalf("removing Go copyleft source obligation must fail closed: err=%v output=%s", err, output)
 	}
 }
 
