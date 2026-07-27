@@ -6,3 +6,9 @@
 .superpowers
 .worktrees
 **/.DS_Store
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/bin
+**/dist
+coverage.out

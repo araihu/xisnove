@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1.18
+ARG UBUNTU_IMAGE=ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+FROM ${UBUNTU_IMAGE} AS build
+ARG TARGETARCH
+ARG VERSION=0.0.0
+ARG COMMIT=0000000000000000000000000000000000000000
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+ENV PATH=/usr/local/go/bin:$PATH
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN case "${TARGETARCH}" in amd64) sum=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053 ;; arm64) sum=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49 ;; *) exit 64 ;; esac \
+    && curl -fsSLo /tmp/go.tgz "https://go.dev/dl/go1.26.5.linux-${TARGETARCH}.tar.gz" \
+    && echo "${sum}  /tmp/go.tgz" | sha256sum -c - \
+    && tar -C /usr/local -xzf /tmp/go.tgz && rm /tmp/go.tgz
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod \
+    cd agent && GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -trimpath \
+    -ldflags="-s -w -X github.com/araihu/xisnove/agent/internal/buildinfo.Version=${VERSION} -X github.com/araihu/xisnove/agent/internal/buildinfo.Commit=${COMMIT} -X github.com/araihu/xisnove/agent/internal/buildinfo.BuildDate=${BUILD_DATE} -X github.com/araihu/xisnove/agent/internal/buildinfo.Dirty=false" \
+    -o /out/xisnove-agent ./cmd/xisnove-agent
+
+FROM ${UBUNTU_IMAGE}
+ARG VERSION=0.0.0
+ARG COMMIT=0000000000000000000000000000000000000000
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+LABEL org.opencontainers.image.title="Xisnove Agent" org.opencontainers.image.description="Outbound Xisnove probe and discovery Agent" org.opencontainers.image.source="https://github.com/araihu/xisnove" org.opencontainers.image.version="${VERSION}" org.opencontainers.image.revision="${COMMIT}" org.opencontainers.image.created="${BUILD_DATE}" org.opencontainers.image.licenses="Apache-2.0" org.opencontainers.image.vendor="AraiHu"
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates wget \
+    && groupadd --gid 101 xisnove && useradd --uid 101 --gid 101 --no-create-home --shell /usr/sbin/nologin xisnove \
+    && install -d -o 101 -g 101 /usr/share/licenses/xisnove && rm -rf /var/lib/apt/lists/*
+COPY --from=build --chown=101:101 /out/xisnove-agent /usr/local/bin/xisnove-agent
+COPY --chown=101:101 LICENSE NOTICE /usr/share/licenses/xisnove/
+USER 101:101
+ENV XISNOVE_AGENT_OBSERVABILITY_ADDRESS=0.0.0.0:9090
+EXPOSE 9090
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=10s --timeout=2s --start-period=10s --retries=3 CMD ["/usr/bin/wget", "--quiet", "--spider", "--timeout=1", "http://127.0.0.1:9090/livez"]
+ENTRYPOINT ["/usr/local/bin/xisnove-agent"]
