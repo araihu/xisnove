@@ -113,6 +113,7 @@ func TestLoadEnvelopeValidatesPrivateKeyring(t *testing.T) {
 		{"short key", fmt.Sprintf(`{"activeVersion":1,"keys":[{"version":1,"key":%q}]}`, base64.StdEncoding.EncodeToString([]byte("short"))), 0o600},
 		{"unknown field", strings.Replace(valid, `"activeVersion"`, `"unexpected"`, 1), 0o600},
 		{"permissive", valid, 0o644},
+		{"group writable", valid, 0o660},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -123,14 +124,15 @@ func TestLoadEnvelopeValidatesPrivateKeyring(t *testing.T) {
 		})
 	}
 
-	t.Run("symlink", func(t *testing.T) {
-		target := writePrivateFile(t, "target.json", valid, 0o600)
+	t.Run("projected symlink", func(t *testing.T) {
+		target := writePrivateFile(t, "target.json", valid, 0o640)
 		link := filepath.Join(t.TempDir(), "keyring.json")
 		if err := os.Symlink(target, link); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := xiscrypto.LoadEnvelope(link); err == nil {
-			t.Fatal("LoadEnvelope() accepted symlink")
+		envelope, err := xiscrypto.LoadEnvelope(link)
+		if err != nil || envelope.ActiveVersion() != 1 {
+			t.Fatalf("LoadEnvelope() = %#v, %v", envelope, err)
 		}
 	})
 
