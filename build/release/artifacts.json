@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "version": {
     "source": "git-tag",
     "pattern": "vX.Y.Z[-<identifier>]",
@@ -74,6 +74,42 @@
       "name": "xisnove-edge",
       "repository": "oci://ghcr.io/araihu/charts/xisnove-edge",
       "version_ref": "release.version"
+    }
+  ],
+  "bundles": [
+    {
+      "name": "xisnove-source",
+      "kind": "source",
+      "format": "tar.gz",
+      "includes": ["LICENSE", "NOTICE", "source-tree"],
+      "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-deployment",
+      "kind": "deployment",
+      "format": "tar.gz",
+      "includes": ["LICENSE", "NOTICE", "charts/xisnove", "charts/xisnove-edge", "deploy/compose", "deploy/raw", "deploy/systemd", "operator/config/crd", "docs/operations/upgrade.md"],
+      "version_ref": "release.version"
+    }
+  ],
+  "metadata": [
+    {
+      "name": "checksums",
+      "kind": "checksums",
+      "format": "sha256",
+      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-platform-manifests", "sboms", "canonical-manifest"]
+    },
+    {
+      "name": "sboms",
+      "kind": "sbom-set",
+      "format": "spdx-json",
+      "subjects": ["archives", "charts", "oci-indexes", "oci-platform-manifests"]
+    },
+    {
+      "name": "canonical-manifest",
+      "kind": "digest-manifest",
+      "format": "canonical-json",
+      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-platform-manifests", "sboms"]
     }
   ]
 }

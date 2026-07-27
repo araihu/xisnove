@@ -35,12 +35,25 @@ type releaseManifest struct {
 		Repository string `json:"repository"`
 		VersionRef string `json:"version_ref"`
 	} `json:"charts"`
+	Bundles []struct {
+		Name       string   `json:"name"`
+		Kind       string   `json:"kind"`
+		Format     string   `json:"format"`
+		Includes   []string `json:"includes"`
+		VersionRef string   `json:"version_ref"`
+	} `json:"bundles"`
+	Metadata []struct {
+		Name     string   `json:"name"`
+		Kind     string   `json:"kind"`
+		Format   string   `json:"format"`
+		Subjects []string `json:"subjects"`
+	} `json:"metadata"`
 }
 
 func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	manifest := readReleaseManifest(t)
-	if manifest.SchemaVersion != 1 {
-		t.Fatalf("schema_version = %d, want 1", manifest.SchemaVersion)
+	if manifest.SchemaVersion != 2 {
+		t.Fatalf("schema_version = %d, want 2", manifest.SchemaVersion)
 	}
 	if manifest.Version.Source != "git-tag" || manifest.Version.Pattern != "vX.Y.Z[-<identifier>]" {
 		t.Fatalf("version = %#v, want one stable-or-prerelease git-tag source", manifest.Version)
@@ -109,6 +122,45 @@ func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotCharts, wantCharts) {
 		t.Fatalf("chart matrix = %#v, want %#v", gotCharts, wantCharts)
+	}
+
+	wantBundles := map[string]string{
+		"xisnove-source":     "source",
+		"xisnove-deployment": "deployment",
+	}
+	gotBundles := make(map[string]string, len(manifest.Bundles))
+	for _, artifact := range manifest.Bundles {
+		if artifact.Format != "tar.gz" || len(artifact.Includes) == 0 {
+			t.Errorf("bundle %q contract incomplete: %#v", artifact.Name, artifact)
+		}
+		assertVersionRef(t, artifact.Name, artifact.VersionRef)
+		gotBundles[artifact.Name] = artifact.Kind
+	}
+	if !reflect.DeepEqual(gotBundles, wantBundles) {
+		t.Fatalf("bundle matrix = %#v, want %#v", gotBundles, wantBundles)
+	}
+
+	wantMetadata := map[string]struct {
+		kind   string
+		format string
+	}{
+		"checksums":          {kind: "checksums", format: "sha256"},
+		"sboms":              {kind: "sbom-set", format: "spdx-json"},
+		"canonical-manifest": {kind: "digest-manifest", format: "canonical-json"},
+	}
+	for _, artifact := range manifest.Metadata {
+		want, ok := wantMetadata[artifact.Name]
+		if !ok {
+			t.Errorf("unexpected metadata artifact %q", artifact.Name)
+			continue
+		}
+		if artifact.Kind != want.kind || artifact.Format != want.format || len(artifact.Subjects) == 0 {
+			t.Errorf("metadata %q contract incomplete: %#v", artifact.Name, artifact)
+		}
+		delete(wantMetadata, artifact.Name)
+	}
+	if len(wantMetadata) != 0 {
+		t.Fatalf("missing metadata artifacts: %#v", wantMetadata)
 	}
 }
 

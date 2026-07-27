@@ -11,15 +11,15 @@
     },
     {
       "name": "actions/upload-artifact",
-      "sha": "b7c566a772e6b6bfb58ed0dc250532a479d7789f"
+      "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     },
     {
       "name": "docker/setup-qemu-action",
-      "sha": "c7c53464625b32c7a7e944ae62b3e17d2b600130"
+      "sha": "96fe6ef7f33517b61c61be40b68a1882f3264fb8"
     },
     {
       "name": "docker/setup-buildx-action",
-      "sha": "4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd"
+      "sha": "bb05f3f5519dd87d3ba754cc423b652a5edd6d2c"
     }
   ],
   "tools": [
@@ -107,6 +107,24 @@
         "linux-amd64": "bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea",
         "linux-arm64": "2ca2c023109c2db6b2b77366b6717291452d4531167377d95c79547f0c8e3467"
       }
+    },
+    {
+      "name": "buildx",
+      "version": "0.35.0",
+      "source": "https://github.com/docker/buildx/releases/tag/v0.35.0",
+      "checksums": {
+        "linux-amd64": "d41ece72044243b4f58b343441ae37446d9c29a7d6b5e11c61847bbcf8f7dfda",
+        "linux-arm64": "c4248d6cbc4a619a7e0b4609c11e509ad4ac0b475e1c64817c0ac20c5d90c766"
+      }
+    },
+    {
+      "name": "oras",
+      "version": "1.3.2",
+      "source": "https://github.com/oras-project/oras/releases/tag/v1.3.2",
+      "checksums": {
+        "linux-amd64": "9229ccc6d17bb282039ad4a69abb16dcb887a5bce567c075d731d9b3c7ad8eaf",
+        "linux-arm64": "8db4a223bd6034deff198e791ea7cb3af0840df25b7e9f370e2f1f3fd20d389b"
+      }
     }
   ],
   "go_module_tools": [
@@ -183,6 +201,11 @@
       "name": "docker.io/tonistiigi/binfmt:latest",
       "use": "test-emulation",
       "digest": "sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0"
+    },
+    {
+      "name": "moby/buildkit:v0.31.2",
+      "use": "buildkit-daemon",
+      "digest": "sha256:2f5adac4ecd194d9f8c10b7b5d7bceb5186853db1b26e5abd3a657af0b7e26ec"
     }
   ],
   "scanner_database": {

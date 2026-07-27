@@ -109,14 +109,16 @@ jobs:
           shellcheck --version
           systemd-analyze --version
       - name: Install pinned arm64 emulation for OCI verification
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
         with:
           image: docker.io/tonistiigi/binfmt:latest@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
           platforms: arm64
       - name: Select pinned multi-platform Buildx builder
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
         with:
+          version: v0.35.0
           driver: docker-container
+          driver-opts: image=moby/buildkit:v0.31.2@sha256:2f5adac4ecd194d9f8c10b7b5d7bceb5186853db1b26e5abd3a657af0b7e26ec
       - name: Verify native production images
         run: make distribution-image-native-check
       - name: Verify multi-platform OCI layouts

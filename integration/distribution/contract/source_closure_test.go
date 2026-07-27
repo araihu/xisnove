@@ -255,12 +255,22 @@ func TestM62DistributionGatesAreWired(t *testing.T) {
 		}
 	}
 	binfmtImage := ""
+	buildkitImage := ""
 	for _, image := range lock.Images {
 		if image.Use == "test-emulation" {
 			binfmtImage = image.Name + "@" + image.Digest
 		}
+		if image.Use == "buildkit-daemon" {
+			buildkitImage = image.Name + "@" + image.Digest
+		}
 	}
-	for label, required := range map[string]string{"QEMU action": qemuAction, "Buildx action": buildxAction, "binfmt image": binfmtImage} {
+	buildxVersion := ""
+	for _, tool := range lock.Tools {
+		if tool.Name == "buildx" {
+			buildxVersion = "version: v" + tool.Version
+		}
+	}
+	for label, required := range map[string]string{"QEMU action": qemuAction, "Buildx action": buildxAction, "binfmt image": binfmtImage, "BuildKit image": buildkitImage, "Buildx version": buildxVersion} {
 		if required == "" {
 			t.Errorf("release toolchain lock has no %s", label)
 		} else if !strings.Contains(workflow, required) {

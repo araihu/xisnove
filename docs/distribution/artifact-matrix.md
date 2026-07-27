@@ -16,11 +16,19 @@ uses `release.version` from the single `vX.Y.Z` tag.
 | `xisnove-operator` | OCI image | Linux amd64/arm64 | `ghcr.io/araihu/xisnove-operator` |
 | `xisnove` | Helm OCI chart | cluster-dependent | `oci://ghcr.io/araihu/charts/xisnove` |
 | `xisnove-edge` | Helm OCI chart | cluster-dependent | `oci://ghcr.io/araihu/charts/xisnove-edge` |
+| `xisnove-source` | source bundle | source closure | GitHub release |
+| `xisnove-deployment` | deployment bundle | charts, Compose, raw, systemd, CRDs, upgrade docs | GitHub release |
 
 Each binary archive and chart package contains `LICENSE` and `NOTICE`.
 Each image contains those files at `/usr/share/licenses/xisnove/`. Every
 archive, chart, OCI index, and per-platform manifest receives a SHA-256 digest,
 SBOM, provenance, and signature in the candidate digest manifest.
+
+Schema v2 also freezes three metadata surfaces: detached SHA-256 checksums,
+SPDX JSON SBOMs, and one canonical JSON digest manifest. The manifest closes
+over archives, charts, both bundles, OCI indexes, per-platform manifests, and
+SBOMs without recursively naming its own digest. Its detached checksum covers
+the manifest itself.
 
 Cross-build success is insufficient. Native Linux amd64 and arm64 runners
 execute each image. The server additionally runs local-Turso open, migrate,
