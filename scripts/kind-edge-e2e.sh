@@ -10,9 +10,10 @@ CLUSTER_NAME="${XISNOVE_KIND_CLUSTER_NAME:-xisnove-edge-e2e}"
 NAMESPACE="${XISNOVE_KIND_NAMESPACE:-xisnove-edge-e2e}"
 NODE_IMAGE="${XISNOVE_KIND_NODE_IMAGE:-kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f}"
 RUN_ID="$(date -u +%Y%m%d%H%M%S)-$$"
-SERVER_IMAGE="xisnove-server:kind-e2e-${RUN_ID}"
-OPERATOR_IMAGE="xisnove-operator:kind-e2e-${RUN_ID}"
-AGENT_IMAGE="xisnove-agent:kind-e2e-${RUN_ID}"
+SERVER_IMAGE="${XISNOVE_KIND_E2E_SERVER_IMAGE:-xisnove-server:kind-e2e-${RUN_ID}}"
+UI_IMAGE="${XISNOVE_KIND_E2E_UI_IMAGE:-xisnove-ui:kind-e2e-${RUN_ID}}"
+OPERATOR_IMAGE="${XISNOVE_KIND_E2E_OPERATOR_IMAGE:-xisnove-operator:kind-e2e-${RUN_ID}}"
+AGENT_IMAGE="${XISNOVE_KIND_E2E_AGENT_IMAGE:-xisnove-agent:kind-e2e-${RUN_ID}}"
 SERVER_CONTAINER="xisnove-kind-e2e-control-plane-${RUN_ID}"
 DATA_VOLUME="xisnove-kind-e2e-data-${RUN_ID}"
 ARTIFACTS_DIR="${XISNOVE_KIND_ARTIFACTS_DIR:-${ROOT_DIR}/.artifacts/kind-edge-e2e/${RUN_ID}}"
@@ -67,10 +68,14 @@ for command in "${KIND_BIN}" "${KUBECTL_BIN}" "${HELM_BIN}" "${DOCKER_BIN}" go c
 "${KIND_BIN}" delete cluster --name "${CLUSTER_NAME}" >/dev/null 2>&1 || true
 "${DOCKER_BIN}" rm -f "${SERVER_CONTAINER}" >/dev/null 2>&1 || true
 
-echo "building digest-pinned Xisnove e2e images"
-"${DOCKER_BIN}" build -f "${ROOT_DIR}/integration/testdata/kind/Dockerfile.server" -t "${SERVER_IMAGE}" "${ROOT_DIR}"
-"${DOCKER_BIN}" build -f "${ROOT_DIR}/integration/testdata/kind/Dockerfile.operator" -t "${OPERATOR_IMAGE}" "${ROOT_DIR}"
-"${DOCKER_BIN}" build -f "${ROOT_DIR}/integration/testdata/kind/Dockerfile.agent" -t "${AGENT_IMAGE}" "${ROOT_DIR}"
+if [[ "${XISNOVE_KIND_E2E_PREBUILT:-0}" == "1" ]]; then
+  echo "using accepted prebuilt Xisnove e2e images"
+else
+  echo "building digest-pinned Xisnove e2e images"
+  "${DOCKER_BIN}" build -f "${ROOT_DIR}/integration/testdata/kind/Dockerfile.server" -t "${SERVER_IMAGE}" "${ROOT_DIR}"
+  "${DOCKER_BIN}" build -f "${ROOT_DIR}/integration/testdata/kind/Dockerfile.operator" -t "${OPERATOR_IMAGE}" "${ROOT_DIR}"
+  "${DOCKER_BIN}" build -f "${ROOT_DIR}/integration/testdata/kind/Dockerfile.agent" -t "${AGENT_IMAGE}" "${ROOT_DIR}"
+fi
 
 "${KIND_BIN}" create cluster --name "${CLUSTER_NAME}" --image "${NODE_IMAGE}" --config "${ROOT_DIR}/integration/testdata/kind/cluster.yaml" --kubeconfig "${KUBECONFIG_PATH}" --wait 120s
 "${KIND_BIN}" load docker-image --name "${CLUSTER_NAME}" "${OPERATOR_IMAGE}" "${AGENT_IMAGE}"
@@ -99,6 +104,7 @@ export XISNOVE_KIND_E2E_CLUSTER_NAME="${CLUSTER_NAME}"
 export XISNOVE_KIND_E2E_NAMESPACE="${NAMESPACE}"
 export XISNOVE_KIND_E2E_OPERATOR_IMAGE="${OPERATOR_IMAGE}"
 export XISNOVE_KIND_E2E_AGENT_IMAGE="${AGENT_IMAGE}"
+export XISNOVE_KIND_E2E_UI_IMAGE="${UI_IMAGE}"
 export XISNOVE_KIND_E2E_ADMIN_EMAIL="kind-e2e@example.test"
 export XISNOVE_KIND_E2E_ADMIN_PASSWORD_FILE="${TEMP_DIR}/admin-password"
 export XISNOVE_KIND_E2E_HELM_BIN="${HELM_BIN}"

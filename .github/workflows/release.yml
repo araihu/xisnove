@@ -1,0 +1,624 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact 40-character commit to build and attest
+        required: true
+        type: string
+      version:
+        description: Release version without the v prefix
+        required: true
+        type: string
+      publish:
+        description: Run protected acceptance and promote the accepted candidate
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  GH_VERSION: 2.96.0
+  GH_SHA256: 83d5c2ccad5498f58bf6368acb1ab32588cf43ab3a4b1c301bf36328b1c8bd60
+  ORAS_VERSION: 1.3.2
+  ORAS_SHA256: 9229ccc6d17bb282039ad4a69abb16dcb887a5bce567c075d731d9b3c7ad8eaf
+  COSIGN_VERSION: 3.1.2
+  COSIGN_SHA256: f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf
+  XISNOVE_TRUSTED_CANDIDATE_VERIFIER: |
+    import hashlib, json, pathlib, re, sys
+
+    root = pathlib.Path(sys.argv[1])
+    commit = sys.argv[2]
+    version = sys.argv[3]
+    manifest_path = root / "candidate-manifest.json"
+    checksum_path = root / "candidate-manifest.json.sha256"
+    raw = manifest_path.read_bytes()
+    manifest = json.loads(raw)
+    canonical = (json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+    if raw != canonical:
+        raise SystemExit("candidate manifest is not canonical JSON")
+    if set(manifest) != {"schemaVersion", "repository", "commit", "version", "sourceDateEpoch", "subjects"}:
+        raise SystemExit("candidate manifest top-level closure mismatch")
+    if manifest["schemaVersion"] != 1 or manifest["repository"] != "github.com/araihu/xisnove":
+        raise SystemExit("candidate manifest identity mismatch")
+    if manifest["commit"] != commit or manifest["version"] != version:
+        raise SystemExit("candidate manifest commit/version mismatch")
+    if type(manifest["sourceDateEpoch"]) is not int or manifest["sourceDateEpoch"] <= 0:
+        raise SystemExit("invalid sourceDateEpoch")
+
+    expected = {}
+    def add(kind, name, platform="", locator=None, sbom=False):
+        key = (kind, name, platform)
+        if key in expected:
+            raise SystemExit("duplicate expected subject")
+        expected[key] = locator
+        if sbom:
+            suffix = "--" + platform.replace("/", "-") if platform else ""
+            sbom_name = kind + "--" + name + suffix
+            expected[("sbom", sbom_name, "")] = "sboms/" + sbom_name + ".spdx.json"
+
+    for binary in ("xisnove-server", "xisnove-ui", "xisnove-agent", "xisnove-operator"):
+        for arch in ("amd64", "arm64"):
+            name = f"{binary}_{version}_linux_{arch}"
+            add("archive", name, locator=f"archives/{name}.tar.gz", sbom=True)
+    for operating_system in ("linux", "darwin", "windows"):
+        for arch in ("amd64", "arm64"):
+            name = f"xisnove_{version}_{operating_system}_{arch}"
+            add("archive", name, locator=f"archives/{name}.tar.gz", sbom=True)
+    for chart in ("xisnove", "xisnove-edge"):
+        add("chart", chart, locator=f"charts/{chart}_{version}.tgz", sbom=True)
+    for bundle in ("xisnove-source", "xisnove-deployment"):
+        add("bundle", bundle, locator=f"bundles/{bundle}_{version}.tar.gz")
+    for image in ("xisnove-server", "xisnove-ui", "xisnove-agent", "xisnove-operator"):
+        add("oci-index", image, sbom=True)
+        for platform in ("linux/amd64", "linux/arm64"):
+            add("oci-platform-manifest", image, platform=platform, sbom=True)
+    for chart in ("xisnove", "xisnove-edge"):
+        add("oci-manifest", chart, sbom=True)
+    add("metadata", "licenses", locator="metadata/licenses.json")
+    add("metadata", "toolchain-lock", locator="metadata/toolchain.lock.json")
+    if len(expected) != 64:
+        raise SystemExit("internal expected-subject-closure count mismatch")
+
+    subjects = manifest["subjects"]
+    actual_keys = [(item.get("kind"), item.get("name"), item.get("platform", "")) for item in subjects]
+    expected_keys = sorted(expected)
+    if actual_keys != expected_keys or len(set(actual_keys)) != 64:
+        raise SystemExit("expected-subject-closure mismatch or non-canonical order")
+    allowed_keys = {"kind", "name", "locator", "sha256", "size", "platform", "mediaType"}
+    digest_pattern = re.compile(r"^[0-9a-f]{64}$")
+    source_name_pattern = re.compile(r"^[A-Za-z0-9._-]+$")
+    for item, key in zip(subjects, actual_keys):
+        if not {"kind", "name", "locator", "sha256", "size"}.issubset(item) or set(item) - allowed_keys:
+            raise SystemExit("subject field closure mismatch")
+        kind, name, platform = key
+        if kind != "sbom" and (not source_name_pattern.fullmatch(name) or "--" in name):
+            raise SystemExit("invalid or ambiguous source subject name")
+        if kind == "oci-platform-manifest":
+            if platform not in ("linux/amd64", "linux/arm64"):
+                raise SystemExit("invalid OCI platform")
+        elif "platform" in item:
+            raise SystemExit("unexpected platform field")
+        digest = item["sha256"]
+        locator = item["locator"]
+        if not digest_pattern.fullmatch(digest) or type(item["size"]) is not int or item["size"] < 0:
+            raise SystemExit("invalid subject digest or size")
+        if not locator or locator.startswith("/") or ".." in pathlib.PurePosixPath(locator).parts:
+            raise SystemExit("unsafe subject locator")
+        expected_locator = expected[key]
+        if expected_locator is not None and locator != expected_locator:
+            raise SystemExit("subject locator closure mismatch")
+        if kind == "oci-index":
+            expected_locator = f"oci/images/{name}/layout/blobs/sha256/{digest}"
+        elif kind == "oci-platform-manifest":
+            expected_locator = f"oci/images/{name}/layout/blobs/sha256/{digest}"
+        elif kind == "oci-manifest":
+            expected_locator = f"oci/charts/{name}/layout/blobs/sha256/{digest}"
+        if expected_locator is not None and locator != expected_locator:
+            raise SystemExit("OCI subject locator mismatch")
+        path = root / pathlib.PurePosixPath(locator)
+        if not path.is_file() or path.is_symlink():
+            raise SystemExit("candidate subject is missing, non-regular, or symlinked")
+        contents = path.read_bytes()
+        if hashlib.sha256(contents).hexdigest() != digest or len(contents) != item["size"]:
+            raise SystemExit("candidate subject bytes mismatch")
+
+    checksum = checksum_path.read_text()
+    manifest_digest = hashlib.sha256(raw).hexdigest()
+    if checksum != f"{manifest_digest}  candidate-manifest.json\n":
+        raise SystemExit("detached candidate manifest checksum mismatch")
+
+concurrency:
+  group: release-${{ inputs.commit }}
+  cancel-in-progress: false
+
+jobs:
+  quality-gate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  candidate:
+    needs: quality-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Reject ambiguous or untrusted release identity
+        shell: bash
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.commit }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REPOSITORY" = araihu/xisnove
+          test "$GITHUB_SHA" = "$CANDIDATE_COMMIT"
+          case "$GITHUB_REF" in
+            refs/heads/*) ;;
+            *) echo "release workflow must be dispatched from the accepted branch ref" >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            go.sum
+            agent/go.sum
+            cli/go.sum
+            operator/go.sum
+            ui/go.sum
+      - name: Install pinned arm64 emulation
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+        with:
+          image: docker.io/tonistiigi/binfmt:latest@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
+      - name: Select pinned multi-platform Buildx builder
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          version: v0.35.0
+          driver: docker-container
+          driver-opts: image=moby/buildkit:v0.31.2@sha256:2f5adac4ecd194d9f8c10b7b5d7bceb5186853db1b26e5abd3a657af0b7e26ec
+      - name: Build and verify the immutable candidate once
+        shell: bash
+        env:
+          XISNOVE_RELEASE_COMMIT: ${{ inputs.commit }}
+          XISNOVE_RELEASE_VERSION: ${{ inputs.version }}
+          XISNOVE_RELEASE_CANDIDATE_OUTPUT: dist/candidate
+          XISNOVE_RELEASE_GLIBC_BASE: ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+          XISNOVE_RELEASE_BUILD_SCRIPTS: >-
+            scripts/release/build-binaries.sh
+            scripts/release/assemble-bundle.sh
+            scripts/release/generate-sboms.sh
+            scripts/release/inventory-licenses.sh
+            scripts/release/verify-bundle.sh
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$XISNOVE_RELEASE_COMMIT")"
+          make distribution-release-candidate
+          test -f dist/candidate/candidate-manifest.json
+          test -f dist/candidate/candidate-manifest.json.sha256
+          jq -e \
+            --arg commit "$XISNOVE_RELEASE_COMMIT" \
+            --arg version "$XISNOVE_RELEASE_VERSION" \
+            '.repository == "github.com/araihu/xisnove" and .commit == $commit and .version == $version' \
+            dist/candidate/candidate-manifest.json >/dev/null
+      - name: Upload exact private candidate
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xisnove-release-candidate
+          path: dist/candidate
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+      - name: Clean candidate workspace and assert no residue
+        if: always()
+        shell: bash
+        run: |
+          rm -rf dist/candidate .artifacts/oci
+          test ! -e dist/candidate
+          test ! -e .artifacts/oci
+
+  attestor:
+    needs: candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download candidate built by this run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: xisnove-release-candidate
+          path: dist/candidate
+      - name: Verify candidate bytes and canonical identity without candidate code
+        shell: bash
+        env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.candidate.outputs.artifact_digest }}
+          EXPECTED_COMMIT: ${{ inputs.commit }}
+          EXPECTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          python3 -c "$XISNOVE_TRUSTED_CANDIDATE_VERIFIER" \
+            dist/candidate "$EXPECTED_COMMIT" "$EXPECTED_VERSION"
+      - name: Attest canonical candidate manifest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: dist/candidate/candidate-manifest.json
+          create-storage-record: false
+      - name: Clean attestor workspace and assert no residue
+        if: always()
+        shell: bash
+        run: |
+          rm -rf dist/candidate
+          test ! -e dist/candidate
+
+  managed-turso:
+    if: inputs.publish
+    needs: attestor
+    permissions:
+      contents: read
+    uses: ./.github/workflows/turso-conformance.yml
+    secrets: inherit
+
+  homelab-acceptance:
+    if: inputs.publish
+    needs: [candidate, attestor]
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/homelab-acceptance.yml
+    with:
+      candidate_run_id: ${{ github.run_id }}
+      candidate_commit: ${{ inputs.commit }}
+      candidate_version: ${{ inputs.version }}
+      candidate_artifact_digest: ${{ needs.candidate.outputs.artifact_digest }}
+
+  publish:
+    if: inputs.publish
+    needs: [candidate, attestor, managed-turso, homelab-acceptance]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: xisnove-release
+    permissions:
+      attestations: read
+      contents: read
+      packages: write
+    steps:
+      - name: Download accepted candidate without source checkout
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: xisnove-release-candidate
+          path: dist/candidate
+      - name: Install checksum-verified GitHub CLI and ORAS
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh_archive="$RUNNER_TEMP/gh.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$gh_archive" \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$GH_SHA256" "$gh_archive" | sha256sum --check
+          tar -xzf "$gh_archive" -C "$RUNNER_TEMP"
+          install -m 0755 "$RUNNER_TEMP/gh_${GH_VERSION}_linux_amd64/bin/gh" "$RUNNER_TEMP/xisnove-gh"
+
+          oras_archive="$RUNNER_TEMP/oras.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$oras_archive" \
+            "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$ORAS_SHA256" "$oras_archive" | sha256sum --check
+          tar -xzf "$oras_archive" -C "$RUNNER_TEMP" oras
+          install -m 0755 "$RUNNER_TEMP/oras" "$RUNNER_TEMP/xisnove-oras"
+      - name: Verify bytes, identity, signer, issuer, ref, SHA, Rekor, and SCT
+        shell: bash
+        env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.candidate.outputs.artifact_digest }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          python3 -c "$XISNOVE_TRUSTED_CANDIDATE_VERIFIER" \
+            dist/candidate "${{ inputs.commit }}" "${{ inputs.version }}"
+          "$RUNNER_TEMP/xisnove-gh" attestation verify dist/candidate/candidate-manifest.json \
+            --cert-oidc-issuer https://token.actions.githubusercontent.com \
+            --deny-self-hosted-runners \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-digest "${{ inputs.commit }}" \
+            --source-ref "$GITHUB_REF" \
+            --format json >dist/candidate/attestation-verification.json
+          jq -e '
+            length > 0 and all(.[].verificationResult;
+              (.verifiedTimestamps | length) > 0 and
+              (.signature.certificate | type) == "object")
+          ' dist/candidate/attestation-verification.json >/dev/null
+      - name: Log in to GHCR for byte-for-byte registry promotion
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote accepted image and chart bytes without rebuild
+        shell: bash
+        env:
+          ORAS: ${{ runner.temp }}/xisnove-oras
+        run: |
+          set -euo pipefail
+          subjects="$RUNNER_TEMP/published-registry-subjects.txt"
+          expected="$RUNNER_TEMP/expected-registry-subjects.txt"
+          : >"$subjects"
+          : >"$expected"
+          while IFS=$'\t' read -r kind name locator digest; do
+            case "$kind/$name" in
+              oci-index/xisnove-server|oci-index/xisnove-ui|oci-index/xisnove-agent|oci-index/xisnove-operator)
+                repository="ghcr.io/araihu/$name"
+                ;;
+              oci-manifest/xisnove|oci-manifest/xisnove-edge)
+                repository="ghcr.io/araihu/charts/$name"
+                ;;
+              *) echo "unexpected publishable OCI subject: $kind/$name" >&2; exit 1 ;;
+            esac
+            layout="dist/candidate/${locator%%/blobs/*}"
+            destination="${repository}:${{ inputs.version }}"
+            printf '%s@sha256:%s\n' "$repository" "$digest" >>"$expected"
+            "$ORAS" cp --from-oci-layout "$layout@sha256:$digest" "$destination"
+            promoted="$($ORAS resolve "$destination")"
+            test "$promoted" = "sha256:$digest"
+            printf '%s@%s\n' "$repository" "$promoted" >>"$subjects"
+          done < <(jq -r '.subjects[] | select(.kind == "oci-index" or .kind == "oci-manifest") | [.kind, .name, .locator, .sha256] | @tsv' dist/candidate/candidate-manifest.json)
+          LC_ALL=C sort -u -o "$expected" "$expected"
+          LC_ALL=C sort -u -o "$subjects" "$subjects"
+          cmp --silent "$expected" "$subjects"
+          test "$(wc -l <"$subjects")" -eq 6
+      - name: Upload exact promoted registry subject list
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: published-registry-subjects
+          path: ${{ runner.temp }}/published-registry-subjects.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Clean publisher workspace and assert no residue
+        if: always()
+        shell: bash
+        run: |
+          rm -rf dist/candidate "$RUNNER_TEMP/xisnove-gh" "$RUNNER_TEMP/xisnove-oras" \
+            "$RUNNER_TEMP/gh.tar.gz" "$RUNNER_TEMP/oras.tar.gz" "$RUNNER_TEMP/gh_${GH_VERSION}_linux_amd64" \
+            "$RUNNER_TEMP/published-registry-subjects.txt" "$RUNNER_TEMP/expected-registry-subjects.txt"
+          test ! -e dist/candidate
+          test ! -e "$RUNNER_TEMP/xisnove-gh"
+
+  signer:
+    needs: [candidate, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: xisnove-release
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - name: Download canonical candidate manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: xisnove-release-candidate
+          path: dist/candidate
+      - name: Download exact promoted registry subject list
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: published-registry-subjects
+          path: dist/published
+      - name: Install checksum-verified Cosign
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/cosign" \
+            "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64"
+          printf '%s  %s\n' "$COSIGN_SHA256" "$RUNNER_TEMP/cosign" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/xisnove-bin"
+          install -m 0755 "$RUNNER_TEMP/cosign" "$RUNNER_TEMP/xisnove-bin/cosign"
+          echo "$RUNNER_TEMP/xisnove-bin" >>"$GITHUB_PATH"
+      - name: Log in to GHCR for registry-native signatures and attestations
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sign, attest, and verify every promoted image and chart digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "$XISNOVE_TRUSTED_CANDIDATE_VERIFIER" \
+            dist/candidate "${{ inputs.commit }}" "${{ inputs.version }}"
+          cd dist/candidate
+          expected="$RUNNER_TEMP/expected-registry-subjects.txt"
+          : >"$expected"
+          while IFS=$'\t' read -r kind name digest; do
+            case "$kind/$name" in
+              oci-index/xisnove-server|oci-index/xisnove-ui|oci-index/xisnove-agent|oci-index/xisnove-operator)
+                repository="ghcr.io/araihu/$name"
+                ;;
+              oci-manifest/xisnove|oci-manifest/xisnove-edge)
+                repository="ghcr.io/araihu/charts/$name"
+                ;;
+              *) echo "unexpected signable OCI subject: $kind/$name" >&2; exit 1 ;;
+            esac
+            printf '%s@sha256:%s\n' "$repository" "$digest" >>"$expected"
+          done < <(jq -r '.subjects[] | select(.kind == "oci-index" or .kind == "oci-manifest") | [.kind, .name, .sha256] | @tsv' candidate-manifest.json)
+          LC_ALL=C sort -u -o "$expected" "$expected"
+          LC_ALL=C sort -u ../published/published-registry-subjects.txt >"$RUNNER_TEMP/actual-registry-subjects.txt"
+          cmp --silent "$expected" "$RUNNER_TEMP/actual-registry-subjects.txt"
+          test "$(wc -l <"$expected")" -eq 6
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}"
+          while IFS= read -r subject; do
+            cosign sign --yes "$subject"
+            cosign attest --yes \
+              --type custom \
+              --predicate candidate-manifest.json \
+              "$subject"
+            cosign verify \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "$subject" >/dev/null
+            cosign verify-attestation \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --type custom \
+              "$subject" >/dev/null
+          done <"$expected"
+      - name: Clean signer workspace and assert no residue
+        if: always()
+        shell: bash
+        run: |
+          rm -rf dist/candidate dist/published "$RUNNER_TEMP/cosign" "$RUNNER_TEMP/xisnove-bin" \
+            "$RUNNER_TEMP/expected-registry-subjects.txt" "$RUNNER_TEMP/actual-registry-subjects.txt"
+          test ! -e dist/candidate
+          test ! -e "$RUNNER_TEMP/xisnove-bin"
+
+  release-assets:
+    needs: [candidate, signer]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: xisnove-release
+    permissions:
+      attestations: read
+      contents: write
+    steps:
+      - name: Download signed accepted candidate without source checkout
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: xisnove-release-candidate
+          path: dist/candidate
+      - name: Install checksum-verified GitHub CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/gh.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$GH_SHA256" "$archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          install -m 0755 "$RUNNER_TEMP/gh_${GH_VERSION}_linux_amd64/bin/gh" "$RUNNER_TEMP/xisnove-gh"
+      - name: Reverify canonical manifest attestation before release publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -c "$XISNOVE_TRUSTED_CANDIDATE_VERIFIER" \
+            dist/candidate "${{ inputs.commit }}" "${{ inputs.version }}"
+          "$RUNNER_TEMP/xisnove-gh" attestation verify dist/candidate/candidate-manifest.json \
+            --cert-oidc-issuer https://token.actions.githubusercontent.com \
+            --deny-self-hosted-runners \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-digest "${{ inputs.commit }}" \
+            --source-ref "$GITHUB_REF" >/dev/null
+      - name: Create or verify tag at accepted SHA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          endpoint="repos/$GITHUB_REPOSITORY/git/ref/tags/v${{ inputs.version }}"
+          if existing="$($RUNNER_TEMP/xisnove-gh api "$endpoint" --jq .object.sha 2>/dev/null)"; then
+            test "$existing" = "${{ inputs.commit }}"
+          else
+            "$RUNNER_TEMP/xisnove-gh" api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/v${{ inputs.version }}" \
+              -f "sha=${{ inputs.commit }}" >/dev/null
+          fi
+      - name: Publish and reverify exact accepted GitHub Release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t relative_assets < <(jq -er '
+            .subjects[] |
+            select(.kind == "archive" or .kind == "chart" or .kind == "bundle" or .kind == "sbom" or .kind == "metadata") |
+            .locator
+          ' dist/candidate/candidate-manifest.json)
+          relative_assets+=(candidate-manifest.json candidate-manifest.json.sha256)
+          assets=()
+          basenames=()
+          for relative in "${relative_assets[@]}"; do
+            case "$relative" in
+              ""|/*|../*|*/../*) echo "unsafe release asset locator: $relative" >&2; exit 1 ;;
+            esac
+            asset="dist/candidate/$relative"
+            test -f "$asset"
+            test ! -L "$asset"
+            assets+=("$asset")
+            basenames+=("$(basename "$asset")")
+          done
+          test -z "$(printf '%s\n' "${basenames[@]}" | sort | uniq -d)"
+          test "${#assets[@]}" -gt 0
+          if ! "$RUNNER_TEMP/xisnove-gh" release view "v${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            "$RUNNER_TEMP/xisnove-gh" release create "v${{ inputs.version }}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "${{ inputs.commit }}" \
+              --verify-tag \
+              --generate-notes
+          fi
+          existing_dir="$RUNNER_TEMP/xisnove-existing-assets"
+          rm -rf "$existing_dir"
+          mkdir -p "$existing_dir"
+          for asset in "${assets[@]}"; do
+            name="$(basename "$asset")"
+            existing="$existing_dir/$name"
+            if "$RUNNER_TEMP/xisnove-gh" release download "v${{ inputs.version }}" \
+              --repo "$GITHUB_REPOSITORY" --pattern "$name" --output "$existing" 2>/dev/null; then
+              if ! cmp --silent "$asset" "$existing"; then
+                echo "asset digest mismatch for existing release asset: $name" >&2
+                exit 1
+              fi
+            else
+              "$RUNNER_TEMP/xisnove-gh" release upload "v${{ inputs.version }}" "$asset" \
+                --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+          published="$RUNNER_TEMP/xisnove-release-assets"
+          rm -rf "$published"
+          mkdir -p "$published"
+          "$RUNNER_TEMP/xisnove-gh" release download "v${{ inputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" --dir "$published"
+          printf '%s\n' "${basenames[@]}" | LC_ALL=C sort >"$RUNNER_TEMP/expected-release-assets.txt"
+          find "$published" -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort >"$RUNNER_TEMP/actual-release-assets.txt"
+          cmp --silent "$RUNNER_TEMP/expected-release-assets.txt" "$RUNNER_TEMP/actual-release-assets.txt"
+          for asset in "${assets[@]}"; do
+            downloaded="$published/$(basename "$asset")"
+            test -f "$downloaded"
+            test "$(sha256sum "$downloaded" | awk '{print $1}')" = \
+              "$(sha256sum "$asset" | awk '{print $1}')"
+          done
+      - name: Clean release workspace and assert no residue
+        if: always()
+        shell: bash
+        run: |
+          rm -rf dist/candidate "$RUNNER_TEMP/xisnove-gh" "$RUNNER_TEMP/gh.tar.gz" \
+            "$RUNNER_TEMP/gh_${GH_VERSION}_linux_amd64" "$RUNNER_TEMP/xisnove-release-assets" \
+            "$RUNNER_TEMP/xisnove-existing-assets" "$RUNNER_TEMP/expected-release-assets.txt" \
+            "$RUNNER_TEMP/actual-release-assets.txt"
+          test ! -e dist/candidate
+          test ! -e "$RUNNER_TEMP/xisnove-gh"

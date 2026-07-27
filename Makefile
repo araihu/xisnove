@@ -1,7 +1,11 @@
-.PHONY: generate generated-check test module-check distribution-contract-check distribution-image-native-check distribution-image-oci-check distribution-helm-check distribution-deploy-check distribution-check runtime-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke kind-edge-e2e check
+.PHONY: generate generated-check test module-check distribution-contract-check distribution-image-native-check distribution-image-oci-check distribution-helm-check distribution-deploy-check distribution-release-candidate distribution-release-check distribution-check runtime-contract-check storage-check operations-check race-check agent-check cli-check cli-workspace-check ui-check ui-browser-smoke kind-edge-e2e check
 
 DISTRIBUTION_ARCH ?= $(shell go env GOARCH)
 COMPOSE ?= $(shell if docker compose version >/dev/null 2>&1; then printf 'docker compose'; elif command -v docker-compose >/dev/null 2>&1; then printf 'docker-compose'; else printf 'docker compose'; fi)
+XISNOVE_RELEASE_COMMIT ?= $(shell git rev-parse HEAD)
+SOURCE_DATE_EPOCH ?= $(shell git show -s --format=%ct $(XISNOVE_RELEASE_COMMIT))
+XISNOVE_RELEASE_VERSION ?= 0.0.0-dev.$(shell git rev-parse --short=12 $(XISNOVE_RELEASE_COMMIT))
+XISNOVE_RELEASE_CANDIDATE_OUTPUT ?= dist/candidate
 
 generate:
 	go generate ./...
@@ -47,6 +51,13 @@ distribution-deploy-check:
 	systemd-analyze verify deploy/systemd/*.service
 	shellcheck deploy/raw/*.sh deploy/compose/bootstrap.sh
 	go test -race ./integration/distribution/deploy -count=1
+
+distribution-release-candidate:
+	bash scripts/release/build-candidate.sh --root . --output-dir "$(XISNOVE_RELEASE_CANDIDATE_OUTPUT)" --version "$(XISNOVE_RELEASE_VERSION)" --commit "$(XISNOVE_RELEASE_COMMIT)" --source-date-epoch "$(SOURCE_DATE_EPOCH)"
+
+distribution-release-check:
+	go test -race ./integration/distribution/release -count=1
+	bash scripts/release/check-reproducible-candidate.sh --root . --version "$(XISNOVE_RELEASE_VERSION)" --commit "$(XISNOVE_RELEASE_COMMIT)" --source-date-epoch "$(SOURCE_DATE_EPOCH)"
 
 distribution-check: distribution-contract-check distribution-image-native-check distribution-image-oci-check distribution-helm-check distribution-deploy-check
 

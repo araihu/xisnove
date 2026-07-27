@@ -66,7 +66,7 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 	digest := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	checksum := regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-	wantActions := set("actions/checkout", "actions/setup-go", "actions/upload-artifact", "docker/setup-qemu-action", "docker/setup-buildx-action")
+	wantActions := set("actions/checkout", "actions/setup-go", "actions/upload-artifact", "actions/download-artifact", "actions/attest", "docker/login-action", "docker/setup-qemu-action", "docker/setup-buildx-action")
 	seenActions := make(map[string]bool, len(manifest.Actions))
 	for _, pin := range manifest.Actions {
 		if seenActions[pin.Name] {
@@ -82,7 +82,7 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 		t.Errorf("missing action pins: %v", wantActions)
 	}
 
-	wantTools := set("go", "helm", "kind", "kubectl", "gotestsum", "goreleaser", "cosign", "syft", "trivy", "buildx", "oras")
+	wantTools := set("go", "helm", "kind", "kubectl", "gotestsum", "goreleaser", "cosign", "syft", "trivy", "buildx", "oras", "gh")
 	seenTools := make(map[string]bool, len(manifest.Tools))
 	for _, pin := range manifest.Tools {
 		if seenTools[pin.Name] {
@@ -123,7 +123,7 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 		t.Errorf("missing Go module tool pins: %v", wantModuleTools)
 	}
 
-	wantImageUses := set("builder", "runtime-base", "database-service")
+	wantImageUses := set("builder", "runtime-base", "database-service", "acceptance-registry")
 	seenImageUses := make(map[string]bool, len(manifest.Images))
 	for _, pin := range manifest.Images {
 		if seenImageUses[pin.Use] {

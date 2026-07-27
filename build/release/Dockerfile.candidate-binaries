@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1.18@sha256:dabfc0969b935b2080555ace70ee69a5261af8a8f1b4df97b9e7fbcf6722eddf
+FROM ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
+
+ARG TARGETARCH
+ARG GO_VERSION
+ARG GO_SHA256
+ARG GORELEASER_VERSION
+ARG GORELEASER_SHA256
+ARG SYFT_VERSION
+ARG SYFT_SHA256
+ARG ORAS_VERSION
+ARG ORAS_SHA256
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git gzip tar \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eu; \
+    curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz"; \
+    printf '%s  %s\n' "${GO_SHA256}" /tmp/go.tar.gz | sha256sum -c -; \
+    tar -C /usr/local -xzf /tmp/go.tar.gz; \
+    rm /tmp/go.tar.gz
+
+RUN set -eu; \
+    case "${TARGETARCH}" in amd64) release_arch=x86_64 ;; arm64) release_arch=arm64 ;; *) exit 2 ;; esac; \
+    curl -fsSLo /tmp/goreleaser.tar.gz "https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/goreleaser_Linux_${release_arch}.tar.gz"; \
+    printf '%s  %s\n' "${GORELEASER_SHA256}" /tmp/goreleaser.tar.gz | sha256sum -c -; \
+    tar -C /usr/local/bin -xzf /tmp/goreleaser.tar.gz goreleaser; \
+    rm /tmp/goreleaser.tar.gz
+
+RUN set -eu; \
+    curl -fsSLo /tmp/syft.tar.gz "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${TARGETARCH}.tar.gz"; \
+    printf '%s  %s\n' "${SYFT_SHA256}" /tmp/syft.tar.gz | sha256sum -c -; \
+    tar -C /usr/local/bin -xzf /tmp/syft.tar.gz syft; \
+    rm /tmp/syft.tar.gz
+
+RUN set -eu; \
+    curl -fsSLo /tmp/oras.tar.gz "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${TARGETARCH}.tar.gz"; \
+    printf '%s  %s\n' "${ORAS_SHA256}" /tmp/oras.tar.gz | sha256sum -c -; \
+    tar -C /usr/local/bin -xzf /tmp/oras.tar.gz oras; \
+    rm /tmp/oras.tar.gz
+
+ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+WORKDIR /src

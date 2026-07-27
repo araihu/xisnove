@@ -110,6 +110,31 @@ func TestCIUsesImmutableLeastPrivilegeInputs(t *testing.T) {
 	actionReference := regexp.MustCompile(`uses:\s*([^\s@]+)@([0-9a-f]{40})(?:\s|$)`)
 	serviceReference := regexp.MustCompile(`(?m)^\s*image:\s*([^\s]+)\s*$`)
 
+	for _, path := range []string{".github/workflows/release.yml", ".github/workflows/homelab-acceptance.yml"} {
+		content := read(t, filepath.Join(root, path))
+		for index, line := range strings.Split(content, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "uses:") && !strings.HasPrefix(trimmed, "- uses:") {
+				continue
+			}
+			if mutableAction.MatchString(trimmed) && !shaAction.MatchString(trimmed) && !strings.Contains(trimmed, "uses: ./") {
+				t.Errorf("%s has mutable action reference at line %d: %s", path, index+1, trimmed)
+			}
+			match := actionReference.FindStringSubmatch(trimmed)
+			if len(match) != 3 {
+				continue
+			}
+			want, ok := actionPins[match[1]]
+			if !ok {
+				t.Errorf("%s action %q at line %d is absent from the release toolchain lock", path, match[1], index+1)
+			} else if match[2] != want {
+				t.Errorf("%s action %q SHA at line %d = %s, want lock %s", path, match[1], index+1, match[2], want)
+			} else {
+				usedActions[match[1]] = true
+			}
+		}
+	}
+
 	for _, path := range []string{".github/workflows/ci.yml", ".github/workflows/turso-conformance.yml"} {
 		path := path
 		t.Run(filepath.Base(path), func(t *testing.T) {
