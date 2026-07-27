@@ -145,6 +145,7 @@ func TestBinaryBuildScriptDerivesStableReleaseMetadata(t *testing.T) {
 	command.Env = append(os.Environ(),
 		"GORELEASER_BIN="+fake,
 		"CAPTURE="+capture,
+		"XISNOVE_RELEASE_OUTPUT=dist/candidate/archives",
 		"XISNOVE_RELEASE_VERSION=1.2.3-rc.1",
 		"XISNOVE_RELEASE_COMMIT=0123456789abcdef0123456789abcdef01234567",
 		"SOURCE_DATE_EPOCH=1785121445",
@@ -156,7 +157,7 @@ func TestBinaryBuildScriptDerivesStableReleaseMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "release --snapshot --clean\n1.2.3-rc.1\n0123456789abcdef0123456789abcdef01234567\n2026-07-27T03:04:05Z\n1785121445\n"
+	want := "release --snapshot --clean --output dist/candidate/archives\n1.2.3-rc.1\n0123456789abcdef0123456789abcdef01234567\n2026-07-27T03:04:05Z\n1785121445\n"
 	if string(contents) != want {
 		t.Fatalf("captured invocation:\n%s\nwant:\n%s", contents, want)
 	}

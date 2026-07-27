@@ -44,4 +44,9 @@ export XISNOVE_RELEASE_COMMIT="$release_commit"
 export XISNOVE_BUILD_DATE="$build_date"
 export SOURCE_DATE_EPOCH
 
-exec "$goreleaser_bin" release --snapshot --clean
+goreleaser_args=(release --snapshot --clean)
+if [[ -n "${XISNOVE_RELEASE_OUTPUT:-}" ]]; then
+  goreleaser_args+=(--output "$XISNOVE_RELEASE_OUTPUT")
+fi
+
+exec "$goreleaser_bin" "${goreleaser_args[@]}"
