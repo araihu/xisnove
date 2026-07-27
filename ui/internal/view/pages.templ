@@ -68,6 +68,9 @@ templ Document(title string, content templ.Component) {
 				.xis-login-form input:not([type="hidden"]) { min-height: 3rem; }
 				.dark .xis-select, .dark .xis-input { background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }
 				.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+				a[href]:focus-visible { outline: 3px solid currentColor !important; outline-offset: 2px !important; }
+				button:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; }
+				.dark button:focus-visible { outline-color: var(--color-primary-dark) !important; }
 				.xis-native-link, .xis-action-link { color: var(--xis-link); display: inline-flex; align-items: center; min-width: 2.75rem; min-height: 2.75rem; }
 				.xis-action-link { justify-content: center; }
 				.xis-visual-test *, .xis-visual-test *::before, .xis-visual-test *::after { transition: none; animation: none; }
@@ -403,6 +406,7 @@ templ ProblemContent(problem Problem) {
 	<main id="problem-content" class="xis-content xis-stack">
 		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 		<div class="xis-meta"><p>Error code: <code>{ problem.Code }</code></p><p>Correlation ID: <code>{ problem.CorrelationID }</code></p></div>
+		<a class="xis-native-link" href="/login">Return to sign in</a>
 	</main>
 }
 

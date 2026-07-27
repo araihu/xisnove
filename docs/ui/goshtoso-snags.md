@@ -157,3 +157,13 @@ consumer that expects password semantics to remain safe without Alpine.
     `innerText` to contain `Searching…`. Goshtoso's contract is correct, but
     documenting this external-indicator composition would prevent a subtle
     consumer failure.
+20. **Public mobile navigation inherited only the browser's one-pixel focus
+    outline.** Exhaustive action acceptance found the icon button after the
+    earlier primary-only scanner passed. Xisnove now gives every focused button
+    a three-pixel semantic ring; the scanner requires at least 3:1 indicator
+    contrast for each visible action, not only the first primary action.
+21. **The signed-out terminal problem composition had no recovery action.** A
+    zero-action acceptance state is now a failure rather than an automatic
+    skip, so timeout pages provide a native `Return to sign in` link. The
+    off-canvas AppShell skip link is deliberately excluded only from hover
+    measurement and remains covered by its keyboard-specific contract.

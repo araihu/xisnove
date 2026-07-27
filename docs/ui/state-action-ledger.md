@@ -13,6 +13,7 @@ offered or accepted by the BFF.
 | monitor inventory / ready | search | yes, read-only | HTMX inventory fragment and canonical `q` URL | query, theme, mode | same search control and caret | one monitor read window; duplicate submit deduplicated |
 | monitor inventory / ready | select monitor | yes, read-only | selected collection plus detail; canonical `selected` URL | query/cursor/theme/mode | selected detail heading | monitor and bounded health reads only |
 | monitor detail / Back or Forward | restore selection | yes, read-only | fresh `no-store` SDK read replaces history snapshot | URL/query/selected/theme/mode | same selected detail heading | one fresh monitor read window |
+| monitor detail / overlapping history or pageshow refreshes | apply newest owner only | yes, read-only | older request is aborted and ignored even if its transport resolves later | captured URL and newest generation | newest state or recovery only | at most one owning response may mutate the DOM |
 | monitor detail / history revalidation failure | retry authoritative refresh | yes, read-only | stale detail/actions are replaced by a visible in-shell alert and retry control | authoritative URL and theme/mode; no stale monitor state | alert heading, then refreshed detail heading | one failed read per attempt; one fresh read on retry |
 | monitor inventory / upstream failure | retry | retryable | swappable in-shell fragment; upstream status in response header | query/cursor/selected | explicit response target | reads only; no mutation |
 | authenticated unknown route | return to monitors | yes | shell-preserving recovery link | authenticated shell/theme/mode | monitor inventory | zero before navigation |
@@ -25,4 +26,6 @@ all routed pages use `Cache-Control: no-store` so history recovery revalidates
 authoritative monitor state. Acceptance mutates the fixture revision and health
 before Back, then requires both markers in the refreshed DOM. Separate 503 and
 rejected-fetch paths must remove the stale detail, focus the recovery heading,
-and restore current state only after an explicit retry.
+and restore current state only after an explicit retry. The ordering fixture
+deliberately resolves two ignored-abort transports out of order and proves an
+older success can replace neither a newer state nor a newer recovery surface.

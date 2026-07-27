@@ -91,6 +91,8 @@ func New(cfg Config) (http.Handler, error) {
 
 const applicationJS = `(() => {
   let pendingFocus = null;
+  let refreshGeneration = 0;
+  let refreshController = null;
 
   function focusMain() {
     const main = document.getElementById("main-content");
@@ -131,11 +133,24 @@ const applicationJS = `(() => {
     focusMain();
   }
 
+  function invalidateAuthoritativeRefresh() {
+    refreshGeneration += 1;
+    refreshController?.abort();
+    refreshController = null;
+  }
+
   async function refreshAuthoritative() {
     const main = document.getElementById("main-content");
     if (!main || !location.pathname.startsWith("/monitors")) return focusMain();
+    refreshController?.abort();
+    const controller = new AbortController();
+    const generation = ++refreshGeneration;
+    const href = location.href;
+    refreshController = controller;
+    const ownsRefresh = () => refreshGeneration === generation && refreshController === controller && !controller.signal.aborted && location.href === href && main.isConnected && document.getElementById("main-content") === main;
     try {
-      const response = await fetch(location.href, {headers: {"HX-Request": "true"}, cache: "no-store"});
+      const response = await fetch(href, {headers: {"HX-Request": "true"}, cache: "no-store", signal: controller.signal});
+      if (!ownsRefresh()) return false;
       const redirect = response.headers.get("HX-Redirect");
       if (redirect) {
         location.assign(redirect);
@@ -145,13 +160,18 @@ const applicationJS = `(() => {
         showAuthoritativeRecovery("The server returned " + response.status + " while refreshing this monitor view.");
         return false;
       }
-      main.innerHTML = await response.text();
+      const body = await response.text();
+      if (!ownsRefresh()) return false;
+      main.innerHTML = body;
       window.htmx?.process(main);
       focusMain();
       return true;
-    } catch (_) {
+    } catch (error) {
+      if (!ownsRefresh() || error?.name === "AbortError") return false;
       showAuthoritativeRecovery("The monitor view could not reach the server. Check the connection and retry.");
       return false;
+    } finally {
+      if (refreshGeneration === generation && refreshController === controller) refreshController = null;
     }
   }
 
@@ -190,10 +210,10 @@ const applicationJS = `(() => {
       document.documentElement.style.setProperty("--xis-shell-header-bottom", Math.ceil(header.getBoundingClientRect().bottom) + "px");
     };
     new MutationObserver(reflect).observe(trigger, {attributes: true, attributeFilter: ["aria-expanded"]});
-	if (header && window.ResizeObserver) new ResizeObserver(updateOffset).observe(header);
-	window.addEventListener("resize", updateOffset);
+    if (header && window.ResizeObserver) new ResizeObserver(updateOffset).observe(header);
+    window.addEventListener("resize", updateOffset);
     reflect();
-	updateOffset();
+    updateOffset();
     window.addEventListener("keydown", event => {
       if (event.key !== "Escape" || trigger.getAttribute("aria-expanded") !== "true") return;
       trigger.focus({preventScroll: true});
@@ -201,9 +221,13 @@ const applicationJS = `(() => {
     }, true);
   }
 
-  document.addEventListener("htmx:beforeRequest", rememberFocus);
+  document.addEventListener("htmx:beforeRequest", event => {
+    invalidateAuthoritativeRefresh();
+    rememberFocus(event);
+  });
   document.addEventListener("htmx:afterSettle", settle);
   document.addEventListener("htmx:historyRestore", () => setTimeout(refreshAuthoritative, 0));
+  window.addEventListener("popstate", invalidateAuthoritativeRefresh);
   window.addEventListener("pageshow", event => { if (event.persisted) refreshAuthoritative(); });
   window.goshtosoDependencies?.ready.then(() => {
     configureMobileNavigation();

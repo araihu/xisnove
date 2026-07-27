@@ -58,8 +58,13 @@ accessible names, broken labels, duplicate IDs, invalid main/banner landmarks,
 nested headers, invalid ARIA values, incoherent selected URL/row/detail identity,
 controls or action boundaries below 3:1, text/action contrast, mobile targets
 below 44 by 44 CSS pixels, and missing focus indicators. Focus and hover action
-states are exercised separately; hover measurement explicitly blurs the
-keyboard-focused control first. Transparent backgrounds are
+states are exercised separately for every visible enabled button and link;
+states without a primary action are not skipped. The harness performs one
+natural Tab traversal, requires a >=3:1 focus indicator for every action, then
+scrolls each action into view, recomputes its bounding box immediately before
+moving the pointer, and requires `:hover` before measuring. The off-canvas skip
+link is excluded only from pointer acceptance and retains its dedicated
+keyboard/focus gate. Transparent backgrounds are
 alpha-composited through every rendered ancestor; a one-pixel canvas converts
 modern CSS colors such as `oklch()` into sRGB before WCAG luminance is measured.
 It passed Minimal light and all other required theme/mode/state combinations.

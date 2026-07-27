@@ -239,6 +239,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
 	assertAuthoritativeRecovery(t, ctx, "status")
 	assertAuthoritativeRecovery(t, ctx, "network")
+	assertAuthoritativeOrdering(t, ctx)
 	homeRevision.Store(0)
 	homeHealth.Store(string(sdk.Up))
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors"), chromedp.WaitVisible("#monitor-results")); err != nil {
@@ -433,7 +434,7 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 					t.Fatalf("capture %s: %v", name, err)
 				}
 				assertP1Accessibility(t, ctx)
-				assertPrimaryActionHover(t, ctx)
+				assertInteractiveActions(t, ctx)
 				if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 100)); err != nil {
 					t.Fatalf("capture %s: %v", name, err)
 				}
@@ -626,58 +627,93 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 	}
 }
 
-func assertPrimaryActionHover(t *testing.T, ctx context.Context) {
+func assertInteractiveActions(t *testing.T, ctx context.Context) {
 	t.Helper()
-	var target struct {
-		Found bool    `json:"found"`
-		X     float64 `json:"x"`
-		Y     float64 `json:"y"`
+	var setup struct {
+		Actions, Stops               int
+		WindowX, WindowY, MainScroll float64
 	}
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),e=[...document.querySelectorAll('.xis-primary-action')].find(visible);if(!e)return {found:false};const r=e.getBoundingClientRect();return {found:true,x:r.left+r.width/2,y:r.top+r.height/2}})()`, &target)); err != nil {
+	const prepare = `(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]'),visibleAction=e=>{if(!visible(e)||e.matches('a[href="#main-content"]'))return false;const r=e.getBoundingClientRect();return r.width>=4&&r.height>=4},actions=[...document.querySelectorAll('button:not([disabled]),a[href]')].filter(visibleAction),stops=[...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);actions.forEach((e,i)=>e.dataset.xisActionIndex=String(i));document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return {actions:actions.length,stops:stops.length,windowX:scrollX,windowY:scrollY,mainScroll:document.querySelector('#main-content')?.scrollTop||0}})()`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(prepare, &setup)); err != nil {
 		t.Fatal(err)
 	}
-	if !target.Found {
-		return
+	if setup.Actions == 0 {
+		t.Fatal("rendered state has no visible enabled action to validate")
 	}
-	var stops int
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),target=[...document.querySelectorAll('.xis-primary-action')].find(visible),nodes=[...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);target.dataset.xisPrimaryActionTarget='true';document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return nodes.length})()`, &stops)); err != nil {
-		t.Fatal(err)
+	type metrics struct {
+		Index                                             int
+		Label, Tag, OutlineStyle, Shadow                  string
+		Text, Boundary, Indicator, OutlineWidth           float64
+		Hovered, BoundaryRequired, HasText, ActiveElement bool
 	}
-	focused := false
-	for index := 0; index <= stops && !focused; index++ {
-		if err := chromedp.Run(ctx, chromedp.KeyEvent("\t"), chromedp.Evaluate(`document.activeElement?.dataset.xisPrimaryActionTarget === 'true'`, &focused)); err != nil {
-			t.Fatal(err)
+	const metricFunction = `(e=>{const canvas=document.createElement('canvas'),c=canvas.getContext('2d',{willReadFrequently:true});canvas.width=canvas.height=1;const parse=v=>{c.clearRect(0,0,1,1);c.fillStyle='rgba(0,0,0,0)';c.fillStyle=v;c.fillRect(0,0,1,1);const p=c.getImageData(0,0,1,1).data;return [p[0],p[1],p[2],p[3]/255]},over=(f,b)=>{const a=f[3]+b[3]*(1-f[3]);if(!a)return [0,0,0,0];return [(f[0]*f[3]+b[0]*b[3]*(1-f[3]))/a,(f[1]*f[3]+b[1]*b[3]*(1-f[3]))/a,(f[2]*f[3]+b[2]*b[3]*(1-f[3]))/a,a]},background=n=>{let color=[0,0,0,0];for(;n;n=n.parentElement)color=over(color,parse(getComputedStyle(n).backgroundColor));return over(color,[255,255,255,1])},lum=v=>{const q=v.slice(0,3).map(x=>x/255).map(x=>x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4));return .2126*q[0]+.7152*q[1]+.0722*q[2]},ratio=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05),s=getComputedStyle(e),bg=background(e),outside=background(e.parentElement),fg=over(parse(s.color),bg),borderRaw=parse(s.borderTopColor),border=over(borderRaw,outside),outline=over(parse(s.outlineColor),outside),fillBoundary=ratio(bg,outside),borderBoundary=ratio(border,outside),label=(e.getAttribute('aria-label')||e.textContent||'').trim();return {index:Number(e.dataset.xisActionIndex),label,tag:e.tagName.toLowerCase(),text:ratio(fg,bg),boundary:Math.max(fillBoundary,borderBoundary),indicator:ratio(outline,outside),outlineStyle:s.outlineStyle,outlineWidth:parseFloat(s.outlineWidth),shadow:s.boxShadow,hovered:e.matches(':hover'),boundaryRequired:parse(s.backgroundColor)[3]>0||(parseFloat(s.borderTopWidth)>0&&s.borderTopStyle!=='none'&&borderRaw[3]>0),hasText:!!e.textContent.trim(),activeElement:document.activeElement===e}})`
+	validate := func(state string, value metrics) {
+		threshold := 3.0
+		if value.HasText {
+			threshold = 4.5
+		}
+		if value.Text < threshold {
+			t.Errorf("%s action %d %q text/icon contrast %.2f < %.1f", state, value.Index, value.Label, value.Text, threshold)
+		}
+		if value.BoundaryRequired && value.Boundary < 3 {
+			t.Errorf("%s action %d %q boundary contrast %.2f < 3", state, value.Index, value.Label, value.Boundary)
 		}
 	}
-	if !focused {
-		t.Fatal("primary action was not reachable by keyboard")
+	seen := make(map[int]bool, setup.Actions)
+	for step := 0; step < setup.Stops; step++ {
+		var index string
+		if err := chromedp.Run(ctx, chromedp.KeyEvent("\t"), chromedp.Evaluate(`document.activeElement?.dataset.xisActionIndex ?? ''`, &index)); err != nil {
+			t.Fatal(err)
+		}
+		if index == "" {
+			continue
+		}
+		var value metrics
+		if err := chromedp.Run(ctx, chromedp.Evaluate(metricFunction+`(document.activeElement)`, &value)); err != nil {
+			t.Fatal(err)
+		}
+		seen[value.Index] = true
+		validate("focus", value)
+		if !value.ActiveElement || value.OutlineStyle == "none" || value.OutlineWidth < 2 || value.Indicator < 3 {
+			t.Errorf("focus action %d %q has insufficient visible indicator: %#v", value.Index, value.Label, value)
+		}
 	}
-	awaitTwoAnimationFrames(t, ctx)
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.dataset.xisPrimaryActionTarget === 'true'`, &focused)); err != nil || !focused {
-		t.Fatalf("primary action focus was stolen after quiescence: focused=%t err=%v", focused, err)
+	if len(seen) != setup.Actions {
+		t.Fatalf("keyboard focus validated %d/%d visible actions", len(seen), setup.Actions)
 	}
-	var ratios struct {
-		Text, Boundary, Outline, FillBoundary, BorderBoundary float64
-		OutlineStyle, FillColor, OutsideColor, BorderColor    string
-		OutlineWidth                                          float64
-		Shadow                                                string
+	hoveredActions := 0
+	for index := 0; index < setup.Actions; index++ {
+		var point struct {
+			X, Y      float64
+			Ready     bool
+			Hoverable bool
+		}
+		position := fmt.Sprintf(`(()=>{const e=document.querySelector('[data-xis-action-index="%d"]'),hoverable=getComputedStyle(e).pointerEvents!=='none';if(hoverable)e.scrollIntoView({block:'nearest',inline:'nearest'});const r=e?.getBoundingClientRect();return {hoverable,ready:!!r&&r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth,x:(r?.left||0)+(r?.width||0)/2,y:(r?.top||0)+(r?.height||0)/2}})()`, index)
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.blur()`, nil), chromedp.Evaluate(position, &point)); err != nil {
+			t.Fatalf("action %d hover geometry: %#v err=%v", index, point, err)
+		}
+		if !point.Hoverable {
+			continue
+		}
+		if !point.Ready {
+			t.Fatalf("action %d has no current hoverable bounding box: %#v", index, point)
+		}
+		hoveredActions++
+		var value metrics
+		measure := fmt.Sprintf(metricFunction+`(document.querySelector('[data-xis-action-index="%d"]'))`, index)
+		if err := chromedp.Run(ctx, chromedp.MouseEvent(cdinput.MouseMoved, point.X, point.Y), chromedp.Sleep(20*time.Millisecond), chromedp.Evaluate(measure, &value)); err != nil {
+			t.Fatal(err)
+		}
+		if !value.Hovered {
+			t.Errorf("hover action %d %q did not match :hover after pointer move", index, value.Label)
+		}
+		validate("hover", value)
 	}
-	const measure = `(()=>{const e=[...document.querySelectorAll('.xis-primary-action')].find(x=>!!(x.offsetWidth||x.offsetHeight||x.getClientRects().length)),canvas=document.createElement('canvas'),c=canvas.getContext('2d',{willReadFrequently:true});canvas.width=canvas.height=1;const parse=v=>{c.clearRect(0,0,1,1);c.fillStyle='rgba(0,0,0,0)';c.fillStyle=v;c.fillRect(0,0,1,1);const p=c.getImageData(0,0,1,1).data;return [p[0],p[1],p[2],p[3]/255]},over=(f,b)=>{const a=f[3]+b[3]*(1-f[3]);if(!a)return [0,0,0,0];return [(f[0]*f[3]+b[0]*b[3]*(1-f[3]))/a,(f[1]*f[3]+b[1]*b[3]*(1-f[3]))/a,(f[2]*f[3]+b[2]*b[3]*(1-f[3]))/a,a]},background=n=>{let color=[0,0,0,0];for(;n;n=n.parentElement)color=over(color,parse(getComputedStyle(n).backgroundColor));return over(color,[255,255,255,1])},lum=v=>{const q=v.slice(0,3).map(x=>x/255).map(x=>x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4));return .2126*q[0]+.7152*q[1]+.0722*q[2]},ratio=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05),s=getComputedStyle(e),bg=background(e),outside=background(e.parentElement),fg=over(parse(s.color),bg),border=over(parse(s.borderTopColor),outside),outline=over(parse(s.outlineColor),outside),fillBoundary=ratio(bg,outside),borderBoundary=ratio(border,outside);return {text:ratio(fg,bg),boundary:Math.max(fillBoundary,borderBoundary),fillBoundary,borderBoundary,outline:ratio(outline,outside),outlineStyle:s.outlineStyle,outlineWidth:parseFloat(s.outlineWidth),shadow:s.boxShadow,fillColor:s.backgroundColor,outsideColor:getComputedStyle(e.parentElement).backgroundColor,borderColor:s.borderTopColor}})()`
-	if err := chromedp.Run(ctx, chromedp.Evaluate(measure, &ratios)); err != nil {
-		t.Fatal(err)
+	if hoveredActions == 0 {
+		t.Fatal("rendered state has no pointer-enabled action to validate")
 	}
-	if ratios.Text < 4.5 || ((ratios.OutlineStyle == "none" || ratios.OutlineWidth < 2 || ratios.Outline < 3) && (ratios.Shadow == "" || ratios.Shadow == "none")) {
-		var debug any
-		_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=[...document.querySelectorAll('.xis-primary-action')].find(x=>!!(x.offsetWidth||x.offsetHeight||x.getClientRects().length)),rules=[];for(const sheet of document.styleSheets){try{for(const rule of sheet.cssRules||[])if(rule.selectorText?.includes('xis-primary-action'))rules.push(rule.cssText)}catch(_){}}return {tag:e?.tagName,className:e?.className,matches:e?.matches('button.xis-primary-action:focus'),inlineRule:[...document.querySelectorAll('style')].some(s=>s.textContent.includes('button.xis-primary-action:focus')),rules}})()`, &debug))
-		t.Fatalf("primary action focus contrast = %#v, debug=%#v", ratios, debug)
-	}
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.blur()`, nil), chromedp.MouseEvent(cdinput.MouseMoved, target.X, target.Y), chromedp.Sleep(20*time.Millisecond), chromedp.Evaluate(measure, &ratios)); err != nil {
-		t.Fatal(err)
-	}
-	if ratios.Text < 4.5 || ratios.Boundary < 3 {
-		t.Fatalf("primary action hover contrast = %#v", ratios)
-	}
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('[data-xis-primary-action-target]')?.removeAttribute('data-xis-primary-action-target')`, nil)); err != nil {
+	restore := fmt.Sprintf(`(()=>{document.querySelectorAll('[data-xis-action-index]').forEach(e=>delete e.dataset.xisActionIndex);window.scrollTo(%f,%f);const main=document.querySelector('#main-content');if(main)main.scrollTop=%f})()`, setup.WindowX, setup.WindowY, setup.MainScroll)
+	if err := chromedp.Run(ctx, chromedp.MouseEvent(cdinput.MouseMoved, 0, 0), chromedp.Evaluate(restore, nil)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -836,7 +872,7 @@ func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir st
 					t.Fatalf("held search at %dpx/%s/%s: %v", width, theme, mode, err)
 				}
 				assertP1Accessibility(t, ctx)
-				assertPrimaryActionHover(t, ctx)
+				assertInteractiveActions(t, ctx)
 				if err := chromedp.Run(ctx,
 					chromedp.FullScreenshot(&screenshot, 100),
 					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false`, nil),
@@ -910,6 +946,46 @@ func assertAuthoritativeRecovery(t *testing.T, ctx context.Context, failure stri
 		chromedp.Poll(`document.querySelector('#monitor-detail')?.dataset.monitorId === new URL(location.href).searchParams.get('selected')`, nil),
 	); err != nil {
 		t.Fatalf("%s authoritative retry: %v", failure, err)
+	}
+}
+
+func assertAuthoritativeOrdering(t *testing.T, ctx context.Context) {
+	t.Helper()
+	const install = `(()=>{window.__xisRealFetch=window.fetch;window.__xisRefreshes=[];window.fetch=(url,options)=>new Promise(resolve=>window.__xisRefreshes.push({resolve,url,signal:options?.signal}));const refresh=()=>window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));refresh();refresh();return window.__xisRefreshes.length})()`
+	var count int
+	if err := chromedp.Run(ctx, chromedp.Evaluate(install, &count)); err != nil || count != 2 {
+		t.Fatalf("install out-of-order refresh fixture: count=%d err=%v", count, err)
+	}
+	const newer = `<section id="ordered-newer"><h1 data-autofocus tabindex="-1">Newer authoritative state</h1></section>`
+	const older = `<section id="ordered-older"><h1 data-autofocus tabindex="-1">Older stale state</h1></section>`
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(fmt.Sprintf(`window.__xisRefreshes[1].resolve(new Response(%q,{status:200}))`, newer), nil),
+		chromedp.WaitVisible("#ordered-newer"),
+		chromedp.Evaluate(fmt.Sprintf(`window.__xisRefreshes[0].resolve(new Response(%q,{status:200}))`, older), nil),
+		chromedp.Sleep(50*time.Millisecond),
+	); err != nil {
+		t.Fatalf("resolve newer then older authoritative states: %v", err)
+	}
+	var newerOwned bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`!!document.querySelector('#ordered-newer') && !document.querySelector('#ordered-older')`, &newerOwned)); err != nil || !newerOwned {
+		t.Fatalf("older response replaced newer authoritative state: owned=%t err=%v", newerOwned, err)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`window.__xisRefreshes=[];const refresh=()=>window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));refresh();refresh();window.__xisRefreshes.length`, &count),
+	); err != nil || count != 2 {
+		t.Fatalf("install recovery ordering fixture: count=%d err=%v", count, err)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`window.__xisRefreshes[1].resolve(new Response("unavailable",{status:503}))`, nil),
+		chromedp.WaitVisible("#history-recovery"),
+		chromedp.Evaluate(fmt.Sprintf(`window.__xisRefreshes[0].resolve(new Response(%q,{status:200}))`, older), nil),
+		chromedp.Sleep(50*time.Millisecond),
+	); err != nil {
+		t.Fatalf("resolve newer recovery then older state: %v", err)
+	}
+	var recoveryOwned bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`!!document.querySelector('#history-recovery') && !document.querySelector('#ordered-older')`, &recoveryOwned), chromedp.Evaluate(`window.fetch=window.__xisRealFetch;delete window.__xisRealFetch;delete window.__xisRefreshes`, nil)); err != nil || !recoveryOwned {
+		t.Fatalf("older response replaced newer recovery: owned=%t err=%v", recoveryOwned, err)
 	}
 }
 
