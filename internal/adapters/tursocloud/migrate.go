@@ -9,8 +9,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	migrations "github.com/araihu/xisnove/db/migrations/sqlite"
+	"github.com/araihu/xisnove/internal/adapters/migration"
+	"github.com/araihu/xisnove/internal/adapters/sqlitecompat"
 )
 
 const initializeVersionTable = `
@@ -32,6 +35,19 @@ WHERE NOT EXISTS (
 // one connection for its entire run. Sending each migration as one libSQL batch
 // keeps that migration and its version record atomic.
 func migrate(ctx context.Context, db *sql.DB) error {
+	return migrateWithOptions(ctx, db, migration.DefaultOptions(fmt.Sprintf("managed-turso-%d", time.Now().UnixNano())))
+}
+
+func migrateWithOptions(ctx context.Context, db *sql.DB, options migration.Options) error {
+	migrationCtx, release, err := sqlitecompat.AcquireDatabaseMigrationLease(ctx, db, options)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return migrateUnlocked(migrationCtx, db)
+}
+
+func migrateUnlocked(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, initializeVersionTable); err != nil {
 		return fmt.Errorf("initialize managed Turso migration table: %w", err)
 	}

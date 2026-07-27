@@ -11,7 +11,7 @@ import (
 func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 10 {
+	if migrations.LatestVersion != 11 {
 		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
 	}
 	var schema strings.Builder
@@ -54,6 +54,8 @@ func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 		"probe_results_received_at",
 		"labels_json JSONB NOT NULL DEFAULT '{}'::jsonb",
 		"action TEXT NOT NULL DEFAULT 'change'",
+		"process_version_leases",
+		"migration_leases",
 	} {
 		if !strings.Contains(schema.String(), expected) {
 			t.Fatalf("migration family is missing %q", expected)

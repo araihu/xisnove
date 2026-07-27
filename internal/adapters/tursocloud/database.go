@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	application "github.com/araihu/xisnove/application/port"
+	"github.com/araihu/xisnove/internal/adapters/migration"
 	"github.com/araihu/xisnove/internal/adapters/sqlitecompat"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
@@ -34,8 +35,33 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	return migrate(ctx, db)
 }
 
+func MigrateWithOptions(ctx context.Context, db *sql.DB, options migration.Options) error {
+	return migrateWithOptions(ctx, db, options)
+}
+
 func Ready(ctx context.Context, db *sql.DB) error {
 	return sqlitecompat.Ready(ctx, db)
+}
+
+func AcquireProcessLease(ctx context.Context, db *sql.DB, lease migration.ProcessLease) error {
+	return sqlitecompat.AcquireProcessLease(ctx, db, lease)
+}
+
+func ReleaseProcessLease(ctx context.Context, db *sql.DB, installationID, processID string) error {
+	return sqlitecompat.ReleaseProcessLease(ctx, db, installationID, processID)
+}
+
+func CheckContractAllowed(ctx context.Context, db *sql.DB, installationID string, targetSchema int64) error {
+	return sqlitecompat.CheckContractAllowed(ctx, db, installationID, targetSchema)
+}
+
+func CheckContractWithOptions(ctx context.Context, db *sql.DB, options migration.Options, targetSchema int64) error {
+	migrationCtx, release, err := sqlitecompat.AcquireDatabaseMigrationLease(ctx, db, options)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return sqlitecompat.CheckContractAllowed(migrationCtx, db, options.InstallationID, targetSchema)
 }
 
 func NewStore(db *sql.DB) application.Store {

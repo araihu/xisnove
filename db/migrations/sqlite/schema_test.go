@@ -45,6 +45,8 @@ func TestMigrationFamilyContainsNotificationOperationsSchema(t *testing.T) {
 		"description TEXT NOT NULL DEFAULT ''",
 		"labels_json BLOB NOT NULL DEFAULT X'7B7D';",
 		"action TEXT NOT NULL DEFAULT 'change'",
+		"process_version_leases",
+		"migration_leases",
 	} {
 		if !strings.Contains(schema.String(), expected) {
 			t.Fatalf("migration family is missing %q", expected)
