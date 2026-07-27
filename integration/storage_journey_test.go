@@ -36,9 +36,15 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	ids := &matrixIDs{}
 	tokens := &matrixTokens{}
 	passwords := matrixPasswords{}
+	sessionDuration := 250 * time.Millisecond
+	if harness.config.Profile == database.ProfileTursoCloud {
+		// The remote profile must test fractional expiry without allowing
+		// network latency to consume the entire session before first use.
+		sessionDuration = 2 * time.Second
+	}
 	auth := application.NewAuthService(application.AuthServiceConfig{
 		Store: primary.Store, Passwords: passwords, Tokens: tokens,
-		SessionDuration: 250 * time.Millisecond, Now: func() time.Time { return storageMatrixNow },
+		SessionDuration: sessionDuration, Now: func() time.Time { return storageMatrixNow },
 		NewID: ids.New,
 	})
 	if err := auth.BootstrapAdmin(ctx, "Admin@Example.com", storageMatrixPassword); err != nil {
@@ -55,7 +61,7 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	if principal.Kind != application.PrincipalAdmin || principal.SubjectID == "" {
 		t.Fatalf("unexpected administrator principal: %#v", principal)
 	}
-	expiryDeadline := time.Now().Add(3 * time.Second)
+	expiryDeadline := time.Now().Add(sessionDuration + 3*time.Second)
 	for {
 		_, err := auth.AuthenticateSession(ctx, session.Token)
 		if errors.Is(err, application.ErrInvalidCredentials) {
