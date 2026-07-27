@@ -25,7 +25,7 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 		t.Fatalf("render document: %v", err)
 	}
 	body := rendered.String()
-	if !strings.Contains(body, `<link rel="icon" type="image/svg+xml" href="/ui/xisnove-81300f5.svg">`) {
+	if !strings.Contains(body, `<link rel="icon" type="image/svg+xml" href="/ui/xisnove-bffc2ac.svg">`) {
 		t.Fatalf("document does not reference the canonical versioned Xisnove favicon: %s", body)
 	}
 	goshtoso := strings.Index(body, `/assets/styles.css`)
@@ -156,9 +156,12 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	}
 	body := rendered.String()
 	for _, want := range []string{
+		`id="monitor-detail-drawer-body"`, `role="dialog"`, `aria-labelledby="monitor-detail-drawerTitle"`,
+		`x-trap.noscroll="monitorDetailDrawerIsOpen"`, `xis-monitor-drawer-panel`,
+		`$event.preventDefault()`,
 		`id="monitor-detail"`, `aria-labelledby="monitor-detail-heading"`,
 		`data-monitor-id="` + monitorID.String() + `"`, `aria-selected="true"`,
-		`id="monitor-detail-heading" tabindex="-1" data-autofocus`, "Home DNS", "DEGRADED",
+		`id="monitor-detail-heading" tabindex="-1" data-autofocus`, `id="monitor-detail-close"`, "Home DNS", "DEGRADED",
 		"Current health", "Configuration", "Observation history",
 		"History is not exposed by the current public API",
 		"60 seconds", "2500 ms", "3 failures", "2 successes",

@@ -133,9 +133,11 @@ consumer that expects password semantics to remain safe without Alpine.
     rendered header.** At 390 px the previous stacked controls made the header
     about 163 px tall while the drawer began at 64 px. Xisnove now keeps the
     compact header on one row and publishes its measured bottom through a
-    shared CSS custom property for both panel and backdrop. A `ResizeObserver`
-    updates the value, and browser acceptance requires panel and backdrop to
-    start below the header with their first and last controls reachable.
+    shared CSS custom property. A `ResizeObserver` updates the value. Mobile
+    navigation panel/backdrop and the modal Drawer panel start below the header;
+    the modal Drawer overlay still covers the full viewport so header controls
+    cannot remain pointer-interactive behind `aria-modal=true`. Browser
+    acceptance verifies header hit-testing plus reachable first/last controls.
 17. **Component minimum size does not cover every composed interactive
     surface.** A native row link rendered 39 by 44 px and the public navigation
     menu trigger rendered 24 by 24 px. Xisnove adds an application boundary of
@@ -175,3 +177,18 @@ consumer that expects password semantics to remain safe without Alpine.
     raw-theme, and license reads now return 200. Xisnove keeps an attributed,
     same-origin pinned copy after Goshtoso's stylesheet for deterministic
     availability, not to work around access or licensing.
+23. **Drawer has no initial-open option, and an early `drawer:open` event can
+    be lost before Alpine initializes an HTMX-inserted instance.** Xisnove
+    retries the public event for one bounded second and stops only when both the
+    Drawer Alpine state and visible panel agree. Geometry alone was racy while
+    `x-cloak` and `x-show` settled. The same initializer runs after direct load,
+    HTMX settle, history restore and authoritative `innerHTML` recovery. Focus
+    moves to the detail heading after two animation frames so the Focus plugin's
+    `x-trap` cannot overwrite it. A public initial-open option or idempotent
+    imperative controller would remove this consumer lifecycle glue.
+24. **Drawer close requests intentionally do not own application route
+    state.** Xisnove intercepts `drawer:close-request`, follows the native/HTMX
+    close link, and restores focus to the matching table row after settle. This
+    keeps Escape, overlay, close button, URL, selected styling and browser
+    history under one server-backed identity instead of hiding a still-selected
+    resource only in Alpine state.

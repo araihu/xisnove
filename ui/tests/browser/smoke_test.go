@@ -221,17 +221,29 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			t.Fatalf("theme selector did not persist %s through reload: persisted=%t err=%v", theme, persisted, err)
 		}
 	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.documentElement.classList.add('xis-visual-test')`, nil)); err != nil {
+		t.Fatalf("disable theme transitions before accessibility scan: %v", err)
+	}
+	awaitTwoAnimationFrames(t, ctx)
 	assertAccessibleSurface(t, ctx, "#monitor-content")
 	assertP1Accessibility(t, ctx)
 	captureMatrix(t, ctx, screenshotDir, "monitors", "#monitor-content")
-	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors?selected="+monitorID.String()), chromedp.WaitVisible("#monitor-detail")); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors?selected="+monitorID.String()), chromedp.WaitReady("#monitor-detail"), chromedp.Sleep(1500*time.Millisecond)); err != nil {
 		t.Fatalf("direct monitor detail: %v", err)
+	}
+	var drawerReady struct {
+		Visible, Alpine, Open bool
+		Display               string
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const owner=document.querySelector('.xis-monitor-drawer'),root=owner?.firstElementChild,panel=owner?.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');return {visible:!!panel&&panel.getClientRects().length>0,alpine:!!window.Alpine,open:root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen===true,display:panel?getComputedStyle(panel).display:''}})()`, &drawerReady)); err != nil || !drawerReady.Visible || !drawerReady.Alpine || !drawerReady.Open {
+		t.Fatalf("direct monitor drawer did not initialize: state=%#v err=%v", drawerReady, err)
 	}
 	assertSelectedMonitorIdentity(t, ctx, monitorID.String())
 	assertAccessibleSurface(t, ctx, "#monitor-content")
 	assertDetailGeometry(t, ctx)
-	assertSequentialKeyboardTraversal(t, ctx, "monitor detail")
+	assertSequentialKeyboardTraversalWithin(t, ctx, `aside[aria-labelledby="monitor-detail-drawerTitle"]`, "monitor detail drawer")
 	captureMatrix(t, ctx, screenshotDir, "monitor-detail", "#monitor-detail")
+	assertDrawerCloseAndRestore(t, ctx, monitorID.String())
 	if err := chromedp.Run(ctx,
 		chromedp.Click(`[aria-label="Select monitor `+unknownID.String()+`"]`),
 		chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+unknownID.String()+`'`, nil),
@@ -242,8 +254,11 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	beforeHistoryRead := monitorRequests.Load()
 	homeRevision.Store(1)
 	homeHealth.Store(string(sdk.Down))
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+monitorID.String()+`'`, nil)); err != nil {
-		t.Fatalf("selected monitor Back: %v", err)
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`new URL(location.href).searchParams.has('selected') === false`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		t.Fatalf("selected monitor Back to list: %v", err)
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+monitorID.String()+`'`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		t.Fatalf("selected monitor Back to prior detail: %v", err)
 	}
 	freshMarker := fmt.Sprintf(`#monitor-detail[data-monitor-state="down"][data-monitor-updated="%s"]`, observedAt.Add(time.Minute).Format(time.RFC3339))
 	if err := chromedp.Run(ctx, chromedp.Poll(`!!document.querySelector(`+fmt.Sprintf("%q", freshMarker)+`) && document.querySelector('#monitor-detail')?.textContent.includes('DOWN') === true`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
@@ -255,8 +270,11 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if monitorRequests.Load() <= beforeHistoryRead {
 		t.Error("selected monitor Back did not re-read authoritative server state")
 	}
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.forward()`, nil), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+unknownID.String()+`'`, nil)); err != nil {
-		t.Fatalf("selected monitor Forward: %v", err)
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.forward()`, nil), chromedp.Poll(`new URL(location.href).searchParams.has('selected') === false`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		t.Fatalf("selected monitor Forward to list: %v", err)
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.forward()`, nil), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+unknownID.String()+`'`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		t.Fatalf("selected monitor Forward to next detail: %v", err)
 	}
 	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
 	assertAuthoritativeRecovery(t, ctx, "status")
@@ -441,6 +459,7 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 		for _, theme := range themes {
 			for _, mode := range modes {
 				name := fmt.Sprintf("%s-%d-%s-%s.png", surface, width, theme, mode)
+				t.Logf("capturing %s", name)
 				var screenshot []byte
 				var overflow bool
 				var applied bool
@@ -449,7 +468,7 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 					chromedp.EmulateViewport(width, 900),
 					chromedp.Evaluate(script, nil),
 					chromedp.Sleep(350*time.Millisecond),
-					chromedp.WaitVisible(readySelector),
+					chromedp.Poll(fmt.Sprintf(`(()=>{const e=document.querySelector(%q);return !!e && e.getClientRects().length > 0})()`, readySelector), nil, chromedp.WithPollingTimeout(3*time.Second)),
 					chromedp.Evaluate(fmt.Sprintf(`document.documentElement.dataset.theme===%q && document.documentElement.classList.contains('dark')===%t`, theme, mode == "dark"), &applied),
 					chromedp.Evaluate(`document.documentElement.scrollWidth > document.documentElement.clientWidth`, &overflow),
 				); err != nil {
@@ -457,7 +476,11 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 				}
 				assertP1Accessibility(t, ctx)
 				assertInteractiveActions(t, ctx)
-				if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 100)); err != nil {
+				if err := chromedp.Run(ctx,
+					chromedp.Evaluate(`(()=>{const body=document.querySelector('#monitor-detail-drawer-body');if(body)body.scrollTop=0})()`, nil),
+					chromedp.Sleep(50*time.Millisecond),
+					chromedp.FullScreenshot(&screenshot, 100),
+				); err != nil {
 					t.Fatalf("capture %s: %v", name, err)
 				}
 				if overflow {
@@ -655,7 +678,7 @@ func assertInteractiveActions(t *testing.T, ctx context.Context) {
 		Actions, Stops               int
 		WindowX, WindowY, MainScroll float64
 	}
-	const prepare = `(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]'),visibleAction=e=>{if(!visible(e)||e.matches('a[href="#main-content"]'))return false;const r=e.getBoundingClientRect();return r.width>=4&&r.height>=4},actions=[...document.querySelectorAll('button:not([disabled]),a[href]')].filter(visibleAction),stops=[...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);actions.forEach((e,i)=>e.dataset.xisActionIndex=String(i));document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return {actions:actions.length,stops:stops.length,windowX:scrollX,windowY:scrollY,mainScroll:document.querySelector('#main-content')?.scrollTop||0}})()`
+	const prepare = `(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]'),visibleAction=e=>{if(!visible(e)||e.matches('a[href="#main-content"]'))return false;const r=e.getBoundingClientRect();return r.width>=4&&r.height>=4},modal=[...document.querySelectorAll('[aria-modal="true"]')].find(visible),root=modal||document,actions=[...root.querySelectorAll('button:not([disabled]),a[href]')].filter(visibleAction),stops=[...root.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);actions.forEach((e,i)=>e.dataset.xisActionIndex=String(i));document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return {actions:actions.length,stops:stops.length,windowX:scrollX,windowY:scrollY,mainScroll:document.querySelector('#main-content')?.scrollTop||0}})()`
 	if err := chromedp.Run(ctx, chromedp.Evaluate(prepare, &setup)); err != nil {
 		t.Fatal(err)
 	}
@@ -741,9 +764,17 @@ func assertInteractiveActions(t *testing.T, ctx context.Context) {
 }
 
 func assertSequentialKeyboardTraversal(t *testing.T, ctx context.Context, surface string) {
+	assertSequentialKeyboardTraversalWithin(t, ctx, "", surface)
+}
+
+func assertSequentialKeyboardTraversalWithin(t *testing.T, ctx context.Context, selector, surface string) {
 	t.Helper()
 	var expected int
-	const prepare = `(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]');const nodes=[...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);nodes.forEach((e,i)=>e.dataset.xisKeyboardIndex=String(i));document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return nodes.length})()`
+	rootExpression := "document"
+	if selector != "" {
+		rootExpression = fmt.Sprintf("document.querySelector(%q)", selector)
+	}
+	prepare := fmt.Sprintf(`(()=>{const root=%s,visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]');const nodes=[...root.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);nodes.forEach((e,i)=>e.dataset.xisKeyboardIndex=String(i));document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return nodes.length})()`, rootExpression)
 	if err := chromedp.Run(ctx, chromedp.Evaluate(prepare, &expected)); err != nil {
 		t.Fatalf("prepare %s keyboard traversal: %v", surface, err)
 	}
@@ -817,18 +848,94 @@ func assertDetailGeometry(t *testing.T, ctx context.Context) {
 		mobile bool
 	}{{390, true}, {1440, false}} {
 		var result struct {
-			PageOverflow bool    `json:"pageOverflow"`
-			RailAfter    bool    `json:"railAfter"`
-			RailBelow    bool    `json:"railBelow"`
-			RailRight    bool    `json:"railRight"`
-			DetailWidth  float64 `json:"detailWidth"`
+			PageOverflow   bool    `json:"pageOverflow"`
+			HeaderBlocked  bool    `json:"headerBlocked"`
+			Reachable      bool    `json:"reachable"`
+			FirstReachable bool    `json:"firstReachable"`
+			LastReachable  bool    `json:"lastReachable"`
+			RailAfter      bool    `json:"railAfter"`
+			RailBelow      bool    `json:"railBelow"`
+			RailRight      bool    `json:"railRight"`
+			DetailWidth    float64 `json:"detailWidth"`
+			HeaderBottom   float64 `json:"headerBottom"`
+			PanelTop       float64 `json:"panelTop"`
+			PanelRight     float64 `json:"panelRight"`
+			ViewportRight  float64 `json:"viewportRight"`
 		}
-		if err := chromedp.Run(ctx, chromedp.EmulateViewport(test.width, 900), chromedp.Evaluate(`(()=>{const detail=document.querySelector('#monitor-detail'),main=detail?.querySelector('.xis-detail-main'),rail=detail?.querySelector('.xis-detail-rail'),dr=detail?.getBoundingClientRect(),mr=main?.getBoundingClientRect(),rr=rail?.getBoundingClientRect();return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,railAfter:!!main&&!!rail&&!!(main.compareDocumentPosition(rail)&Node.DOCUMENT_POSITION_FOLLOWING),railBelow:!!mr&&!!rr&&rr.top>=mr.bottom-1,railRight:!!mr&&!!rr&&rr.left>=mr.right-1,detailWidth:dr?.width||0}})()`, &result)); err != nil {
+		if err := chromedp.Run(ctx, chromedp.EmulateViewport(test.width, 900), chromedp.Sleep(100*time.Millisecond), chromedp.Evaluate(`(()=>{const detail=document.querySelector('#monitor-detail'),main=detail?.querySelector('.xis-detail-main'),rail=detail?.querySelector('.xis-detail-rail'),panel=document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]'),header=document.querySelector('body > div > header'),headerControl=header?.querySelector('button,select,a'),dr=detail?.getBoundingClientRect(),mr=main?.getBoundingClientRect(),rr=rail?.getBoundingClientRect(),pr=panel?.getBoundingClientRect(),hr=header?.getBoundingClientRect(),hcr=headerControl?.getBoundingClientRect(),controls=[...panel.querySelectorAll('a[href],button:not([disabled])')].filter(e=>e.getClientRects().length),first=controls[0],last=controls.at(-1),fr=first?.getBoundingClientRect();last?.scrollIntoView({block:'nearest'});const lr=last?.getBoundingClientRect(),hit=hcr?document.elementFromPoint(hcr.left+hcr.width/2,hcr.top+hcr.height/2):null;return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,headerBlocked:!!headerControl&&hit!==headerControl&&!headerControl.contains(hit),reachable:!!pr&&pr.width>0&&pr.height>0&&pr.bottom>0&&pr.top<innerHeight,firstReachable:!!fr&&fr.top>=pr.top&&fr.bottom<=Math.min(pr.bottom,innerHeight),lastReachable:!!lr&&lr.top>=pr.top&&lr.bottom<=Math.min(pr.bottom,innerHeight),railAfter:!!main&&!!rail&&!!(main.compareDocumentPosition(rail)&Node.DOCUMENT_POSITION_FOLLOWING),railBelow:!!mr&&!!rr&&rr.top>=mr.bottom-1,railRight:!!mr&&!!rr&&rr.left>=mr.right-1,detailWidth:dr?.width||0,headerBottom:hr?.bottom||0,panelTop:pr?.top||0,panelRight:pr?.right||0,viewportRight:innerWidth}})()`, &result)); err != nil {
 			t.Fatalf("detail geometry at %dpx: %v", test.width, err)
 		}
-		if result.PageOverflow || !result.RailAfter || result.DetailWidth <= 0 || (test.mobile && !result.RailBelow) || (!test.mobile && !result.RailRight) {
+		if result.PageOverflow || !result.HeaderBlocked || !result.Reachable || !result.FirstReachable || !result.LastReachable || !result.RailAfter || result.DetailWidth <= 0 || result.PanelTop+1 < result.HeaderBottom || result.PanelRight != result.ViewportRight || (test.mobile && !result.RailBelow) || (!test.mobile && !result.RailRight) {
 			t.Errorf("detail geometry at %dpx = %#v", test.width, result)
 		}
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('#monitor-detail-drawer-body').scrollTop=0`, nil)); err != nil {
+			t.Fatalf("reset detail drawer scroll at %dpx: %v", test.width, err)
+		}
+	}
+}
+
+func assertDrawerCloseAndRestore(t *testing.T, ctx context.Context, id string) {
+	t.Helper()
+	var retained struct {
+		Open, PanelVisible bool
+		Selected           string
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`window.__xisCancelDrawerClose=event=>{if(event.detail?.elt?.id==='monitor-detail-close'){event.preventDefault();document.removeEventListener('htmx:beforeRequest',window.__xisCancelDrawerClose)}};document.addEventListener('htmx:beforeRequest',window.__xisCancelDrawerClose)`, nil),
+		chromedp.KeyEvent("\u001b"),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`(()=>{const owner=document.querySelector('.xis-monitor-drawer'),root=owner?.firstElementChild,panel=owner?.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');return {open:root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen===true,panelVisible:!!panel&&panel.getClientRects().length>0,selected:new URL(location.href).searchParams.get('selected')||''}})()`, &retained),
+	); err != nil {
+		t.Fatalf("cancel monitor drawer close: %v", err)
+	}
+	if !retained.Open || !retained.PanelVisible || retained.Selected != id {
+		t.Fatalf("cancelled drawer close lost selected state: got=%#v want=%s", retained, id)
+	}
+	var escapeState struct {
+		Seen, Open, PanelVisible bool
+		URL                      string
+		Active                   string
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`window.__xisEscapeSeen=0;window.addEventListener('keydown',event=>{if(event.key==='Escape')window.__xisEscapeSeen++},{once:true,capture:true})`, nil),
+		chromedp.KeyEvent("\u001b"),
+		chromedp.Sleep(300*time.Millisecond),
+		chromedp.Evaluate(`(()=>{const owner=document.querySelector('.xis-monitor-drawer'),root=owner?.firstElementChild,panel=owner?.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');return {seen:window.__xisEscapeSeen>0,open:root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen===true,panelVisible:!!panel&&panel.getClientRects().length>0,url:location.href,active:document.activeElement?.outerHTML?.slice(0,160)||''}})()`, &escapeState),
+	); err != nil {
+		t.Fatalf("close monitor drawer with Escape: %v", err)
+	}
+	if !escapeState.Seen || strings.Contains(escapeState.URL, "selected=") {
+		t.Fatalf("close monitor drawer with Escape did not change route: state=%#v", escapeState)
+	}
+	var closed struct {
+		DrawerVisible bool   `json:"drawerVisible"`
+		Focused       string `json:"focused"`
+		SelectedCount int    `json:"selectedCount"`
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const panel=document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]'),row=document.activeElement?.closest('tr[data-monitor-id]');return {drawerVisible:!!panel&&panel.getClientRects().length>0,focused:row?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length}})()`, &closed)); err != nil {
+		t.Fatal(err)
+	}
+	if closed.DrawerVisible || closed.Focused != id || closed.SelectedCount != 0 {
+		t.Fatalf("drawer close state = %#v, want hidden drawer and focus restored to %s", closed, id)
+	}
+	if err := chromedp.Run(ctx, chromedp.Click(`[aria-label="Select monitor `+id+`"]`), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+id+`'`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		t.Fatalf("reopen monitor drawer URL: %v", err)
+	}
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.querySelector('#monitor-detail') !== null`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		t.Fatalf("reopen monitor drawer render: %v", err)
+	}
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]')?.getClientRects().length > 0`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		var state any
+		_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const owner=document.querySelector('.xis-monitor-drawer'),root=owner?.firstElementChild,panel=owner?.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');return {url:location.href,owner:!!owner,panel:!!panel,visible:!!panel&&panel.getClientRects().length>0,open:root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen,alpine:!!window.Alpine}})()`, &state))
+		t.Fatalf("reopen monitor drawer visibility: state=%#v err=%v", state, err)
+	}
+	assertSelectedMonitorIdentity(t, ctx, id)
+	if err := chromedp.Run(ctx,
+		chromedp.Click("#monitor-detail-close"),
+		chromedp.Poll(`new URL(location.href).searchParams.has('selected') === false`, nil, chromedp.WithPollingTimeout(5*time.Second)),
+		chromedp.Poll(`document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]') === null`, nil, chromedp.WithPollingTimeout(5*time.Second)),
+	); err != nil {
+		t.Fatalf("close reopened monitor drawer: %v", err)
 	}
 }
 
@@ -920,8 +1027,10 @@ func assertSelectedMonitorIdentity(t *testing.T, ctx context.Context, id string)
 		URL, Detail, Focus, Selected string
 		SelectedCount                int
 	}
-	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='monitor-detail-heading'`, nil), chromedp.Evaluate(`(()=>{const selected=document.querySelector('tr[aria-selected="true"]');return {url:new URL(location.href).searchParams.get('selected')||'',detail:document.querySelector('#monitor-detail')?.dataset.monitorId||'',focus:document.activeElement?.closest('[data-monitor-id]')?.dataset.monitorId||'',selected:selected?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length}})()`, &identity)); err != nil {
-		t.Fatal(err)
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='monitor-detail-heading'`, nil, chromedp.WithPollingTimeout(5*time.Second)), chromedp.Evaluate(`(()=>{const selected=document.querySelector('tr[aria-selected="true"]');return {url:new URL(location.href).searchParams.get('selected')||'',detail:document.querySelector('#monitor-detail')?.dataset.monitorId||'',focus:document.activeElement?.closest('[data-monitor-id]')?.dataset.monitorId||'',selected:selected?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length}})()`, &identity)); err != nil {
+		var active string
+		_ = chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.outerHTML?.slice(0,240)||''`, &active))
+		t.Fatalf("selected monitor focus did not settle: active=%s err=%v", active, err)
 	}
 	if identity.URL != id || identity.Detail != id || identity.Selected != id || identity.SelectedCount != 1 || identity.Focus != id {
 		t.Fatalf("selected monitor identity = %#v, want %s", identity, id)
@@ -964,10 +1073,14 @@ func assertAuthoritativeRecovery(t *testing.T, ctx context.Context, failure stri
 	if err := chromedp.Run(ctx,
 		chromedp.Evaluate(`window.fetch=window.__xisRealFetch;delete window.__xisRealFetch`, nil),
 		chromedp.Click("#history-recovery button"),
-		chromedp.WaitVisible("#monitor-detail"),
-		chromedp.Poll(`document.querySelector('#monitor-detail')?.dataset.monitorId === new URL(location.href).searchParams.get('selected')`, nil),
+		chromedp.Poll(`document.querySelector('#monitor-detail')?.dataset.monitorId === new URL(location.href).searchParams.get('selected')`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 	); err != nil {
-		t.Fatalf("%s authoritative retry: %v", failure, err)
+		t.Fatalf("%s authoritative retry render: %v", failure, err)
+	}
+	if err := chromedp.Run(ctx, chromedp.Poll(`document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]')?.getClientRects().length > 0`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		var state any
+		_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const owner=document.querySelector('.xis-monitor-drawer'),root=owner?.firstElementChild,panel=owner?.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');return {owner:!!owner,panel:!!panel,open:root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen,visible:!!panel&&panel.getClientRects().length>0}})()`, &state))
+		t.Fatalf("%s authoritative retry drawer: state=%#v err=%v", failure, state, err)
 	}
 }
 

@@ -19,18 +19,18 @@ requests retain the real 502 or 504 status.
 
 ## Browser matrix
 
-The Chromedp smoke records the full 32-image happy matrix at 390 px and 1440 px
-for Goshtoso and Minimal themes in light and dark modes. It also records every
-one of the 13 explicit states across the same eight width/theme/mode axes:
+The Chromedp smoke records the full 48-image happy matrix at 390 px and 1440 px
+for Arai Hû, Goshtoso and Minimal themes in light and dark modes. It also records
+every one of the 13 explicit states across the same twelve width/theme/mode axes:
 invalid and timed-out login; monitor loading, empty, filtered-empty, upstream
 error and partial/unknown; and public empty, unknown, up, degraded with active
 incident, upstream error and timeout. These 104 state captures plus the happy
 matrix are named with all four dimensions, so no artifact can ambiguously
 inherit the theme or mode from a previous capture. They
 are browser-visible captures driven through the BFF and controlled API
-responses, not source-only assertions. The final evidence is exactly 136
+responses, not source-only assertions. The final evidence is exactly 204
 PNG-encoded files
-under `/Users/guilhermecastro/.codex/visualizations/2026/07/24/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-v0.0.13-review-fixes`.
+under `/Users/guilhermecastro/.codex/visualizations/2026/07/24/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-drawer-bffc2ac-final-v3`.
 The browser harness requests lossless encoding, rejects bytes without the
 eight-byte PNG signature before writing, and re-reads every `.png` artifact at
 the end of the run. The final evidence was also checked with the system `file`
@@ -47,13 +47,15 @@ absence of opaque bearer credentials in DOM content. It uses the generated SDK
 adapter and asserts session, monitor page, monitor health and public-status
 routes. Loading also asserts that the result surface has zero visible geometry
 while the skeleton is active and that the skeleton reuses the result surface's
-horizontal boundaries. The selected-monitor route is opened directly, keeps
-one `h1`, preserves the Operations List, places the metadata rail to the right
-at 1440 px and after the main detail content at 390 px, and remains free of page
-overflow.
+horizontal boundaries. The selected-monitor route opens a Goshtoso Drawer
+directly, keeps one `h1`, preserves the Operations List behind the modal layer,
+places the metadata rail to the right at 1440 px and after the main detail
+content at 390 px, and remains free of page overflow. Escape closes through the
+route, focus returns to the selected row, and Back/Forward traverse both list
+and detail entries while restored detail is re-read from authoritative state.
 
 The automated P1 accessibility scan is an in-repo browser equivalent rather
-than axe. It runs after every one of the 136 captures and fails on missing
+than axe. It runs after every one of the 204 captures and fails on missing
 accessible names, broken labels, duplicate IDs, invalid main/banner landmarks,
 nested headers, invalid ARIA values, incoherent selected URL/row/detail identity,
 controls or action boundaries below 3:1, text/action contrast, mobile targets
@@ -72,8 +74,8 @@ modern CSS colors such as `oklch()` into sRGB before WCAG luminance is measured.
 It passed Minimal light and all other required theme/mode/state combinations.
 Desktop placeholder width is measured using the rendered font and padding.
 
-Sequential Tab traversal was exercised for login, desktop monitors, selected
-monitor detail, mobile monitors with its open drawer, and public status. The
+Sequential Tab traversal was exercised for login, desktop monitors, the active
+monitor-detail Drawer, mobile monitors with open navigation, and public status. The
 test compares focus to visible DOM order, rejects hidden focus stops, requires
 a computed outline or box shadow at every stop, activates representative
 native links, and retains the dedicated skip-link, row-action, drawer
@@ -82,7 +84,7 @@ drawer bounding box below the measured header boundary, first and last drawer
 controls reachable inside the viewport, HTMX and Back/Forward checks. No manual screen-reader session is
 claimed.
 
-Monitor loading evidence is no longer simulated DOM state. Across all eight
+Monitor loading evidence is no longer simulated DOM state. Across all twelve
 width/theme/mode combinations, the
 harness holds the real HTMX search while the API response is delayed,
 double-clicks the submitter, and observes `button.WithLoadingText`,

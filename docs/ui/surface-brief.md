@@ -12,15 +12,17 @@ Workspace. Information priority: degraded/unknown health, monitor identity,
 current health, configuration, then unavailable history. Navigation model:
 native links with HTMX fragments and canonical URLs. Consequential states:
 loading, empty, filtered-empty, partial/unknown, upstream failure, sign-in
-failure, signed-out recovery, and unknown route. Existing identity: Xisnove
-name with Goshtoso system/title stacks; no additional brand identity supplied.
+failure, signed-out recovery, and unknown route. Existing identity: typographic
+`X-9` working name with Goshtoso system/title stacks plus the canonical Xisnove
+v3 favicon from `araihu/assets`; the full wordmark remains deferred pending the
+working-name decision.
 
 Density: compact for the inventory and standard for detail. Motion: restrained;
 only Goshtoso loading/drawer transitions explain state. Visual direction: one
 dense inventory, semantic health and selected-state tokens, restrained dividers,
 one subordinate metadata rail, and no decorative elevation. Primitives:
 `AppShell`, `PageHeader`, `Toolbar`, `Table`, `Badge`, `Alert`, `EmptyState`,
-`Skeleton`, `Button`, `Link`, and `Sidebar.Overlay`. The state/action invariant
+`Skeleton`, `Button`, `Link`, `Drawer`, and `Sidebar.Overlay`. The state/action invariant
 ledger is [state-action-ledger.md](state-action-ledger.md).
 
 No public primitive matches the monitor definition-list/detail composition, so

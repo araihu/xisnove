@@ -19,8 +19,12 @@ Goshtoso and Minimal base themes remain available through the theme selector
 and are not modified. The shared repository is public and licenses the theme
 under Apache-2.0 as of commit `a5e1afb1f3df2cc50aa88c9558370fd8fd177e9b`.
 The Xisnove favicon is likewise pinned from the canonical
-`logos/xisnove-favicon.svg` at `araihu/assets` commit `81300f5ccb108f36d63cb02113eeebd025583045`
-and served from the immutable, versioned `/ui/xisnove-81300f5.svg` URL.
+`logos/xisnove-favicon.svg` at `araihu/assets` commit `bffc2acfc9380eaf84473abfeaacbba625ac73d5`
+and served from the immutable, versioned `/ui/xisnove-bffc2ac.svg` URL. Its
+SHA-256 is `4df17d9b60b9999bed10e1e937ac5fdce433245ff5c4bdf43bd81605a4372d61`,
+matching `brand/canonical-assets-v3.sha256`.
+The preceding `/ui/xisnove-81300f5.svg` bytes remain served for one rolling
+release so old and new replicas never break immutable asset URLs.
 
 ## Development
 

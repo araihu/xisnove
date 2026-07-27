@@ -11,6 +11,7 @@ import (
 	"github.com/araihu/goshtoso/components/badge"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/card"
+	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/emptystate"
 	"github.com/araihu/goshtoso/components/head"
 	"github.com/araihu/goshtoso/components/link"
@@ -50,7 +51,7 @@ templ Document(title string, content templ.Component) {
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title } · X-9</title>
-			<link rel="icon" type="image/svg+xml" href="/ui/xisnove-81300f5.svg"/>
+			<link rel="icon" type="image/svg+xml" href="/ui/xisnove-bffc2ac.svg"/>
 			@head.Dependencies()
 			<link rel="stylesheet" href="/ui/araihu-f841fe90.css"/>
 			<script src="/ui/app.js" defer nonce={ templ.GetNonce(ctx) }></script>
@@ -94,8 +95,9 @@ templ Document(title string, content templ.Component) {
 				.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
 				.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 				.xis-status-results { align-content: start; align-items: start; min-height: 0; }
-				.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr); gap: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--color-outline); }
-				.dark .xis-detail-workspace { border-color: var(--color-outline-dark-strong); }
+				.xis-monitor-drawer-panel { top: var(--xis-shell-header-bottom, 4rem) !important; }
+				.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
+				.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
 				.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
 				.xis-detail-identity { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 				.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }
@@ -125,7 +127,7 @@ templ Document(title string, content templ.Component) {
 				.xis-topbar { min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--color-outline); background: var(--color-surface); }
 				.dark .xis-topbar { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark); }
 				.xis-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
-				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-topbar { min-height: 4rem; gap: .35rem; padding: .35rem .5rem; } .xis-topbar > .xis-brand { font-size: 1rem; } .xis-topbar-actions { gap: .25rem; min-width: 0; } .xis-topbar .xis-theme-controls { width: auto; align-items: end; flex-direction: row; gap: .2rem; } .xis-topbar .xis-field { font-size: .6875rem; } .xis-topbar .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; } .xis-topbar #theme-choice { width: 5.75rem; } .xis-topbar #mode-choice { width: 4.75rem; } .xis-topbar form button { padding-inline: .45rem; font-size: .75rem; } .xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; } .xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; } .dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); } .xis-mobile-nav { display: block; } }
+				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-topbar { min-height: 4rem; gap: .35rem; padding: .35rem .5rem; } .xis-topbar > .xis-brand { font-size: 1rem; } .xis-topbar-actions { gap: .25rem; min-width: 0; } .xis-topbar .xis-theme-controls { width: auto; align-items: end; flex-direction: row; gap: .2rem; } .xis-topbar .xis-field { font-size: .6875rem; } .xis-topbar .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; } .xis-topbar #theme-choice { width: 5.75rem; } .xis-topbar #mode-choice { width: 4.75rem; } .xis-topbar form button { padding-inline: .45rem; font-size: .75rem; } .xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; } .xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; } .xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; } .dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); } .xis-mobile-nav { display: block; } }
 			</style>
 		</head>
 		<body>
@@ -265,7 +267,7 @@ templ MonitorContent(data MonitorList) {
 			}
 			if data.Selected != "" {
 				if monitor, health, ok := selectedMonitor(data); ok {
-					@MonitorDetail(data, monitor, health)
+					@MonitorDetailDrawer(data, monitor, health)
 				} else {
 					@alert.Alert(alert.Config{Title: "Selected monitor unavailable", Description: "The selected monitor is not present in this result page. The monitor list remains available; close the detail or select a visible row.", Tone: alert.ToneWarning, RootClass: "xis-state-warning", Link: &alert.LinkConfig{Label: "Close detail", Href: monitorURL(data.Query, data.Cursor, "")}})
 				}
@@ -274,13 +276,26 @@ templ MonitorContent(data MonitorList) {
 	</section>
 }
 
+templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	<div
+		class="xis-monitor-drawer"
+		data-monitor-id={ monitor.Id.String() }
+		x-data="{}"
+		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer') { $event.preventDefault(); document.getElementById('monitor-detail-close')?.click() }"
+	>
+		@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: "Monitor detail", Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
+			@MonitorDetail(data, monitor, health)
+		}
+	</div>
+}
+
 templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
 	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-heading" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(health.State) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) }>
 		<div class="xis-detail-main">
 			<div class="xis-detail-identity">
 				<div>
 					<p class="xis-meta">Selected monitor</p>
-					<h2 id="monitor-detail-heading" tabindex="-1" data-autofocus>{ monitor.Name }</h2>
+					<h3 id="monitor-detail-heading" tabindex="-1" data-autofocus>{ monitor.Name }</h3>
 					<p class="xis-meta"><code>{ monitor.Id.String() }</code></p>
 				</div>
 				@healthBadge(health.State)
@@ -318,7 +333,7 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 				<dt>Required</dt><dd>{ enabledLabel(monitor.RequiredLocation) }</dd>
 				<dt>Updated</dt><dd>{ formattedTime(monitor.UpdatedAt) }</dd>
 			</dl>
-			<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-push-url="true">Close detail</a>
+			<a id="monitor-detail-close" class="xis-native-link" data-monitor-drawer-close data-monitor-id={ monitor.Id.String() } href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-push-url="true">Close detail</a>
 		</aside>
 	</section>
 }

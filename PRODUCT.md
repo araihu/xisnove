@@ -41,7 +41,7 @@ Operators use a server-rendered web BFF and a separate CLI. Both consume the pub
 
 Use `X-9` as the visible working name. Technical identifiers may remain `xisnove` until a complete rename is deliberately approved. Product-name collision research is still required before treating X-9 as final.
 
-Until that research resolves, use a typographic `X-9` treatment only. Do not create a repository-local mark. A future canonical asset must be requested from and consumed through `github.com/araihu/assets`.
+Until that research resolves, keep the visible wordmark as typographic `X-9` and do not create a repository-local alternative. The canonical Xisnove v3 favicon is consumed from pinned `github.com/araihu/assets`; the available full logo and marks remain deferred until the working-name decision.
 
 The voice is concise, operational, and evidence-led. UI copy should describe infrastructure state and available action, not implementation details.
 
@@ -49,7 +49,7 @@ The voice is concise, operational, and evidence-led. UI copy should describe inf
 
 - A live homelab pilot currently reports three real monitors and a Kubernetes discovery catalog.
 - The repository contains the public API, generated SDK, server, Agent, relational storage, UI BFF, browser tests, deployment resources, and design state/action ledger.
-- No customer claims, commercial benchmarks, testimonials, or finalized brand assets exist and must not be fabricated.
+- No customer claims, commercial benchmarks, or testimonials exist and must not be fabricated. Canonical Xisnove v3 assets exist in `github.com/araihu/assets`; only the pinned favicon is approved for this surface while the visible working name remains `X-9`.
 
 ## Product Principles
 

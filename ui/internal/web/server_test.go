@@ -77,7 +77,7 @@ func TestHandlerServesPinnedAraiHuThemeAsImmutableCSS(t *testing.T) {
 
 func TestHandlerServesCanonicalVersionedXisnoveFavicon(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/xisnove-81300f5.svg", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/xisnove-bffc2ac.svg", nil)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, request)
@@ -91,8 +91,23 @@ func TestHandlerServesCanonicalVersionedXisnoveFavicon(t *testing.T) {
 	if got := recorder.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
 		t.Fatalf("favicon Cache-Control = %q", got)
 	}
-	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "4edb4342c4ccffc7f3b8daa79ac883c40ff7524e540f4e5560f5b457edcb8fdd"; got != want {
+	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "4df17d9b60b9999bed10e1e937ac5fdce433245ff5c4bdf43bd81605a4372d61"; got != want {
 		t.Fatalf("canonical Xisnove favicon SHA-256 = %s, want %s", got, want)
+	}
+}
+
+func TestHandlerRetainsPreviousImmutableXisnoveFaviconDuringRollout(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/xisnove-81300f5.svg", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("previous favicon status = %d", recorder.Code)
+	}
+	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "4edb4342c4ccffc7f3b8daa79ac883c40ff7524e540f4e5560f5b457edcb8fdd"; got != want {
+		t.Fatalf("previous Xisnove favicon SHA-256 = %s, want %s", got, want)
 	}
 }
 

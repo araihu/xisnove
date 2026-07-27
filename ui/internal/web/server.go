@@ -79,7 +79,8 @@ func New(cfg Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
 	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
-	mux.HandleFunc("GET /ui/xisnove-81300f5.svg", serveXisnoveFavicon)
+	mux.HandleFunc("GET /ui/xisnove-bffc2ac.svg", serveXisnoveFavicon)
+	mux.HandleFunc("GET /ui/xisnove-81300f5.svg", servePreviousXisnoveFavicon)
 	mux.HandleFunc("GET /ui/app.js", serveApplicationJS)
 	mux.HandleFunc("/", s.route)
 
@@ -98,10 +99,19 @@ var araiHuThemeCSS string
 //go:embed static/xisnove-favicon.svg
 var xisnoveFavicon string
 
+//go:embed static/xisnove-favicon-81300f5.svg
+var previousXisnoveFavicon string
+
 func serveXisnoveFavicon(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	_, _ = io.WriteString(w, xisnoveFavicon)
+}
+
+func servePreviousXisnoveFavicon(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	_, _ = io.WriteString(w, previousXisnoveFavicon)
 }
 
 func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
@@ -112,6 +122,7 @@ func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
 
 const applicationJS = `(() => {
   let pendingFocus = null;
+  let pendingDrawerReturnFocus = null;
   let refreshGeneration = 0;
   let refreshController = null;
 
@@ -138,6 +149,16 @@ const applicationJS = `(() => {
   }
 
   function settle(event) {
+	if (pendingDrawerReturnFocus) {
+	  const id = pendingDrawerReturnFocus;
+	  pendingDrawerReturnFocus = null;
+	  const row = Array.from(document.querySelectorAll("#main-content tr[data-monitor-id]")).find(candidate => candidate.dataset.monitorId === id);
+	  const target = row?.querySelector("a[href]");
+	  if (target) {
+		target.focus({preventScroll: true});
+		return;
+	  }
+	}
     if (pendingFocus) {
       const target = document.getElementById(pendingFocus.id);
       if (target) {
@@ -185,6 +206,7 @@ const applicationJS = `(() => {
       if (!ownsRefresh()) return false;
       main.innerHTML = body;
       window.htmx?.process(main);
+      openMonitorDrawer();
       focusMain();
       return true;
     } catch (error) {
@@ -242,19 +264,49 @@ const applicationJS = `(() => {
     }, true);
   }
 
+  function openMonitorDrawer(attempt = 0) {
+	const owner = document.querySelector(".xis-monitor-drawer[data-monitor-id]");
+	if (!owner) return;
+	const root = owner.firstElementChild;
+	const panel = owner.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');
+	if (root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen === true && panel?.getClientRects().length) return;
+	window.dispatchEvent(new CustomEvent("drawer:open", {detail: {id: "monitor-detail-drawer"}}));
+	if (attempt < 40) setTimeout(() => openMonitorDrawer(attempt + 1), 25);
+  }
+
+  window.addEventListener("drawer:open", event => {
+	if (event.detail?.id !== "monitor-detail-drawer") return;
+	requestAnimationFrame(() => requestAnimationFrame(() => {
+	  document.getElementById("monitor-detail-heading")?.focus({preventScroll: true});
+	}));
+  });
+
+  document.addEventListener("click", event => {
+	const close = event.target?.closest?.("[data-monitor-drawer-close]");
+	if (close?.dataset.monitorId) pendingDrawerReturnFocus = close.dataset.monitorId;
+  }, true);
+
   document.addEventListener("htmx:beforeRequest", event => {
     invalidateAuthoritativeRefresh();
     rememberFocus(event);
   });
   document.addEventListener("htmx:afterSettle", settle);
-  document.addEventListener("htmx:historyRestore", () => setTimeout(refreshAuthoritative, 0));
+  document.addEventListener("htmx:historyRestore", () => setTimeout(() => {
+	openMonitorDrawer();
+	refreshAuthoritative();
+  }, 0));
+  document.addEventListener("alpine:initialized", openMonitorDrawer);
   window.addEventListener("popstate", invalidateAuthoritativeRefresh);
   window.addEventListener("pageshow", event => { if (event.persisted) refreshAuthoritative(); });
   window.goshtosoDependencies?.ready.then(() => {
     configureMobileNavigation();
+    openMonitorDrawer();
     if (document.querySelector("#main-content [data-autofocus]")) focusMain();
   }).catch(() => {});
-  document.addEventListener("htmx:afterSettle", configureMobileNavigation);
+  document.addEventListener("htmx:afterSettle", () => {
+	configureMobileNavigation();
+	openMonitorDrawer();
+  });
 })();
 `
 
