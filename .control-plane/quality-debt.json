@@ -208,6 +208,65 @@
       "trigger": "M6.4 Linux platform acceptance before release publication",
       "owner": "Xisnove release workflow",
       "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-007"
+    },
+    {
+      "id": "QD-2026-07-27-008",
+      "status": "open",
+      "feature": "M6.3 protected GitHub OIDC attestation acceptance",
+      "exact_sha": "7f07c66451629717505c7c2c7a1c629dd2f2ef97",
+      "skipped_gate": "execute the isolated attestor job with GitHub OIDC and verify the resulting provenance against the protected workflow identity",
+      "reason": "Local delivery proves the immutable candidate, workflow permissions, pinned actions, and verifier contract. A real OIDC token and GitHub attestation service exist only in a protected GitHub Actions run.",
+      "risk": "medium",
+      "affected_paths": [
+        ".github/workflows/release.yml",
+        "build/release/toolchain.lock.json",
+        "integration/distribution/release/workflow_test.go",
+        "scripts/release/verify-bundle.sh"
+      ],
+      "current_evidence": [
+        "candidate build has no write permission and the attestor is isolated with only contents read, id-token write, and attestations write",
+        "all workflow actions and verifier tools are pinned by immutable identity",
+        "exact SHA 7f07c66451629717505c7c2c7a1c629dd2f2ef97 passed two-clean-worktree reproducibility, full release race tests, clean-consumer verification, and make check"
+      ],
+      "acceptance": [
+        "run the protected candidate and attestor jobs for a descendant of the receipted SHA",
+        "verify repository, workflow identity, issuer, ref, commit SHA, and every canonical subject digest",
+        "prove the attestor consumes the accepted candidate without rebuild and cleanup runs on success and failure",
+        "close this receipt against the exact verified workflow SHA"
+      ],
+      "trigger": "first protected release-candidate workflow, before any publication",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-008"
+    },
+    {
+      "id": "QD-2026-07-27-009",
+      "status": "open",
+      "feature": "M6.3 no-rebuild GitHub Release, GHCR, and Helm publication acceptance",
+      "exact_sha": "7f07c66451629717505c7c2c7a1c629dd2f2ef97",
+      "skipped_gate": "promote the accepted archives, bundles, OCI image layouts, and Helm layouts to public registries and verify every remote digest",
+      "reason": "Publishing changes external public state and requires protected repository environments and credentials. The implementation and local candidate are complete; publication is intentionally reserved for an authorized release tag.",
+      "risk": "medium",
+      "affected_paths": [
+        ".github/workflows/release.yml",
+        "scripts/release/build-candidate.sh",
+        "scripts/release/verify-bundle.sh",
+        "integration/distribution/release/workflow_test.go"
+      ],
+      "current_evidence": [
+        "the promotion workflow is separated from candidate build and consumes accepted artifacts without rebuilding",
+        "the canonical manifest closes 65 subjects across archives, bundles, charts, OCI indexes and manifests, metadata, and SBOMs",
+        "exact SHA 7f07c66451629717505c7c2c7a1c629dd2f2ef97 produced byte-identical complete candidates in two detached clean worktrees"
+      ],
+      "acceptance": [
+        "authorize a protected release tag pointing to a descendant of the receipted SHA",
+        "publish the already accepted bytes and OCI digests without rebuild",
+        "verify GitHub Release checksums plus GHCR image and Helm index/platform digests against the canonical manifest",
+        "verify signatures and attestations from a clean consumer and prove temporary candidate residue is removed",
+        "close this receipt against the exact published SHA"
+      ],
+      "trigger": "authorized release tag, before announcing a public release",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-009"
     }
   ]
 }
