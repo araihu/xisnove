@@ -189,7 +189,8 @@
         "obligations": [
           "provide-corresponding-source-reference",
           "retain-license-notice"
-        ]
+        ],
+        "correspondingSource": "golang:modernc.org/libc@v1.74.3"
       },
       {
         "purl": "pkg:golang/modernc.org/memory@v1.11.0",
@@ -217,5 +218,6 @@
     "distro": "ubuntu-22.04",
     "snapshot": "20260701T000000Z",
     "lock": "ubuntu-runtime-lock.json"
-  }
+  },
+  "correspondingSources": "corresponding-sources.lock.json"
 }

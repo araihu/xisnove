@@ -250,7 +250,9 @@ func TestReleaseWorkflowTrustAndPromotionContract(t *testing.T) {
 	for _, contract := range []string{
 		"json.dumps(manifest, ensure_ascii=False, separators=(\",\", \":\"))",
 		"expected-subject-closure",
-		"len(expected) != 64",
+		"len(expected) != 65",
+		"len(set(actual_keys)) != 65",
+		"xisnove-corresponding-sources",
 		"oci-manifest",
 		"metadata/licenses.json",
 		"metadata/toolchain.lock.json",
@@ -331,7 +333,7 @@ func TestReleaseWorkflowTrustedVerifierAcceptsOnlyExactClosure(t *testing.T) {
 	for _, chart := range []string{"xisnove", "xisnove-edge"} {
 		addWithSBOM("chart", chart, "", "charts/"+chart+"_"+version+".tgz")
 	}
-	for _, bundle := range []string{"xisnove-source", "xisnove-deployment"} {
+	for _, bundle := range []string{"xisnove-source", "xisnove-deployment", "xisnove-corresponding-sources"} {
 		add("bundle", bundle, "", "bundles/"+bundle+"_"+version+".tar.gz")
 	}
 	for _, image := range []string{"xisnove-server", "xisnove-ui", "xisnove-agent", "xisnove-operator"} {
@@ -372,17 +374,17 @@ func TestReleaseWorkflowTrustedVerifierAcceptsOnlyExactClosure(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "candidate-manifest.json.sha256"), []byte(digest+"  candidate-manifest.json\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	run := func() error {
+	run := func() ([]byte, error) {
 		command := exec.Command("python3", "-c", verifier, root, commit, version)
-		return command.Run()
+		return command.CombinedOutput()
 	}
-	if err := run(); err != nil {
-		t.Fatalf("trusted verifier rejected exact closure: %v", err)
+	if output, err := run(); err != nil {
+		t.Fatalf("trusted verifier rejected exact closure: %v\n%s", err, output)
 	}
 	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(subjects[0].Locator)), []byte("tampered\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(); err == nil {
+	if _, err := run(); err == nil {
 		t.Fatal("trusted verifier accepted tampered subject")
 	}
 }

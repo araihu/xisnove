@@ -6,7 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -140,6 +143,12 @@ func TestManifestIsCanonicalOrderedAndCleanConsumerVerifiable(t *testing.T) {
 func TestDeploymentAssemblyIncludesContractAndLegalClosure(t *testing.T) {
 	tool := buildReleaseBundleTool(t)
 	root := t.TempDir()
+	correspondingPayload := []byte("reviewed corresponding source\n")
+	correspondingDigest := sha256.Sum256(correspondingPayload)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write(correspondingPayload)
+	}))
+	defer server.Close()
 	for _, path := range []string{
 		"LICENSE",
 		"NOTICE",
@@ -155,19 +164,29 @@ func TestDeploymentAssemblyIncludesContractAndLegalClosure(t *testing.T) {
 	} {
 		mustWriteFile(t, filepath.Join(root, path), path+"\n", 0o644)
 	}
+	mustWriteFile(t, filepath.Join(root, "build", "release", "corresponding-sources.lock.json"), `{"schemaVersion":1,"sources":[{"id":"test:source@1","purls":["pkg:generic/test@1"],"files":[{"path":"test/source.txt","url":"`+server.URL+`/source.txt","sha256":"`+hex.EncodeToString(correspondingDigest[:])+`","size":`+fmt.Sprint(len(correspondingPayload))+`}]}]}`, 0o644)
 	mustWriteFile(t, filepath.Join(root, ".worktrees", "secret"), "excluded", 0o644)
 	mustWriteFile(t, filepath.Join(root, ".env"), "TURSO_TOKEN=must-not-ship\n", 0o600)
 	runCommandIn(t, root, nil, "git", "init", "--quiet")
-	runCommandIn(t, root, nil, "git", "add", "LICENSE", "NOTICE", "charts", "deploy", "config", "docs")
+	runCommandIn(t, root, nil, "git", "add", "LICENSE", "NOTICE", "charts", "deploy", "config", "docs", "build")
 	first := t.TempDir()
 	second := t.TempDir()
 	script := filepath.Join(repositoryRoot(t), "scripts", "release", "assemble-bundle.sh")
 	for _, output := range []string{first, second} {
 		runCommandIn(t, repositoryRoot(t), []string{"RELEASEBUNDLE_BIN=" + tool}, script, "--root", root, "--output-dir", output, "--version", "1.2.3", "--source-date-epoch", releaseEpoch)
 	}
-	for _, name := range []string{"xisnove-source_1.2.3.tar.gz", "xisnove-deployment_1.2.3.tar.gz"} {
+	for _, name := range []string{"xisnove-source_1.2.3.tar.gz", "xisnove-deployment_1.2.3.tar.gz", "xisnove-corresponding-sources_1.2.3.tar.gz"} {
 		if !reflect.DeepEqual(mustReadFile(t, filepath.Join(first, name)), mustReadFile(t, filepath.Join(second, name))) {
 			t.Fatalf("%s is not reproducible", name)
+		}
+	}
+	correspondingNames := headerNames(readTarHeaders(t, filepath.Join(first, "xisnove-corresponding-sources_1.2.3.tar.gz")))
+	for _, required := range []string{
+		"xisnove-corresponding-sources-1.2.3/SOURCES.lock.json",
+		"xisnove-corresponding-sources-1.2.3/test/source.txt",
+	} {
+		if !contains(correspondingNames, required) {
+			t.Errorf("corresponding sources bundle missing %s", required)
 		}
 	}
 	deploymentNames := headerNames(readTarHeaders(t, filepath.Join(first, "xisnove-deployment_1.2.3.tar.gz")))
@@ -342,6 +361,82 @@ func TestLicensePolicyV2ScopesGoAndUbuntuDecisions(t *testing.T) {
 				t.Fatalf("want %q failure: err=%v output=%s", test.message, err, output)
 			}
 		})
+	}
+}
+
+func TestCorrespondingSourcesAreExactFailClosedAndMaterialized(t *testing.T) {
+	tool := buildReleaseBundleTool(t)
+	root := t.TempDir()
+	ubuntuPayload := []byte("exact ubuntu source\n")
+	goPayload := []byte("exact go module source\n")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/ubuntu/apt.dsc":
+			_, _ = writer.Write(ubuntuPayload)
+		case "/golang/modernc-libc.zip":
+			_, _ = writer.Write(goPayload)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	ubuntuDigest := sha256.Sum256(ubuntuPayload)
+	goDigest := sha256.Sum256(goPayload)
+	correspondingLock := filepath.Join(root, "corresponding-sources.lock.json")
+	mustWriteFile(t, correspondingLock, `{"schemaVersion":1,"sources":[`+
+		`{"id":"ubuntu:apt@2.4.14","purls":["pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04"],"files":[{"path":"ubuntu/apt/apt.dsc","url":"`+server.URL+`/ubuntu/apt.dsc","sha256":"`+hex.EncodeToString(ubuntuDigest[:])+`","size":`+fmt.Sprint(len(ubuntuPayload))+`}]},`+
+		`{"id":"golang:modernc.org/libc@v1.74.3","purls":["pkg:golang/modernc.org/libc@v1.74.3"],"files":[{"path":"golang/modernc.org/libc@v1.74.3.zip","url":"`+server.URL+`/golang/modernc-libc.zip","sha256":"`+hex.EncodeToString(goDigest[:])+`","size":`+fmt.Sprint(len(goPayload))+`}]}`+
+		`]}`, 0o644)
+
+	evidence := filepath.Join(root, "evidence.txt")
+	mustWriteFile(t, evidence, "reviewed\n", 0o644)
+	evidenceDigest := sha256.Sum256(mustReadFile(t, evidence))
+	policy := filepath.Join(root, "policy.json")
+	mustWriteFile(t, policy, `{"schemaVersion":2,"globalDeny":[],"default":{"allow":["MIT"],"deny":[]},"golang":{"allow":["MIT"],"deny":[],"overrides":[{"purl":"pkg:golang/modernc.org/libc@v1.74.3","reportedLicense":"LGPL-2.1-or-later","resolvedLicense":"LGPL-2.1-or-later","evidenceFile":"evidence.txt","evidenceSHA256":"`+hex.EncodeToString(evidenceDigest[:])+`","obligations":["provide-corresponding-source-reference","retain-license-notice"],"correspondingSource":"golang:modernc.org/libc@v1.74.3"}]},"ubuntu":{"distro":"ubuntu-22.04","snapshot":"20260701T000000Z","lock":"ubuntu-lock.json"},"correspondingSources":"corresponding-sources.lock.json"}`, 0o644)
+	mustWriteFile(t, filepath.Join(root, "ubuntu-lock.json"), `{"schemaVersion":1,"packages":[{"purl":"pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04","packageVerificationCode":"abc123","reportedLicense":"GPL-2.0-or-later","resolvedLicense":"GPL-2.0-or-later","evidenceSHA256":"`+strings.Repeat("a", 64)+`","obligations":["provide-corresponding-source-reference","retain-license-notice"],"correspondingSource":"ubuntu:apt@2.4.14"}]}`, 0o644)
+	sbom := filepath.Join(root, "runtime.spdx.json")
+	mustWriteFile(t, sbom, `{"spdxVersion":"SPDX-2.3","packages":[{"name":"apt","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04"}],"packageVerificationCode":{"packageVerificationCodeValue":"abc123"},"licenseDeclared":"GPL-2.0-or-later","licenseConcluded":"GPL-2.0-or-later"},{"name":"modernc.org/libc","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:golang/modernc.org/libc@v1.74.3"}],"licenseDeclared":"LGPL-2.1-or-later","licenseConcluded":"LGPL-2.1-or-later"}]}`, 0o644)
+
+	inventory := filepath.Join(root, "licenses.json")
+	runTool(t, tool, "licenses", "--sbom", sbom, "--policy", policy, "--output", inventory)
+	inventoryText := string(mustReadFile(t, inventory))
+	for _, sourceID := range []string{"ubuntu:apt@2.4.14", "golang:modernc.org/libc@v1.74.3"} {
+		if !strings.Contains(inventoryText, `"correspondingSource":"`+sourceID+`"`) {
+			t.Fatalf("inventory missing corresponding source %q: %s", sourceID, inventoryText)
+		}
+	}
+
+	materialized := filepath.Join(root, "materialized")
+	runTool(t, tool, "corresponding-sources", "--lock", correspondingLock, "--output-root", materialized)
+	if got := mustReadFile(t, filepath.Join(materialized, "ubuntu", "apt", "apt.dsc")); !reflect.DeepEqual(got, ubuntuPayload) {
+		t.Fatalf("materialized Ubuntu source = %q", got)
+	}
+	if got := mustReadFile(t, filepath.Join(materialized, "golang", "modernc.org", "libc@v1.74.3.zip")); !reflect.DeepEqual(got, goPayload) {
+		t.Fatalf("materialized Go source = %q", got)
+	}
+	if !reflect.DeepEqual(mustReadFile(t, filepath.Join(materialized, "SOURCES.lock.json")), mustReadFile(t, correspondingLock)) {
+		t.Fatal("materialized source lock differs from reviewed lock")
+	}
+
+	badLock := filepath.Join(root, "bad.lock.json")
+	mustWriteFile(t, badLock, strings.ReplaceAll(string(mustReadFile(t, correspondingLock)), hex.EncodeToString(ubuntuDigest[:]), strings.Repeat("f", 64)), 0o644)
+	badOutput := filepath.Join(root, "bad-output")
+	cmd := exec.Command(tool, "corresponding-sources", "--lock", badLock, "--output-root", badOutput)
+	output, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "digest mismatch") {
+		t.Fatalf("digest drift must fail closed: err=%v output=%s", err, output)
+	}
+	if _, statErr := os.Stat(badOutput); !os.IsNotExist(statErr) {
+		t.Fatalf("failed materialization exposed partial output: %v", statErr)
+	}
+
+	badPolicy := filepath.Join(root, "bad-policy.json")
+	mustWriteFile(t, badPolicy, strings.ReplaceAll(string(mustReadFile(t, policy)), `"correspondingSource":"golang:modernc.org/libc@v1.74.3"`, `"correspondingSource":"ubuntu:apt@2.4.14"`), 0o644)
+	cmd = exec.Command(tool, "licenses", "--sbom", sbom, "--policy", badPolicy, "--output", filepath.Join(root, "bad-licenses.json"))
+	output, err = cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "does not cover purl") {
+		t.Fatalf("wrong corresponding source must fail closed: err=%v output=%s", err, output)
 	}
 }
 

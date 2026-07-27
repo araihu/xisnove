@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,7 +79,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("expected command: bundle, manifest, verify, normalize-sbom, licenses, or propose-ubuntu-lock")
+		return errors.New("expected command: bundle, manifest, verify, normalize-sbom, licenses, propose-ubuntu-lock, or corresponding-sources")
 	}
 	switch args[0] {
 	case "bundle":
@@ -91,6 +94,8 @@ func run(args []string) error {
 		return runLicenses(args[1:])
 	case "propose-ubuntu-lock":
 		return runProposeUbuntuLock(args[1:])
+	case "corresponding-sources":
+		return runCorrespondingSources(args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -700,12 +705,13 @@ type licenseProfile struct {
 }
 
 type licenseOverride struct {
-	PURL            string   `json:"purl"`
-	ReportedLicense string   `json:"reportedLicense"`
-	ResolvedLicense string   `json:"resolvedLicense"`
-	EvidenceFile    string   `json:"evidenceFile"`
-	EvidenceSHA256  string   `json:"evidenceSHA256"`
-	Obligations     []string `json:"obligations"`
+	PURL                string   `json:"purl"`
+	ReportedLicense     string   `json:"reportedLicense"`
+	ResolvedLicense     string   `json:"resolvedLicense"`
+	EvidenceFile        string   `json:"evidenceFile"`
+	EvidenceSHA256      string   `json:"evidenceSHA256"`
+	Obligations         []string `json:"obligations"`
+	CorrespondingSource string   `json:"correspondingSource,omitempty"`
 }
 
 type ubuntuLicenseProfile struct {
@@ -715,11 +721,12 @@ type ubuntuLicenseProfile struct {
 }
 
 type licensePolicy struct {
-	SchemaVersion int                  `json:"schemaVersion"`
-	GlobalDeny    []string             `json:"globalDeny,omitempty"`
-	Default       licenseProfile       `json:"default"`
-	Golang        licenseProfile       `json:"golang"`
-	Ubuntu        ubuntuLicenseProfile `json:"ubuntu"`
+	SchemaVersion        int                  `json:"schemaVersion"`
+	GlobalDeny           []string             `json:"globalDeny,omitempty"`
+	Default              licenseProfile       `json:"default"`
+	Golang               licenseProfile       `json:"golang"`
+	Ubuntu               ubuntuLicenseProfile `json:"ubuntu"`
+	CorrespondingSources string               `json:"correspondingSources,omitempty"`
 }
 
 type ubuntuPackageApproval struct {
@@ -729,6 +736,7 @@ type ubuntuPackageApproval struct {
 	ResolvedLicense         string   `json:"resolvedLicense"`
 	EvidenceSHA256          string   `json:"evidenceSHA256"`
 	Obligations             []string `json:"obligations,omitempty"`
+	CorrespondingSource     string   `json:"correspondingSource,omitempty"`
 }
 
 type ubuntuPackageLock struct {
@@ -838,16 +846,35 @@ func expressionHasCopyleft(expression string) bool {
 }
 
 type licenseRecord struct {
-	Package         string   `json:"package"`
-	Version         string   `json:"version,omitempty"`
-	PURL            string   `json:"purl,omitempty"`
-	Ecosystem       string   `json:"ecosystem"`
-	ReportedLicense string   `json:"reportedLicense,omitempty"`
-	License         string   `json:"license"`
-	Status          string   `json:"status"`
-	Rule            string   `json:"rule"`
-	Obligations     []string `json:"obligations,omitempty"`
-	SourceSBOM      string   `json:"sourceSbom"`
+	Package             string   `json:"package"`
+	Version             string   `json:"version,omitempty"`
+	PURL                string   `json:"purl,omitempty"`
+	Ecosystem           string   `json:"ecosystem"`
+	ReportedLicense     string   `json:"reportedLicense,omitempty"`
+	License             string   `json:"license"`
+	Status              string   `json:"status"`
+	Rule                string   `json:"rule"`
+	Obligations         []string `json:"obligations,omitempty"`
+	CorrespondingSource string   `json:"correspondingSource,omitempty"`
+	SourceSBOM          string   `json:"sourceSbom"`
+}
+
+type correspondingSourceFile struct {
+	Path   string `json:"path"`
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"size"`
+}
+
+type correspondingSource struct {
+	ID    string                    `json:"id"`
+	PURLs []string                  `json:"purls"`
+	Files []correspondingSourceFile `json:"files"`
+}
+
+type correspondingSourceLock struct {
+	SchemaVersion int                   `json:"schemaVersion"`
+	Sources       []correspondingSource `json:"sources"`
 }
 
 type licenseInventory struct {
@@ -879,6 +906,10 @@ func runLicenses(args []string) error {
 		return err
 	}
 	ubuntuLock, err := loadUbuntuLock(filepath.Dir(*policyPath), policy.Ubuntu.Lock)
+	if err != nil {
+		return err
+	}
+	correspondingSources, err := loadCorrespondingSourceLock(filepath.Dir(*policyPath), policy.CorrespondingSources)
 	if err != nil {
 		return err
 	}
@@ -933,7 +964,20 @@ func runLicenses(args []string) error {
 			if effectiveLicense != license {
 				reportedLicense = license
 			}
-			records = append(records, licenseRecord{Package: pkg.Name, Version: pkg.Version, PURL: purl, Ecosystem: ecosystem, ReportedLicense: reportedLicense, License: effectiveLicense, Status: status, Rule: rule, Obligations: obligations, SourceSBOM: filepath.Base(sbomPath)})
+			correspondingSourceID, err := correspondingSourceForDecision(policy, ubuntuLock, purl, license, obligations)
+			if err != nil {
+				return fmt.Errorf("%w for %s", err, pkg.Name)
+			}
+			if correspondingSourceID != "" {
+				source, ok := correspondingSources[correspondingSourceID]
+				if !ok {
+					return fmt.Errorf("corresponding source %q is not locked for %s", correspondingSourceID, pkg.Name)
+				}
+				if !containsString(source.PURLs, purl) {
+					return fmt.Errorf("corresponding source %q does not cover purl %q for %s", correspondingSourceID, purl, pkg.Name)
+				}
+			}
+			records = append(records, licenseRecord{Package: pkg.Name, Version: pkg.Version, PURL: purl, Ecosystem: ecosystem, ReportedLicense: reportedLicense, License: effectiveLicense, Status: status, Rule: rule, Obligations: obligations, CorrespondingSource: correspondingSourceID, SourceSBOM: filepath.Base(sbomPath)})
 		}
 	}
 	sort.Slice(records, func(i, j int) bool {
@@ -972,7 +1016,208 @@ func validateLicensePolicy(policy licensePolicy) error {
 	if filepath.IsAbs(policy.Ubuntu.Lock) || strings.Contains(filepath.ToSlash(filepath.Clean(policy.Ubuntu.Lock)), "../") {
 		return errors.New("license policy Ubuntu lock must be a relative contained path")
 	}
+	if policy.CorrespondingSources != "" && !containedRelativePath(policy.CorrespondingSources) {
+		return errors.New("license policy corresponding sources lock must be a relative contained path")
+	}
 	return nil
+}
+
+func correspondingSourceForDecision(policy licensePolicy, ubuntuLock map[string]ubuntuPackageApproval, purl, reportedLicense string, obligations []string) (string, error) {
+	required := containsString(obligations, "provide-corresponding-source-reference")
+	identifier := ""
+	if approved, ok := ubuntuLock[purl]; ok {
+		identifier = approved.CorrespondingSource
+	} else {
+		for _, override := range policy.Golang.Overrides {
+			if override.PURL == purl && override.ReportedLicense == reportedLicense {
+				identifier = override.CorrespondingSource
+				break
+			}
+		}
+	}
+	if required && identifier == "" {
+		return "", fmt.Errorf("corresponding source is required for purl %q", purl)
+	}
+	if !required && identifier != "" {
+		return "", fmt.Errorf("corresponding source %q has no matching obligation for purl %q", identifier, purl)
+	}
+	return identifier, nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func containedRelativePath(value string) bool {
+	clean := filepath.ToSlash(filepath.Clean(value))
+	return value != "" && !filepath.IsAbs(value) && clean != "." && clean != ".." && !strings.HasPrefix(clean, "../")
+}
+
+func loadCorrespondingSourceLock(policyDir, lockPath string) (map[string]correspondingSource, error) {
+	if lockPath == "" {
+		return map[string]correspondingSource{}, nil
+	}
+	if !containedRelativePath(lockPath) {
+		return nil, errors.New("corresponding sources lock must be a relative contained path")
+	}
+	contents, err := os.ReadFile(filepath.Join(policyDir, lockPath))
+	if err != nil {
+		return nil, fmt.Errorf("read corresponding sources lock: %w", err)
+	}
+	return decodeCorrespondingSourceLock(contents)
+}
+
+func decodeCorrespondingSourceLock(contents []byte) (map[string]correspondingSource, error) {
+	var lock correspondingSourceLock
+	if err := decodeStrict(contents, &lock); err != nil {
+		return nil, fmt.Errorf("decode corresponding sources lock: %w", err)
+	}
+	if lock.SchemaVersion != 1 || len(lock.Sources) == 0 {
+		return nil, errors.New("corresponding sources lock requires schemaVersion 1 and non-empty sources")
+	}
+	byID := make(map[string]correspondingSource, len(lock.Sources))
+	seenPURLs := map[string]string{}
+	seenPaths := map[string]string{}
+	for _, source := range lock.Sources {
+		if source.ID == "" || len(source.PURLs) == 0 || len(source.Files) == 0 {
+			return nil, errors.New("corresponding source entries require id, purls, and files")
+		}
+		if _, duplicate := byID[source.ID]; duplicate {
+			return nil, fmt.Errorf("duplicate corresponding source id %q", source.ID)
+		}
+		for _, purl := range source.PURLs {
+			if purl == "" {
+				return nil, fmt.Errorf("corresponding source %q has empty purl", source.ID)
+			}
+			if previous, duplicate := seenPURLs[purl]; duplicate {
+				return nil, fmt.Errorf("purl %q belongs to both %q and %q", purl, previous, source.ID)
+			}
+			seenPURLs[purl] = source.ID
+		}
+		for _, file := range source.Files {
+			if !containedRelativePath(file.Path) || !digestPattern.MatchString(file.SHA256) || file.Size <= 0 {
+				return nil, fmt.Errorf("corresponding source %q files require contained path, sha256, and positive size", source.ID)
+			}
+			if previous, duplicate := seenPaths[file.Path]; duplicate {
+				return nil, fmt.Errorf("path %q belongs to both %q and %q", file.Path, previous, source.ID)
+			}
+			if err := validateCorrespondingSourceURL(file.URL); err != nil {
+				return nil, fmt.Errorf("corresponding source %q: %w", source.ID, err)
+			}
+			seenPaths[file.Path] = source.ID
+		}
+		byID[source.ID] = source
+	}
+	return byID, nil
+}
+
+func validateCorrespondingSourceURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("invalid corresponding source URL %q", raw)
+	}
+	if parsed.Scheme == "https" {
+		return nil
+	}
+	if parsed.Scheme == "http" {
+		host := parsed.Hostname()
+		if host == "localhost" || net.ParseIP(host).IsLoopback() {
+			return nil
+		}
+	}
+	return fmt.Errorf("corresponding source URL must use HTTPS: %q", raw)
+}
+
+func runCorrespondingSources(args []string) error {
+	flags := flag.NewFlagSet("corresponding-sources", flag.ContinueOnError)
+	lockPath := flags.String("lock", "", "corresponding sources lock")
+	outputRoot := flags.String("output-root", "", "materialized source root")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *lockPath == "" || *outputRoot == "" {
+		return errors.New("--lock and --output-root are required")
+	}
+	if _, err := os.Lstat(*outputRoot); err == nil {
+		return fmt.Errorf("output root already exists: %s", *outputRoot)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	contents, err := os.ReadFile(*lockPath)
+	if err != nil {
+		return err
+	}
+	sources, err := decodeCorrespondingSourceLock(contents)
+	if err != nil {
+		return err
+	}
+	parent := filepath.Dir(*outputRoot)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	temporary, err := os.MkdirTemp(parent, ".corresponding-sources-*")
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.RemoveAll(temporary)
+		}
+	}()
+	client := &http.Client{Timeout: 2 * time.Minute}
+	ids := make([]string, 0, len(sources))
+	for id := range sources {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		for _, file := range sources[id].Files {
+			if err := materializeCorrespondingSourceFile(client, temporary, file); err != nil {
+				return fmt.Errorf("materialize %s: %w", file.Path, err)
+			}
+		}
+	}
+	if err := atomicWrite(filepath.Join(temporary, "SOURCES.lock.json"), contents, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, *outputRoot); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func materializeCorrespondingSourceFile(client *http.Client, root string, file correspondingSourceFile) error {
+	response, err := client.Get(file.URL)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected HTTP status %s", response.Status)
+	}
+	contents, err := io.ReadAll(io.LimitReader(response.Body, file.Size+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(contents)) != file.Size {
+		return fmt.Errorf("size mismatch: got %d want %d", len(contents), file.Size)
+	}
+	digest := sha256.Sum256(contents)
+	if hex.EncodeToString(digest[:]) != file.SHA256 {
+		return fmt.Errorf("digest mismatch: got %s want %s", hex.EncodeToString(digest[:]), file.SHA256)
+	}
+	target := filepath.Join(root, filepath.FromSlash(file.Path))
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	return atomicWrite(target, contents, 0o644)
 }
 
 func loadUbuntuLock(policyDir, lockPath string) (map[string]ubuntuPackageApproval, error) {

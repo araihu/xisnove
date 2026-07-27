@@ -23,6 +23,9 @@ done
 
 releasebundle=${RELEASEBUNDLE_BIN:-releasebundle}
 mkdir -p "$output_dir"
+source_work=$(mktemp -d "${TMPDIR:-/tmp}/xisnove-corresponding-sources.XXXXXXXX")
+trap 'rm -rf "$source_work"' EXIT INT TERM
+source_root="$source_work/root"
 
 "$releasebundle" bundle \
   --root "$root" \
@@ -51,3 +54,14 @@ mkdir -p "$output_dir"
   --include deploy/systemd \
   --include config/crd \
   --include docs/operations/upgrade.md
+
+"$releasebundle" corresponding-sources \
+  --lock "$root/build/release/corresponding-sources.lock.json" \
+  --output-root "$source_root"
+
+"$releasebundle" bundle \
+  --root "$source_root" \
+  --output "$output_dir/xisnove-corresponding-sources_${version}.tar.gz" \
+  --prefix "xisnove-corresponding-sources-${version}" \
+  --source-date-epoch "$source_date_epoch" \
+  --include .

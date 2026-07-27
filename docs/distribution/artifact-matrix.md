@@ -18,6 +18,7 @@ uses `release.version` from the single `vX.Y.Z` tag.
 | `xisnove-edge` | Helm OCI chart | cluster-dependent | `oci://ghcr.io/araihu/charts/xisnove-edge` |
 | `xisnove-source` | source bundle | source closure | GitHub release |
 | `xisnove-deployment` | deployment bundle | charts, Compose, raw, systemd, CRDs, upgrade docs | GitHub release |
+| `xisnove-corresponding-sources` | corresponding-source bundle | exact Ubuntu and Go copyleft source bytes | GitHub release |
 
 Each binary archive and chart package contains `LICENSE` and `NOTICE`.
 Each image contains those files at `/usr/share/licenses/xisnove/`. Every
@@ -27,7 +28,7 @@ SBOM, provenance, and signature in the candidate digest manifest.
 Schema v2 also freezes five metadata surfaces: detached SHA-256 checksums,
 SPDX JSON SBOMs, a fail-closed canonical license inventory, the exact release
 toolchain lock, and one canonical JSON digest manifest. The manifest closes
-over archives, charts, both bundles, OCI indexes, per-platform manifests,
+over archives, charts, all three bundles, OCI indexes, per-platform manifests,
 SBOMs, and verified metadata without recursively naming its own digest. Its
 detached checksum covers the manifest itself.
 

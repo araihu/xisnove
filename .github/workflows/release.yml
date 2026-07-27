@@ -70,7 +70,7 @@ env:
             add("archive", name, locator=f"archives/{name}.tar.gz", sbom=True)
     for chart in ("xisnove", "xisnove-edge"):
         add("chart", chart, locator=f"charts/{chart}_{version}.tgz", sbom=True)
-    for bundle in ("xisnove-source", "xisnove-deployment"):
+    for bundle in ("xisnove-source", "xisnove-deployment", "xisnove-corresponding-sources"):
         add("bundle", bundle, locator=f"bundles/{bundle}_{version}.tar.gz")
     for image in ("xisnove-server", "xisnove-ui", "xisnove-agent", "xisnove-operator"):
         add("oci-index", image, sbom=True)
@@ -80,13 +80,13 @@ env:
         add("oci-manifest", chart, sbom=True)
     add("metadata", "licenses", locator="metadata/licenses.json")
     add("metadata", "toolchain-lock", locator="metadata/toolchain.lock.json")
-    if len(expected) != 64:
+    if len(expected) != 65:
         raise SystemExit("internal expected-subject-closure count mismatch")
 
     subjects = manifest["subjects"]
     actual_keys = [(item.get("kind"), item.get("name"), item.get("platform", "")) for item in subjects]
     expected_keys = sorted(expected)
-    if actual_keys != expected_keys or len(set(actual_keys)) != 64:
+    if actual_keys != expected_keys or len(set(actual_keys)) != 65:
         raise SystemExit("expected-subject-closure mismatch or non-canonical order")
     allowed_keys = {"kind", "name", "locator", "sha256", "size", "platform", "mediaType"}
     digest_pattern = re.compile(r"^[0-9a-f]{64}$")

@@ -2,7 +2,7 @@
 
 Every candidate commit produces immutable, SHA-addressed release bytes before
 publication. The candidate contains binary archives, Helm charts, OCI layouts,
-two deterministic bundles, SPDX JSON SBOMs, a deterministic license inventory,
+three deterministic bundles, SPDX JSON SBOMs, a deterministic license inventory,
 a canonical candidate manifest, and its detached SHA-256 checksum.
 
 Build one candidate from an exact clean commit with the locked toolchain:
@@ -27,12 +27,20 @@ project's legal files, and the upgrade runbook. Tar ownership is `0:0`; modes,
 path order, gzip headers, and modification times derive from
 `SOURCE_DATE_EPOCH`.
 
+`xisnove-corresponding-sources_<version>.tar.gz` contains the exact Ubuntu
+source package files and Go module zip required by every
+`provide-corresponding-source-reference` obligation. Its committed lock binds
+each affected PURL to a source identity and each downloaded byte sequence to
+an HTTPS URL, size, and SHA-256 digest. Candidate construction fails before
+publication on a missing mapping, changed size, changed digest, or partial
+download.
+
 ## Candidate manifest
 
 The manifest identity fixes repository, full commit SHA, version without the
 `v` prefix, and positive `SOURCE_DATE_EPOCH`. Subjects are ordered by kind,
-name, and platform. The current closure has exactly 64 subjects: 14 binary
-archives, two charts, two bundles, four image indexes, eight platform
+name, and platform. The current closure has exactly 65 subjects: 14 binary
+archives, two charts, three bundles, four image indexes, eight platform
 manifests, two chart OCI manifests, 30 SPDX documents, and two metadata files.
 Each subject records its relative locator, byte size, and SHA-256 digest. The
 manifest never lists itself; its adjacent `.sha256` file authenticates the
@@ -77,9 +85,11 @@ eight platform SBOMs. It does not broaden a profile: the committed lock is the
 review boundary. Raw `NOASSERTION` values remain visible in the inventory and
 are resolved only to a package-specific `LicenseRef-Ubuntu-<digest>` bound to
 the exact package closure. Copyleft entries carry corresponding-source and
-notice obligations. Exact Go exceptions retain the reported Syft expression,
-resolved expression, obligations, and the checksum-verified review record in
-`build/release/license-evidence/`.
+notice obligations. Every such inventory record names one source identity
+from `build/release/corresponding-sources.lock.json`; that identity must cover
+the exact package PURL. Exact Go exceptions retain the reported Syft
+expression, resolved expression, obligations, source identity, and the
+checksum-verified review record in `build/release/license-evidence/`.
 
 All Ubuntu package installs use snapshot `20260701T000000Z`. The pinned Ubuntu
 base does not contain a CA bundle, so each Dockerfile bootstraps the exact

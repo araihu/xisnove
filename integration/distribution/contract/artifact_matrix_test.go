@@ -125,8 +125,9 @@ func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	}
 
 	wantBundles := map[string]string{
-		"xisnove-source":     "source",
-		"xisnove-deployment": "deployment",
+		"xisnove-source":                "source",
+		"xisnove-deployment":            "deployment",
+		"xisnove-corresponding-sources": "corresponding-source",
 	}
 	gotBundles := make(map[string]string, len(manifest.Bundles))
 	for _, artifact := range manifest.Bundles {

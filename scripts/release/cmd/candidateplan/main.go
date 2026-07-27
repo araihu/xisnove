@@ -856,7 +856,7 @@ func validateContractPlans(plans []plan, version string) error {
 	for _, chart := range []string{"xisnove", "xisnove-edge"} {
 		addNamed("chart", chart, "charts/"+chart+"_"+version+".tgz", "")
 	}
-	for _, bundle := range []string{"xisnove-source", "xisnove-deployment"} {
+	for _, bundle := range []string{"xisnove-source", "xisnove-deployment", "xisnove-corresponding-sources"} {
 		addNamed("bundle", bundle, "bundles/"+bundle+"_"+version+".tar.gz", "")
 	}
 	addNamed("metadata", "licenses", "metadata/licenses.json", "")
@@ -940,8 +940,8 @@ func validateContractPlans(plans []plan, version string) error {
 	if len(missing) > 0 || len(extra) > 0 {
 		return fmt.Errorf("candidate subject closure mismatch: missing=%v extra=%v", missing, extra)
 	}
-	if len(plans) != 64 {
-		return fmt.Errorf("candidate subject count=%d want=64", len(plans))
+	if len(plans) != 65 {
+		return fmt.Errorf("candidate subject count=%d want=65", len(plans))
 	}
 	return nil
 }

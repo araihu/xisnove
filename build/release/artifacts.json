@@ -90,6 +90,13 @@
       "format": "tar.gz",
       "includes": ["LICENSE", "NOTICE", "charts/xisnove", "charts/xisnove-edge", "deploy/compose", "deploy/raw", "deploy/systemd", "config/crd", "docs/operations/upgrade.md"],
       "version_ref": "release.version"
+    },
+    {
+      "name": "xisnove-corresponding-sources",
+      "kind": "corresponding-source",
+      "format": "tar.gz",
+      "includes": ["SOURCES.lock.json", "ubuntu", "golang"],
+      "version_ref": "release.version"
     }
   ],
   "metadata": [

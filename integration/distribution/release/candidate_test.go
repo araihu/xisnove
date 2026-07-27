@@ -254,7 +254,7 @@ cp "$input" "$output"
 	}
 }
 
-func TestCandidatePlanRequiresExact64SubjectClosure(t *testing.T) {
+func TestCandidatePlanRequiresExact65SubjectClosureIncludingCorrespondingSources(t *testing.T) {
 	tool := buildCandidatePlanTool(t)
 	root := t.TempDir()
 	version := "1.2.3"
@@ -280,7 +280,7 @@ func TestCandidatePlanRequiresExact64SubjectClosure(t *testing.T) {
 		writeSyntheticChartLayout(t, filepath.Join(root, "oci", "charts", chart, "layout"), chartPath)
 		mustWriteFile(t, filepath.Join(root, "sboms", "oci-manifest--"+chart+".spdx.json"), "{}\n", 0o644)
 	}
-	for _, bundle := range []string{"xisnove-source", "xisnove-deployment"} {
+	for _, bundle := range []string{"xisnove-source", "xisnove-deployment", "xisnove-corresponding-sources"} {
 		mustWriteFile(t, filepath.Join(root, "bundles", bundle+"_"+version+".tar.gz"), bundle, 0o644)
 	}
 	for _, image := range []string{"xisnove-server", "xisnove-ui", "xisnove-agent", "xisnove-operator"} {
@@ -300,8 +300,8 @@ func TestCandidatePlanRequiresExact64SubjectClosure(t *testing.T) {
 	if err := json.Unmarshal(mustReadFile(t, output), &plans); err != nil {
 		t.Fatal(err)
 	}
-	if len(plans) != 64 {
-		t.Fatalf("subject count=%d want=64", len(plans))
+	if len(plans) != 65 {
+		t.Fatalf("subject count=%d want=65", len(plans))
 	}
 }
 

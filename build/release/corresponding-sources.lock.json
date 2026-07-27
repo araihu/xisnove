@@ -1,0 +1,1056 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "golang:modernc.org/libc@v1.74.3",
+      "purls": [
+        "pkg:golang/modernc.org/libc@v1.74.3"
+      ],
+      "files": [
+        {
+          "path": "golang/modernc.org/libc@v1.74.3.zip",
+          "url": "https://proxy.golang.org/modernc.org/libc/@v/v1.74.3.zip",
+          "sha256": "85667ef4002a9b471c10461bab3ebde42cb5aff5d8835ca1581557a4b01b654b",
+          "size": 18189547
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:acl@2.3.1-1",
+      "purls": [
+        "pkg:deb/ubuntu/libacl1@2.3.1-1?arch=amd64&distro=ubuntu-22.04&upstream=acl",
+        "pkg:deb/ubuntu/libacl1@2.3.1-1?arch=arm64&distro=ubuntu-22.04&upstream=acl"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/acl/2.3.1-1/acl_2.3.1-1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/acl/acl_2.3.1-1.debian.tar.xz",
+          "sha256": "900e8993f3a8b95e2c83fc7f530cc15b5cd165b6f517a639239f51cd60d06f2a",
+          "size": 27732
+        },
+        {
+          "path": "ubuntu/acl/2.3.1-1/acl_2.3.1-1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/acl/acl_2.3.1-1.dsc",
+          "sha256": "6299780e84c240e79aae9886deaacc1bd8439a2a58f6a23749156f8a4d62572e",
+          "size": 2486
+        },
+        {
+          "path": "ubuntu/acl/2.3.1-1/acl_2.3.1.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/acl/acl_2.3.1.orig.tar.xz",
+          "sha256": "c0234042e17f11306c23c038b08e5e070edb7be44bef6697fb8734dcff1c66b1",
+          "size": 355676
+        },
+        {
+          "path": "ubuntu/acl/2.3.1-1/acl_2.3.1.orig.tar.xz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/acl/acl_2.3.1.orig.tar.xz.asc",
+          "sha256": "54fb8fcd6ae6901f2257e18d503e5e18ad956babf8d80d2ea29f280fc7264662",
+          "size": 833
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:apt@2.4.14",
+      "purls": [
+        "pkg:deb/ubuntu/apt@2.4.14?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/apt@2.4.14?arch=arm64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/libapt-pkg6.0@2.4.14?arch=amd64&distro=ubuntu-22.04&upstream=apt",
+        "pkg:deb/ubuntu/libapt-pkg6.0@2.4.14?arch=arm64&distro=ubuntu-22.04&upstream=apt"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/apt/2.4.14/apt_2.4.14.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/apt/apt_2.4.14.dsc",
+          "sha256": "317040c4ab15f20cc77460126fd78745814a81d73a6c37d0559876977a7dfe35",
+          "size": 2801
+        },
+        {
+          "path": "ubuntu/apt/2.4.14/apt_2.4.14.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/apt/apt_2.4.14.tar.xz",
+          "sha256": "8d1b2748a6b5c99c9fd56dfadde280b85616dd67d22f7ca44f86225fa688a98c",
+          "size": 2323176
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:attr@1:2.5.1-1build1",
+      "purls": [
+        "pkg:deb/ubuntu/libattr1@1%3A2.5.1-1build1?arch=amd64&distro=ubuntu-22.04&upstream=attr",
+        "pkg:deb/ubuntu/libattr1@1%3A2.5.1-1build1?arch=arm64&distro=ubuntu-22.04&upstream=attr"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/attr/1:2.5.1-1build1/attr_2.5.1-1build1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/attr/attr_2.5.1-1build1.debian.tar.xz",
+          "sha256": "5486d1f904183bff993d23c84d9513f796464e30bf8d536bd2a211d6c5abd1ce",
+          "size": 28032
+        },
+        {
+          "path": "ubuntu/attr/1:2.5.1-1build1/attr_2.5.1-1build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/attr/attr_2.5.1-1build1.dsc",
+          "sha256": "edd2626ebe2c75284aaeb608cee0e21c0b7a6aba61ef5c537e0d98107a2c9ce6",
+          "size": 2134
+        },
+        {
+          "path": "ubuntu/attr/1:2.5.1-1build1/attr_2.5.1.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/attr/attr_2.5.1.orig.tar.xz",
+          "sha256": "db448a626f9313a1a970d636767316a8da32aede70518b8050fa0de7947adc32",
+          "size": 318188
+        },
+        {
+          "path": "ubuntu/attr/1:2.5.1-1build1/attr_2.5.1.orig.tar.xz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/attr/attr_2.5.1.orig.tar.xz.asc",
+          "sha256": "67bc632e754efbadba846d0b40138b3fc3e306c3b909a9ba868c6dba1e2689d0",
+          "size": 833
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:audit@1:3.0.7-1build1",
+      "purls": [
+        "pkg:deb/ubuntu/libaudit-common@1%3A3.0.7-1build1?arch=all&distro=ubuntu-22.04&upstream=audit",
+        "pkg:deb/ubuntu/libaudit1@1%3A3.0.7-1build1?arch=amd64&distro=ubuntu-22.04&upstream=audit",
+        "pkg:deb/ubuntu/libaudit1@1%3A3.0.7-1build1?arch=arm64&distro=ubuntu-22.04&upstream=audit"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/audit/1:3.0.7-1build1/audit_3.0.7-1build1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/audit/audit_3.0.7-1build1.debian.tar.xz",
+          "sha256": "003b4423c8a1414591f4f8e05eedb82b2ae9761f99c96032bf2eb800da70c3be",
+          "size": 17772
+        },
+        {
+          "path": "ubuntu/audit/1:3.0.7-1build1/audit_3.0.7-1build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/audit/audit_3.0.7-1build1.dsc",
+          "sha256": "d1dab6b3d00e105d1396b2d78a6ecbeb2937aee10c77c89723ff0e643494b1b6",
+          "size": 2771
+        },
+        {
+          "path": "ubuntu/audit/1:3.0.7-1build1/audit_3.0.7.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/a/audit/audit_3.0.7.orig.tar.gz",
+          "sha256": "8b4c78632a9301a1c7f859b0e38fc0b9c260b8214d6b7c771bf28b3d73a62597",
+          "size": 1180226
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:base-passwd@3.5.52build1",
+      "purls": [
+        "pkg:deb/ubuntu/base-passwd@3.5.52build1?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/base-passwd@3.5.52build1?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/base-passwd/3.5.52build1/base-passwd_3.5.52build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/b/base-passwd/base-passwd_3.5.52build1.dsc",
+          "sha256": "6cd272c4c1e532aa213f7a73ec256aa362f788c9a07107eea512bfb7033a37d6",
+          "size": 1320
+        },
+        {
+          "path": "ubuntu/base-passwd/3.5.52build1/base-passwd_3.5.52build1.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/b/base-passwd/base-passwd_3.5.52build1.tar.xz",
+          "sha256": "5e6dcf3176c1483f2f34c88c5084aa1e2a501237a5866f0ac4bd845a348f561c",
+          "size": 54252
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:bzip2@1.0.8-5build1",
+      "purls": [
+        "pkg:deb/ubuntu/libbz2-1.0@1.0.8-5build1?arch=amd64&distro=ubuntu-22.04&upstream=bzip2",
+        "pkg:deb/ubuntu/libbz2-1.0@1.0.8-5build1?arch=arm64&distro=ubuntu-22.04&upstream=bzip2"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/bzip2/1.0.8-5build1/bzip2_1.0.8-5build1.debian.tar.bz2",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/b/bzip2/bzip2_1.0.8-5build1.debian.tar.bz2",
+          "sha256": "d31878008c269a4338324b3984f1b3177c3de003cf8254559cf898b4ab044e12",
+          "size": 26870
+        },
+        {
+          "path": "ubuntu/bzip2/1.0.8-5build1/bzip2_1.0.8-5build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/b/bzip2/bzip2_1.0.8-5build1.dsc",
+          "sha256": "f12de39052005fc1abdebed9aceef3589b4d25e1579cabdbd77fdc8063493121",
+          "size": 1860
+        },
+        {
+          "path": "ubuntu/bzip2/1.0.8-5build1/bzip2_1.0.8.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/b/bzip2/bzip2_1.0.8.orig.tar.gz",
+          "sha256": "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
+          "size": 810029
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:ca-certificates@20260601~22.04.1",
+      "purls": [
+        "pkg:deb/ubuntu/ca-certificates@20260601~22.04.1?arch=all&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/ca-certificates/20260601~22.04.1/ca-certificates_20260601~22.04.1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/c/ca-certificates/ca-certificates_20260601~22.04.1.dsc",
+          "sha256": "d6690a5511b32153722acb09dc2eb8e3ae80f836cbe2561ca1072103cea77961",
+          "size": 1850
+        },
+        {
+          "path": "ubuntu/ca-certificates/20260601~22.04.1/ca-certificates_20260601~22.04.1.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/c/ca-certificates/ca-certificates_20260601~22.04.1.tar.xz",
+          "sha256": "6e2c49696983cd0874e509bf733d006ed688977100fb8b71cbe19d6bf8006959",
+          "size": 266492
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:coreutils@8.32-4.1ubuntu1.3",
+      "purls": [
+        "pkg:deb/ubuntu/coreutils@8.32-4.1ubuntu1.3?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/coreutils@8.32-4.1ubuntu1.3?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/coreutils/8.32-4.1ubuntu1.3/coreutils_8.32-4.1ubuntu1.3.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/c/coreutils/coreutils_8.32-4.1ubuntu1.3.debian.tar.xz",
+          "sha256": "5ff54161038e479c904042f8848e40b40f5330bc4e4f2df9a474974f3d466061",
+          "size": 45556
+        },
+        {
+          "path": "ubuntu/coreutils/8.32-4.1ubuntu1.3/coreutils_8.32-4.1ubuntu1.3.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/c/coreutils/coreutils_8.32-4.1ubuntu1.3.dsc",
+          "sha256": "26959de3887a535d7929e5f3ac18eab6eaba5f221cdcf3b4cf7b43c68d32f92b",
+          "size": 2027
+        },
+        {
+          "path": "ubuntu/coreutils/8.32-4.1ubuntu1.3/coreutils_8.32.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/c/coreutils/coreutils_8.32.orig.tar.xz",
+          "sha256": "4458d8de7849df44ccab15e16b1548b285224dbba5f08fac070c1c0e0bcc4cfa",
+          "size": 5547836
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:dash@0.5.11+git20210903+057cd650a4ed-3build1",
+      "purls": [
+        "pkg:deb/ubuntu/dash@0.5.11%2Bgit20210903%2B057cd650a4ed-3build1?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/dash@0.5.11%2Bgit20210903%2B057cd650a4ed-3build1?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/dash/0.5.11+git20210903+057cd650a4ed-3build1/dash_0.5.11+git20210903+057cd650a4ed-3build1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/d/dash/dash_0.5.11+git20210903+057cd650a4ed-3build1.debian.tar.xz",
+          "sha256": "a37a02ba5e34492bf45eee9e22abd963cc3002212ee165ad6397134ab30b33af",
+          "size": 42744
+        },
+        {
+          "path": "ubuntu/dash/0.5.11+git20210903+057cd650a4ed-3build1/dash_0.5.11+git20210903+057cd650a4ed-3build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/d/dash/dash_0.5.11+git20210903+057cd650a4ed-3build1.dsc",
+          "sha256": "c7922c61052590033204a220e3fbc1e4263924b211072248b0c5a4c144d1545d",
+          "size": 1834
+        },
+        {
+          "path": "ubuntu/dash/0.5.11+git20210903+057cd650a4ed-3build1/dash_0.5.11+git20210903+057cd650a4ed.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/d/dash/dash_0.5.11+git20210903+057cd650a4ed.orig.tar.xz",
+          "sha256": "4fb06697f33f14fcd6b96cd4dfdd5b343c848a4bb69b7c04f1717767e4a117d3",
+          "size": 133320
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:dpkg@1.21.1ubuntu2.6",
+      "purls": [
+        "pkg:deb/ubuntu/dpkg@1.21.1ubuntu2.6?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/dpkg@1.21.1ubuntu2.6?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/dpkg/1.21.1ubuntu2.6/dpkg_1.21.1ubuntu2.6.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/d/dpkg/dpkg_1.21.1ubuntu2.6.dsc",
+          "sha256": "45e8b9e16206bc27ebe1d6a0363c36135dd40c40d6105a8bb92258693f6822e8",
+          "size": 2254
+        },
+        {
+          "path": "ubuntu/dpkg/1.21.1ubuntu2.6/dpkg_1.21.1ubuntu2.6.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/d/dpkg/dpkg_1.21.1ubuntu2.6.tar.xz",
+          "sha256": "f66de0b3430a5545699361168824976acfa85f1308f00dde5bc35f39e15e2d02",
+          "size": 5017128
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:gnupg2@2.2.27-3ubuntu2.5",
+      "purls": [
+        "pkg:deb/ubuntu/gpgv@2.2.27-3ubuntu2.5?arch=amd64&distro=ubuntu-22.04&upstream=gnupg2",
+        "pkg:deb/ubuntu/gpgv@2.2.27-3ubuntu2.5?arch=arm64&distro=ubuntu-22.04&upstream=gnupg2"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/gnupg2/2.2.27-3ubuntu2.5/gnupg2_2.2.27-3ubuntu2.5.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/gnupg2/gnupg2_2.2.27-3ubuntu2.5.debian.tar.xz",
+          "sha256": "63239842abfe155bf3b0be202446a807a202a25f85257bc0331292602eb39666",
+          "size": 76672
+        },
+        {
+          "path": "ubuntu/gnupg2/2.2.27-3ubuntu2.5/gnupg2_2.2.27-3ubuntu2.5.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/gnupg2/gnupg2_2.2.27-3ubuntu2.5.dsc",
+          "sha256": "1fb5930a84f846fec8322e6c32544ebb8118d618bbb175c1d38722def6f0d461",
+          "size": 3763
+        },
+        {
+          "path": "ubuntu/gnupg2/2.2.27-3ubuntu2.5/gnupg2_2.2.27.orig.tar.bz2",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/gnupg2/gnupg2_2.2.27.orig.tar.bz2",
+          "sha256": "34e60009014ea16402069136e0a5f63d9b65f90096244975db5cea74b3d02399",
+          "size": 7191555
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:grep@3.7-1build1",
+      "purls": [
+        "pkg:deb/ubuntu/grep@3.7-1build1?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/grep@3.7-1build1?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/grep/3.7-1build1/grep_3.7-1build1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/grep/grep_3.7-1build1.debian.tar.xz",
+          "sha256": "2e449406cea72546c295a5410bc37f90d49d24f62fc1dff410e7c71e504b1915",
+          "size": 18184
+        },
+        {
+          "path": "ubuntu/grep/3.7-1build1/grep_3.7-1build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/grep/grep_3.7-1build1.dsc",
+          "sha256": "f77c96adafcedb144e8a61d65cfb0df42875ca1e62c65cbc7e949c024e96ad29",
+          "size": 1900
+        },
+        {
+          "path": "ubuntu/grep/3.7-1build1/grep_3.7.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/grep/grep_3.7.orig.tar.xz",
+          "sha256": "5c10da312460aec721984d5d83246d24520ec438dd48d7ab5a05dbc0d6d6823c",
+          "size": 1641196
+        },
+        {
+          "path": "ubuntu/grep/3.7-1build1/grep_3.7.orig.tar.xz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/grep/grep_3.7.orig.tar.xz.asc",
+          "sha256": "d79a0137eb803938ff47dc366825d05d1a042457f74acc264a361a84428a5de7",
+          "size": 833
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:gzip@1.10-4ubuntu4.1",
+      "purls": [
+        "pkg:deb/ubuntu/gzip@1.10-4ubuntu4.1?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/gzip@1.10-4ubuntu4.1?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/gzip/1.10-4ubuntu4.1/gzip_1.10-4ubuntu4.1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/gzip/gzip_1.10-4ubuntu4.1.debian.tar.xz",
+          "sha256": "35a9967c2ab73e620fffad4cca6f65183dc83024aae4866cea92a1f26c8b6232",
+          "size": 39520
+        },
+        {
+          "path": "ubuntu/gzip/1.10-4ubuntu4.1/gzip_1.10-4ubuntu4.1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/gzip/gzip_1.10-4ubuntu4.1.dsc",
+          "sha256": "ecdfb40e6271b4895e9b108be68d47d9b164903cdae7b8400478e1047adfd34e",
+          "size": 2277
+        },
+        {
+          "path": "ubuntu/gzip/1.10-4ubuntu4.1/gzip_1.10.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/gzip/gzip_1.10.orig.tar.gz",
+          "sha256": "c91f74430bf7bc20402e1f657d0b252cb80aa66ba333a25704512af346633c68",
+          "size": 1201421
+        },
+        {
+          "path": "ubuntu/gzip/1.10-4ubuntu4.1/gzip_1.10.orig.tar.gz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/g/gzip/gzip_1.10.orig.tar.gz.asc",
+          "sha256": "b5e4942cca901ca37772d3ea060c4af6a1908719cec5327fbe033f9d30933f1b",
+          "size": 833
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:hostname@3.23ubuntu2",
+      "purls": [
+        "pkg:deb/ubuntu/hostname@3.23ubuntu2?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/hostname@3.23ubuntu2?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/hostname/3.23ubuntu2/hostname_3.23ubuntu2.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/h/hostname/hostname_3.23ubuntu2.dsc",
+          "sha256": "1b217706172fdbee1bda911d6886bb18fd8afeec806001e52320b418515274f3",
+          "size": 1085
+        },
+        {
+          "path": "ubuntu/hostname/3.23ubuntu2/hostname_3.23ubuntu2.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/h/hostname/hostname_3.23ubuntu2.tar.gz",
+          "sha256": "a4c8b64f711a272482a45ee28d0563a7f0f68ebb5eec522f23fa649456f3e8ad",
+          "size": 13854
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:init-system-helpers@1.62",
+      "purls": [
+        "pkg:deb/ubuntu/init-system-helpers@1.62?arch=all&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/init-system-helpers/1.62/init-system-helpers_1.62.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/i/init-system-helpers/init-system-helpers_1.62.dsc",
+          "sha256": "98b0149e9d8f9b75b604ac2cedeef32f40e7f18f64f02b1ec819d4dd49b249a1",
+          "size": 1993
+        },
+        {
+          "path": "ubuntu/init-system-helpers/1.62/init-system-helpers_1.62.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/i/init-system-helpers/init-system-helpers_1.62.tar.xz",
+          "sha256": "195db496bc40fe5a37bcdab26c275643cd119edfceb0551cacf6206ba36447e6",
+          "size": 42144
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:keyutils@1.6.1-2ubuntu3",
+      "purls": [
+        "pkg:deb/ubuntu/libkeyutils1@1.6.1-2ubuntu3?arch=amd64&distro=ubuntu-22.04&upstream=keyutils",
+        "pkg:deb/ubuntu/libkeyutils1@1.6.1-2ubuntu3?arch=arm64&distro=ubuntu-22.04&upstream=keyutils"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/keyutils/1.6.1-2ubuntu3/keyutils_1.6.1-2ubuntu3.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/k/keyutils/keyutils_1.6.1-2ubuntu3.debian.tar.xz",
+          "sha256": "e9e8992edcc28599fb59ca1dc9ecbfb6b35175fb712f86b13bf4dc35397631f9",
+          "size": 18936
+        },
+        {
+          "path": "ubuntu/keyutils/1.6.1-2ubuntu3/keyutils_1.6.1-2ubuntu3.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/k/keyutils/keyutils_1.6.1-2ubuntu3.dsc",
+          "sha256": "6ce03824add78e1dc385723ce354a5513eb1ab4b83643e91e9b2c64f81112f9d",
+          "size": 2203
+        },
+        {
+          "path": "ubuntu/keyutils/1.6.1-2ubuntu3/keyutils_1.6.1.orig.tar.bz2",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/k/keyutils/keyutils_1.6.1.orig.tar.bz2",
+          "sha256": "c8b15722ae51d95b9ad76cc6d49a4c2cc19b0c60f72f61fb9bf43eea7cbd64ce",
+          "size": 97232
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libcap2@1:2.44-1ubuntu0.22.04.3",
+      "purls": [
+        "pkg:deb/ubuntu/libcap2@1%3A2.44-1ubuntu0.22.04.3?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/libcap2@1%3A2.44-1ubuntu0.22.04.3?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libcap2/1:2.44-1ubuntu0.22.04.3/libcap2_2.44-1ubuntu0.22.04.3.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libc/libcap2/libcap2_2.44-1ubuntu0.22.04.3.debian.tar.xz",
+          "sha256": "6a6435b74e9b2ec65eb1ee2b7958c37777fe005312feac37d84f4167521d135a",
+          "size": 24880
+        },
+        {
+          "path": "ubuntu/libcap2/1:2.44-1ubuntu0.22.04.3/libcap2_2.44-1ubuntu0.22.04.3.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libc/libcap2/libcap2_2.44-1ubuntu0.22.04.3.dsc",
+          "sha256": "67523116f07081f3a8066f737b9c84f92f5e854f13f38487c1ce485a43d85bd7",
+          "size": 2318
+        },
+        {
+          "path": "ubuntu/libcap2/1:2.44-1ubuntu0.22.04.3/libcap2_2.44.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libc/libcap2/libcap2_2.44.orig.tar.xz",
+          "sha256": "92188359cd5be86e8e5bd3f6483ac6ce582264f912398937ef763def2205c8e1",
+          "size": 125568
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libgpg-error@1.43-3",
+      "purls": [
+        "pkg:deb/ubuntu/libgpg-error0@1.43-3?arch=amd64&distro=ubuntu-22.04&upstream=libgpg-error",
+        "pkg:deb/ubuntu/libgpg-error0@1.43-3?arch=arm64&distro=ubuntu-22.04&upstream=libgpg-error"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libgpg-error/1.43-3/libgpg-error_1.43-3.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libg/libgpg-error/libgpg-error_1.43-3.debian.tar.xz",
+          "sha256": "d9d4efa45fc8d58152cbfa3bbaa68ed1977d8c56b7d59a579ef4feb4ffe7ec83",
+          "size": 19264
+        },
+        {
+          "path": "ubuntu/libgpg-error/1.43-3/libgpg-error_1.43-3.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libg/libgpg-error/libgpg-error_1.43-3.dsc",
+          "sha256": "4cebb44aa01a2dfc75eae5b5758ac73f353778e1391e55726264fabf06944a23",
+          "size": 2270
+        },
+        {
+          "path": "ubuntu/libgpg-error/1.43-3/libgpg-error_1.43.orig.tar.bz2",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libg/libgpg-error/libgpg-error_1.43.orig.tar.bz2",
+          "sha256": "a9ab83ca7acc442a5bd846a75b920285ff79bdb4e3d34aa382be88ed2c3aebaf",
+          "size": 999006
+        },
+        {
+          "path": "ubuntu/libgpg-error/1.43-3/libgpg-error_1.43.orig.tar.bz2.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libg/libgpg-error/libgpg-error_1.43.orig.tar.bz2.asc",
+          "sha256": "6f1f0354aee0abc946d7f0e604fa69d5826a312baabcc0bb4fad4f97899cfa80",
+          "size": 238
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libidn2@2.3.2-2build1",
+      "purls": [
+        "pkg:deb/ubuntu/libidn2-0@2.3.2-2build1?arch=amd64&distro=ubuntu-22.04&upstream=libidn2",
+        "pkg:deb/ubuntu/libidn2-0@2.3.2-2build1?arch=arm64&distro=ubuntu-22.04&upstream=libidn2"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libidn2/2.3.2-2build1/libidn2_2.3.2-2build1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libi/libidn2/libidn2_2.3.2-2build1.debian.tar.xz",
+          "sha256": "4111fae48e55185111ea05a70618114aa6c76f440d384f5985008c0cab3a9132",
+          "size": 15972
+        },
+        {
+          "path": "ubuntu/libidn2/2.3.2-2build1/libidn2_2.3.2-2build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libi/libidn2/libidn2_2.3.2-2build1.dsc",
+          "sha256": "b163760eee669b374571286b920e90a9647b436af745192b7d7ac9c87f9c3f47",
+          "size": 2655
+        },
+        {
+          "path": "ubuntu/libidn2/2.3.2-2build1/libidn2_2.3.2.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libi/libidn2/libidn2_2.3.2.orig.tar.gz",
+          "sha256": "76940cd4e778e8093579a9d195b25fff5e936e9dc6242068528b437a76764f91",
+          "size": 2169556
+        },
+        {
+          "path": "ubuntu/libidn2/2.3.2-2build1/libidn2_2.3.2.orig.tar.gz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libi/libidn2/libidn2_2.3.2.orig.tar.gz.asc",
+          "sha256": "3d533d0b18e031e90fbee0e552e1a034ef0b5bb11298019f0b99c0c85132ff9a",
+          "size": 488
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libnsl@1.3.0-2build2",
+      "purls": [
+        "pkg:deb/ubuntu/libnsl2@1.3.0-2build2?arch=amd64&distro=ubuntu-22.04&upstream=libnsl",
+        "pkg:deb/ubuntu/libnsl2@1.3.0-2build2?arch=arm64&distro=ubuntu-22.04&upstream=libnsl"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libnsl/1.3.0-2build2/libnsl_1.3.0-2build2.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libn/libnsl/libnsl_1.3.0-2build2.debian.tar.xz",
+          "sha256": "ff64ca839c3f44058e5ba17a15ed32f40cd1e2a197cb2cbd8e788912357c2882",
+          "size": 4868
+        },
+        {
+          "path": "ubuntu/libnsl/1.3.0-2build2/libnsl_1.3.0-2build2.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libn/libnsl/libnsl_1.3.0-2build2.dsc",
+          "sha256": "537d6e611f0d10a7cac5ac82425827a89f58b34340cab113d827e858432d4437",
+          "size": 2087
+        },
+        {
+          "path": "ubuntu/libnsl/1.3.0-2build2/libnsl_1.3.0.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libn/libnsl/libnsl_1.3.0.orig.tar.xz",
+          "sha256": "eac3062957fa302c62eff4aed718a07bacbf9ceb0a058289f12a19bfdda3c8e2",
+          "size": 321488
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libseccomp@2.5.3-2ubuntu3~22.04.1",
+      "purls": [
+        "pkg:deb/ubuntu/libseccomp2@2.5.3-2ubuntu3~22.04.1?arch=amd64&distro=ubuntu-22.04&upstream=libseccomp",
+        "pkg:deb/ubuntu/libseccomp2@2.5.3-2ubuntu3~22.04.1?arch=arm64&distro=ubuntu-22.04&upstream=libseccomp"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libseccomp/2.5.3-2ubuntu3~22.04.1/libseccomp_2.5.3-2ubuntu3~22.04.1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libs/libseccomp/libseccomp_2.5.3-2ubuntu3~22.04.1.debian.tar.xz",
+          "sha256": "cd582c847ced99c97f487b3f4a851bc1f2bed9065f90729d90dc8721b6dc483e",
+          "size": 24328
+        },
+        {
+          "path": "ubuntu/libseccomp/2.5.3-2ubuntu3~22.04.1/libseccomp_2.5.3-2ubuntu3~22.04.1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libs/libseccomp/libseccomp_2.5.3-2ubuntu3~22.04.1.dsc",
+          "sha256": "e7f514056a28794c6a7067cd0881b5bf03e918578df3418eea6752cbfa83fd13",
+          "size": 2860
+        },
+        {
+          "path": "ubuntu/libseccomp/2.5.3-2ubuntu3~22.04.1/libseccomp_2.5.3.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libs/libseccomp/libseccomp_2.5.3.orig.tar.gz",
+          "sha256": "59065c8733364725e9721ba48c3a99bbc52af921daf48df4b1e012fbc7b10a76",
+          "size": 637572
+        },
+        {
+          "path": "ubuntu/libseccomp/2.5.3-2ubuntu3~22.04.1/libseccomp_2.5.3.orig.tar.gz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libs/libseccomp/libseccomp_2.5.3.orig.tar.gz.asc",
+          "sha256": "cc1cbe9d9eb6a67b78de107eb37b2bc8d7599e3c1d36699ae2528db489cb5d44",
+          "size": 833
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libtirpc@1.3.2-2ubuntu0.1",
+      "purls": [
+        "pkg:deb/ubuntu/libtirpc-common@1.3.2-2ubuntu0.1?arch=all&distro=ubuntu-22.04&upstream=libtirpc",
+        "pkg:deb/ubuntu/libtirpc3@1.3.2-2ubuntu0.1?arch=amd64&distro=ubuntu-22.04&upstream=libtirpc",
+        "pkg:deb/ubuntu/libtirpc3@1.3.2-2ubuntu0.1?arch=arm64&distro=ubuntu-22.04&upstream=libtirpc"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libtirpc/1.3.2-2ubuntu0.1/libtirpc_1.3.2-2ubuntu0.1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libt/libtirpc/libtirpc_1.3.2-2ubuntu0.1.debian.tar.xz",
+          "sha256": "9e280f94501b63ba7e753f7bb71c1394f2615073e5022a1136632d32780027f8",
+          "size": 18364
+        },
+        {
+          "path": "ubuntu/libtirpc/1.3.2-2ubuntu0.1/libtirpc_1.3.2-2ubuntu0.1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libt/libtirpc/libtirpc_1.3.2-2ubuntu0.1.dsc",
+          "sha256": "082cce0086a92b4a2fef61bc5318b332b5cbedcafda5654faf51ed6c5b611533",
+          "size": 2201
+        },
+        {
+          "path": "ubuntu/libtirpc/1.3.2-2ubuntu0.1/libtirpc_1.3.2.orig.tar.bz2",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libt/libtirpc/libtirpc_1.3.2.orig.tar.bz2",
+          "sha256": "e24eb88b8ce7db3b7ca6eb80115dd1284abc5ec32a8deccfed2224fc2532b9fd",
+          "size": 513151
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libunistring@1.0-1",
+      "purls": [
+        "pkg:deb/ubuntu/libunistring2@1.0-1?arch=amd64&distro=ubuntu-22.04&upstream=libunistring",
+        "pkg:deb/ubuntu/libunistring2@1.0-1?arch=arm64&distro=ubuntu-22.04&upstream=libunistring"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libunistring/1.0-1/libunistring_1.0-1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libu/libunistring/libunistring_1.0-1.debian.tar.xz",
+          "sha256": "7cf35dfd1de973ee3944930d215750c7de27ececd91616ad129ac5a238b1538f",
+          "size": 42004
+        },
+        {
+          "path": "ubuntu/libunistring/1.0-1/libunistring_1.0-1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libu/libunistring/libunistring_1.0-1.dsc",
+          "sha256": "d93859cde749a30f55404ea1ef0ed4f02e58d2475a7c7e088b264d4df0626061",
+          "size": 1928
+        },
+        {
+          "path": "ubuntu/libunistring/1.0-1/libunistring_1.0.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libu/libunistring/libunistring_1.0.orig.tar.xz",
+          "sha256": "5bab55b49f75d77ed26b257997e919b693f29fd4a1bc22e0e6e024c246c72741",
+          "size": 2367800
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:libzstd@1.4.8+dfsg-3build1",
+      "purls": [
+        "pkg:deb/ubuntu/libzstd1@1.4.8%2Bdfsg-3build1?arch=amd64&distro=ubuntu-22.04&upstream=libzstd",
+        "pkg:deb/ubuntu/libzstd1@1.4.8%2Bdfsg-3build1?arch=arm64&distro=ubuntu-22.04&upstream=libzstd"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/libzstd/1.4.8+dfsg-3build1/libzstd_1.4.8+dfsg-3build1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libz/libzstd/libzstd_1.4.8+dfsg-3build1.debian.tar.xz",
+          "sha256": "60d554776b4fbee2aa81eb9990cbe156636b1ec4e4213b73fd190057680241ba",
+          "size": 12316
+        },
+        {
+          "path": "ubuntu/libzstd/1.4.8+dfsg-3build1/libzstd_1.4.8+dfsg-3build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libz/libzstd/libzstd_1.4.8+dfsg-3build1.dsc",
+          "sha256": "d4f80bb9278967f55a38c50c7e2bb8102328c7d2955bdcd9b7dedc70cd4a8c9e",
+          "size": 2398
+        },
+        {
+          "path": "ubuntu/libzstd/1.4.8+dfsg-3build1/libzstd_1.4.8+dfsg.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/libz/libzstd/libzstd_1.4.8+dfsg.orig.tar.xz",
+          "sha256": "1e8ce5c4880a6d5bd8d3186e4186607dd19b64fc98a3877fc13aeefd566d67c5",
+          "size": 1331996
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:lsb@11.1.0ubuntu4",
+      "purls": [
+        "pkg:deb/ubuntu/lsb-base@11.1.0ubuntu4?arch=all&distro=ubuntu-22.04&upstream=lsb"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/lsb/11.1.0ubuntu4/lsb_11.1.0ubuntu4.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/l/lsb/lsb_11.1.0ubuntu4.dsc",
+          "sha256": "10dd8177e4727cd1b661b4544e4d14b475dd535e3e02c215bb28aa588cd275a6",
+          "size": 2222
+        },
+        {
+          "path": "ubuntu/lsb/11.1.0ubuntu4/lsb_11.1.0ubuntu4.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/l/lsb/lsb_11.1.0ubuntu4.tar.xz",
+          "sha256": "37f9580e03371cb1b3535af3fac007b0614795c5a58e11e3c93594eb3403595c",
+          "size": 46152
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:lz4@1.9.3-2build2",
+      "purls": [
+        "pkg:deb/ubuntu/liblz4-1@1.9.3-2build2?arch=amd64&distro=ubuntu-22.04&upstream=lz4",
+        "pkg:deb/ubuntu/liblz4-1@1.9.3-2build2?arch=arm64&distro=ubuntu-22.04&upstream=lz4"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/lz4/1.9.3-2build2/lz4_1.9.3-2build2.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/l/lz4/lz4_1.9.3-2build2.debian.tar.xz",
+          "sha256": "46e79943d637f60be3a8c1e5edaba8890599e0fdcc2a58462e4eb194f1e56352",
+          "size": 14088
+        },
+        {
+          "path": "ubuntu/lz4/1.9.3-2build2/lz4_1.9.3-2build2.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/l/lz4/lz4_1.9.3-2build2.dsc",
+          "sha256": "24f317883fddecd5488241a836a951e83dbd7070b667e34eed4319d2090244a9",
+          "size": 2091
+        },
+        {
+          "path": "ubuntu/lz4/1.9.3-2build2/lz4_1.9.3.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/l/lz4/lz4_1.9.3.orig.tar.gz",
+          "sha256": "030644df4611007ff7dc962d981f390361e6c97a34e5cbc393ddfbe019ffe2c1",
+          "size": 320958
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:nettle@3.7.3-1build2",
+      "purls": [
+        "pkg:deb/ubuntu/libhogweed6@3.7.3-1build2?arch=amd64&distro=ubuntu-22.04&upstream=nettle",
+        "pkg:deb/ubuntu/libhogweed6@3.7.3-1build2?arch=arm64&distro=ubuntu-22.04&upstream=nettle",
+        "pkg:deb/ubuntu/libnettle8@3.7.3-1build2?arch=amd64&distro=ubuntu-22.04&upstream=nettle",
+        "pkg:deb/ubuntu/libnettle8@3.7.3-1build2?arch=arm64&distro=ubuntu-22.04&upstream=nettle"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/nettle/3.7.3-1build2/nettle_3.7.3-1build2.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/n/nettle/nettle_3.7.3-1build2.debian.tar.xz",
+          "sha256": "ee9dda53e8a7c14ec91c3655fa59d685aa21873d1f279f8deaba4581880eba69",
+          "size": 22100
+        },
+        {
+          "path": "ubuntu/nettle/3.7.3-1build2/nettle_3.7.3-1build2.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/n/nettle/nettle_3.7.3-1build2.dsc",
+          "sha256": "46de1c6d01561bcf67922a8398f2aba038ce89be182644eec4227d7e14d998ee",
+          "size": 2165
+        },
+        {
+          "path": "ubuntu/nettle/3.7.3-1build2/nettle_3.7.3.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/n/nettle/nettle_3.7.3.orig.tar.gz",
+          "sha256": "661f5eb03f048a3b924c3a8ad2515d4068e40f67e774e8a26827658007e3bcf0",
+          "size": 2383985
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:openssl@3.0.2-0ubuntu1.25",
+      "purls": [
+        "pkg:deb/ubuntu/libssl3@3.0.2-0ubuntu1.25?arch=amd64&distro=ubuntu-22.04&upstream=openssl",
+        "pkg:deb/ubuntu/libssl3@3.0.2-0ubuntu1.25?arch=arm64&distro=ubuntu-22.04&upstream=openssl",
+        "pkg:deb/ubuntu/openssl@3.0.2-0ubuntu1.25?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/openssl@3.0.2-0ubuntu1.25?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/openssl/3.0.2-0ubuntu1.25/openssl_3.0.2-0ubuntu1.25.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/o/openssl/openssl_3.0.2-0ubuntu1.25.debian.tar.xz",
+          "sha256": "85b73f386d02cc8da762b8b1e579e0f5096dc6c889b3a78ec43f01546ccb07b3",
+          "size": 292264
+        },
+        {
+          "path": "ubuntu/openssl/3.0.2-0ubuntu1.25/openssl_3.0.2-0ubuntu1.25.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/o/openssl/openssl_3.0.2-0ubuntu1.25.dsc",
+          "sha256": "a75a99775b315fce5a46b432b3afbb4b814a8b0f72ac2b3758c90aee167030d8",
+          "size": 2730
+        },
+        {
+          "path": "ubuntu/openssl/3.0.2-0ubuntu1.25/openssl_3.0.2.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/o/openssl/openssl_3.0.2.orig.tar.gz",
+          "sha256": "98e91ccead4d4756ae3c9cde5e09191a8e586d9f4d50838e7ec09d6411dfdb63",
+          "size": 15038141
+        },
+        {
+          "path": "ubuntu/openssl/3.0.2-0ubuntu1.25/openssl_3.0.2.orig.tar.gz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/o/openssl/openssl_3.0.2.orig.tar.gz.asc",
+          "sha256": "764d220aaa6d5e9c13b4239b61f3b8de57aa53fa8362f56ceeada0a10264a8f1",
+          "size": 488
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:p11-kit@0.24.0-6build1",
+      "purls": [
+        "pkg:deb/ubuntu/libp11-kit0@0.24.0-6build1?arch=amd64&distro=ubuntu-22.04&upstream=p11-kit",
+        "pkg:deb/ubuntu/libp11-kit0@0.24.0-6build1?arch=arm64&distro=ubuntu-22.04&upstream=p11-kit"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/p11-kit/0.24.0-6build1/p11-kit_0.24.0-6build1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/p11-kit/p11-kit_0.24.0-6build1.debian.tar.xz",
+          "sha256": "885af30d506c1b29b094f928ba31cdf9acdc64bfad6f3064f7c4fd4b275ee857",
+          "size": 23264
+        },
+        {
+          "path": "ubuntu/p11-kit/0.24.0-6build1/p11-kit_0.24.0-6build1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/p11-kit/p11-kit_0.24.0-6build1.dsc",
+          "sha256": "aaa1078c2e7d774725ff9bac86bcc14d1cbb3c5cc4ee7a293f26df8ad1a73c46",
+          "size": 2633
+        },
+        {
+          "path": "ubuntu/p11-kit/0.24.0-6build1/p11-kit_0.24.0.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/p11-kit/p11-kit_0.24.0.orig.tar.xz",
+          "sha256": "81e6140584f635e4e956a1b93a32239acf3811ff5b2d3a5c6094e94e99d2c685",
+          "size": 834392
+        },
+        {
+          "path": "ubuntu/p11-kit/0.24.0-6build1/p11-kit_0.24.0.orig.tar.xz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/p11-kit/p11-kit_0.24.0.orig.tar.xz.asc",
+          "sha256": "f9996976ae08e48ac652d2aad3f0528a75f87eaa6c17cf076ec00e7ce2fbaeed",
+          "size": 833
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:perl@5.34.0-3ubuntu1.7",
+      "purls": [
+        "pkg:deb/ubuntu/perl-base@5.34.0-3ubuntu1.7?arch=amd64&distro=ubuntu-22.04&upstream=perl",
+        "pkg:deb/ubuntu/perl-base@5.34.0-3ubuntu1.7?arch=arm64&distro=ubuntu-22.04&upstream=perl"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/perl/5.34.0-3ubuntu1.7/perl_5.34.0-3ubuntu1.7.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/perl/perl_5.34.0-3ubuntu1.7.debian.tar.xz",
+          "sha256": "762f869b41facfc896ca64417f935af31e575019ba1a0789968e49ac8236382b",
+          "size": 202360
+        },
+        {
+          "path": "ubuntu/perl/5.34.0-3ubuntu1.7/perl_5.34.0-3ubuntu1.7.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/perl/perl_5.34.0-3ubuntu1.7.dsc",
+          "sha256": "ddb55d962d56e9ac3b7be44e3e3517a74966c7c564f56fa10e8c742f1ea0dd44",
+          "size": 2846
+        },
+        {
+          "path": "ubuntu/perl/5.34.0-3ubuntu1.7/perl_5.34.0.orig-regen-configure.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/perl/perl_5.34.0.orig-regen-configure.tar.xz",
+          "sha256": "b168f566401fdccc13d0616c258854c1e1a461276922babca617097cd9dfd85b",
+          "size": 415412
+        },
+        {
+          "path": "ubuntu/perl/5.34.0-3ubuntu1.7/perl_5.34.0.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/perl/perl_5.34.0.orig.tar.xz",
+          "sha256": "82c2e5e5c71b0e10487a80d79140469ab1f8056349ca8545140a224dbbed7ded",
+          "size": 12881416
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:procps@2:3.3.17-6ubuntu2.1",
+      "purls": [
+        "pkg:deb/ubuntu/libprocps8@2%3A3.3.17-6ubuntu2.1?arch=amd64&distro=ubuntu-22.04&upstream=procps",
+        "pkg:deb/ubuntu/libprocps8@2%3A3.3.17-6ubuntu2.1?arch=arm64&distro=ubuntu-22.04&upstream=procps",
+        "pkg:deb/ubuntu/procps@2%3A3.3.17-6ubuntu2.1?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/procps@2%3A3.3.17-6ubuntu2.1?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/procps/2:3.3.17-6ubuntu2.1/procps_3.3.17-6ubuntu2.1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/procps/procps_3.3.17-6ubuntu2.1.debian.tar.xz",
+          "sha256": "7ecb85faef890f1f56c4e6d2eb73988b02283b32e6367a24cd006b91dfdb7979",
+          "size": 35488
+        },
+        {
+          "path": "ubuntu/procps/2:3.3.17-6ubuntu2.1/procps_3.3.17-6ubuntu2.1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/procps/procps_3.3.17-6ubuntu2.1.dsc",
+          "sha256": "2160554b394a265e1be8fe668ea15955ccbb89c5ccf8f53ea2b3f38abb3e2d93",
+          "size": 2111
+        },
+        {
+          "path": "ubuntu/procps/2:3.3.17-6ubuntu2.1/procps_3.3.17.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/p/procps/procps_3.3.17.orig.tar.xz",
+          "sha256": "4518b3e7aafd34ec07d0063d250fd474999b20b200218c3ae56f5d2113f141b4",
+          "size": 1008428
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:sensible-utils@0.0.17",
+      "purls": [
+        "pkg:deb/ubuntu/sensible-utils@0.0.17?arch=all&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/sensible-utils/0.0.17/sensible-utils_0.0.17.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/sensible-utils/sensible-utils_0.0.17.dsc",
+          "sha256": "e4754f4763f77d57fdb29093ec78eb0a84bac4e3aa94e4c251f0d00f11a4b231",
+          "size": 1733
+        },
+        {
+          "path": "ubuntu/sensible-utils/0.0.17/sensible-utils_0.0.17.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/sensible-utils/sensible-utils_0.0.17.tar.xz",
+          "sha256": "5edf1f6043eeb88957ffe0b0e8793fbbdf40c8ff83f5bf9b36c9421c2d977626",
+          "size": 66648
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:systemd@249.11-0ubuntu3.21",
+      "purls": [
+        "pkg:deb/ubuntu/libsystemd0@249.11-0ubuntu3.21?arch=amd64&distro=ubuntu-22.04&upstream=systemd",
+        "pkg:deb/ubuntu/libsystemd0@249.11-0ubuntu3.21?arch=arm64&distro=ubuntu-22.04&upstream=systemd",
+        "pkg:deb/ubuntu/libudev1@249.11-0ubuntu3.21?arch=amd64&distro=ubuntu-22.04&upstream=systemd",
+        "pkg:deb/ubuntu/libudev1@249.11-0ubuntu3.21?arch=arm64&distro=ubuntu-22.04&upstream=systemd"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/systemd/249.11-0ubuntu3.21/systemd_249.11-0ubuntu3.21.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/systemd/systemd_249.11-0ubuntu3.21.debian.tar.xz",
+          "sha256": "f3fb95455ce4525b549628da612a6db3bd48e1c0304e3051ab112c54a6dea458",
+          "size": 269776
+        },
+        {
+          "path": "ubuntu/systemd/249.11-0ubuntu3.21/systemd_249.11-0ubuntu3.21.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/systemd/systemd_249.11-0ubuntu3.21.dsc",
+          "sha256": "f0a7e5181963a96f485ac2dfea4eca6757d2a532ccaa48e469a66c195ba83fca",
+          "size": 5907
+        },
+        {
+          "path": "ubuntu/systemd/249.11-0ubuntu3.21/systemd_249.11.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/systemd/systemd_249.11.orig.tar.gz",
+          "sha256": "305ba81cc33593bc2e8e9d6dc7f964b1c0a9303155fced5e6b1d236577441bf2",
+          "size": 10622702
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:sysvinit@3.01-1ubuntu1",
+      "purls": [
+        "pkg:deb/ubuntu/sysvinit-utils@3.01-1ubuntu1?arch=amd64&distro=ubuntu-22.04&upstream=sysvinit",
+        "pkg:deb/ubuntu/sysvinit-utils@3.01-1ubuntu1?arch=arm64&distro=ubuntu-22.04&upstream=sysvinit"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/sysvinit/3.01-1ubuntu1/sysvinit_3.01-1ubuntu1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/sysvinit/sysvinit_3.01-1ubuntu1.debian.tar.xz",
+          "sha256": "7302cff71c0b977e4792b8cad1165b6afe658717deee3adefa439b4e55ff18ee",
+          "size": 131304
+        },
+        {
+          "path": "ubuntu/sysvinit/3.01-1ubuntu1/sysvinit_3.01-1ubuntu1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/sysvinit/sysvinit_3.01-1ubuntu1.dsc",
+          "sha256": "3473643c1d1f4e4b4b78e70641c660de11ffbf15ec00cb5d8e65f010f1f60552",
+          "size": 2138
+        },
+        {
+          "path": "ubuntu/sysvinit/3.01-1ubuntu1/sysvinit_3.01.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/s/sysvinit/sysvinit_3.01.orig.tar.xz",
+          "sha256": "4cc39f1c49f66c29e63360aea7a264a35ba2b853b41117251b9d23cf6d640b94",
+          "size": 126400
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:util-linux@2.37.2-4ubuntu3.5",
+      "purls": [
+        "pkg:deb/ubuntu/bsdutils@1%3A2.37.2-4ubuntu3.5?arch=amd64&distro=ubuntu-22.04&upstream=util-linux%402.37.2-4ubuntu3.5",
+        "pkg:deb/ubuntu/bsdutils@1%3A2.37.2-4ubuntu3.5?arch=arm64&distro=ubuntu-22.04&upstream=util-linux%402.37.2-4ubuntu3.5",
+        "pkg:deb/ubuntu/libblkid1@2.37.2-4ubuntu3.5?arch=amd64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/libblkid1@2.37.2-4ubuntu3.5?arch=arm64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/libmount1@2.37.2-4ubuntu3.5?arch=amd64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/libmount1@2.37.2-4ubuntu3.5?arch=arm64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/libsmartcols1@2.37.2-4ubuntu3.5?arch=amd64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/libsmartcols1@2.37.2-4ubuntu3.5?arch=arm64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/libuuid1@2.37.2-4ubuntu3.5?arch=amd64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/libuuid1@2.37.2-4ubuntu3.5?arch=arm64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/mount@2.37.2-4ubuntu3.5?arch=amd64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/mount@2.37.2-4ubuntu3.5?arch=arm64&distro=ubuntu-22.04&upstream=util-linux",
+        "pkg:deb/ubuntu/util-linux@2.37.2-4ubuntu3.5?arch=amd64&distro=ubuntu-22.04",
+        "pkg:deb/ubuntu/util-linux@2.37.2-4ubuntu3.5?arch=arm64&distro=ubuntu-22.04"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/util-linux/2.37.2-4ubuntu3.5/util-linux_2.37.2-4ubuntu3.5.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/u/util-linux/util-linux_2.37.2-4ubuntu3.5.debian.tar.xz",
+          "sha256": "fe69a2cc84ddcfb17a47f57b8c39c3919844bd92ef8868b40676656025f391c8",
+          "size": 115268
+        },
+        {
+          "path": "ubuntu/util-linux/2.37.2-4ubuntu3.5/util-linux_2.37.2-4ubuntu3.5.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/u/util-linux/util-linux_2.37.2-4ubuntu3.5.dsc",
+          "sha256": "024c983405cf31b5ba1230c99d27fd340552c0f59e05b4d94f222d9e399ac522",
+          "size": 4550
+        },
+        {
+          "path": "ubuntu/util-linux/2.37.2-4ubuntu3.5/util-linux_2.37.2.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/u/util-linux/util-linux_2.37.2.orig.tar.xz",
+          "sha256": "6a0764c1aae7fb607ef8a6dd2c0f6c47d5e5fd27aa08820abaad9ec14e28e9d9",
+          "size": 5621624
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:xxhash@0.8.1-1",
+      "purls": [
+        "pkg:deb/ubuntu/libxxhash0@0.8.1-1?arch=amd64&distro=ubuntu-22.04&upstream=xxhash",
+        "pkg:deb/ubuntu/libxxhash0@0.8.1-1?arch=arm64&distro=ubuntu-22.04&upstream=xxhash"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/xxhash/0.8.1-1/xxhash_0.8.1-1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/x/xxhash/xxhash_0.8.1-1.debian.tar.xz",
+          "sha256": "d40aa223e90b85435082857b64573541ba9a995841717496e8975aed97241550",
+          "size": 4572
+        },
+        {
+          "path": "ubuntu/xxhash/0.8.1-1/xxhash_0.8.1-1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/x/xxhash/xxhash_0.8.1-1.dsc",
+          "sha256": "4a961627c06efc8fa3bc4b06ee9dba6cfaf092f2550b88d63e9218a2728721b4",
+          "size": 1966
+        },
+        {
+          "path": "ubuntu/xxhash/0.8.1-1/xxhash_0.8.1.orig.tar.gz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/x/xxhash/xxhash_0.8.1.orig.tar.gz",
+          "sha256": "3bb6b7d6f30c591dd65aaaff1c8b7a5b94d81687998ca9400082c739a690436c",
+          "size": 171552
+        }
+      ]
+    },
+    {
+      "id": "ubuntu:xz-utils@5.2.5-2ubuntu1.1",
+      "purls": [
+        "pkg:deb/ubuntu/liblzma5@5.2.5-2ubuntu1.1?arch=amd64&distro=ubuntu-22.04&upstream=xz-utils",
+        "pkg:deb/ubuntu/liblzma5@5.2.5-2ubuntu1.1?arch=arm64&distro=ubuntu-22.04&upstream=xz-utils"
+      ],
+      "files": [
+        {
+          "path": "ubuntu/xz-utils/5.2.5-2ubuntu1.1/xz-utils_5.2.5-2ubuntu1.1.debian.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/x/xz-utils/xz-utils_5.2.5-2ubuntu1.1.debian.tar.xz",
+          "sha256": "30dce55bb4b07c703564f3667bfe5b11668964cb94f41c6d5ab886b27176711b",
+          "size": 36020
+        },
+        {
+          "path": "ubuntu/xz-utils/5.2.5-2ubuntu1.1/xz-utils_5.2.5-2ubuntu1.1.dsc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/x/xz-utils/xz-utils_5.2.5-2ubuntu1.1.dsc",
+          "sha256": "9334c6a33605f75ec1727f0fdb91d4a2f64b0475f95759810bbd0ceb2a8a780e",
+          "size": 2467
+        },
+        {
+          "path": "ubuntu/xz-utils/5.2.5-2ubuntu1.1/xz-utils_5.2.5.orig.tar.xz",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/x/xz-utils/xz-utils_5.2.5.orig.tar.xz",
+          "sha256": "3e1e518ffc912f86608a8cb35e4bd41ad1aec210df2a47aaa1f95e7f5576ef56",
+          "size": 1148824
+        },
+        {
+          "path": "ubuntu/xz-utils/5.2.5-2ubuntu1.1/xz-utils_5.2.5.orig.tar.xz.asc",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260701T000000Z/pool/main/x/xz-utils/xz-utils_5.2.5.orig.tar.xz.asc",
+          "sha256": "6efc0075a58912e640119d2b52ef7d1518b260d8720fadc73df21ab7fc727624",
+          "size": 833
+        }
+      ]
+    }
+  ]
+}
