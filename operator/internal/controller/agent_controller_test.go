@@ -382,7 +382,7 @@ func TestAgentDeploymentUsesNamedObservabilityPortAndBoundedProbes(t *testing.T)
 		t.Fatalf("credential Secret mode = %#v, want 0440", volumes)
 	}
 	podSecurity := deployment.Spec.Template.Spec.SecurityContext
-	if podSecurity == nil || podSecurity.RunAsUser == nil || *podSecurity.RunAsUser != 100 || podSecurity.RunAsGroup == nil || *podSecurity.RunAsGroup != 101 || podSecurity.FSGroup == nil || *podSecurity.FSGroup != 101 {
+	if podSecurity == nil || podSecurity.RunAsUser == nil || *podSecurity.RunAsUser != 101 || podSecurity.RunAsGroup == nil || *podSecurity.RunAsGroup != 101 || podSecurity.FSGroup == nil || *podSecurity.FSGroup != 101 {
 		t.Fatalf("Agent pod security context = %#v", podSecurity)
 	}
 }

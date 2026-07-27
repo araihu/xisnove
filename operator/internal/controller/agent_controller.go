@@ -360,7 +360,7 @@ func (r *AgentReconciler) applyAgentDeployment(ctx context.Context, agent *monit
 			image = r.DefaultAgentImage
 		}
 		automount, runAsNonRoot, readOnlyRoot, allowPrivilegeEscalation := true, true, true, false
-		runAsUser, runAsGroup, fsGroup := int64(100), int64(101), int64(101)
+		runAsUser, runAsGroup, fsGroup := int64(101), int64(101), int64(101)
 		seccomp := corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
 		deployment.Labels = cloneStringMap(labels)
 		terminationGracePeriod := int64(agentTerminationGracePeriodSeconds)
