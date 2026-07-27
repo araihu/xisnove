@@ -1,12 +1,64 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
+	"github.com/araihu/xisnove/internal/buildinfo"
 )
+
+func TestExecuteVersionSkipsCommandDependencies(t *testing.T) {
+	setServerBuildInfo(t, "1.2.3", "0123456789abcdef0123456789abcdef01234567", "2026-07-27T03:04:05Z", "false")
+	var stdout, stderr bytes.Buffer
+	called := false
+	exit := execute(context.Background(), []string{"--version"}, &stdout, &stderr, func(context.Context, []string) error {
+		called = true
+		return nil
+	})
+	if exit != 0 || called || stderr.Len() != 0 {
+		t.Fatalf("execute = exit %d called %t stderr %q", exit, called, stderr.String())
+	}
+	want := "xisnove-server version=1.2.3 commit=0123456789abcdef0123456789abcdef01234567 build_date=2026-07-27T03:04:05Z dirty=false\n"
+	if stdout.String() != want {
+		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestExecuteVersionFailureIsSingleUsageDiagnostic(t *testing.T) {
+	setServerBuildInfo(t, "dev", "bad", "bad", "true")
+	var stdout, stderr bytes.Buffer
+	exit := execute(context.Background(), []string{"--version"}, &stdout, &stderr, func(context.Context, []string) error {
+		t.Fatal("command dependency initialized")
+		return nil
+	})
+	if exit != 2 || stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 {
+		t.Fatalf("execute = exit %d stdout %q stderr %q", exit, stdout.String(), stderr.String())
+	}
+}
+
+func TestExecuteRejectsMalformedVersionFlags(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	exit := execute(context.Background(), []string{"--version", "extra"}, &stdout, &stderr, func(context.Context, []string) error {
+		t.Fatal("command dependency initialized")
+		return nil
+	})
+	if exit != 2 || stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 {
+		t.Fatalf("execute = exit %d stdout %q stderr %q", exit, stdout.String(), stderr.String())
+	}
+}
+
+func setServerBuildInfo(t *testing.T, version, commit, date, dirty string) {
+	t.Helper()
+	oldVersion, oldCommit, oldDate, oldDirty := buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate, buildinfo.Dirty
+	buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate, buildinfo.Dirty = version, commit, date, dirty
+	t.Cleanup(func() {
+		buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate, buildinfo.Dirty = oldVersion, oldCommit, oldDate, oldDirty
+	})
+}
 
 func TestMigrateCommandCreatesCurrentDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "xisnove.db")

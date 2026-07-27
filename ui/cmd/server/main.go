@@ -5,16 +5,21 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/araihu/xisnove/sdk"
+	"github.com/araihu/xisnove/ui/internal/buildinfo"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/web"
 	"github.com/google/uuid"
@@ -30,18 +35,40 @@ type config struct {
 }
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	cfg, err := loadConfig(os.Getenv)
-	if err != nil {
-		logger.Error("configuration failed", "error", err)
-		os.Exit(1)
+	os.Exit(execute(os.Args[1:], os.Stdout, os.Stderr, func() error {
+		logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+		cfg, err := loadConfig(os.Getenv)
+		if err != nil {
+			return fmt.Errorf("configuration failed: %w", err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := run(ctx, cfg, logger); err != nil {
+			return fmt.Errorf("UI server stopped: %w", err)
+		}
+		return nil
+	}))
+}
+
+func execute(args []string, stdout, stderr io.Writer, start func() error) int {
+	if len(args) > 0 {
+		if args[0] != "--version" || len(args) != 1 {
+			fmt.Fprintln(stderr, "error: malformed flags")
+			return 2
+		}
+		value, err := buildinfo.String("xisnove-ui")
+		if err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return 2
+		}
+		fmt.Fprintln(stdout, value)
+		return 0
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := run(ctx, cfg, logger); err != nil {
-		logger.Error("UI server stopped", "error", err)
-		os.Exit(1)
+	if err := start(); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
+	return 0
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -76,9 +103,9 @@ func loadConfig(getenv func(string) string) (config, error) {
 		cfg.shutdownTimeout = parsed
 	}
 
-	secret, err := decodeSecret(getenv("XISNOVE_UI_COOKIE_SECRET"))
+	secret, err := loadCookieSecret(getenv)
 	if err != nil {
-		return config{}, fmt.Errorf("decode XISNOVE_UI_COOKIE_SECRET: %w", err)
+		return config{}, fmt.Errorf("load UI cookie secret: %w", err)
 	}
 	cfg.cookieSecret = secret
 
@@ -107,6 +134,41 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	cfg.controlPlane = client
 	return cfg, nil
+}
+
+func loadCookieSecret(getenv func(string) string) ([]byte, error) {
+	direct := getenv("XISNOVE_UI_COOKIE_SECRET")
+	path := getenv("XISNOVE_UI_COOKIE_SECRET_FILE")
+	if direct != "" && path != "" {
+		return nil, errors.New("set only one cookie secret source")
+	}
+	if path == "" {
+		return decodeSecret(direct)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, errors.New("cookie secret file is unavailable")
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("cookie secret file must be regular, owner-readable, and owner-only")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, errors.New("cookie secret file is unavailable")
+	}
+	defer file.Close()
+	openedInfo, err := file.Stat()
+	if err != nil || !os.SameFile(info, openedInfo) || !openedInfo.Mode().IsRegular() || openedInfo.Mode().Perm()&0o077 != 0 || openedInfo.Mode().Perm()&0o400 == 0 {
+		return nil, errors.New("cookie secret file must be regular, owner-readable, and owner-only")
+	}
+	contents, err := io.ReadAll(io.LimitReader(file, 16*1024+1))
+	if err != nil {
+		return nil, errors.New("cookie secret file cannot be read")
+	}
+	if len(contents) > 16*1024 {
+		return nil, errors.New("cookie secret file is too large")
+	}
+	return decodeSecret(strings.TrimSpace(string(contents)))
 }
 
 func developmentFake(email, password, session string) *controlplane.Fake {
@@ -151,7 +213,7 @@ func defaultValue(value, fallback string) string {
 }
 
 func run(ctx context.Context, cfg config, logger *slog.Logger) error {
-	handler, err := web.New(web.Config{
+	application, err := web.New(web.Config{
 		ControlPlane:   cfg.controlPlane,
 		CookieSecret:   cfg.cookieSecret,
 		CookieSecure:   cfg.cookieSecure,
@@ -161,18 +223,24 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("create UI handler: %w", err)
 	}
+	var lifecycle atomic.Int32
 	httpServer := &http.Server{
 		Addr:              cfg.addr,
-		Handler:           handler,
+		Handler:           runtimeHandler(application, &lifecycle),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      cfg.requestTimeout + 5*time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	listener, err := net.Listen("tcp", cfg.addr)
+	if err != nil {
+		return err
+	}
 	shutdownDone := make(chan struct{})
 	go func() {
 		defer close(shutdownDone)
 		<-ctx.Done()
+		lifecycle.Store(2)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.shutdownTimeout)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -180,11 +248,31 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		}
 	}()
 
+	if !lifecycle.CompareAndSwap(0, 1) {
+		_ = listener.Close()
+		<-shutdownDone
+		return nil
+	}
 	logger.Info("UI server listening", "address", cfg.addr, "secure_cookie", cfg.cookieSecure)
-	err = httpServer.ListenAndServe()
+	err = httpServer.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		<-shutdownDone
 		return nil
 	}
 	return err
+}
+
+func runtimeHandler(application http.Handler, lifecycle *atomic.Int32) http.Handler {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/livez" || request.URL.Path == "/readyz" {
+			response.Header().Set("Cache-Control", "no-store")
+			if lifecycle.Load() != 1 {
+				response.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			response.WriteHeader(http.StatusNoContent)
+			return
+		}
+		application.ServeHTTP(response, request)
+	})
 }

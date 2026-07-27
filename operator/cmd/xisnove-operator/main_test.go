@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	monitoringv1alpha1 "github.com/araihu/xisnove/operator/api/v1alpha1"
+	"github.com/araihu/xisnove/operator/internal/buildinfo"
 	"github.com/araihu/xisnove/operator/internal/controller"
 	"github.com/araihu/xisnove/operator/internal/controlplane"
 	appsv1 "k8s.io/api/apps/v1"
@@ -23,6 +25,52 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 )
+
+func TestExecuteVersionSkipsKubernetesAndConfiguration(t *testing.T) {
+	setOperatorBuildInfo(t, "1.2.3", "0123456789abcdef0123456789abcdef01234567", "2026-07-27T03:04:05Z", "false")
+	var stdout, stderr bytes.Buffer
+	called := false
+	exit := execute([]string{"--version"}, &stdout, &stderr, func(string) string {
+		t.Fatal("environment read")
+		return ""
+	}, func(runtimeConfig) error {
+		called = true
+		return nil
+	})
+	if exit != 0 || called || stderr.Len() != 0 {
+		t.Fatalf("execute = exit %d called %t stderr %q", exit, called, stderr.String())
+	}
+	want := "xisnove-operator version=1.2.3 commit=0123456789abcdef0123456789abcdef01234567 build_date=2026-07-27T03:04:05Z dirty=false\n"
+	if stdout.String() != want {
+		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestExecuteInvalidVersionAndMalformedFlagsUseSingleUsageDiagnostic(t *testing.T) {
+	tests := [][]string{{"--version"}, {"--version", "extra"}, {"--unknown"}}
+	for _, arguments := range tests {
+		t.Run(strings.Join(arguments, " "), func(t *testing.T) {
+			setOperatorBuildInfo(t, "dev", "bad", "bad", "true")
+			var stdout, stderr bytes.Buffer
+			exit := execute(arguments, &stdout, &stderr, func(string) string { return "" }, func(runtimeConfig) error {
+				t.Fatal("Kubernetes initialized")
+				return nil
+			})
+			if exit != 2 || stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 {
+				t.Fatalf("execute = exit %d stdout %q stderr %q", exit, stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+
+func setOperatorBuildInfo(t *testing.T, version, commit, date, dirty string) {
+	t.Helper()
+	oldVersion, oldCommit, oldDate, oldDirty := buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate, buildinfo.Dirty
+	buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate, buildinfo.Dirty = version, commit, date, dirty
+	t.Cleanup(func() {
+		buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate, buildinfo.Dirty = oldVersion, oldCommit, oldDate, oldDirty
+	})
+}
 
 func TestParseConfigUsesNamespacedSecureRuntimeDefaults(t *testing.T) {
 	t.Parallel()

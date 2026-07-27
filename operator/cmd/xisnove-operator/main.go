@@ -6,13 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	monitoringv1alpha1 "github.com/araihu/xisnove/operator/api/v1alpha1"
+	"github.com/araihu/xisnove/operator/internal/buildinfo"
 	"github.com/araihu/xisnove/operator/internal/controller"
 	"github.com/araihu/xisnove/operator/internal/controlplane"
 	controlplanesdk "github.com/araihu/xisnove/operator/internal/controlplane/sdk"
@@ -70,15 +70,35 @@ type credentialFileDoer struct {
 }
 
 func main() {
-	config, err := parseConfig(os.Args[1:], os.Getenv)
+	os.Exit(execute(os.Args[1:], os.Stdout, os.Stderr, os.Getenv, func(config runtimeConfig) error {
+		return run(ctrl.SetupSignalHandler(), config)
+	}))
+}
+
+func execute(arguments []string, stdout, stderr io.Writer, getenv func(string) string, start func(runtimeConfig) error) int {
+	if len(arguments) > 0 && arguments[0] == "--version" {
+		if len(arguments) != 1 {
+			fmt.Fprintln(stderr, "error: --version accepts no arguments")
+			return 2
+		}
+		value, err := buildinfo.String("xisnove-operator")
+		if err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return 2
+		}
+		fmt.Fprintln(stdout, value)
+		return 0
+	}
+	config, err := parseConfig(arguments, getenv)
 	if err != nil {
-		log.Printf("invalid operator configuration: %v", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "invalid operator configuration: %v\n", err)
+		return 2
 	}
-	if err := run(ctrl.SetupSignalHandler(), config); err != nil {
-		log.Printf("operator stopped: %v", err)
-		os.Exit(1)
+	if err := start(config); err != nil {
+		fmt.Fprintf(stderr, "operator stopped: %v\n", err)
+		return 1
 	}
+	return 0
 }
 
 func run(ctx context.Context, config runtimeConfig) error {
