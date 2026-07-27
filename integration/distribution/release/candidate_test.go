@@ -319,6 +319,8 @@ func TestCandidateBuilderPinsContainerAndToolInputs(t *testing.T) {
 	for _, required := range []string{
 		"XISNOVE_RELEASE_OUTPUT=/out/archives", `release_tmp_root=${XISNOVE_RELEASE_TMPDIR:-$(dirname "$root")}`, `work_dir=$(cd "$work_dir" && pwd -P)`, "buildx bake", `--allow="fs.write=$layouts"`, "generate-sboms.sh",
 		"sbom-oci", "org.opencontainers.image.created=${XISNOVE_BUILD_DATE}", "inventory-licenses.sh", "candidate-manifest.json.sha256", "verify --root",
+		`git_common_dir=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)`,
+		`git_mount=("-v" "$git_common_dir:$git_common_dir:ro")`,
 	} {
 		if !strings.Contains(script, required) {
 			t.Errorf("candidate builder lacks %q", required)

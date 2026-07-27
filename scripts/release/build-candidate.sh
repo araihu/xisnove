@@ -120,7 +120,12 @@ trap cleanup EXIT INT TERM
 image_built=true
 
 if build_date=$(date -u -r "$source_date_epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null); then :; else build_date=$(date -u -d "@$source_date_epoch" '+%Y-%m-%dT%H:%M:%SZ'); fi
-run_container=("$docker_bin" run --rm -e HOME=/tmp -e GOCACHE=/tmp/go-build -e GOMODCACHE=/tmp/go-mod -e "XISNOVE_RELEASE_VERSION=$version" -e "XISNOVE_RELEASE_COMMIT=$commit" -e "XISNOVE_BUILD_DATE=$build_date" -e "SOURCE_DATE_EPOCH=$source_date_epoch" -v "$root:/src:ro" -v "$staging:/out" "$builder_image")
+git_common_dir=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)
+git_mount=()
+if [[ -f "$root/.git" ]]; then
+  git_mount=("-v" "$git_common_dir:$git_common_dir:ro")
+fi
+run_container=("$docker_bin" run --rm -e HOME=/tmp -e GOCACHE=/tmp/go-build -e GOMODCACHE=/tmp/go-mod -e "XISNOVE_RELEASE_VERSION=$version" -e "XISNOVE_RELEASE_COMMIT=$commit" -e "XISNOVE_BUILD_DATE=$build_date" -e "SOURCE_DATE_EPOCH=$source_date_epoch" -v "$root:/src:ro" "${git_mount[@]}" -v "$staging:/out" "$builder_image")
 
 "${run_container[@]}" bash -euc '
   go build -trimpath -o /out/tools/releasebundle ./scripts/release/cmd/releasebundle
