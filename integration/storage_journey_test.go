@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/araihu/xisnove/application"
+	sqlitemigrations "github.com/araihu/xisnove/db/migrations/sqlite"
 	"github.com/araihu/xisnove/domain"
 	"github.com/araihu/xisnove/internal/adapters/database"
 )
@@ -30,7 +31,7 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	if err := secondary.Ready(ctx); err != nil {
 		t.Fatalf("secondary readiness: %v", err)
 	}
-	assertSchemaVersion(t, primary, 10)
+	assertSchemaVersion(t, primary, sqlitemigrations.LatestVersion)
 
 	ids := &matrixIDs{}
 	tokens := &matrixTokens{}
@@ -384,7 +385,7 @@ func runStorageJourney(t *testing.T, harness *storageHarness) {
 	}
 
 	reopened := harness.closeAndReopen(t)
-	assertSchemaVersion(t, reopened, 10)
+	assertSchemaVersion(t, reopened, sqlitemigrations.LatestVersion)
 	assertTableCount(t, reopened, "admins", 1)
 	assertTableCount(t, reopened, "sessions", 1)
 	assertTableCount(t, reopened, "locations", 1)
