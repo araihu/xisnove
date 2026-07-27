@@ -1,0 +1,298 @@
+name: xisnove
+
+x-server-image: &server-image ${XISNOVE_SERVER_IMAGE:-ghcr.io/araihu/xisnove-server}:${XISNOVE_IMAGE_TAG:-dev}
+services:
+  secret-init:
+    image: busybox:1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+    user: "0:0"
+    entrypoint: [/bin/sh, -eu, -c]
+    command:
+      - |
+        for name in admin-password cursor-signing-key notification-keyring ui-cookie-secret agent-credential turso-auth-token database-url; do
+          cp "/input/$$name" "/output/$$name"
+          chown 101:101 "/output/$$name"
+          chmod 0440 "/output/$$name"
+        done
+    secrets:
+      - source: admin-password
+        target: /input/admin-password
+      - source: cursor-signing-key
+        target: /input/cursor-signing-key
+      - source: notification-keyring
+        target: /input/notification-keyring
+      - source: ui-cookie-secret
+        target: /input/ui-cookie-secret
+      - source: agent-credential
+        target: /input/agent-credential
+      - source: turso-auth-token
+        target: /input/turso-auth-token
+      - source: database-url
+        target: /input/database-url
+    volumes:
+      - runtime-secrets:/output
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+
+  migrate:
+    image: *server-image
+    command:
+      - db
+      - migrate
+      - --database-profile
+      - ${XISNOVE_DATABASE_PROFILE:-sqlite}
+      - --database-url
+      - ${XISNOVE_DATABASE_URL-/var/lib/xisnove/xisnove.db}
+      - --database-url-file
+      - ${XISNOVE_DATABASE_URL_FILE:-}
+      - --database-auth-token-file
+      - ${XISNOVE_DATABASE_AUTH_TOKEN_FILE:-}
+      - --installation-id
+      - ${XISNOVE_INSTALLATION_ID:-compose}
+      - --phase
+      - expand
+      - --lock-timeout
+      - 30s
+    volumes:
+      - xisnove-data:/var/lib/xisnove
+      - runtime-secrets:/run/xisnove-secrets:ro
+    depends_on:
+      secret-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+
+  bootstrap-admin:
+    image: *server-image
+    command:
+      - admin
+      - bootstrap
+      - --database-profile
+      - ${XISNOVE_DATABASE_PROFILE:-sqlite}
+      - --database-url
+      - ${XISNOVE_DATABASE_URL-/var/lib/xisnove/xisnove.db}
+      - --database-url-file
+      - ${XISNOVE_DATABASE_URL_FILE:-}
+      - --database-auth-token-file
+      - ${XISNOVE_DATABASE_AUTH_TOKEN_FILE:-}
+      - --email
+      - ${XISNOVE_ADMIN_EMAIL:-admin@example.test}
+      - --password-file
+      - /run/xisnove-secrets/admin-password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - xisnove-data:/var/lib/xisnove
+      - runtime-secrets:/run/xisnove-secrets:ro
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+
+  migrate-remote:
+    image: *server-image
+    profiles: [postgres, managed-turso]
+    command:
+      - db
+      - migrate
+      - --database-profile
+      - ${XISNOVE_DATABASE_PROFILE:-postgres}
+      - --database-url
+      - ${XISNOVE_DATABASE_URL-}
+      - --database-url-file
+      - ${XISNOVE_DATABASE_URL_FILE:-}
+      - --database-auth-token-file
+      - ${XISNOVE_DATABASE_AUTH_TOKEN_FILE:-}
+      - --installation-id
+      - ${XISNOVE_INSTALLATION_ID:-compose}
+      - --phase
+      - expand
+      - --lock-timeout
+      - 30s
+    volumes:
+      - runtime-secrets:/run/xisnove-secrets:ro
+    depends_on:
+      secret-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+
+  bootstrap-admin-remote:
+    image: *server-image
+    profiles: [postgres, managed-turso]
+    command:
+      - admin
+      - bootstrap
+      - --database-profile
+      - ${XISNOVE_DATABASE_PROFILE:-postgres}
+      - --database-url
+      - ${XISNOVE_DATABASE_URL-}
+      - --database-url-file
+      - ${XISNOVE_DATABASE_URL_FILE:-}
+      - --database-auth-token-file
+      - ${XISNOVE_DATABASE_AUTH_TOKEN_FILE:-}
+      - --email
+      - ${XISNOVE_ADMIN_EMAIL:-admin@example.test}
+      - --password-file
+      - /run/xisnove-secrets/admin-password
+    depends_on:
+      migrate-remote:
+        condition: service_completed_successfully
+    volumes:
+      - runtime-secrets:/run/xisnove-secrets:ro
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+
+  server:
+    image: *server-image
+    entrypoint: [/usr/libexec/xisnove/run-server.sh]
+    command: []
+    environment:
+      XISNOVE_SERVER_BIN: /usr/local/bin/xisnove-server
+      XISNOVE_DATABASE_PROFILE: ${XISNOVE_DATABASE_PROFILE:-sqlite}
+      XISNOVE_DATABASE_URL: ${XISNOVE_DATABASE_URL-/var/lib/xisnove/xisnove.db}
+      XISNOVE_DATABASE_URL_FILE: ${XISNOVE_DATABASE_URL_FILE:-}
+      XISNOVE_DATABASE_AUTH_TOKEN_FILE: ${XISNOVE_DATABASE_AUTH_TOKEN_FILE:-}
+      XISNOVE_INSTALLATION_ID: ${XISNOVE_INSTALLATION_ID:-compose}
+      XISNOVE_REPLICAS: ${XISNOVE_SERVER_REPLICAS:-1}
+      XISNOVE_LISTEN: 0.0.0.0:8080
+      XISNOVE_SINGLETON_LOCK: /var/lib/xisnove/.server
+      XISNOVE_CURSOR_SIGNING_KEY_FILE: /run/xisnove-secrets/cursor-signing-key
+      XISNOVE_NOTIFICATION_MASTER_KEY_FILE: /run/xisnove-secrets/notification-keyring
+    depends_on:
+      bootstrap-admin:
+        condition: service_completed_successfully
+    volumes:
+      - xisnove-data:/var/lib/xisnove
+      - runtime-secrets:/run/xisnove-secrets:ro
+      - ../raw:/usr/libexec/xisnove:ro
+    ports: ["127.0.0.1:8080:8080"]
+    labels:
+      org.xisnove.liveness: http://127.0.0.1:8080/livez
+    healthcheck:
+      test: [CMD, /usr/bin/wget, --quiet, --spider, --timeout=2, http://127.0.0.1:8080/readyz]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+  server-remote:
+    image: *server-image
+    profiles: [postgres, managed-turso]
+    entrypoint: [/usr/libexec/xisnove/run-server.sh]
+    command: []
+    environment:
+      XISNOVE_SERVER_BIN: /usr/local/bin/xisnove-server
+      XISNOVE_DATABASE_PROFILE: ${XISNOVE_DATABASE_PROFILE:-postgres}
+      XISNOVE_DATABASE_URL: ${XISNOVE_DATABASE_URL-}
+      XISNOVE_DATABASE_URL_FILE: ${XISNOVE_DATABASE_URL_FILE:-}
+      XISNOVE_DATABASE_AUTH_TOKEN_FILE: ${XISNOVE_DATABASE_AUTH_TOKEN_FILE:-}
+      XISNOVE_INSTALLATION_ID: ${XISNOVE_INSTALLATION_ID:-compose}
+      XISNOVE_REPLICAS: ${XISNOVE_SERVER_REPLICAS:-2}
+      XISNOVE_LISTEN: 0.0.0.0:8080
+      XISNOVE_CURSOR_SIGNING_KEY_FILE: /run/xisnove-secrets/cursor-signing-key
+      XISNOVE_NOTIFICATION_MASTER_KEY_FILE: /run/xisnove-secrets/notification-keyring
+    depends_on:
+      bootstrap-admin-remote:
+        condition: service_completed_successfully
+    volumes:
+      - runtime-secrets:/run/xisnove-secrets:ro
+      - ../raw:/usr/libexec/xisnove:ro
+    ports: ["127.0.0.1:8080:8080"]
+    labels:
+      org.xisnove.liveness: http://127.0.0.1:8080/livez
+    healthcheck:
+      test: [CMD, /usr/bin/wget, --quiet, --spider, --timeout=2, http://127.0.0.1:8080/readyz]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+  ui:
+    image: ${XISNOVE_UI_IMAGE:-ghcr.io/araihu/xisnove-ui}:${XISNOVE_IMAGE_TAG:-dev}
+    environment:
+      XISNOVE_UI_ADDR: 0.0.0.0:8081
+      XISNOVE_UI_API_BASE_URL: http://${XISNOVE_SERVER_HOST:-server}:8080
+      XISNOVE_UI_COOKIE_SECRET_FILE: /run/xisnove-secrets/ui-cookie-secret
+      XISNOVE_UI_COOKIE_SECURE: ${XISNOVE_UI_COOKIE_SECURE:-false}
+    volumes:
+      - runtime-secrets:/run/xisnove-secrets:ro
+    ports: ["127.0.0.1:8081:8081"]
+    labels:
+      org.xisnove.liveness: http://127.0.0.1:8081/livez
+    healthcheck:
+      test: [CMD, /usr/bin/wget, --quiet, --spider, --timeout=2, http://127.0.0.1:8081/readyz]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+  agent:
+    image: ${XISNOVE_AGENT_IMAGE:-ghcr.io/araihu/xisnove-agent}:${XISNOVE_IMAGE_TAG:-dev}
+    environment:
+      XISNOVE_URL: http://${XISNOVE_SERVER_HOST:-server}:8080
+      XISNOVE_AGENT_CREDENTIAL_FILE: /run/xisnove-secrets/agent-credential
+      XISNOVE_AGENT_OBSERVABILITY_ADDRESS: 0.0.0.0:9090
+      XISNOVE_AGENT_CAPABILITIES: http,tcp,dns
+    labels:
+      org.xisnove.liveness: http://127.0.0.1:9090/livez
+    volumes:
+      - runtime-secrets:/run/xisnove-secrets:ro
+    healthcheck:
+      test: [CMD, /usr/bin/wget, --quiet, --spider, --timeout=2, http://127.0.0.1:9090/readyz]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+  postgres:
+    image: postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: xisnove
+      POSTGRES_USER: xisnove
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U xisnove -d xisnove]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    restart: unless-stopped
+
+secrets:
+  admin-password:
+    file: ${XISNOVE_SECRET_DIR:-./secrets}/admin-password
+  cursor-signing-key:
+    file: ${XISNOVE_SECRET_DIR:-./secrets}/cursor-signing-key
+  notification-keyring:
+    file: ${XISNOVE_SECRET_DIR:-./secrets}/notification-keyring.json
+  ui-cookie-secret:
+    file: ${XISNOVE_SECRET_DIR:-./secrets}/ui-cookie-secret
+  agent-credential:
+    file: ${XISNOVE_SECRET_DIR:-./secrets}/agent-credential.json
+  turso-auth-token:
+    file: ${XISNOVE_SECRET_DIR:-./secrets}/turso-auth-token
+  database-url:
+    file: ${XISNOVE_SECRET_DIR:-./secrets}/database-url
+
+volumes:
+  xisnove-data: {}
+  postgres-data: {}
+  runtime-secrets: {}

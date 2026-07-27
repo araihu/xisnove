@@ -1,0 +1,32 @@
+[Unit]
+Description=Xisnove bounded expand migration
+Before=xisnove-server.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=xisnove
+Group=xisnove
+UMask=0077
+EnvironmentFile=/etc/xisnove/server.env
+Environment=XISNOVE_MIGRATION_PHASE=expand
+ExecStart=/usr/libexec/xisnove/migrate.sh
+TimeoutStartSec=60s
+NoNewPrivileges=true
+CapabilityBoundingSet=
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/xisnove /run/xisnove
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

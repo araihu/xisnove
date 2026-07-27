@@ -1,0 +1,36 @@
+[Unit]
+Description=Xisnove UI BFF
+After=xisnove-server.service
+Wants=xisnove-server.service
+
+[Service]
+Type=simple
+User=xisnove
+Group=xisnove
+UMask=0077
+EnvironmentFile=/etc/xisnove/ui.env
+Environment=XISNOVE_UI_COOKIE_SECRET_FILE=/etc/xisnove/secrets/ui-cookie-secret
+ExecStart=/usr/bin/xisnove-ui
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10s
+NoNewPrivileges=true
+CapabilityBoundingSet=
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/xisnove
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

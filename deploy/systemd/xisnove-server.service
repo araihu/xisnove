@@ -1,0 +1,41 @@
+[Unit]
+Description=Xisnove control-plane server
+Requires=xisnove-migrate.service
+After=xisnove-migrate.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xisnove
+Group=xisnove
+UMask=0077
+EnvironmentFile=/etc/xisnove/server.env
+Environment=XISNOVE_CURSOR_SIGNING_KEY_FILE=/etc/xisnove/secrets/cursor-signing-key
+Environment=XISNOVE_NOTIFICATION_MASTER_KEY_FILE=/etc/xisnove/secrets/notification-keyring.json
+ExecStart=/usr/libexec/xisnove/run-server.sh
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10s
+RuntimeDirectory=xisnove
+RuntimeDirectoryMode=0750
+NoNewPrivileges=true
+CapabilityBoundingSet=
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/xisnove
+ReadWritePaths=/var/lib/xisnove /run/xisnove
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

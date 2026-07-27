@@ -1,0 +1,35 @@
+name: xisnove-remote-agent
+services:
+  secret-init:
+    image: busybox:1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+    user: "0:0"
+    entrypoint: [/bin/sh, -eu, -c]
+    command: ["cp /input/agent-credential /output/agent-credential && chown 101:101 /output/agent-credential && chmod 0440 /output/agent-credential"]
+    secrets:
+      - source: agent-credential
+        target: /input/agent-credential
+    volumes: [runtime-secrets:/output]
+    read_only: true
+    restart: "no"
+  agent:
+    image: ${XISNOVE_AGENT_IMAGE:-ghcr.io/araihu/xisnove-agent}:${XISNOVE_IMAGE_TAG:-dev}
+    environment:
+      XISNOVE_URL: ${XISNOVE_URL:-https://monitor.example.test}
+      XISNOVE_AGENT_CREDENTIAL_FILE: /run/xisnove-secrets/agent-credential
+      XISNOVE_AGENT_OBSERVABILITY_ADDRESS: 0.0.0.0:9090
+      XISNOVE_AGENT_CAPABILITIES: ${XISNOVE_AGENT_CAPABILITIES:-http,tcp,dns}
+      XISNOVE_AGENT_ALLOWED_PRIVATE_CIDRS: ${XISNOVE_AGENT_ALLOWED_PRIVATE_CIDRS:-}
+    depends_on:
+      secret-init:
+        condition: service_completed_successfully
+    volumes: [runtime-secrets:/run/xisnove-secrets:ro]
+    ports: ["127.0.0.1:9090:9090"]
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    stop_grace_period: 10s
+secrets:
+  agent-credential:
+    file: ${XISNOVE_AGENT_CREDENTIAL_FILE:-./secrets/agent-credential.json}
+volumes:
+  runtime-secrets: {}
