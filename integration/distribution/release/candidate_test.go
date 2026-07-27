@@ -235,7 +235,7 @@ func TestCandidateBuilderPinsContainerAndToolInputs(t *testing.T) {
 	}
 	script := string(mustReadFile(t, filepath.Join(repositoryRoot(t), "scripts", "release", "build-candidate.sh")))
 	for _, required := range []string{
-		"XISNOVE_RELEASE_OUTPUT=/out/archives", "buildx bake", "generate-sboms.sh",
+		"XISNOVE_RELEASE_OUTPUT=/out/archives", `work_dir=$(cd "$work_dir" && pwd -P)`, "buildx bake", `--allow="fs.write=$layouts"`, "generate-sboms.sh",
 		"sbom-oci", "org.opencontainers.image.created=${XISNOVE_BUILD_DATE}", "inventory-licenses.sh", "candidate-manifest.json.sha256", "verify --root",
 	} {
 		if !strings.Contains(script, required) {

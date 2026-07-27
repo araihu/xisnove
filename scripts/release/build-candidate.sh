@@ -87,6 +87,7 @@ if [[ "$actual_buildx_version" != "$buildx_version" ]]; then
 fi
 
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/xisnove-candidate.XXXXXXXX")
+work_dir=$(cd "$work_dir" && pwd -P)
 staging="$work_dir/candidate"
 layouts="$work_dir/layouts"
 mkdir -p "$staging" "$layouts"
@@ -138,7 +139,7 @@ run_container=("$docker_bin" run --rm -e HOME=/tmp -e GOCACHE=/tmp/go-build -e G
 '
 
 export VERSION="$version" COMMIT="$commit" BUILD_DATE="$build_date"
-(cd "$root" && "$docker_bin" buildx bake --file "$root/docker-bake.hcl" \
+(cd "$root" && "$docker_bin" buildx bake --allow="fs.write=$layouts" --file "$root/docker-bake.hcl" \
   --set "server-oci.output=type=oci,dest=$layouts/xisnove-server.tar" \
   --set "ui-oci.output=type=oci,dest=$layouts/xisnove-ui.tar" \
   --set "agent-oci.output=type=oci,dest=$layouts/xisnove-agent.tar" \
