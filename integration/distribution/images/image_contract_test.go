@@ -66,11 +66,7 @@ func TestNativeImagesHonorRuntimeAndSupplyChainContract(t *testing.T) {
 					t.Errorf("secret-shaped image environment: %q", value)
 				}
 			}
-			if name == "server" {
-				if len(inspect.Config.Volumes) != 1 || inspect.Config.Volumes["/var/lib/xisnove"] == nil {
-					t.Fatalf("server volumes = %#v, want only /var/lib/xisnove", inspect.Config.Volumes)
-				}
-			} else if len(inspect.Config.Volumes) != 0 {
+			if len(inspect.Config.Volumes) != 0 {
 				t.Fatalf("%s volumes = %#v, want none", name, inspect.Config.Volumes)
 			}
 			if name == "operator" {
@@ -94,7 +90,12 @@ func TestNativeImagesHonorRuntimeAndSupplyChainContract(t *testing.T) {
 			if name == "server" {
 				probeCheck += " test -x /usr/bin/flock; /usr/bin/flock -n /var/lib/xisnove/xisnove-image-contract.lock true;"
 			}
-			files := docker(t, "run", "--rm", "--read-only", "--entrypoint", "/bin/sh", image, "-ec", probeCheck+" test -s /etc/ssl/certs/ca-certificates.crt; sha256sum /usr/share/licenses/xisnove/LICENSE /usr/share/licenses/xisnove/NOTICE; getconf GNU_LIBC_VERSION")
+			arguments := []string{"run", "--rm", "--read-only"}
+			if name == "server" {
+				arguments = append(arguments, "--tmpfs", "/var/lib/xisnove:rw,noexec,nosuid,size=1m,uid=101,gid=101")
+			}
+			arguments = append(arguments, "--entrypoint", "/bin/sh", image, "-ec", probeCheck+" test -s /etc/ssl/certs/ca-certificates.crt; sha256sum /usr/share/licenses/xisnove/LICENSE /usr/share/licenses/xisnove/NOTICE; getconf GNU_LIBC_VERSION")
+			files := docker(t, arguments...)
 			for _, want := range []string{
 				"cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  /usr/share/licenses/xisnove/LICENSE",
 				"e3ad5f2f51b2365c85478db227c5fdf36e7f193cab97d132904af61765e4e7ba  /usr/share/licenses/xisnove/NOTICE",

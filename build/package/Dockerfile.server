@@ -40,7 +40,6 @@ COPY --chown=101:101 LICENSE NOTICE /usr/share/licenses/xisnove/
 USER 101:101
 ENV HOME=/var/lib/xisnove XDG_CACHE_HOME=/var/lib/xisnove/.cache
 EXPOSE 8080
-VOLUME ["/var/lib/xisnove"]
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=10s --timeout=2s --start-period=10s --retries=3 CMD ["/usr/bin/wget", "--quiet", "--spider", "--timeout=1", "http://127.0.0.1:8080/livez"]
 ENTRYPOINT ["/usr/local/bin/xisnove-server"]
