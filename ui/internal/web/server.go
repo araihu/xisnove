@@ -136,12 +136,47 @@ const applicationJS = `(() => {
     if (!main || !location.pathname.startsWith("/monitors")) return focusMain();
     try {
       const response = await fetch(location.href, {headers: {"HX-Request": "true"}, cache: "no-store"});
-      if (!response.ok) return;
+      const redirect = response.headers.get("HX-Redirect");
+      if (redirect) {
+        location.assign(redirect);
+        return false;
+      }
+      if (!response.ok) {
+        showAuthoritativeRecovery("The server returned " + response.status + " while refreshing this monitor view.");
+        return false;
+      }
       main.innerHTML = await response.text();
       window.htmx?.process(main);
-    } finally {
       focusMain();
+      return true;
+    } catch (_) {
+      showAuthoritativeRecovery("The monitor view could not reach the server. Check the connection and retry.");
+      return false;
     }
+  }
+
+  function showAuthoritativeRecovery(detail) {
+    const main = document.getElementById("main-content");
+    if (!main) return;
+    const section = document.createElement("section");
+    section.id = "history-recovery";
+    section.className = "xis-content xis-stack";
+    section.setAttribute("role", "alert");
+    const heading = document.createElement("h1");
+    heading.id = "history-recovery-heading";
+    heading.tabIndex = -1;
+    heading.textContent = "Monitor state could not be refreshed";
+    const description = document.createElement("p");
+    description.textContent = detail;
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "xis-primary-action xis-recovery-action";
+    retry.textContent = "Retry authoritative refresh";
+    retry.addEventListener("click", refreshAuthoritative);
+    section.append(heading, description, retry);
+    main.replaceChildren(section);
+    main.scrollTop = 0;
+    heading.focus({preventScroll: true});
   }
 
   function configureMobileNavigation() {
@@ -149,8 +184,16 @@ const applicationJS = `(() => {
     if (!trigger || trigger.dataset.xisConfigured) return;
     trigger.dataset.xisConfigured = "true";
     const reflect = () => trigger.setAttribute("aria-label", trigger.getAttribute("aria-expanded") === "true" ? "Close monitoring navigation" : "Open monitoring navigation");
+    const header = trigger.closest("header");
+    const updateOffset = () => {
+      if (!header) return;
+      document.documentElement.style.setProperty("--xis-shell-header-bottom", Math.ceil(header.getBoundingClientRect().bottom) + "px");
+    };
     new MutationObserver(reflect).observe(trigger, {attributes: true, attributeFilter: ["aria-expanded"]});
+	if (header && window.ResizeObserver) new ResizeObserver(updateOffset).observe(header);
+	window.addEventListener("resize", updateOffset);
     reflect();
+	updateOffset();
     window.addEventListener("keydown", event => {
       if (event.key !== "Escape" || trigger.getAttribute("aria-expanded") !== "true") return;
       trigger.focus({preventScroll: true});

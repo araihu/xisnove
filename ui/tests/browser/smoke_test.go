@@ -23,6 +23,7 @@ import (
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/web"
+	cdinput "github.com/chromedp/cdproto/input"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/google/uuid"
@@ -39,6 +40,9 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	var scenario atomic.Value
 	scenario.Store("success")
 	var monitorRequests atomic.Int32
+	var homeRevision atomic.Int64
+	var homeHealth atomic.Value
+	homeHealth.Store(string(sdk.Up))
 	apiCalls := make([]string, 0, 8)
 	var apiMu sync.Mutex
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,10 +87,14 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors":
 			monitorRequests.Add(1)
 			requireBearer(t, r)
+			currentHome := homeDNS
+			revision := homeRevision.Load()
+			currentHome.UpdatedAt = observedAt.Add(time.Duration(revision) * time.Minute)
+			currentHome.Description = fmt.Sprintf("Resolver reachability revision %d", revision)
 			switch scenario.Load().(string) {
 			case "monitors-loading":
-				time.Sleep(300 * time.Millisecond)
-				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{homeDNS}, Page: sdk.PageMetadata{}})
+				time.Sleep(600 * time.Millisecond)
+				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{currentHome}, Page: sdk.PageMetadata{}})
 			case "monitors-empty":
 				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Page: sdk.PageMetadata{}})
 			case "monitors-filtered":
@@ -95,7 +103,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = w.Write([]byte(`{"title":"upstream offline"}`))
 			default:
-				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{homeDNS, vpsEdge}, Page: sdk.PageMetadata{}})
+				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{currentHome, vpsEdge}, Page: sdk.PageMetadata{}})
 			}
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors/"+monitorID.String()+"/health":
 			requireBearer(t, r)
@@ -103,7 +111,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up, LastTransitionAt: observedAt})
+			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: monitorID, State: sdk.HealthState(homeHealth.Load().(string)), LastTransitionAt: observedAt.Add(time.Duration(homeRevision.Load()) * time.Minute)})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors/"+unknownID.String()+"/health":
 			requireBearer(t, r)
 			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: unknownID, State: sdk.Unknown, LastTransitionAt: time.Now()})
@@ -116,7 +124,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := web.New(web.Config{ControlPlane: adapter, CookieSecret: []byte("0123456789abcdef0123456789abcdef"), CookieSecure: true, RequestTimeout: 500 * time.Millisecond})
+	handler, err := web.New(web.Config{ControlPlane: adapter, CookieSecret: []byte("0123456789abcdef0123456789abcdef"), CookieSecure: true, RequestTimeout: 900 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,8 +218,16 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
 	beforeHistoryRead := monitorRequests.Load()
+	homeRevision.Store(1)
+	homeHealth.Store(string(sdk.Down))
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+monitorID.String()+`'`, nil)); err != nil {
 		t.Fatalf("selected monitor Back: %v", err)
+	}
+	freshMarker := fmt.Sprintf(`#monitor-detail[data-monitor-state="down"][data-monitor-updated="%s"]`, observedAt.Add(time.Minute).Format(time.RFC3339))
+	if err := chromedp.Run(ctx, chromedp.Poll(`!!document.querySelector(`+fmt.Sprintf("%q", freshMarker)+`) && document.querySelector('#monitor-detail')?.textContent.includes('DOWN') === true`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		var current any
+		_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=document.querySelector('#monitor-detail');return {state:e?.dataset.monitorState||'',updated:e?.dataset.monitorUpdated||'',text:e?.textContent||''}})()`, &current))
+		t.Fatalf("selected monitor Back retained stale state after %d reads: current=%#v err=%v", monitorRequests.Load()-beforeHistoryRead, current, err)
 	}
 	assertSelectedMonitorIdentity(t, ctx, monitorID.String())
 	if monitorRequests.Load() <= beforeHistoryRead {
@@ -221,6 +237,10 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		t.Fatalf("selected monitor Forward: %v", err)
 	}
 	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
+	assertAuthoritativeRecovery(t, ctx, "status")
+	assertAuthoritativeRecovery(t, ctx, "network")
+	homeRevision.Store(0)
+	homeHealth.Store(string(sdk.Up))
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/monitors"), chromedp.WaitVisible("#monitor-results")); err != nil {
 		t.Fatal(err)
 	}
@@ -320,9 +340,9 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			t.Errorf("API calls %#v missing %q", calls, want)
 		}
 	}
-	expectedArtifacts := 58
+	expectedArtifacts := 136
 	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
-		expectedArtifacts = 30
+		expectedArtifacts = 17
 	}
 	assertPNGArtifacts(t, screenshotDir, expectedArtifacts)
 	t.Logf("browser matrix and integrated SDK routes passed; screenshots: %s", screenshotDir)
@@ -387,32 +407,13 @@ func replaceBody(ctx context.Context, html string) error {
 
 func captureState(t *testing.T, ctx context.Context, dir, name, readySelector string) {
 	t.Helper()
-	for _, width := range []int64{390, 1440} {
-		var screenshot []byte
-		var ready bool
-		visibility := fmt.Sprintf(`(()=>{const e=document.querySelector(%q);return !!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden'&&e.getClientRects().length>0})()`, readySelector)
-		if err := chromedp.Run(ctx, chromedp.EmulateViewport(width, 900), chromedp.Evaluate(`document.documentElement.classList.add('xis-visual-test')`, nil), chromedp.Sleep(350*time.Millisecond), chromedp.Evaluate(visibility, &ready)); err != nil {
-			t.Fatalf("capture %s: %v", name, err)
-		}
-		if !ready {
-			t.Fatalf("capture %s: %s is not visibly rendered", name, readySelector)
-		}
-		assertP1Accessibility(t, ctx)
-		if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 100)); err != nil {
-			t.Fatalf("capture %s: %v", name, err)
-		}
-		writePNGArtifact(t, filepath.Join(dir, fmt.Sprintf("state-%s-%d.png", name, width)), screenshot)
-	}
+	captureMatrix(t, ctx, dir, "state-"+name, readySelector)
 }
 
 func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelector string) {
 	t.Helper()
-	widths := []int64{390, 1440}
-	themes := []string{"goshtoso", "minimal"}
-	modes := []string{"light", "dark"}
-	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
-		widths, themes, modes = []int64{390}, []string{"goshtoso"}, []string{"light"}
-	}
+	awaitGoshtosoDependencies(t, ctx)
+	widths, themes, modes := acceptanceAxes()
 	for _, width := range widths {
 		for _, theme := range themes {
 			for _, mode := range modes {
@@ -420,7 +421,7 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 				var screenshot []byte
 				var overflow bool
 				var applied bool
-				script := fmt.Sprintf(`(()=>{const root=document.documentElement,state=window.Alpine?.$data(root);root.classList.add('xis-visual-test');if(state){state.theme=%q;state.dark=%t}root.dataset.theme=%q;root.classList.toggle("dark",%t);localStorage.setItem('xisnove-theme',%q);localStorage.setItem('xisnove-mode',%q);const themeControl=document.querySelector('#theme-choice');if(themeControl)themeControl.value=%q;const modeControl=document.querySelector('#mode-choice');if(modeControl)modeControl.value=%q;})()`, theme, mode == "dark", theme, mode == "dark", theme, mode, theme, mode)
+				script := themeModeScript(theme, mode)
 				if err := chromedp.Run(ctx,
 					chromedp.EmulateViewport(width, 900),
 					chromedp.Evaluate(script, nil),
@@ -432,6 +433,7 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 					t.Fatalf("capture %s: %v", name, err)
 				}
 				assertP1Accessibility(t, ctx)
+				assertPrimaryActionHover(t, ctx)
 				if err := chromedp.Run(ctx, chromedp.FullScreenshot(&screenshot, 100)); err != nil {
 					t.Fatalf("capture %s: %v", name, err)
 				}
@@ -445,6 +447,41 @@ func captureMatrix(t *testing.T, ctx context.Context, dir, surface, readySelecto
 			}
 		}
 	}
+}
+
+func awaitGoshtosoDependencies(t *testing.T, ctx context.Context) {
+	t.Helper()
+	var ready bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`window.goshtosoDependencies?.ready.then(()=>true)`, &ready, chromedp.EvalAsValue, func(params *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams {
+		return params.WithAwaitPromise(true)
+	})); err != nil {
+		t.Fatalf("Goshtoso dependencies did not settle: %v", err)
+	}
+	if !ready {
+		t.Fatal("Goshtoso dependencies settled without ready=true")
+	}
+	awaitTwoAnimationFrames(t, ctx)
+}
+
+func awaitTwoAnimationFrames(t *testing.T, ctx context.Context) {
+	t.Helper()
+	var settled bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))`, &settled, chromedp.EvalAsValue, func(params *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams {
+		return params.WithAwaitPromise(true)
+	})); err != nil || !settled {
+		t.Fatalf("browser did not reach two-frame quiescence: settled=%t err=%v", settled, err)
+	}
+}
+
+func acceptanceAxes() ([]int64, []string, []string) {
+	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
+		return []int64{390}, []string{"goshtoso"}, []string{"light"}
+	}
+	return []int64{390, 1440}, []string{"goshtoso", "minimal"}, []string{"light", "dark"}
+}
+
+func themeModeScript(theme, mode string) string {
+	return fmt.Sprintf(`(()=>{const root=document.documentElement,state=window.Alpine?.$data(root);root.classList.add('xis-visual-test');if(state){state.theme=%q;state.dark=%t}root.dataset.theme=%q;root.classList.toggle("dark",%t);localStorage.setItem('xisnove-theme',%q);localStorage.setItem('xisnove-mode',%q);const themeControl=document.querySelector('#theme-choice');if(themeControl)themeControl.value=%q;const modeControl=document.querySelector('#mode-choice');if(modeControl)modeControl.value=%q;})()`, theme, mode == "dark", theme, mode == "dark", theme, mode, theme, mode)
 }
 
 var pngSignature = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
@@ -549,10 +586,30 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 		if (bannerHeaders.length > 1) failures.push('banner-landmarks:'+bannerHeaders.length);
 		const colorCanvas=document.createElement('canvas'); colorCanvas.width=colorCanvas.height=1; const colorContext=colorCanvas.getContext('2d',{willReadFrequently:true});
 		const parse = value => { colorContext.clearRect(0,0,1,1); colorContext.fillStyle='rgba(0,0,0,0)'; colorContext.fillStyle=value; colorContext.fillRect(0,0,1,1); const v=colorContext.getImageData(0,0,1,1).data; return [v[0],v[1],v[2],v[3]/255]; };
-		const over = (fg,bg) => { const a=fg[3]+bg[3]*(1-fg[3]); if (!a) return [0,0,0,0]; return [(fg[0]*fg[3]+bg[0]*bg[3]*(1-fg[3]))/a,(fg[1]*fg[3]+bg[1]*bg[3]*(1-fg[3]))/a,(fg[2]*fg[3]+bg[2]*bg[3]*(1-fg[3]))/a,a]; };
+		const over = (fg,bg) => { const a=fg[3]+bg[3]*(1-fg[3]); if (a===0) return [0,0,0,0]; return [(fg[0]*fg[3]+bg[0]*bg[3]*(1-fg[3]))/a,(fg[1]*fg[3]+bg[1]*bg[3]*(1-fg[3]))/a,(fg[2]*fg[3]+bg[2]*bg[3]*(1-fg[3]))/a,a]; };
 		const background = e => { let color=[0,0,0,0]; for(let node=e;node;node=node.parentElement) color=over(color,parse(getComputedStyle(node).backgroundColor)); return over(color,[255,255,255,1]); };
 		const lum = rgb => { const c=rgb.map(v=>v/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
 		const ratio = (a,b) => (Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
+		for (const e of document.querySelectorAll('[aria-selected]')) if (!['true','false'].includes(e.getAttribute('aria-selected'))) failures.push('aria-selected-value');
+		const selected=[...document.querySelectorAll('[aria-selected="true"]')].filter(visible);
+		if (selected.length > 1) failures.push('aria-selected-multiple:'+selected.length);
+		for (const e of document.querySelectorAll('[aria-expanded]')) {
+			if (!['true','false'].includes(e.getAttribute('aria-expanded'))) failures.push('aria-expanded-value');
+			const controlled=e.getAttribute('aria-controls'); if (controlled && !document.getElementById(controlled)) failures.push('aria-controls-missing:'+controlled);
+		}
+		for (const e of document.querySelectorAll('[aria-current]')) if (!['page','step','location','date','time','true','false'].includes(e.getAttribute('aria-current'))) failures.push('aria-current-value');
+		const detail=document.querySelector('#monitor-detail'), selectedRow=document.querySelector('tr[aria-selected="true"]');
+		if (detail && selectedRow && detail.dataset.monitorId !== selectedRow.dataset.monitorId) failures.push('selection-detail-mismatch');
+		if (detail && new URL(location.href).searchParams.get('selected') !== detail.dataset.monitorId) failures.push('selection-url-mismatch');
+		for (const e of document.querySelectorAll('input:not([type=hidden]),select,textarea')) {
+			if (!visible(e) || e.disabled) continue;
+			const cs=getComputedStyle(e), fill=background(e), outside=background(e.parentElement), border=over(parse(cs.borderTopColor),outside);
+			if (Math.max(ratio(fill,outside),ratio(border,outside)) < 3) failures.push('control-boundary:'+e.id);
+		}
+		if (innerWidth <= 390) for (const e of document.querySelectorAll('button,select,input:not([type=hidden]),textarea,.xis-native-link,.xis-action-link')) {
+			if (!visible(e) || e.disabled) continue;
+			const r=e.getBoundingClientRect(); if (r.width < 44 || r.height < 44) failures.push('touch-target:'+e.tagName.toLowerCase()+':'+(e.id||name(e).slice(0,24))+':'+Math.round(r.width)+'x'+Math.round(r.height)+':class='+e.className);
+		}
 		for (const e of document.querySelectorAll('h1,h2,h3,p,label,a,button,td,th,span,li,code,legend')) {
 			if (!visible(e) || !e.textContent.trim()) continue;
 			const cs=getComputedStyle(e), bg=background(e), fg=over(parse(cs.color),bg);
@@ -566,6 +623,62 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 	}
 	if len(violations) > 0 {
 		t.Fatalf("P1 accessibility violations: %v", violations)
+	}
+}
+
+func assertPrimaryActionHover(t *testing.T, ctx context.Context) {
+	t.Helper()
+	var target struct {
+		Found bool    `json:"found"`
+		X     float64 `json:"x"`
+		Y     float64 `json:"y"`
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),e=[...document.querySelectorAll('.xis-primary-action')].find(visible);if(!e)return {found:false};const r=e.getBoundingClientRect();return {found:true,x:r.left+r.width/2,y:r.top+r.height/2}})()`, &target)); err != nil {
+		t.Fatal(err)
+	}
+	if !target.Found {
+		return
+	}
+	var stops int
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),target=[...document.querySelectorAll('.xis-primary-action')].find(visible),nodes=[...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);target.dataset.xisPrimaryActionTarget='true';document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return nodes.length})()`, &stops)); err != nil {
+		t.Fatal(err)
+	}
+	focused := false
+	for index := 0; index <= stops && !focused; index++ {
+		if err := chromedp.Run(ctx, chromedp.KeyEvent("\t"), chromedp.Evaluate(`document.activeElement?.dataset.xisPrimaryActionTarget === 'true'`, &focused)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !focused {
+		t.Fatal("primary action was not reachable by keyboard")
+	}
+	awaitTwoAnimationFrames(t, ctx)
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.dataset.xisPrimaryActionTarget === 'true'`, &focused)); err != nil || !focused {
+		t.Fatalf("primary action focus was stolen after quiescence: focused=%t err=%v", focused, err)
+	}
+	var ratios struct {
+		Text, Boundary, Outline, FillBoundary, BorderBoundary float64
+		OutlineStyle, FillColor, OutsideColor, BorderColor    string
+		OutlineWidth                                          float64
+		Shadow                                                string
+	}
+	const measure = `(()=>{const e=[...document.querySelectorAll('.xis-primary-action')].find(x=>!!(x.offsetWidth||x.offsetHeight||x.getClientRects().length)),canvas=document.createElement('canvas'),c=canvas.getContext('2d',{willReadFrequently:true});canvas.width=canvas.height=1;const parse=v=>{c.clearRect(0,0,1,1);c.fillStyle='rgba(0,0,0,0)';c.fillStyle=v;c.fillRect(0,0,1,1);const p=c.getImageData(0,0,1,1).data;return [p[0],p[1],p[2],p[3]/255]},over=(f,b)=>{const a=f[3]+b[3]*(1-f[3]);if(!a)return [0,0,0,0];return [(f[0]*f[3]+b[0]*b[3]*(1-f[3]))/a,(f[1]*f[3]+b[1]*b[3]*(1-f[3]))/a,(f[2]*f[3]+b[2]*b[3]*(1-f[3]))/a,a]},background=n=>{let color=[0,0,0,0];for(;n;n=n.parentElement)color=over(color,parse(getComputedStyle(n).backgroundColor));return over(color,[255,255,255,1])},lum=v=>{const q=v.slice(0,3).map(x=>x/255).map(x=>x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4));return .2126*q[0]+.7152*q[1]+.0722*q[2]},ratio=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05),s=getComputedStyle(e),bg=background(e),outside=background(e.parentElement),fg=over(parse(s.color),bg),border=over(parse(s.borderTopColor),outside),outline=over(parse(s.outlineColor),outside),fillBoundary=ratio(bg,outside),borderBoundary=ratio(border,outside);return {text:ratio(fg,bg),boundary:Math.max(fillBoundary,borderBoundary),fillBoundary,borderBoundary,outline:ratio(outline,outside),outlineStyle:s.outlineStyle,outlineWidth:parseFloat(s.outlineWidth),shadow:s.boxShadow,fillColor:s.backgroundColor,outsideColor:getComputedStyle(e.parentElement).backgroundColor,borderColor:s.borderTopColor}})()`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(measure, &ratios)); err != nil {
+		t.Fatal(err)
+	}
+	if ratios.Text < 4.5 || ((ratios.OutlineStyle == "none" || ratios.OutlineWidth < 2 || ratios.Outline < 3) && (ratios.Shadow == "" || ratios.Shadow == "none")) {
+		var debug any
+		_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const e=[...document.querySelectorAll('.xis-primary-action')].find(x=>!!(x.offsetWidth||x.offsetHeight||x.getClientRects().length)),rules=[];for(const sheet of document.styleSheets){try{for(const rule of sheet.cssRules||[])if(rule.selectorText?.includes('xis-primary-action'))rules.push(rule.cssText)}catch(_){}}return {tag:e?.tagName,className:e?.className,matches:e?.matches('button.xis-primary-action:focus'),inlineRule:[...document.querySelectorAll('style')].some(s=>s.textContent.includes('button.xis-primary-action:focus')),rules}})()`, &debug))
+		t.Fatalf("primary action focus contrast = %#v, debug=%#v", ratios, debug)
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.blur()`, nil), chromedp.MouseEvent(cdinput.MouseMoved, target.X, target.Y), chromedp.Sleep(20*time.Millisecond), chromedp.Evaluate(measure, &ratios)); err != nil {
+		t.Fatal(err)
+	}
+	if ratios.Text < 4.5 || ratios.Boundary < 3 {
+		t.Fatalf("primary action hover contrast = %#v", ratios)
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('[data-xis-primary-action-target]')?.removeAttribute('data-xis-primary-action-target')`, nil)); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -664,8 +777,9 @@ func assertDetailGeometry(t *testing.T, ctx context.Context) {
 func assertMobileNavigation(t *testing.T, ctx context.Context) {
 	t.Helper()
 	var opened struct {
-		Expanded, Reachable, OneTrigger bool
-		Label                           string
+		Expanded, Reachable, OneTrigger, FirstReachable, LastReachable bool
+		Label                                                          string
+		HeaderBottom, PanelTop, BackdropTop, PanelBottom               float64
 	}
 	var triggerFocused bool
 	if err := chromedp.Run(ctx,
@@ -674,14 +788,14 @@ func assertMobileNavigation(t *testing.T, ctx context.Context) {
 		chromedp.Evaluate(`document.activeElement === document.querySelector('button[aria-label="Open monitoring navigation"]')`, &triggerFocused),
 		chromedp.Click(`button[aria-label="Open monitoring navigation"]`),
 		chromedp.Sleep(100*time.Millisecond),
-		chromedp.Evaluate(`(()=>{const trigger=document.querySelector('button[aria-controls="mobile-monitoring-panel"]'),panel=document.querySelector('#mobile-monitoring-panel'),r=panel?.getBoundingClientRect();return {expanded:trigger?.getAttribute('aria-expanded')==='true',label:trigger?.getAttribute('aria-label')||'',reachable:!!r&&r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight&&panel.querySelector('a[href="/status"]')?.textContent.includes('Public status')===true,oneTrigger:document.querySelectorAll('button[aria-controls="mobile-monitoring-panel"]').length===1}})()`, &opened),
+		chromedp.Evaluate(`(()=>{const trigger=document.querySelector('button[aria-controls="mobile-monitoring-panel"]'),panel=document.querySelector('#mobile-monitoring-panel'),header=trigger?.closest('header'),backdrop=document.querySelector('.xis-mobile-nav-backdrop'),r=panel?.getBoundingClientRect(),hr=header?.getBoundingClientRect(),br=backdrop?.getBoundingClientRect(),controls=[...panel.querySelectorAll('a[href],button:not([disabled])')].filter(e=>e.getClientRects().length);const first=controls[0],last=controls.at(-1),fr=first?.getBoundingClientRect();last?.scrollIntoView({block:'nearest'});const lr=last?.getBoundingClientRect();return {expanded:trigger?.getAttribute('aria-expanded')==='true',label:trigger?.getAttribute('aria-label')||'',reachable:!!r&&r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight&&panel.querySelector('a[href="/status"]')?.textContent.includes('Public status')===true,oneTrigger:document.querySelectorAll('button[aria-controls="mobile-monitoring-panel"]').length===1,firstReachable:!!fr&&fr.top>=r.top&&fr.bottom<=Math.min(r.bottom,innerHeight),lastReachable:!!lr&&lr.top>=r.top&&lr.bottom<=Math.min(r.bottom,innerHeight),headerBottom:hr?.bottom||0,panelTop:r?.top||0,backdropTop:br?.top||0,panelBottom:r?.bottom||0}})()`, &opened),
 	); err != nil {
 		t.Fatalf("open mobile navigation: %v", err)
 	}
 	if !triggerFocused {
 		t.Error("mobile navigation trigger is not keyboard focusable")
 	}
-	if !opened.Expanded || !opened.Reachable || !opened.OneTrigger || opened.Label != "Close monitoring navigation" {
+	if !opened.Expanded || !opened.Reachable || !opened.OneTrigger || !opened.FirstReachable || !opened.LastReachable || opened.Label != "Close monitoring navigation" || opened.HeaderBottom <= 0 || opened.PanelTop+1 < opened.HeaderBottom || opened.BackdropTop+1 < opened.HeaderBottom || opened.PanelBottom <= opened.PanelTop {
 		t.Fatalf("mobile status navigation contract = %#v", opened)
 	}
 	assertSequentialKeyboardTraversal(t, ctx, "mobile monitors and drawer")
@@ -700,33 +814,44 @@ func assertMobileNavigation(t *testing.T, ctx context.Context) {
 
 func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir string, scenario *atomic.Value, monitorRequests *atomic.Int32) {
 	t.Helper()
-	for _, width := range []int64{390, 1440} {
-		scenario.Store("success")
-		if err := chromedp.Run(ctx, chromedp.Navigate(baseURL+"/monitors"), chromedp.WaitVisible("#monitor-results"), chromedp.EmulateViewport(width, 900)); err != nil {
-			t.Fatalf("prepare held search at %dpx: %v", width, err)
+	widths, themes, modes := acceptanceAxes()
+	for _, width := range widths {
+		for _, theme := range themes {
+			for _, mode := range modes {
+				scenario.Store("success")
+				if err := chromedp.Run(ctx, chromedp.Navigate(baseURL+"/monitors"), chromedp.WaitVisible("#monitor-results"), chromedp.EmulateViewport(width, 900), chromedp.Evaluate(themeModeScript(theme, mode), nil)); err != nil {
+					t.Fatalf("prepare held search at %dpx/%s/%s: %v", width, theme, mode, err)
+				}
+				scenario.Store("monitors-loading")
+				before := monitorRequests.Load()
+				var pending struct {
+					Loading, ResultsHidden, Disabled, PendingCopy bool
+				}
+				var screenshot []byte
+				if err := chromedp.Run(ctx,
+					chromedp.Evaluate(`(()=>{const input=document.querySelector('#monitor-search'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]');input.value='dns';input.focus();input.setSelectionRange(1,2);button.click();button.click();return true})()`, nil),
+					chromedp.Poll(`document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === true`, nil, chromedp.WithPollingInterval(10*time.Millisecond)),
+					chromedp.Evaluate(`(()=>{const loading=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]'),lr=loading?.getBoundingClientRect(),rr=results?.getBoundingClientRect();return {loading:!!lr&&lr.height>0,resultsHidden:!!rr&&rr.height===0,disabled:button?.disabled===true,pendingCopy:button?.innerText.includes('Searching…')===true}})()`, &pending),
+				); err != nil {
+					t.Fatalf("held search at %dpx/%s/%s: %v", width, theme, mode, err)
+				}
+				assertP1Accessibility(t, ctx)
+				assertPrimaryActionHover(t, ctx)
+				if err := chromedp.Run(ctx,
+					chromedp.FullScreenshot(&screenshot, 100),
+					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false`, nil),
+				); err != nil {
+					t.Fatalf("finish held search at %dpx/%s/%s: %v", width, theme, mode, err)
+				}
+				if !pending.Loading || !pending.ResultsHidden || !pending.Disabled || !pending.PendingCopy {
+					t.Fatalf("held search state at %dpx/%s/%s = %#v", width, theme, mode, pending)
+				}
+				if delta := monitorRequests.Load() - before; delta != 1 {
+					t.Fatalf("double-click search issued %d control-plane reads, want 1", delta)
+				}
+				writePNGArtifact(t, filepath.Join(dir, fmt.Sprintf("state-monitors-loading-%d-%s-%s.png", width, theme, mode)), screenshot)
+			}
 		}
-		scenario.Store("monitors-loading")
-		before := monitorRequests.Load()
-		var pending struct {
-			Loading, ResultsHidden, Disabled, PendingCopy bool
-		}
-		var screenshot []byte
-		if err := chromedp.Run(ctx,
-			chromedp.Evaluate(`(()=>{const input=document.querySelector('#monitor-search'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]');input.value='dns';input.focus();input.setSelectionRange(1,2);button.click();button.click();return true})()`, nil),
-			chromedp.Poll(`document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === true`, nil, chromedp.WithPollingInterval(10*time.Millisecond)),
-			chromedp.Evaluate(`(()=>{const loading=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]'),lr=loading?.getBoundingClientRect(),rr=results?.getBoundingClientRect();return {loading:!!lr&&lr.height>0,resultsHidden:!!rr&&rr.height===0,disabled:button?.disabled===true,pendingCopy:button?.textContent.includes('Searching…')===true}})()`, &pending),
-			chromedp.FullScreenshot(&screenshot, 100),
-			chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false`, nil),
-		); err != nil {
-			t.Fatalf("held search at %dpx: %v", width, err)
-		}
-		if !pending.Loading || !pending.ResultsHidden || !pending.Disabled || !pending.PendingCopy {
-			t.Fatalf("held search state at %dpx = %#v", width, pending)
-		}
-		if delta := monitorRequests.Load() - before; delta != 1 {
-			t.Fatalf("double-click search issued %d control-plane reads, want 1", delta)
-		}
-		writePNGArtifact(t, filepath.Join(dir, fmt.Sprintf("state-monitors-loading-%d.png", width)), screenshot)
 	}
 	scenario.Store("success")
 }
@@ -742,6 +867,49 @@ func assertSelectedMonitorIdentity(t *testing.T, ctx context.Context, id string)
 	}
 	if identity.URL != id || identity.Detail != id || identity.Selected != id || identity.SelectedCount != 1 || identity.Focus != id {
 		t.Fatalf("selected monitor identity = %#v, want %s", identity, id)
+	}
+}
+
+func assertAuthoritativeRecovery(t *testing.T, ctx context.Context, failure string) {
+	t.Helper()
+	var script string
+	switch failure {
+	case "status":
+		script = `(()=>{window.__xisRealFetch=window.fetch;window.fetch=()=>Promise.resolve(new Response("unavailable",{status:503}));window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));return true})()`
+	case "network":
+		script = `(()=>{window.__xisRealFetch=window.fetch;window.fetch=()=>Promise.reject(new TypeError("offline"));window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));return true})()`
+	default:
+		t.Fatalf("unsupported authoritative failure %q", failure)
+	}
+	var triggered bool
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(script, &triggered),
+		chromedp.WaitVisible("#history-recovery"),
+	); err != nil {
+		t.Fatalf("%s authoritative recovery: %v", failure, err)
+	}
+	var recovery struct {
+		OldDetail bool   `json:"oldDetail"`
+		Focused   string `json:"focused"`
+		Retry     bool   `json:"retry"`
+		Detail    string `json:"detail"`
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>({oldDetail:!!document.querySelector('#monitor-detail'),focused:document.activeElement?.id||'',retry:!!document.querySelector('#history-recovery button'),detail:document.querySelector('#history-recovery')?.textContent||''}))()`, &recovery)); err != nil {
+		t.Fatal(err)
+	}
+	if !triggered || recovery.OldDetail || recovery.Focused != "history-recovery-heading" || !recovery.Retry {
+		t.Fatalf("%s recovery retained stale or unusable content: %#v", failure, recovery)
+	}
+	if (failure == "status" && !strings.Contains(recovery.Detail, "503")) || (failure == "network" && !strings.Contains(recovery.Detail, "could not reach")) {
+		t.Fatalf("%s recovery copy = %q", failure, recovery.Detail)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`window.fetch=window.__xisRealFetch;delete window.__xisRealFetch`, nil),
+		chromedp.Click("#history-recovery button"),
+		chromedp.WaitVisible("#monitor-detail"),
+		chromedp.Poll(`document.querySelector('#monitor-detail')?.dataset.monitorId === new URL(location.href).searchParams.get('selected')`, nil),
+	); err != nil {
+		t.Fatalf("%s authoritative retry: %v", failure, err)
 	}
 }
 

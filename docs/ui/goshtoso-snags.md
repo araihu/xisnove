@@ -129,3 +129,31 @@ consumer that expects password semantics to remain safe without Alpine.
     restores trigger focus. The public `PanelPositionClass` and
     `BackdropPositionClass` solve viewport ownership; the browser measures
     positive viewport intersection.
+16. **A fixed `top-16` overlay offset is not coupled to the application's
+    rendered header.** At 390 px the previous stacked controls made the header
+    about 163 px tall while the drawer began at 64 px. Xisnove now keeps the
+    compact header on one row and publishes its measured bottom through a
+    shared CSS custom property for both panel and backdrop. A `ResizeObserver`
+    updates the value, and browser acceptance requires panel and backdrop to
+    start below the header with their first and last controls reachable.
+17. **Component minimum size does not cover every composed interactive
+    surface.** A native row link rendered 39 by 44 px and the public navigation
+    menu trigger rendered 24 by 24 px. Xisnove adds an application boundary of
+    44 by 44 px for buttons and native/action links. The scanner checks this in
+    every 390 px state; this is useful upstream feedback for mobile navigation
+    and icon-button defaults.
+18. **Dependency readiness is a behavioral gate, not only a loading promise.**
+    Focus checks could race the application's handler registered on
+    `window.goshtosoDependencies.ready`. The browser harness now awaits that
+    promise and two animation frames before keyboard traversal, then proves
+    focused actions remain focused for another two frames. This avoids both
+    false focus failures and screenshots captured during runtime settlement.
+19. **`WithLoadingText` needs the requesting ancestor to receive
+    `htmx-request`.** A form with an external `hx-indicator` disabled its
+    submitter and displayed the skeleton, but left the form without the class
+    that switches Goshtoso's visible label. A `textContent` assertion initially
+    hid this because both labels remained in the DOM. Xisnove now uses one
+    indicator class on the form and skeleton, and acceptance requires
+    `innerText` to contain `Searching…`. Goshtoso's contract is correct, but
+    documenting this external-indicator composition would prevent a subtle
+    consumer failure.

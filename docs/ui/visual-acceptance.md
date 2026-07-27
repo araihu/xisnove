@@ -20,23 +20,27 @@ requests retain the real 502 or 504 status.
 ## Browser matrix
 
 The Chromedp smoke records the full 32-image happy matrix at 390 px and 1440 px
-for Goshtoso and Minimal themes in light and dark modes. It also records 26
-state images at both widths: invalid and timed-out login; monitor loading,
-empty, filtered-empty, upstream error and partial/unknown; and public empty,
-unknown, up, degraded with active incident, upstream error and timeout. These
+for Goshtoso and Minimal themes in light and dark modes. It also records every
+one of the 13 explicit states across the same eight width/theme/mode axes:
+invalid and timed-out login; monitor loading, empty, filtered-empty, upstream
+error and partial/unknown; and public empty, unknown, up, degraded with active
+incident, upstream error and timeout. These 104 state captures plus the happy
+matrix are named with all four dimensions, so no artifact can ambiguously
+inherit the theme or mode from a previous capture. They
 are browser-visible captures driven through the BFF and controlled API
-responses, not source-only assertions. The final evidence is exactly 58
+responses, not source-only assertions. The final evidence is exactly 136
 PNG-encoded files
-under `/Users/guilhermecastro/.codex/visualizations/2026/07/26/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-v0.0.13`.
+under `/Users/guilhermecastro/.codex/visualizations/2026/07/24/019f9527-817a-7953-932e-e262e7351b8a/xisnove-ui-v0.0.13-review-fixes`.
 The browser harness requests lossless encoding, rejects bytes without the
 eight-byte PNG signature before writing, and re-reads every `.png` artifact at
 the end of the run. The final evidence was also checked with the system `file`
 utility rather than trusting filename extensions.
 
 The smoke verifies direct navigation, HTMX navigation, Back and Forward with a
-fresh authoritative SDK read, one selected identity across URL/detail/focus/
+fresh authoritative SDK read and a changed fixture revision/state marker, one selected identity across URL/detail/focus/
 row styling/`aria-selected`, no unexpected JavaScript console errors, the AppShell skip
-link, visible focus, mobile navigation open/Escape/focus return, persistent
+link, visible focus, visible in-shell retry after both a non-2xx revalidation
+and rejected fetch, mobile navigation open/Escape/focus return, persistent
 labels and names, one desktop main scroll surface, hidden idle skeleton
 geometry, Goshtoso-owned table overflow at 390 px, row-action focusability and
 absence of opaque bearer credentials in DOM content. It uses the generated SDK
@@ -49,9 +53,13 @@ at 1440 px and after the main detail content at 390 px, and remains free of page
 overflow.
 
 The automated P1 accessibility scan is an in-repo browser equivalent rather
-than axe. It runs after every one of the 58 captures and fails on missing
+than axe. It runs after every one of the 136 captures and fails on missing
 accessible names, broken labels, duplicate IDs, invalid main/banner landmarks,
-nested headers and measurable text contrast. Transparent backgrounds are
+nested headers, invalid ARIA values, incoherent selected URL/row/detail identity,
+controls or action boundaries below 3:1, text/action contrast, mobile targets
+below 44 by 44 CSS pixels, and missing focus indicators. Focus and hover action
+states are exercised separately; hover measurement explicitly blurs the
+keyboard-focused control first. Transparent backgrounds are
 alpha-composited through every rendered ancestor; a one-pixel canvas converts
 modern CSS colors such as `oklch()` into sRGB before WCAG luminance is measured.
 It passed Minimal light and all other required theme/mode/state combinations.
@@ -63,10 +71,12 @@ test compares focus to visible DOM order, rejects hidden focus stops, requires
 a computed outline or box shadow at every stop, activates representative
 native links, and retains the dedicated skip-link, row-action, drawer
 Escape/focus-return and truthful label/`aria-expanded`, a positive intersecting
-drawer bounding box, HTMX and Back/Forward checks. No manual screen-reader session is
+drawer bounding box below the measured header boundary, first and last drawer
+controls reachable inside the viewport, HTMX and Back/Forward checks. No manual screen-reader session is
 claimed.
 
-Monitor loading evidence is no longer simulated DOM state. At both widths, the
+Monitor loading evidence is no longer simulated DOM state. Across all eight
+width/theme/mode combinations, the
 harness holds the real HTMX search while the API response is delayed,
 double-clicks the submitter, and observes `button.WithLoadingText`,
 `hx-disabled-elt`, hidden results, one control-plane read, then the restored
