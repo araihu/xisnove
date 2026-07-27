@@ -73,6 +73,48 @@ jobs:
             echo "No API compatibility baseline exists."
           fi
 
+  distribution:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            go.sum
+            agent/go.sum
+            operator/go.sum
+            ui/go.sum
+      - name: Install checksum-verified Helm
+        run: |
+          set -euo pipefail
+          lock=build/release/toolchain.lock.json
+          tool_dir="$(mktemp -d)"
+          trap 'rm -rf "$tool_dir"' EXIT
+          helm_version="$(jq -er '.tools[] | select(.name == "helm") | .version' "$lock")"
+          helm_checksum="$(jq -er '.tools[] | select(.name == "helm") | .checksums["linux-amd64"]' "$lock")"
+          helm_archive="$tool_dir/helm.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$helm_archive" \
+            "https://get.helm.sh/helm-v${helm_version}-linux-amd64.tar.gz"
+          printf '%s  %s\n' "$helm_checksum" "$helm_archive" | sha256sum --check
+          tar -xzf "$helm_archive" -C "$tool_dir"
+          install -m 0755 "$tool_dir/linux-amd64/helm" "$(go env GOPATH)/bin/helm"
+      - name: Verify distribution host tools
+        run: |
+          docker buildx version
+          docker compose version
+          shellcheck --version
+          systemd-analyze --version
+      - name: Verify native production images
+        run: make distribution-image-native-check
+      - name: Verify control-plane chart
+        run: make distribution-helm-check
+      - name: Verify Compose, raw, and systemd deployments
+        run: make distribution-deploy-check
+
   agent:
     runs-on: ubuntu-24.04
     defaults:

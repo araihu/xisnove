@@ -11,13 +11,18 @@ import (
 	"time"
 )
 
+const (
+	runtimeBaseImage     = "ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982"
+	databaseServiceImage = "postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7"
+)
+
 func TestServerLocalProfilesRunReadOnlyAndTerminateGracefully(t *testing.T) {
 	image := "xisnove-server:test-" + runtime.GOARCH
 	for _, profile := range []string{"sqlite", "turso-local"} {
 		t.Run(profile, func(t *testing.T) {
 			data := createVolume(t, "xisnove-image-data")
 			secrets := createVolume(t, "xisnove-image-secrets")
-			docker(t, "run", "--rm", "--user", "0:0", "--mount", "type=volume,source="+secrets+",target=/secrets", "ubuntu:22.04", "/bin/sh", "-ec", `printf '01234567890123456789012345678901' > /secrets/cursor; chown 101:101 /secrets/cursor; chmod 0400 /secrets/cursor`)
+			docker(t, "run", "--rm", "--user", "0:0", "--mount", "type=volume,source="+secrets+",target=/secrets", runtimeBaseImage, "/bin/sh", "-ec", `printf '01234567890123456789012345678901' > /secrets/cursor; chown 101:101 /secrets/cursor; chmod 0400 /secrets/cursor`)
 			database := "/var/lib/xisnove/xisnove.db"
 			if profile == "turso-local" {
 				database = "/var/lib/xisnove/turso.db"
@@ -46,12 +51,12 @@ func TestServerPostgresProfileRunsReadOnlyAndTerminatesGracefully(t *testing.T) 
 	postgresName := uniqueName("xisnove-postgres")
 	docker(t, "run", "-d", "--name", postgresName, "--network", network, "--network-alias", "postgres",
 		"-e", "POSTGRES_USER=xisnove", "-e", "POSTGRES_PASSWORD=image-contract", "-e", "POSTGRES_DB=xisnove",
-		"postgres:18-alpine")
+		databaseServiceImage)
 	registerContainerCleanup(t, postgresName)
 	waitForPostgres(t, postgresName, 30*time.Second)
 
 	secrets := createVolume(t, "xisnove-image-secrets")
-	docker(t, "run", "--rm", "--user", "0:0", "--mount", "type=volume,source="+secrets+",target=/secrets", "ubuntu:22.04", "/bin/sh", "-ec", `printf '01234567890123456789012345678901' > /secrets/cursor; chown 101:101 /secrets/cursor; chmod 0400 /secrets/cursor`)
+	docker(t, "run", "--rm", "--user", "0:0", "--mount", "type=volume,source="+secrets+",target=/secrets", runtimeBaseImage, "/bin/sh", "-ec", `printf '01234567890123456789012345678901' > /secrets/cursor; chown 101:101 /secrets/cursor; chmod 0400 /secrets/cursor`)
 	databaseURL := "postgres://xisnove:image-contract@postgres:5432/xisnove?sslmode=disable"
 	docker(t, "run", "--rm", "--network", network, "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", image,
 		"db", "migrate", "--phase=expand", "--database-profile=postgres", "--database-url="+databaseURL)
@@ -93,10 +98,10 @@ func TestUIAndAgentHealthchecksRunReadOnlyAndTerminateGracefully(t *testing.T) {
 		t.Cleanup(func() { _ = server.Close() })
 
 		secrets := createVolume(t, "xisnove-agent-secrets")
-		docker(t, "run", "--rm", "--user", "0:0", "--mount", "type=volume,source="+secrets+",target=/secrets", "ubuntu:22.04", "/bin/sh", "-ec", `printf '{"credential":"runtime-only","generation":1}' > /secrets/credential; chown 101:101 /secrets/credential; chmod 0440 /secrets/credential`)
+		docker(t, "run", "--rm", "--user", "0:0", "--mount", "type=volume,source="+secrets+",target=/secrets", runtimeBaseImage, "/bin/sh", "-ec", `printf '{"credential":"runtime-only","generation":1}' > /secrets/credential; chown 101:101 /secrets/credential; chmod 0440 /secrets/credential`)
 		port := listener.Addr().(*net.TCPAddr).Port
 		name := uniqueName("xisnove-agent")
-		docker(t, "run", "-d", "--name", name, "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--mount", "type=volume,source="+secrets+",target=/run/secrets,readonly",
+		docker(t, "run", "-d", "--name", name, "--add-host", "host.docker.internal:host-gateway", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--mount", "type=volume,source="+secrets+",target=/run/secrets,readonly",
 			"-e", fmt.Sprintf("XISNOVE_URL=http://host.docker.internal:%d", port), "-e", "XISNOVE_AGENT_CREDENTIAL_FILE=/run/secrets/credential", "-e", "XISNOVE_AGENT_CAPABILITIES=kubernetes-discovery",
 			"xisnove-agent:test-"+runtime.GOARCH)
 		registerContainerCleanup(t, name)

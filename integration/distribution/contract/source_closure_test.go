@@ -179,6 +179,68 @@ func TestCIUsesImmutableLeastPrivilegeInputs(t *testing.T) {
 	}
 }
 
+func TestImageRuntimeFixturesUseLockedImages(t *testing.T) {
+	root := repositoryRoot(t)
+	lock := readToolchainManifest(t, root)
+	want := map[string]string{}
+	for _, image := range lock.Images {
+		if image.Use == "runtime-base" || image.Use == "database-service" {
+			want[image.Use] = image.Name + "@" + image.Digest
+		}
+	}
+	content := read(t, filepath.Join(root, "integration/distribution/images/runtime_test.go"))
+	for _, use := range []string{"runtime-base", "database-service"} {
+		image := want[use]
+		if image == "" {
+			t.Fatalf("release toolchain lock has no %s image", use)
+		}
+		if !strings.Contains(content, image) {
+			t.Errorf("image runtime fixture does not use locked %s image %q", use, image)
+		}
+	}
+	for _, mutable := range []string{`"ubuntu:22.04"`, `"postgres:18-alpine"`} {
+		if strings.Contains(content, mutable) {
+			t.Errorf("image runtime fixture contains mutable image reference %s", mutable)
+		}
+	}
+}
+
+func TestM62DistributionGatesAreWired(t *testing.T) {
+	root := repositoryRoot(t)
+	makefile := read(t, filepath.Join(root, "Makefile"))
+	for _, required := range []string{
+		"distribution-image-native-check:",
+		"distribution-image-oci-check:",
+		"distribution-helm-check:",
+		"distribution-deploy-check:",
+		"distribution-check:",
+		"docker buildx bake test-$(DISTRIBUTION_ARCH) --load",
+		"docker buildx bake oci-layout",
+		"go test -race ./integration/distribution/images",
+		"helm lint charts/xisnove",
+		"go test -race ./integration/distribution/helm",
+		"systemd-analyze verify deploy/systemd/*.service",
+		"shellcheck deploy/raw/*.sh deploy/compose/bootstrap.sh",
+		"go test -race ./integration/distribution/deploy",
+	} {
+		if !strings.Contains(makefile, required) {
+			t.Errorf("Makefile missing M6.2 gate %q", required)
+		}
+	}
+
+	workflow := read(t, filepath.Join(root, ".github/workflows/ci.yml"))
+	for _, required := range []string{
+		"distribution:\n",
+		"make distribution-image-native-check",
+		"make distribution-helm-check",
+		"make distribution-deploy-check",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Errorf("CI workflow missing M6.2 gate %q", required)
+		}
+	}
+}
+
 func readToolchainManifest(t *testing.T, root string) toolchainManifest {
 	t.Helper()
 	contents, err := os.ReadFile(filepath.Join(root, "build", "release", "toolchain.lock.json"))
