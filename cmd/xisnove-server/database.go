@@ -19,6 +19,7 @@ func migrateCommand(ctx context.Context, args []string) error {
 	phase := flags.String("phase", string(migration.PhaseExpand), "migration phase: expand or contract")
 	installationID := flags.String("installation-id", "default", "migration and process-lease namespace")
 	lockTimeout := flags.Duration("lock-timeout", 30*time.Second, "bounded migration lock timeout")
+	commandTimeout := flags.Duration("timeout", 2*time.Minute, "overall migration command timeout")
 	if err := parseCommandFlags(flags, args); err != nil {
 		return err
 	}
@@ -29,11 +30,16 @@ func migrateCommand(ctx context.Context, args []string) error {
 	if *lockTimeout <= 0 {
 		return newCommandUsageError(fmt.Errorf("migration lock timeout must be positive"))
 	}
-	config, err := databaseFlags.configContext(ctx)
+	if *commandTimeout <= 0 {
+		return newCommandUsageError(fmt.Errorf("migration command timeout must be positive"))
+	}
+	commandCtx, cancel := context.WithTimeout(ctx, *commandTimeout)
+	defer cancel()
+	config, err := databaseFlags.configContext(commandCtx)
 	if err != nil {
 		return err
 	}
-	handle, err := database.Open(ctx, config)
+	handle, err := database.Open(commandCtx, config)
 	if err != nil {
 		return err
 	}
@@ -46,9 +52,9 @@ func migrateCommand(ctx context.Context, args []string) error {
 	}
 	switch selectedPhase {
 	case migration.PhaseExpand:
-		return migrateProfile(ctx, handle, options)
+		return migrateProfile(commandCtx, handle, options)
 	case migration.PhaseContract:
-		return migrateContractProfile(ctx, handle, options)
+		return migrateContractProfile(commandCtx, handle, options)
 	}
 	panic("validated migration phase is not handled")
 }

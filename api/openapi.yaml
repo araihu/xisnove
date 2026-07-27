@@ -453,6 +453,8 @@ paths:
       tags: [agent]
       security: []
       x-xisnove-scopes: []
+      parameters:
+        - {$ref: '#/components/parameters/RequiredIdempotencyKey'}
       requestBody:
         required: true
         content:
@@ -1252,7 +1254,7 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: Caller-generated key required for an operator mutation retry.
+      description: Caller-generated key required for safe mutation retry.
       schema:
         type: string
         minLength: 8
@@ -1716,9 +1718,10 @@ components:
     EnrollAgentRequest:
       type: object
       additionalProperties: false
-      required: [token, name, capabilities]
+      required: [token, name, capabilities, credential]
       properties:
         token: {type: string, minLength: 32, writeOnly: true}
+        credential: {type: string, minLength: 32, writeOnly: true}
         name: {type: string, minLength: 1, maxLength: 120}
         capabilities:
           type: array

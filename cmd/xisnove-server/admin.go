@@ -19,26 +19,32 @@ func bootstrapCommand(ctx context.Context, args []string) error {
 	databaseFlags := addDatabaseFlags(flags)
 	email := flags.String("email", "", "administrator email")
 	passwordFile := flags.String("password-file", "", "password secret file")
+	commandTimeout := flags.Duration("timeout", 2*time.Minute, "overall bootstrap command timeout")
 	if err := parseCommandFlags(flags, args); err != nil {
 		return err
 	}
 	if *email == "" || *passwordFile == "" {
 		return fmt.Errorf("--email and --password-file are required")
 	}
-	config, err := databaseFlags.configContext(ctx)
+	if *commandTimeout <= 0 {
+		return newCommandUsageError(fmt.Errorf("bootstrap command timeout must be positive"))
+	}
+	commandCtx, cancel := context.WithTimeout(ctx, *commandTimeout)
+	defer cancel()
+	config, err := databaseFlags.configContext(commandCtx)
 	if err != nil {
 		return err
 	}
-	password, err := readBootstrapPassword(ctx, *passwordFile)
+	password, err := readBootstrapPassword(commandCtx, *passwordFile)
 	if err != nil {
 		return err
 	}
-	handle, err := database.Open(ctx, config)
+	handle, err := database.Open(commandCtx, config)
 	if err != nil {
 		return err
 	}
 	defer handle.Close()
-	if err := handle.Ready(ctx); err != nil {
+	if err := handle.Ready(commandCtx); err != nil {
 		return err
 	}
 	service := application.NewAuthService(application.AuthServiceConfig{
@@ -46,7 +52,7 @@ func bootstrapCommand(ctx context.Context, args []string) error {
 		Tokens: xiscrypto.NewProductionTokenIssuer(), SessionDuration: 24 * time.Hour,
 		Now: time.Now, NewID: ids.NewUUID,
 	})
-	return service.BootstrapAdmin(ctx, *email, password)
+	return service.BootstrapAdmin(commandCtx, *email, password)
 }
 
 func readBootstrapPassword(ctx context.Context, path string) (string, error) {

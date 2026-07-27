@@ -31,6 +31,12 @@ database contains more than one installation. Heartbeat failure makes
 incompatible lease.
 
 All five binaries implement `--version` without initializing dependencies.
+`xisnove-server db migrate` and `admin bootstrap` expose an overall `--timeout`
+that bounds secret resolution, database open, readiness, and the complete
+operation; migration's `--lock-timeout` remains the narrower admission bound.
+`xisnove-agent enroll` accepts only file-backed enrollment input, persists its
+caller credential and idempotency journal before network mutation, and writes
+the final credential bundle atomically.
 Stable output is one line:
 
 ```text

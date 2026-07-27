@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,5 +47,11 @@ func TestMigrateCommandRejectsInvalidPhaseAndUnboundedTimeout(t *testing.T) {
 	}
 	if err := migrateCommand(context.Background(), []string{"--database-url", path, "--lock-timeout", "0s"}); err == nil {
 		t.Fatal("zero timeout accepted")
+	}
+	if err := migrateCommand(context.Background(), []string{"--database-url", path, "--timeout", "0s"}); err == nil || strings.Contains(err.Error(), "flag provided but not defined") {
+		t.Fatalf("zero command timeout error = %v", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("invalid input created database: %v", err)
 	}
 }

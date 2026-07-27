@@ -324,6 +324,7 @@ type DiscoveryCandidateInputProtocol string
 // EnrollAgentRequest defines model for EnrollAgentRequest.
 type EnrollAgentRequest struct {
 	Capabilities []AgentCapability `json:"capabilities"`
+	Credential   *string           `json:"credential,omitempty"`
 	Name         string            `json:"name"`
 	Token        *string           `json:"token,omitempty"`
 }
@@ -499,6 +500,15 @@ type NotificationDeliveryID = openapi_types.UUID
 
 // NotificationRouteID defines model for NotificationRouteID.
 type NotificationRouteID = openapi_types.UUID
+
+// RequiredIdempotencyKey defines model for RequiredIdempotencyKey.
+type RequiredIdempotencyKey = string
+
+// EnrollAgentParams defines parameters for EnrollAgent.
+type EnrollAgentParams struct {
+	// IdempotencyKey Caller-generated key required for safe mutation retry.
+	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
 
 // UpsertDiscoveryCandidatesParams defines parameters for UpsertDiscoveryCandidates.
 type UpsertDiscoveryCandidatesParams struct {
@@ -734,11 +744,11 @@ type ClientInterface interface {
 
 	// EnrollAgentWithBody performs a POST /v1/agent-enrollments (the `EnrollAgent` operationId) request,
 	// with any type of body and a specified content type.
-	EnrollAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	EnrollAgentWithBody(ctx context.Context, params *EnrollAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// EnrollAgent performs a POST /v1/agent-enrollments (the `EnrollAgent` operationId) request.
 	// Takes a body of the `application/json` content type.
-	EnrollAgent(ctx context.Context, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	EnrollAgent(ctx context.Context, params *EnrollAgentParams, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpsertDiscoveryCandidatesWithBody Idempotently upsert a bounded discovery candidate batch
 	//
@@ -785,8 +795,8 @@ type ClientInterface interface {
 
 // EnrollAgentWithBody performs a POST /v1/agent-enrollments (the `EnrollAgent` operationId) request,
 // with any type of body and a specified content type.
-func (c *Client) EnrollAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewEnrollAgentRequestWithBody(c.Server, contentType, body)
+func (c *Client) EnrollAgentWithBody(ctx context.Context, params *EnrollAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEnrollAgentRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -799,8 +809,8 @@ func (c *Client) EnrollAgentWithBody(ctx context.Context, contentType string, bo
 
 // EnrollAgent performs a POST /v1/agent-enrollments (the `EnrollAgent` operationId) request.
 // Takes a body of the `application/json` content type.
-func (c *Client) EnrollAgent(ctx context.Context, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewEnrollAgentRequest(c.Server, body)
+func (c *Client) EnrollAgent(ctx context.Context, params *EnrollAgentParams, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEnrollAgentRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -934,18 +944,18 @@ func (c *Client) LeaseAgentWork(ctx context.Context, body LeaseAgentWorkJSONRequ
 }
 
 // NewEnrollAgentRequest calls the generic EnrollAgent builder with application/json body
-func NewEnrollAgentRequest(server string, body EnrollAgentJSONRequestBody) (*http.Request, error) {
+func NewEnrollAgentRequest(server string, params *EnrollAgentParams, body EnrollAgentJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewEnrollAgentRequestWithBody(server, "application/json", bodyReader)
+	return NewEnrollAgentRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewEnrollAgentRequestWithBody constructs an http.Request for the EnrollAgent method, with any body, and a specified content type
-func NewEnrollAgentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewEnrollAgentRequestWithBody(server string, params *EnrollAgentParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -969,6 +979,19 @@ func NewEnrollAgentRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
 
 	return req, nil
 }
@@ -1196,11 +1219,11 @@ type ClientWithResponsesInterface interface {
 	// with any type of body and a specified content type.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	EnrollAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error)
+	EnrollAgentWithBodyWithResponse(ctx context.Context, params *EnrollAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error)
 
 	// EnrollAgentWithResponse performs a POST /v1/agent-enrollments (the `EnrollAgent` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	EnrollAgentWithResponse(ctx context.Context, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error)
+	EnrollAgentWithResponse(ctx context.Context, params *EnrollAgentParams, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error)
 
 	// UpsertDiscoveryCandidatesWithBodyWithResponse Idempotently upsert a bounded discovery candidate batch
 	//
@@ -1488,8 +1511,8 @@ func (r LeaseAgentWorkResponse) ContentType() string {
 // with any type of body and a specified content type.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) EnrollAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error) {
-	rsp, err := c.EnrollAgentWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) EnrollAgentWithBodyWithResponse(ctx context.Context, params *EnrollAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error) {
+	rsp, err := c.EnrollAgentWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -1498,8 +1521,8 @@ func (c *ClientWithResponses) EnrollAgentWithBodyWithResponse(ctx context.Contex
 
 // EnrollAgentWithResponse performs a POST /v1/agent-enrollments (the `EnrollAgent` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) EnrollAgentWithResponse(ctx context.Context, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error) {
-	rsp, err := c.EnrollAgent(ctx, body, reqEditors...)
+func (c *ClientWithResponses) EnrollAgentWithResponse(ctx context.Context, params *EnrollAgentParams, body EnrollAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*EnrollAgentResponse, error) {
+	rsp, err := c.EnrollAgent(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

@@ -42,11 +42,14 @@ func TestAgentEnrollmentAndHeartbeatHandlers(t *testing.T) {
 	}
 
 	rawToken := enrollment.Token
+	rawCredential := "agent-caller-credential-01234567890123456789"
 	enrollResponse, err := server.EnrollAgent(
 		context.Background(),
 		httpapi.EnrollAgentRequestObject{
+			Params: httpapi.EnrollAgentParams{IdempotencyKey: "agent-enroll-test-1"},
 			Body: &httpapi.EnrollAgentJSONRequestBody{
 				Token:        &rawToken,
+				Credential:   &rawCredential,
 				Name:         "vps-1",
 				Capabilities: []httpapi.AgentCapability{httpapi.AgentCapabilityHttp},
 			},

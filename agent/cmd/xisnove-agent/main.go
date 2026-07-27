@@ -59,8 +59,21 @@ func execute(args []string, stdout, stderr io.Writer, getenv func(string) string
 		fmt.Fprintln(stdout, value)
 		return 0
 	}
+	if len(args) > 0 && args[0] == "enroll" {
+		err := enrollCommand(context.Background(), args[1:])
+		if err == nil {
+			return 0
+		}
+		var usage *enrollUsageError
+		if errors.As(err, &usage) {
+			fmt.Fprintf(stderr, "invalid enrollment command: %v\n", usage)
+			return 2
+		}
+		fmt.Fprintf(stderr, "Agent enrollment failed: %v\n", err)
+		return 1
+	}
 	if len(args) != 0 {
-		fmt.Fprintln(stderr, "usage: xisnove-agent [--version]")
+		fmt.Fprintln(stderr, "usage: xisnove-agent [--version] | enroll [flags]")
 		return 2
 	}
 	config, err := loadConfig(getenv)

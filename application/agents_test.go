@@ -48,6 +48,40 @@ func TestEnrollmentTokenIsOneTimeAndLocationScoped(t *testing.T) {
 	}
 }
 
+func TestEnrollmentWithCallerCredentialReplaysAfterLostResponse(t *testing.T) {
+	service, _ := newAgentServiceForTest(t)
+	ctx := context.Background()
+	enrollment, err := service.CreateEnrollmentToken(ctx, "l1", 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := application.EnrollAgentCommand{
+		Token: enrollment.Token, Name: "edge-agent",
+		Capabilities:   []domain.AgentCapability{domain.CapabilityHTTP},
+		Credential:     "agent-caller-credential-01234567890123456789",
+		IdempotencyKey: "chart-agent-enrollment-1",
+	}
+	first, err := service.Enroll(ctx, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := service.Enroll(ctx, command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayed.ID != first.ID || replayed.Credential != command.Credential {
+		t.Fatalf("replay = %#v, first = %#v", replayed, first)
+	}
+	if _, err := service.Authenticate(ctx, command.Credential); err != nil {
+		t.Fatalf("authenticate caller credential: %v", err)
+	}
+	changed := command
+	changed.Name = "different-agent"
+	if _, err := service.Enroll(ctx, changed); !errors.Is(err, application.ErrIdempotencyKeyReused) {
+		t.Fatalf("changed replay error = %v", err)
+	}
+}
+
 func TestEnrollmentTokenClampsLifetime(t *testing.T) {
 	tests := []struct {
 		name string

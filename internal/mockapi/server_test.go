@@ -573,8 +573,8 @@ func advertisedOperationRequest(operationID string) any {
 		}
 	case "EnrollAgent":
 		return map[string]any{
-			"token": "xisnove_mock_enrollment_0000000000000000000001",
-			"name":  "contract agent", "capabilities": []string{"http"},
+			"token":      "xisnove_mock_enrollment_0000000000000000000001",
+			"credential": agentToken, "name": "contract agent", "capabilities": []string{"http"},
 		}
 	case "HeartbeatAgent":
 		return map[string]any{

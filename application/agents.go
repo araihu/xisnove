@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -22,9 +24,11 @@ type EnrollmentCredential struct {
 }
 
 type EnrollAgentCommand struct {
-	Token        string
-	Name         string
-	Capabilities []domain.AgentCapability
+	Token          string
+	Name           string
+	Capabilities   []domain.AgentCapability
+	Credential     string
+	IdempotencyKey string
 }
 
 type EnrolledAgentCredential struct {
@@ -92,6 +96,9 @@ func (s *AgentService) Enroll(
 	if command.Token == "" {
 		return EnrolledAgentCredential{}, ErrInvalidEnrollmentToken
 	}
+	if command.Credential != "" || command.IdempotencyKey != "" {
+		return s.enrollCallerCredential(ctx, command)
+	}
 	credential, err := s.tokens.New()
 	if err != nil {
 		return EnrolledAgentCredential{}, fmt.Errorf("issue agent credential: %w", err)
@@ -136,6 +143,71 @@ func (s *AgentService) Enroll(
 		return EnrolledAgentCredential{}, err
 	}
 	return EnrolledAgentCredential{Agent: enrolled, Credential: credential.Raw}, nil
+}
+
+func (s *AgentService) enrollCallerCredential(
+	ctx context.Context,
+	command EnrollAgentCommand,
+) (EnrolledAgentCredential, error) {
+	fields := make(map[string]string)
+	if len(command.Credential) < 32 {
+		fields["credential"] = "must contain at least 32 characters"
+	}
+	if command.IdempotencyKey == "" {
+		fields["idempotencyKey"] = "is required"
+	}
+	if len(fields) != 0 {
+		return EnrolledAgentCredential{}, &ValidationError{Fields: fields}
+	}
+
+	tokenHash := s.tokens.Hash(command.Token)
+	credentialHash := s.tokens.Hash(command.Credential)
+	plannedID := domain.AgentID(s.newID())
+	now := s.now().UTC()
+	type enrollmentRequest struct {
+		TokenHash      string                   `json:"tokenHash"`
+		CredentialHash string                   `json:"credentialHash"`
+		Name           string                   `json:"name"`
+		Capabilities   []domain.AgentCapability `json:"capabilities"`
+	}
+	request := enrollmentRequest{
+		TokenHash: hex.EncodeToString(tokenHash), CredentialHash: hex.EncodeToString(credentialHash),
+		Name: command.Name, Capabilities: append([]domain.AgentCapability(nil), command.Capabilities...),
+	}
+	service := NewIdempotencyService[EnrolledAgentCredential](s.store)
+	return service.Execute(ctx, IdempotencyRequest{
+		Principal:   Principal{CredentialID: "enrollment:" + request.TokenHash},
+		OperationID: "enrollAgent", Key: command.IdempotencyKey, Request: request,
+		ResourceKind: "agent",
+	}, func(ctx context.Context, repositories Repositories) (string, EnrolledAgentCredential, error) {
+		enrollment, consumed, err := repositories.Agents.ConsumeEnrollmentToken(ctx, tokenHash, now, now)
+		if err != nil {
+			return "", EnrolledAgentCredential{}, fmt.Errorf("consume enrollment token: %w", err)
+		}
+		if !consumed {
+			return "", EnrolledAgentCredential{}, ErrInvalidEnrollmentToken
+		}
+		enrolled, err := domain.NewAgent(domain.NewAgentParams{
+			ID: plannedID, LocationID: enrollment.LocationID, Name: command.Name,
+			Capabilities: command.Capabilities, CredentialGeneration: 1, CreatedAt: now,
+		})
+		if err != nil {
+			return "", EnrolledAgentCredential{}, &ValidationError{Fields: map[string]string{"agent": "contains invalid configuration"}}
+		}
+		if err := repositories.Agents.Create(ctx, AgentRecord{Agent: enrolled, CredentialHash: credentialHash}); err != nil {
+			return "", EnrolledAgentCredential{}, fmt.Errorf("create agent: %w", err)
+		}
+		return string(enrolled.ID), EnrolledAgentCredential{Agent: enrolled, Credential: command.Credential}, nil
+	}, func(ctx context.Context, repositories Repositories, resourceID string) (EnrolledAgentCredential, error) {
+		record, err := repositories.Agents.Get(ctx, domain.AgentID(resourceID))
+		if err != nil {
+			return EnrolledAgentCredential{}, err
+		}
+		if subtle.ConstantTimeCompare(record.CredentialHash, credentialHash) != 1 {
+			return EnrolledAgentCredential{}, ErrIdempotencyKeyReused
+		}
+		return EnrolledAgentCredential{Agent: record.Agent, Credential: command.Credential}, nil
+	})
 }
 
 func (s *AgentService) Authenticate(

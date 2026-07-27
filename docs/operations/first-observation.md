@@ -38,29 +38,33 @@ export MONITOR_ID="$(
 )"
 ```
 
-Create a one-time enrollment token and enroll the Agent:
+Create a one-time enrollment token and let the Agent atomically materialize its
+caller-generated credential. The enrollment command journals its credential
+and idempotency key before the request, so a lost response can be retried
+without creating another Agent:
 
 ```bash
-export ENROLLMENT_TOKEN="$(
-  curl -fsS -H "Authorization: Bearer $ADMIN_TOKEN" \
-    -H 'Content-Type: application/json' \
-    -d "{\"locationId\":\"$LOCATION_ID\",\"expiresInSeconds\":600}" \
-    "$XISNOVE_URL/v1/agent-enrollment-tokens" | jq -r .token
-)"
-curl -fsS -H 'Content-Type: application/json' \
-  -d "{\"token\":\"$ENROLLMENT_TOKEN\",\"name\":\"edge-1\",\"capabilities\":[\"http\",\"tcp\",\"dns\"]}" \
-  "$XISNOVE_URL/v1/agent-enrollments" |
-  jq -r .credential > ./agent-credential
-chmod 600 ./agent-credential
+umask 077
+curl -fsS -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{\"locationId\":\"$LOCATION_ID\",\"expiresInSeconds\":600}" \
+  "$XISNOVE_URL/v1/agent-enrollment-tokens" |
+  jq -r .token > ./agent-enrollment-token
+go run ./agent/cmd/xisnove-agent enroll \
+  --url "$XISNOVE_URL" \
+  --token-file ./agent-enrollment-token \
+  --credential-file ./agent-credential.json \
+  --name edge-1 \
+  --capabilities http,tcp,dns
 ```
 
-The Agent credential is returned once. Store it in a mode-0600 file or a
-secret manager, never in arguments or source control. Private targets remain
-denied unless explicitly allow-listed:
+The resulting JSON credential bundle is mode 0600. Store it in a secret
+manager, never in arguments or source control. Private targets remain denied
+unless explicitly allow-listed:
 
 ```bash
 XISNOVE_URL="$XISNOVE_URL" \
-XISNOVE_AGENT_CREDENTIAL_FILE=./agent-credential \
+XISNOVE_AGENT_CREDENTIAL_FILE=./agent-credential.json \
 XISNOVE_AGENT_ALLOWED_PRIVATE_CIDRS='10.0.0.0/8,192.168.0.0/16' \
 XISNOVE_AGENT_CAPABILITIES='http,tcp,dns' \
 go run ./agent/cmd/xisnove-agent

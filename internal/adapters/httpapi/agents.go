@@ -48,7 +48,7 @@ func (s *Server) EnrollAgent(
 	ctx context.Context,
 	request EnrollAgentRequestObject,
 ) (EnrollAgentResponseObject, error) {
-	if request.Body == nil || request.Body.Token == nil {
+	if request.Body == nil || request.Body.Token == nil || request.Body.Credential == nil {
 		response, _ := enrollAgentProblem(application.ErrInvalidEnrollmentToken)
 		return response, nil
 	}
@@ -57,9 +57,11 @@ func (s *Server) EnrollAgent(
 		capabilities[i] = domain.AgentCapability(capability)
 	}
 	enrolled, err := s.agents.Enroll(ctx, application.EnrollAgentCommand{
-		Token:        *request.Body.Token,
-		Name:         request.Body.Name,
-		Capabilities: capabilities,
+		Token:          *request.Body.Token,
+		Name:           request.Body.Name,
+		Capabilities:   capabilities,
+		Credential:     *request.Body.Credential,
+		IdempotencyKey: string(request.Params.IdempotencyKey),
 	})
 	if err != nil {
 		response, mapped := enrollAgentProblem(err)
