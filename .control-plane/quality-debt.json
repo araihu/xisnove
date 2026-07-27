@@ -3,7 +3,7 @@
   "items": [
     {
       "id": "QD-2026-07-27-001",
-      "status": "open",
+      "status": "closed",
       "feature": "Goshtoso v0.0.13 UI authoritative history and interaction hardening",
       "exact_sha": "01043fa3544d44b298b36eec1e2922f0999471ea",
       "skipped_gate": "repeat full-repository `make check` after the isolated UI correction",
@@ -31,7 +31,16 @@
       ],
       "trigger": "before freezing Milestone 6.0 or merging this branch into the primary branch",
       "owner": "Xisnove control plane",
-      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-001"
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-001",
+      "closed_at": "2026-07-27",
+      "closure": {
+        "verified_sha": "187d40f055d9e8257badb57dfd16a4a24aea6352",
+        "evidence": [
+          "clean-tree Docker-backed `make check` exited zero at exact SHA 187d40f055d9e8257badb57dfd16a4a24aea6352",
+          "generated drift, SQLite, local Turso, PostgreSQL, operations, root race, Agent, CLI, and UI gates all passed",
+          "the verified SHA descends from 01043fa3544d44b298b36eec1e2922f0999471ea"
+        ]
+      }
     }
   ]
 }
