@@ -86,7 +86,7 @@ if [[ "$actual_buildx_version" != "$buildx_version" ]]; then
   exit 2
 fi
 
-work_dir=$(mktemp -d "${TMPDIR:-/tmp}/xisnove-candidate.XXXXXXXX")
+work_dir=$(mktemp -d "${XISNOVE_RELEASE_TMPDIR:-/tmp}/xisnove-candidate.XXXXXXXX")
 work_dir=$(cd "$work_dir" && pwd -P)
 staging="$work_dir/candidate"
 layouts="$work_dir/layouts"
