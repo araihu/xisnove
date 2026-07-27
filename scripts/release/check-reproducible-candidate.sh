@@ -26,7 +26,9 @@ root=$(cd "$root" && pwd)
 [[ "$(git -C "$root" rev-parse HEAD)" == "$commit" ]] || { echo "requested commit does not match HEAD" >&2; exit 1; }
 [[ -z "$(git -C "$root" status --porcelain=v1 --untracked-files=all)" ]] || { echo "working tree must be clean" >&2; exit 1; }
 
-work_root=$(mktemp -d "${TMPDIR:-/tmp}/xisnove-reproducibility.XXXXXXXX")
+reproducibility_tmp_root=${XISNOVE_RELEASE_TMPDIR:-$(dirname "$root")}
+work_root=$(mktemp -d "$reproducibility_tmp_root/xisnove-reproducibility.XXXXXXXX")
+work_root=$(cd "$work_root" && pwd -P)
 work_a="$work_root/work-a"
 work_b="$work_root/work-b"
 out_a="$work_root/candidate-a"

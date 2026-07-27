@@ -363,6 +363,20 @@ func TestReleaseMakeTargetsWireCandidateIdentityAndReproducibilityGate(t *testin
 }
 
 func TestReproducibleCandidateGateComparesIndependentCleanWorktrees(t *testing.T) {
+	scriptContents := string(mustReadFile(t, filepath.Join(repositoryRoot(t), "scripts", "release", "check-reproducible-candidate.sh")))
+	for _, required := range []string{
+		`reproducibility_tmp_root=${XISNOVE_RELEASE_TMPDIR:-$(dirname "$root")}`,
+		`work_root=$(mktemp -d "$reproducibility_tmp_root/xisnove-reproducibility.XXXXXXXX")`,
+		`work_root=$(cd "$work_root" && pwd -P)`,
+	} {
+		if !strings.Contains(scriptContents, required) {
+			t.Errorf("reproducibility gate lacks Docker-shareable worktree placement %q", required)
+		}
+	}
+	if t.Failed() {
+		return
+	}
+
 	root := t.TempDir()
 	runCommandIn(t, root, nil, "git", "init", "--quiet")
 	runCommandIn(t, root, nil, "git", "config", "user.email", "candidate@example.invalid")
