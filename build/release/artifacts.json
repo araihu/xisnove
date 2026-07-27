@@ -88,7 +88,7 @@
       "name": "xisnove-deployment",
       "kind": "deployment",
       "format": "tar.gz",
-      "includes": ["LICENSE", "NOTICE", "charts/xisnove", "charts/xisnove-edge", "deploy/compose", "deploy/raw", "deploy/systemd", "operator/config/crd", "docs/operations/upgrade.md"],
+      "includes": ["LICENSE", "NOTICE", "charts/xisnove", "charts/xisnove-edge", "deploy/compose", "deploy/raw", "deploy/systemd", "config/crd", "docs/operations/upgrade.md"],
       "version_ref": "release.version"
     }
   ],
