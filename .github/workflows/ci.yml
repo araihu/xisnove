@@ -113,6 +113,10 @@ jobs:
         with:
           image: docker.io/tonistiigi/binfmt:latest@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
           platforms: arm64
+      - name: Select pinned multi-platform Buildx builder
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+        with:
+          driver: docker-container
       - name: Verify native production images
         run: make distribution-image-native-check
       - name: Verify multi-platform OCI layouts

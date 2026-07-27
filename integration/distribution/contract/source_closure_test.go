@@ -244,9 +244,13 @@ func TestM62DistributionGatesAreWired(t *testing.T) {
 	}
 	lock := readToolchainManifest(t, root)
 	qemuAction := ""
+	buildxAction := ""
 	for _, action := range lock.Actions {
 		if action.Name == "docker/setup-qemu-action" {
 			qemuAction = action.Name + "@" + action.SHA
+		}
+		if action.Name == "docker/setup-buildx-action" {
+			buildxAction = action.Name + "@" + action.SHA
 		}
 	}
 	binfmtImage := ""
@@ -255,12 +259,15 @@ func TestM62DistributionGatesAreWired(t *testing.T) {
 			binfmtImage = image.Name + "@" + image.Digest
 		}
 	}
-	for label, required := range map[string]string{"QEMU action": qemuAction, "binfmt image": binfmtImage} {
+	for label, required := range map[string]string{"QEMU action": qemuAction, "Buildx action": buildxAction, "binfmt image": binfmtImage} {
 		if required == "" {
 			t.Errorf("release toolchain lock has no %s", label)
 		} else if !strings.Contains(workflow, required) {
 			t.Errorf("CI workflow does not consume locked %s %q", label, required)
 		}
+	}
+	if !strings.Contains(workflow, "driver: docker-container") {
+		t.Error("CI workflow does not select the docker-container Buildx driver required by OCI export")
 	}
 }
 
