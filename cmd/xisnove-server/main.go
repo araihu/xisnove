@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/araihu/xisnove/internal/adapters/migration"
 	"github.com/araihu/xisnove/internal/buildinfo"
 )
 
@@ -32,6 +33,9 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer, comma
 		fmt.Fprintln(stderr, err)
 		if len(args) == 0 || strings.HasPrefix(args[0], "-") || !knownCommand(args) {
 			return 2
+		}
+		if migration.Retryable(err) {
+			return 75
 		}
 		return 1
 	}

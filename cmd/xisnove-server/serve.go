@@ -19,7 +19,9 @@ import (
 	"github.com/araihu/xisnove/internal/adapters/database"
 	"github.com/araihu/xisnove/internal/adapters/httpapi"
 	"github.com/araihu/xisnove/internal/adapters/ids"
+	"github.com/araihu/xisnove/internal/adapters/migration"
 	"github.com/araihu/xisnove/internal/adapters/observability"
+	"github.com/araihu/xisnove/internal/buildinfo"
 )
 
 func serveCommand(parent context.Context, args []string) (returnErr error) {
@@ -32,6 +34,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	observabilityFlags := addObservabilityFlags(flags)
 	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	replicas := flags.Int("replicas", 1, "expected number of server replicas")
+	installationID := flags.String("installation-id", "default", "stable installation identifier for migration fencing")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -52,10 +55,16 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	traceClosed := false
 	databaseClosed := false
 	var handle *database.Handle
+	var processLease *runtimeProcessLease
 	defer func() {
 		if !traceClosed {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			returnErr = errors.Join(returnErr, tracing.Shutdown(ctx))
+			cancel()
+		}
+		if processLease != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			returnErr = errors.Join(returnErr, processLease.Stop(ctx))
 			cancel()
 		}
 		if handle != nil && !databaseClosed {
@@ -77,6 +86,17 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	}
 	if err := handle.Ready(parent); err != nil {
 		return fmt.Errorf("database is not ready; run db migrate: %w", err)
+	}
+	const processLeaseTTL = 45 * time.Second
+	processLease, err = startRuntimeProcessLease(parent, handle.ProcessLeaseStore(), migration.ProcessLease{
+		InstallationID: *installationID,
+		ProcessID:      ids.NewUUID(),
+		ProcessVersion: runtimeProcessVersion(buildinfo.Version),
+		Readable:       handle.SupportedSchemaInterval(),
+		TTL:            processLeaseTTL,
+	}, 15*time.Second)
+	if err != nil {
+		return err
 	}
 	if err := validateNotificationKeyring(parent, handle.Store, sealer); err != nil {
 		return fmt.Errorf("notification keyring is not ready: %w", err)
@@ -165,7 +185,11 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 				},
 			),
 		}),
-		Ready:   func(ctx context.Context) error { return lifecycle.Ready(ctx, handle.Ready) },
+		Ready: func(ctx context.Context) error {
+			return lifecycle.Ready(ctx, func(ctx context.Context) error {
+				return errors.Join(handle.Ready(ctx), processLease.Ready(ctx))
+			})
+		},
 		Metrics: metrics.Handler(), AdmitWork: lifecycle.AdmitClaim,
 	})
 	if err != nil {
@@ -250,6 +274,8 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 		if err != nil && err != http.ErrServerClosed {
 			serveErr = err
 		}
+	case err := <-processLease.Failures():
+		serveErr = fmt.Errorf("process version lease failed: %w", err)
 	}
 	forcedWatchDone := make(chan struct{})
 	go func() {
@@ -265,7 +291,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	shutdownErr := lifecycle.Shutdown(shutdown, func(ctx context.Context) error {
 		httpErr := server.Shutdown(ctx)
 		loops.Wait()
-		return httpErr
+		return errors.Join(httpErr, processLease.Stop(ctx))
 	})
 	close(forcedWatchDone)
 	traceContext, cancelTrace := context.WithTimeout(context.Background(), 10*time.Second)

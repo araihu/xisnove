@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/araihu/xisnove/internal/adapters/migration"
 	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
 	"github.com/araihu/xisnove/internal/buildinfo"
 )
@@ -25,6 +26,30 @@ func TestExecuteVersionSkipsCommandDependencies(t *testing.T) {
 	want := "xisnove-server version=1.2.3 commit=0123456789abcdef0123456789abcdef01234567 build_date=2026-07-27T03:04:05Z dirty=false\n"
 	if stdout.String() != want {
 		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestExecuteMigrationFailureExitCodes(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "contention", err: migration.NewContentionError("held"), want: 75},
+		{name: "timeout", err: migration.NewTimeoutError("expired"), want: 75},
+		{name: "incompatible schema", err: migration.NewIncompatibleSchemaError("too new"), want: 1},
+		{name: "live incompatible process", err: migration.NewLiveIncompatibleProcessError("old process"), want: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			exit := execute(context.Background(), []string{"db", "migrate"}, &stdout, &stderr, func(context.Context, []string) error {
+				return tt.err
+			})
+			if exit != tt.want || stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 {
+				t.Fatalf("execute = exit %d stdout %q stderr %q, want exit %d", exit, stdout.String(), stderr.String(), tt.want)
+			}
+		})
 	}
 }
 

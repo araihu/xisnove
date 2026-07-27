@@ -4,8 +4,10 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	xisdatabase "github.com/araihu/xisnove/internal/adapters/database"
+	"github.com/araihu/xisnove/internal/adapters/migration"
 )
 
 func TestOpenSQLiteHandleLifecycle(t *testing.T) {
@@ -38,6 +40,20 @@ func TestOpenSQLiteHandleLifecycle(t *testing.T) {
 	}
 	if err := handle.Ready(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	interval := handle.SupportedSchemaInterval()
+	if err := interval.Validate(); err != nil {
+		t.Fatalf("SupportedSchemaInterval() error = %v", err)
+	}
+	lease := migration.ProcessLease{
+		InstallationID: "test", ProcessID: "server-1", ProcessVersion: "dev",
+		Readable: interval, TTL: time.Second,
+	}
+	if err := handle.ProcessLeaseStore().AcquireProcessLease(context.Background(), lease); err != nil {
+		t.Fatalf("AcquireProcessLease() error = %v", err)
+	}
+	if err := handle.ProcessLeaseStore().ReleaseProcessLease(context.Background(), lease.InstallationID, lease.ProcessID); err != nil {
+		t.Fatalf("ReleaseProcessLease() error = %v", err)
 	}
 }
 

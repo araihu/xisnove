@@ -6,8 +6,10 @@ import (
 	"fmt"
 
 	application "github.com/araihu/xisnove/application/port"
+	migrationcontract "github.com/araihu/xisnove/internal/adapters/migration"
 	postgresstore "github.com/araihu/xisnove/internal/adapters/postgres"
 	sqlitestore "github.com/araihu/xisnove/internal/adapters/sqlite"
+	"github.com/araihu/xisnove/internal/adapters/sqlitecompat"
 	"github.com/araihu/xisnove/internal/adapters/tursocloud"
 	"github.com/araihu/xisnove/internal/adapters/tursolocal"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -144,6 +146,59 @@ func (h *Handle) DiscoveryUnitOfWork() application.DiscoveryUnitOfWork {
 		panic("opened database profile does not implement discovery transactions")
 	}
 	return store
+}
+
+// ProcessLeaseStore selects the profile-specific runtime lease implementation
+// used to fence contract migrations from incompatible live server processes.
+func (h *Handle) ProcessLeaseStore() migrationcontract.ProcessLeaseStore {
+	switch h.Profile {
+	case ProfileSQLite:
+		return migrationcontract.ProcessLeaseStoreFuncs{
+			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return sqlitestore.AcquireProcessLease(ctx, h.DB, lease)
+			},
+			Release: func(ctx context.Context, installationID, processID string) error {
+				return sqlitestore.ReleaseProcessLease(ctx, h.DB, installationID, processID)
+			},
+		}
+	case ProfileTursoLocal:
+		return migrationcontract.ProcessLeaseStoreFuncs{
+			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return tursolocal.AcquireProcessLease(ctx, h.DB, lease)
+			},
+			Release: func(ctx context.Context, installationID, processID string) error {
+				return tursolocal.ReleaseProcessLease(ctx, h.DB, installationID, processID)
+			},
+		}
+	case ProfileTursoCloud:
+		return migrationcontract.ProcessLeaseStoreFuncs{
+			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return tursocloud.AcquireProcessLease(ctx, h.DB, lease)
+			},
+			Release: func(ctx context.Context, installationID, processID string) error {
+				return tursocloud.ReleaseProcessLease(ctx, h.DB, installationID, processID)
+			},
+		}
+	case ProfilePostgres:
+		return migrationcontract.ProcessLeaseStoreFuncs{
+			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return postgresstore.AcquireProcessLease(ctx, h.DB, lease)
+			},
+			Release: func(ctx context.Context, installationID, processID string) error {
+				return postgresstore.ReleaseProcessLease(ctx, h.DB, installationID, processID)
+			},
+		}
+	default:
+		panic("opened database profile is not handled")
+	}
+}
+
+// SupportedSchemaInterval returns the schema range readable by this binary.
+func (h *Handle) SupportedSchemaInterval() migrationcontract.SchemaInterval {
+	if h.Profile == ProfilePostgres {
+		return postgresstore.SupportedSchemaInterval
+	}
+	return sqlitecompat.SupportedSchemaInterval
 }
 
 func openSQLite(ctx context.Context, config Config) (*Handle, error) {
