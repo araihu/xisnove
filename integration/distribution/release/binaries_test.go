@@ -13,7 +13,8 @@ import (
 )
 
 type goreleaserConfig struct {
-	Version int `yaml:"version"`
+	Version int    `yaml:"version"`
+	Dist    string `yaml:"dist"`
 	Builds  []struct {
 		ID      string   `yaml:"id"`
 		Dir     string   `yaml:"dir"`
@@ -60,6 +61,9 @@ func TestBinaryGoReleaserMatrixAndMetadataContract(t *testing.T) {
 	}
 	if config.Version != 2 {
 		t.Fatalf("configuration version = %d, want 2", config.Version)
+	}
+	if config.Dist != `{{ if index .Env "XISNOVE_RELEASE_OUTPUT" }}{{ .Env.XISNOVE_RELEASE_OUTPUT }}{{ else }}dist{{ end }}` {
+		t.Fatalf("dist = %q, want release output environment template", config.Dist)
 	}
 
 	type target struct {
@@ -157,7 +161,7 @@ func TestBinaryBuildScriptDerivesStableReleaseMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "release --snapshot --clean --output dist/candidate/archives\n1.2.3-rc.1\n0123456789abcdef0123456789abcdef01234567\n2026-07-27T03:04:05Z\n1785121445\n"
+	want := "release --snapshot --clean\n1.2.3-rc.1\n0123456789abcdef0123456789abcdef01234567\n2026-07-27T03:04:05Z\n1785121445\n"
 	if string(contents) != want {
 		t.Fatalf("captured invocation:\n%s\nwant:\n%s", contents, want)
 	}

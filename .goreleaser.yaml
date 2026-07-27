@@ -1,5 +1,6 @@
 version: 2
 project_name: xisnove
+dist: '{{ if index .Env "XISNOVE_RELEASE_OUTPUT" }}{{ .Env.XISNOVE_RELEASE_OUTPUT }}{{ else }}dist{{ end }}'
 
 builds:
   - id: xisnove-server
