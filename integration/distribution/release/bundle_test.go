@@ -62,10 +62,14 @@ func TestManifestIsCanonicalOrderedAndCleanConsumerVerifiable(t *testing.T) {
 	candidate := t.TempDir()
 	mustWriteFile(t, filepath.Join(candidate, "archives", "server.tar.gz"), "server", 0o644)
 	mustWriteFile(t, filepath.Join(candidate, "sboms", "server.spdx.json"), "{}\n", 0o644)
+	mustWriteFile(t, filepath.Join(candidate, "metadata", "licenses.json"), "{}\n", 0o644)
+	mustWriteFile(t, filepath.Join(candidate, "metadata", "toolchain.lock.json"), "{}\n", 0o644)
 	mustWriteFile(t, filepath.Join(candidate, "oci", "index.json"), "index", 0o644)
 	plan := filepath.Join(candidate, "subjects.json")
 	mustWriteFile(t, plan, `[
   {"kind":"sbom","name":"server-sbom","locator":"sboms/server.spdx.json","path":"sboms/server.spdx.json","mediaType":"application/spdx+json"},
+  {"kind":"metadata","name":"licenses","locator":"metadata/licenses.json","path":"metadata/licenses.json","mediaType":"application/json"},
+  {"kind":"metadata","name":"toolchain-lock","locator":"metadata/toolchain.lock.json","path":"metadata/toolchain.lock.json","mediaType":"application/json"},
   {"kind":"oci-index","name":"server","locator":"oci/index.json","path":"oci/index.json","mediaType":"application/vnd.oci.image.index.v1+json"},
   {"kind":"archive","name":"server","locator":"archives/server.tar.gz","path":"archives/server.tar.gz"}
 ]`, 0o644)
@@ -93,7 +97,7 @@ func TestManifestIsCanonicalOrderedAndCleanConsumerVerifiable(t *testing.T) {
 			t.Fatalf("manifest recursively names itself: %q", subject.Locator)
 		}
 	}
-	wantOrder := []string{"archive/server/", "oci-index/server/", "sbom/server-sbom/"}
+	wantOrder := []string{"archive/server/", "metadata/licenses/", "metadata/toolchain-lock/", "oci-index/server/", "sbom/server-sbom/"}
 	if !reflect.DeepEqual(order, wantOrder) {
 		t.Fatalf("subject order = %v, want %v", order, wantOrder)
 	}

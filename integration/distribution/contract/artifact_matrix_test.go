@@ -146,6 +146,8 @@ func TestArtifactManifestFreezesReleaseMatrix(t *testing.T) {
 	}{
 		"checksums":          {kind: "checksums", format: "sha256"},
 		"sboms":              {kind: "sbom-set", format: "spdx-json"},
+		"licenses":           {kind: "license-inventory", format: "canonical-json"},
+		"toolchain-lock":     {kind: "toolchain-lock", format: "json"},
 		"canonical-manifest": {kind: "digest-manifest", format: "canonical-json"},
 	}
 	for _, artifact := range manifest.Metadata {

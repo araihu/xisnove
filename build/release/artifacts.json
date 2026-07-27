@@ -106,10 +106,22 @@
       "subjects": ["archives", "charts", "oci-indexes", "oci-platform-manifests"]
     },
     {
+      "name": "licenses",
+      "kind": "license-inventory",
+      "format": "canonical-json",
+      "subjects": ["sboms"]
+    },
+    {
+      "name": "toolchain-lock",
+      "kind": "toolchain-lock",
+      "format": "json",
+      "subjects": ["candidate-build", "candidate-verification", "candidate-publication"]
+    },
+    {
       "name": "canonical-manifest",
       "kind": "digest-manifest",
       "format": "canonical-json",
-      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-platform-manifests", "sboms"]
+      "subjects": ["archives", "charts", "bundles", "oci-indexes", "oci-platform-manifests", "sboms", "licenses", "toolchain-lock"]
     }
   ]
 }

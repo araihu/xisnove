@@ -24,11 +24,12 @@ Each image contains those files at `/usr/share/licenses/xisnove/`. Every
 archive, chart, OCI index, and per-platform manifest receives a SHA-256 digest,
 SBOM, provenance, and signature in the candidate digest manifest.
 
-Schema v2 also freezes three metadata surfaces: detached SHA-256 checksums,
-SPDX JSON SBOMs, and one canonical JSON digest manifest. The manifest closes
-over archives, charts, both bundles, OCI indexes, per-platform manifests, and
-SBOMs without recursively naming its own digest. Its detached checksum covers
-the manifest itself.
+Schema v2 also freezes five metadata surfaces: detached SHA-256 checksums,
+SPDX JSON SBOMs, a fail-closed canonical license inventory, the exact release
+toolchain lock, and one canonical JSON digest manifest. The manifest closes
+over archives, charts, both bundles, OCI indexes, per-platform manifests,
+SBOMs, and verified metadata without recursively naming its own digest. Its
+detached checksum covers the manifest itself.
 
 Cross-build success is insufficient. Native Linux amd64 and arm64 runners
 execute each image. The server additionally runs local-Turso open, migrate,

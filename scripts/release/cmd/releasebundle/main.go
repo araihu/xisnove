@@ -441,7 +441,7 @@ func runManifest(args []string) error {
 }
 
 func validatePlan(plan subjectPlan, manifestName string) error {
-	allowed := map[string]bool{"archive": true, "chart": true, "bundle": true, "sbom": true, "oci-index": true, "oci-platform-manifest": true}
+	allowed := map[string]bool{"archive": true, "chart": true, "bundle": true, "sbom": true, "metadata": true, "oci-index": true, "oci-platform-manifest": true}
 	if !allowed[plan.Kind] {
 		return fmt.Errorf("invalid subject kind %q", plan.Kind)
 	}
@@ -556,7 +556,7 @@ func runVerify(args []string) error {
 }
 
 func validateSubject(item subject) error {
-	allowed := map[string]bool{"archive": true, "chart": true, "bundle": true, "sbom": true, "oci-index": true, "oci-platform-manifest": true}
+	allowed := map[string]bool{"archive": true, "chart": true, "bundle": true, "sbom": true, "metadata": true, "oci-index": true, "oci-platform-manifest": true}
 	if !allowed[item.Kind] || item.Name == "" || item.Locator == "" || !digestPattern.MatchString(item.SHA256) || item.Size < 0 {
 		return fmt.Errorf("manifest subject %q violates release contract", item.Name)
 	}
