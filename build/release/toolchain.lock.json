@@ -125,6 +125,15 @@
         "linux-amd64": "9229ccc6d17bb282039ad4a69abb16dcb887a5bce567c075d731d9b3c7ad8eaf",
         "linux-arm64": "8db4a223bd6034deff198e791ea7cb3af0840df25b7e9f370e2f1f3fd20d389b"
       }
+    },
+    {
+      "name": "gh",
+      "version": "2.96.0",
+      "source": "https://github.com/cli/cli/releases/tag/v2.96.0",
+      "checksums": {
+        "linux-amd64": "83d5c2ccad5498f58bf6368acb1ab32588cf43ab3a4b1c301bf36328b1c8bd60",
+        "linux-arm64": "06f86ec7103d41993b76cd78072f43595c34aaa56506d971d9860e67140bf909"
+      }
     }
   ],
   "go_module_tools": [
