@@ -267,6 +267,36 @@
       "trigger": "authorized release tag, before announcing a public release",
       "owner": "Xisnove release workflow",
       "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-009"
+    },
+    {
+      "id": "QD-2026-07-27-010",
+      "status": "open",
+      "feature": "Monitor detail deep links independent of list pagination",
+      "exact_sha": "03827ebc37934d53d031a02e664bf4423ca0f30c",
+      "skipped_gate": "resolve a selected monitor by ID when it is absent from the current paginated monitor list",
+      "reason": "The current public API and generated SDK expose list and health reads but no independent GetMonitor operation. The Drawer slice preserves the list and renders an explicit unavailable-selection recovery instead of inventing a database or private API read.",
+      "risk": "low",
+      "affected_paths": [
+        "openapi/xisnove.yaml",
+        "sdk/**",
+        "ui/internal/controlplane/**",
+        "ui/internal/web/server.go",
+        "ui/internal/view/pages.templ"
+      ],
+      "current_evidence": [
+        "exact SHA 03827ebc37934d53d031a02e664bf4423ca0f30c passed UI generation, unit tests, vet, independent review, and the 204-artifact browser matrix",
+        "unknown or off-page selections render an explicit recovery while preserving the monitor list",
+        "the UI BFF remains API-only and performs no direct storage read"
+      ],
+      "acceptance": [
+        "add a public OpenAPI GetMonitor operation with generated server and Go SDK contracts",
+        "resolve detail identity and health without requiring the selected monitor in ListMonitors results",
+        "test direct, HTMX, Back/Forward, unknown-ID, authorization, focus, and authoritative recovery paths",
+        "close this receipt against the verified descendant SHA"
+      ],
+      "trigger": "before claiming shareable monitor-detail URLs or changing pagination so a selected monitor can leave the current page",
+      "owner": "Xisnove API and UI control plane",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-010"
     }
   ]
 }
