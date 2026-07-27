@@ -232,8 +232,12 @@ func TestNotificationJourneyTransportsRetriesResolutionAndRedaction(t *testing.T
 	if err != nil || enrollment.JSON201 == nil {
 		t.Fatalf("enrollment token: response=%#v error=%v", enrollment, err)
 	}
-	enrolled, err := client.EnrollAgentWithResponse(ctx, sdk.EnrollAgentRequest{
+	credential := "notification-agent-credential-0000000000000001"
+	enrolled, err := client.EnrollAgentWithResponse(ctx, &sdk.EnrollAgentParams{
+		IdempotencyKey: sdk.RequiredIdempotencyKey("notification-agent-enrollment"),
+	}, sdk.EnrollAgentRequest{
 		Token: pointer(enrollment.JSON201.Token), Name: "notification-agent",
+		Credential:   &credential,
 		Capabilities: []sdk.AgentCapability{sdk.AgentCapabilityHttp},
 	})
 	if err != nil || enrolled.JSON201 == nil {

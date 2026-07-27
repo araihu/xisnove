@@ -3,8 +3,18 @@ set -eu
 
 umask 077
 secret_dir=${XISNOVE_SECRET_DIR:-/etc/xisnove/secrets}
+control_plane_owner=${XISNOVE_CONTROL_PLANE_SECRET_OWNER:-}
+chown_command=${XISNOVE_CHOWN_COMMAND:-chown}
+ownership_required=${XISNOVE_REQUIRE_SECRET_OWNERSHIP:-false}
+if [ "$ownership_required" = true ] && [ -z "$control_plane_owner" ]; then
+	printf 'control-plane secret owner is required\n' >&2
+	exit 2
+fi
 mkdir -p "$secret_dir"
 chmod 700 "$secret_dir"
+if [ -n "$control_plane_owner" ]; then
+	"$chown_command" "$control_plane_owner" "$secret_dir"
+fi
 
 random_base64() {
 	openssl rand -base64 "$1" | tr -d '\n'
@@ -27,6 +37,9 @@ write_once() {
 		trap - EXIT HUP INT TERM
 	fi
 	chmod 600 "$path"
+	if [ -n "$control_plane_owner" ]; then
+		"$chown_command" "$control_plane_owner" "$path"
+	fi
 	if [ "${XISNOVE_BOOTSTRAP_INTERRUPT_AFTER:-}" = "$name" ]; then
 		printf 'interrupted after %s\n' "$name" >&2
 		exit 75

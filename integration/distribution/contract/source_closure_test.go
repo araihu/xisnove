@@ -93,7 +93,9 @@ func TestCIUsesImmutableLeastPrivilegeInputs(t *testing.T) {
 		t.Fatal("release toolchain lock has no Go version")
 	}
 	databaseService := ""
+	lockedImages := map[string]bool{}
 	for _, pin := range lock.Images {
+		lockedImages[pin.Name+"@"+pin.Digest] = true
 		if pin.Use == "database-service" {
 			databaseService = pin.Name + "@" + pin.Digest
 		}
@@ -161,9 +163,9 @@ func TestCIUsesImmutableLeastPrivilegeInputs(t *testing.T) {
 				}
 			}
 			for _, match := range serviceReference.FindAllStringSubmatch(content, -1) {
-				if match[1] != databaseService {
-					t.Errorf("service image = %s, want release lock %s", match[1], databaseService)
-				} else {
+				if !lockedImages[match[1]] {
+					t.Errorf("workflow image %s is absent from the release lock", match[1])
+				} else if match[1] == databaseService {
 					usedDatabaseService = true
 				}
 			}
@@ -232,11 +234,66 @@ func TestM62DistributionGatesAreWired(t *testing.T) {
 	for _, required := range []string{
 		"distribution:\n",
 		"make distribution-image-native-check",
+		"make distribution-image-oci-check",
 		"make distribution-helm-check",
 		"make distribution-deploy-check",
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("CI workflow missing M6.2 gate %q", required)
+		}
+	}
+	lock := readToolchainManifest(t, root)
+	qemuAction := ""
+	for _, action := range lock.Actions {
+		if action.Name == "docker/setup-qemu-action" {
+			qemuAction = action.Name + "@" + action.SHA
+		}
+	}
+	binfmtImage := ""
+	for _, image := range lock.Images {
+		if image.Use == "test-emulation" {
+			binfmtImage = image.Name + "@" + image.Digest
+		}
+	}
+	for label, required := range map[string]string{"QEMU action": qemuAction, "binfmt image": binfmtImage} {
+		if required == "" {
+			t.Errorf("release toolchain lock has no %s", label)
+		} else if !strings.Contains(workflow, required) {
+			t.Errorf("CI workflow does not consume locked %s %q", label, required)
+		}
+	}
+}
+
+func TestDockerBuildInputsArePinnedAndSecretFree(t *testing.T) {
+	root := repositoryRoot(t)
+	ignore := read(t, filepath.Join(root, ".dockerignore"))
+	for _, excluded := range []string{"deploy/compose/secrets", "deploy/compose/.bootstrap-state"} {
+		if !strings.Contains(ignore, excluded) {
+			t.Errorf(".dockerignore does not exclude bootstrap runtime path %q", excluded)
+		}
+	}
+	gitignore := read(t, filepath.Join(root, ".gitignore"))
+	for _, excluded := range []string{"deploy/compose/secrets", "deploy/compose/.bootstrap-state"} {
+		if !strings.Contains(gitignore, excluded) {
+			t.Errorf(".gitignore does not exclude bootstrap runtime path %q", excluded)
+		}
+	}
+
+	lock := readToolchainManifest(t, root)
+	frontend := ""
+	for _, image := range lock.Images {
+		if image.Use == "dockerfile-frontend" {
+			frontend = image.Name + "@" + image.Digest
+		}
+	}
+	if frontend == "" {
+		t.Fatal("release toolchain lock has no Dockerfile frontend image")
+	}
+	for _, name := range []string{"server", "ui", "agent", "operator"} {
+		path := filepath.Join(root, "build/package/Dockerfile."+name)
+		first, _, _ := strings.Cut(read(t, path), "\n")
+		if first != "# syntax="+frontend {
+			t.Errorf("%s frontend = %q, want pinned %q", path, first, frontend)
 		}
 	}
 }

@@ -179,8 +179,12 @@ func TestClientReadyAPI(t *testing.T) {
 	if err != nil || enrollment.JSON201 == nil {
 		t.Fatalf("create enrollment response=%#v err=%v", enrollment, err)
 	}
-	enrolled, err := client.EnrollAgentWithResponse(ctx, sdk.EnrollAgentRequest{
+	credential := "client-ready-agent-credential-0000000000000001"
+	enrolled, err := client.EnrollAgentWithResponse(ctx, &sdk.EnrollAgentParams{
+		IdempotencyKey: sdk.RequiredIdempotencyKey("client-ready-agent-enrollment"),
+	}, sdk.EnrollAgentRequest{
 		Token: pointer(enrollment.JSON201.Token), Name: "cluster-agent",
+		Credential:   &credential,
 		Capabilities: []sdk.AgentCapability{sdk.AgentCapabilityHttp, sdk.AgentCapabilityKubernetesDiscovery},
 	})
 	if err != nil || enrolled.JSON201 == nil {

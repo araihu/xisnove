@@ -5,6 +5,8 @@
 .artifacts
 .superpowers
 .worktrees
+deploy/compose/secrets
+deploy/compose/.bootstrap-state
 **/.DS_Store
 **/*.db
 **/*.db-shm

@@ -33,4 +33,3 @@ if [ -n "$auth_token_file" ]; then
 $auth_token_file"
 fi
 export DATABASE_ARGS
-

@@ -96,8 +96,12 @@ func runDiscoveryAPIJourney(t *testing.T, harness *storageHarness) {
 	if err != nil || enrollment.JSON201 == nil {
 		t.Fatalf("create enrollment response=%#v err=%v", enrollment, err)
 	}
-	enrolled, err := client.EnrollAgentWithResponse(ctx, sdk.EnrollAgentRequest{
+	credential := "discovery-agent-credential-0000000000000001"
+	enrolled, err := client.EnrollAgentWithResponse(ctx, &sdk.EnrollAgentParams{
+		IdempotencyKey: sdk.RequiredIdempotencyKey("discovery-agent-enrollment"),
+	}, sdk.EnrollAgentRequest{
 		Token: pointer(enrollment.JSON201.Token), Name: "kube-prod-discovery",
+		Credential:   &credential,
 		Capabilities: []sdk.AgentCapability{sdk.AgentCapabilityKubernetesDiscovery},
 	})
 	if err != nil || enrolled.JSON201 == nil {

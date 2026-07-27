@@ -7,7 +7,9 @@ private host directory; do not edit committed examples with credentials.
 
 ## First installation
 
-Requirements are Docker Compose, `openssl`, `curl`, and `jq`. Set an administrator
+Requirements are the Docker Compose plugin or `docker-compose`, `openssl`, `curl`,
+and `jq`. Detection prefers `docker compose`; `COMPOSE_COMMAND=docker-compose`
+selects the standalone binary explicitly. Set an administrator
 password through a private file or the process environment, then run the bounded
 bootstrap helper:
 
@@ -47,7 +49,16 @@ committed env file or rendered config. Managed Turso is a real remote profile,
 never an emulation: provide its URL by private environment/config, its token via
 `XISNOVE_TURSO_AUTH_TOKEN_FILE`, and set `COMPOSE_PROFILES=managed-turso`.
 Multiple server replicas are allowed only for PostgreSQL and managed Turso. Their
-server services mount no local database storage. Local Turso remains a
+server services mount no local database storage. Bootstrap starts
+`XISNOVE_SERVER_REPLICAS` instances (default `2`) and publishes each API on a
+collision-free loopback port. Discover a deterministic instance with:
+
+```sh
+docker compose -f deploy/compose/compose.yaml port --index 1 server-remote 8080
+```
+
+Use the fixed UI endpoint at `http://127.0.0.1:8081`; internal UI and Agent
+traffic uses Compose service discovery. Local Turso remains a
 raw/singleton profile and is not advertised as Compose multi-replica.
 
 Deploy a separate outbound Agent near private targets with
@@ -56,8 +67,10 @@ to an owner-only file on that host; the Agent initiates all control-plane traffi
 
 ## Operations
 
-Check readiness at `http://127.0.0.1:8080/readyz` and UI readiness at
-`http://127.0.0.1:8081/readyz`. SQLite data lives in `xisnove-data`; restart does
+Check SQLite readiness at `http://127.0.0.1:8080/readyz`. For remote profiles,
+append `/readyz` to the instance endpoint returned by `compose port`. UI
+readiness remains `http://127.0.0.1:8081/readyz`. SQLite data lives in
+`xisnove-data`; restart does
 not remove it. `docker compose down` preserves volumes. Destructive cleanup is
 explicit:
 

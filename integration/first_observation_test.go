@@ -138,10 +138,13 @@ func TestFirstObservationOpensIncidentAfterThirdFailure(t *testing.T) {
 	if err != nil || enrollmentResponse.JSON201 == nil {
 		t.Fatalf("enrollment: response=%#v error=%v", enrollmentResponse, err)
 	}
+	credential := "first-observation-agent-credential-0000000000000001"
 	enrolledResponse, err := client.EnrollAgentWithResponse(
 		ctx,
+		&sdk.EnrollAgentParams{IdempotencyKey: sdk.RequiredIdempotencyKey("first-observation-agent-enrollment")},
 		sdk.EnrollAgentRequest{
 			Token:        pointer(enrollmentResponse.JSON201.Token),
+			Credential:   &credential,
 			Name:         "integration-agent",
 			Capabilities: []sdk.AgentCapability{sdk.AgentCapabilityHttp},
 		},

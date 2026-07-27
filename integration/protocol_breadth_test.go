@@ -108,8 +108,12 @@ func TestProtocolBreadthControlPlanePath(t *testing.T) {
 	if err != nil || enrollment.JSON201 == nil {
 		t.Fatalf("enrollment=%#v error=%v", enrollment, err)
 	}
-	enrolled, err := client.EnrollAgentWithResponse(ctx, sdk.EnrollAgentRequest{
+	credential := "protocol-breadth-agent-credential-0000000000000001"
+	enrolled, err := client.EnrollAgentWithResponse(ctx, &sdk.EnrollAgentParams{
+		IdempotencyKey: sdk.RequiredIdempotencyKey("protocol-breadth-agent-enrollment"),
+	}, sdk.EnrollAgentRequest{
 		Token: pointer(enrollment.JSON201.Token), Name: "hybrid-agent",
+		Credential: &credential,
 		Capabilities: []sdk.AgentCapability{
 			sdk.AgentCapabilityHttp, sdk.AgentCapabilityTcp, sdk.AgentCapabilityDns,
 		},

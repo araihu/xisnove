@@ -12,6 +12,10 @@
     {
       "name": "actions/upload-artifact",
       "sha": "b7c566a772e6b6bfb58ed0dc250532a479d7789f"
+    },
+    {
+      "name": "docker/setup-qemu-action",
+      "sha": "c7c53464625b32c7a7e944ae62b3e17d2b600130"
     }
   ],
   "tools": [
@@ -165,6 +169,16 @@
       "name": "kindest/node:v1.35.0",
       "use": "test-cluster",
       "digest": "sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f"
+    },
+    {
+      "name": "docker/dockerfile:1.18",
+      "use": "dockerfile-frontend",
+      "digest": "sha256:dabfc0969b935b2080555ace70ee69a5261af8a8f1b4df97b9e7fbcf6722eddf"
+    },
+    {
+      "name": "docker.io/tonistiigi/binfmt:latest",
+      "use": "test-emulation",
+      "digest": "sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0"
     }
   ],
   "scanner_database": {

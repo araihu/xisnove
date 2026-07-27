@@ -108,8 +108,15 @@ jobs:
           docker compose version
           shellcheck --version
           systemd-analyze --version
+      - name: Install pinned arm64 emulation for OCI verification
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        with:
+          image: docker.io/tonistiigi/binfmt:latest@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
       - name: Verify native production images
         run: make distribution-image-native-check
+      - name: Verify multi-platform OCI layouts
+        run: make distribution-image-oci-check
       - name: Verify control-plane chart
         run: make distribution-helm-check
       - name: Verify Compose, raw, and systemd deployments

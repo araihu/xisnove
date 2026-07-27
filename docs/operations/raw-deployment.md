@@ -27,6 +27,7 @@ XISNOVE_ADMIN_PASSWORD_FILE=/private/input/admin-password \
 XISNOVE_DATABASE_PROFILE=turso-local \
 XISNOVE_DATABASE_URL=/var/lib/xisnove/turso.db \
 XISNOVE_SECRET_DIR=/etc/xisnove/secrets \
+XISNOVE_CONTROL_PLANE_SECRET_OWNER=xisnove:xisnove \
 XISNOVE_BOOTSTRAP_STATE_DIR=/var/lib/xisnove/bootstrap \
 XISNOVE_AGENT_CREDENTIAL_FILE=/var/lib/xisnove-agent/credential.json \
 XISNOVE_AGENT_CREDENTIAL_OWNER=xisnove-agent:xisnove-agent \
@@ -41,10 +42,14 @@ Every process boundary records a private marker. API mutations use stable
 idempotency keys; response bodies are written atomically before the next marker.
 Retries neither rotate the administrator nor replace an existing Agent bundle.
 
-All secret files are `0600`. Cursor key, notification keyring, UI cookie secret,
-administrator password, Agent credential, and optional managed-Turso token are
-file references. No helper sends secret values as command-line arguments or logs
-them. Vault Agent, OpenBao, ESO, or CSI may materialize the same file contract.
+Bootstrap run as root fails closed unless both ownership inputs are explicit.
+`/etc/xisnove/secrets` becomes `0700 xisnove:xisnove`; its files become `0600`
+and remain readable only by the control-plane identity. Agent credential is
+materialized separately as `0600 xisnove-agent:xisnove-agent`. Cursor key,
+notification keyring, UI cookie secret, administrator password, Agent credential,
+and optional managed-Turso token are file references. No helper sends secret
+values as command-line arguments or logs them. Vault Agent, OpenBao, ESO, or CSI
+may materialize the same file contract with equivalent ownership.
 
 ## systemd lifecycle
 

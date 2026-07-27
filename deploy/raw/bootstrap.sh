@@ -10,10 +10,22 @@ api_url=${XISNOVE_API_URL:-http://127.0.0.1:8080}
 admin_email=${XISNOVE_ADMIN_EMAIL:-admin@example.test}
 agent_name=${XISNOVE_AGENT_NAME:-colocated-agent}
 credential_file=${XISNOVE_AGENT_CREDENTIAL_FILE:-$secret_dir/agent-credential.json}
+ownership_required=${XISNOVE_REQUIRE_SECRET_OWNERSHIP:-false}
+if [ "$(id -u)" -eq 0 ]; then
+	ownership_required=true
+fi
+if [ "$ownership_required" = true ] && [ -z "${XISNOVE_CONTROL_PLANE_SECRET_OWNER:-}" ]; then
+	printf 'control-plane secret owner is required\n' >&2
+	exit 2
+fi
+if [ "$ownership_required" = true ] && [ "${XISNOVE_BOOTSTRAP_ONLINE:-false}" = true ] && [ -z "${XISNOVE_AGENT_CREDENTIAL_OWNER:-}" ]; then
+	printf 'Agent credential owner is required\n' >&2
+	exit 2
+fi
 mkdir -p "$state_dir"
 chmod 700 "$state_dir"
 
-"$script_dir/prepare-secrets.sh"
+XISNOVE_REQUIRE_SECRET_OWNERSHIP=$ownership_required "$script_dir/prepare-secrets.sh"
 # shellcheck source=deploy/raw/database-args.sh
 . "$script_dir/database-args.sh"
 set -f
@@ -57,17 +69,37 @@ until curl --fail --silent --show-error --max-time 2 "$api_url/readyz" >/dev/nul
 done
 boundary server-ready
 
-password=$(cat "$secret_dir/admin-password")
-session=$(jq -cn --arg email "$admin_email" --arg password "$password" '{email:$email,password:$password}' |
-	curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' --data-binary @- "$api_url/v1/sessions" |
-	jq -er '.token')
+session_token_file=$state_dir/session-token
+authorization_header_file=$state_dir/authorization-header
+session_request_file=$state_dir/session-request.json
+session_response_file=$state_dir/session-response.json
+cleanup_session_state() {
+	for path in "$session_token_file" "$authorization_header_file" "$session_request_file" "$session_response_file"; do
+		[ ! -e "$path" ] || unlink "$path"
+	done
+}
+trap cleanup_session_state EXIT HUP INT TERM
+cleanup_session_state
+jq -cn --arg email "$admin_email" --rawfile password "$secret_dir/admin-password" \
+	'{email:$email,password:($password|rtrimstr("\n"))}' >"$session_request_file"
+chmod 600 "$session_request_file"
+curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' \
+	--data-binary @"$session_request_file" "$api_url/v1/sessions" >"$session_response_file"
+jq -er '.token' "$session_response_file" >"$session_token_file"
+chmod 600 "$session_token_file"
+{
+	printf 'Authorization: Bearer '
+	tr -d '\n' <"$session_token_file"
+	printf '\n'
+} >"$authorization_header_file"
+chmod 600 "$authorization_header_file"
 
 location_file=$state_dir/location.json
 if [ ! -s "$location_file" ]; then
 	temporary=$location_file.tmp.$$
 	jq -cn --arg name "${XISNOVE_LOCATION_NAME:-colocated}" '{name:$name}' |
 		curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' \
-		-H "Authorization: Bearer $session" -H 'Idempotency-Key: raw-bootstrap-location-v1' \
+		--header @"$authorization_header_file" -H 'Idempotency-Key: raw-bootstrap-location-v1' \
 		--data-binary @- "$api_url/v1/locations" >"$temporary"
 	jq -e '.id' "$temporary" >/dev/null
 	mv "$temporary" "$location_file"
@@ -89,7 +121,7 @@ if grep -q 'CHANGE-ME-AFTER-ENROLLMENT' "$credential_file"; then
 		temporary=$token_file.tmp.$$
 		jq -cn --arg locationId "$location_id" '{locationId:$locationId,expiresInSeconds:900}' |
 			curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' \
-			-H "Authorization: Bearer $session" -H 'Idempotency-Key: raw-bootstrap-agent-token-v1' \
+			--header @"$authorization_header_file" -H 'Idempotency-Key: raw-bootstrap-agent-token-v1' \
 			--data-binary @- "$api_url/v1/agent-enrollment-tokens" >"$temporary"
 		jq -e '.token' "$temporary" >/dev/null
 		mv "$temporary" "$token_file"
@@ -110,10 +142,8 @@ if grep -q 'CHANGE-ME-AFTER-ENROLLMENT' "$credential_file"; then
 	enrolled_file=$state_dir/enrolled-agent.json
 	if [ ! -s "$enrolled_file" ]; then
 		temporary=$enrolled_file.tmp.$$
-		token=$(jq -er '.token' "$token_file")
-		enrollment_credential=$(cat "$enrollment_credential_file")
-		jq -cn --arg token "$token" --arg credential "$enrollment_credential" --arg name "$agent_name" \
-			'{token:$token,credential:$credential,name:$name,capabilities:["http","tcp","dns"]}' |
+		jq -cn --rawfile token "$token_file" --rawfile credential "$enrollment_credential_file" --arg name "$agent_name" \
+			'{token:($token|fromjson|.token),credential:($credential|rtrimstr("\n")),name:$name,capabilities:["http","tcp","dns"]}' |
 			curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' \
 			-H 'Idempotency-Key: raw-bootstrap-agent-enrollment-v1' \
 			--data-binary @- "$api_url/v1/agent-enrollments" >"$temporary"
@@ -126,10 +156,8 @@ if grep -q 'CHANGE-ME-AFTER-ENROLLMENT' "$credential_file"; then
 	boundary enrollment
 
 	temporary=$credential_file.tmp.$$
-	enrollment_credential=$(cat "$enrollment_credential_file")
-	credential_generation=$(jq -er '.credentialGeneration' "$enrolled_file")
-	jq -cn --arg credential "$enrollment_credential" --argjson generation "$credential_generation" \
-		'{credential:$credential,generation:$generation}' >"$temporary"
+	jq -cn --rawfile credential "$enrollment_credential_file" --rawfile enrolled "$enrolled_file" \
+		'{credential:($credential|rtrimstr("\n")),generation:($enrolled|fromjson|.credentialGeneration)}' >"$temporary"
 	chmod 600 "$temporary"
 	mv "$temporary" "$credential_file"
 	if [ -n "${XISNOVE_AGENT_CREDENTIAL_OWNER:-}" ]; then
@@ -143,3 +171,5 @@ if ! grep -q 'CHANGE-ME-AFTER-ENROLLMENT' "$credential_file" && [ -s "$state_dir
 		[ ! -e "$state_dir/$sensitive_state" ] || unlink "$state_dir/$sensitive_state"
 	done
 fi
+cleanup_session_state
+trap - EXIT HUP INT TERM

@@ -169,8 +169,12 @@ func createPublicStatusFixtures(
 	if err != nil || enrollment.JSON201 == nil {
 		t.Fatalf("create status fixture enrollment response=%#v err=%v", enrollment, err)
 	}
-	agent, err := client.EnrollAgentWithResponse(ctx, sdk.EnrollAgentRequest{
+	credential := "public-status-agent-credential-0000000000000001"
+	agent, err := client.EnrollAgentWithResponse(ctx, &sdk.EnrollAgentParams{
+		IdempotencyKey: sdk.RequiredIdempotencyKey("public-status-agent-enrollment"),
+	}, sdk.EnrollAgentRequest{
 		Token: pointer(enrollment.JSON201.Token), Name: "status-agent",
+		Credential:   &credential,
 		Capabilities: []sdk.AgentCapability{sdk.AgentCapabilityHttp},
 	})
 	if err != nil || agent.JSON201 == nil {

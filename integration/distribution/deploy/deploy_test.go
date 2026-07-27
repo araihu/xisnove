@@ -29,6 +29,7 @@ func TestPrepareSecretsIsPrivateIdempotentAndResumable(t *testing.T) {
 			"XISNOVE_SECRET_DIR="+directory,
 			"XISNOVE_ADMIN_PASSWORD=correct-horse-battery-staple",
 			"XISNOVE_BOOTSTRAP_INTERRUPT_AFTER="+interrupt,
+			testControlPlaneOwner(t),
 		)
 		return command.CombinedOutput()
 	}
@@ -146,7 +147,7 @@ func TestRawSQLiteLoginPersistsAcrossRestart(t *testing.T) {
 	}
 	secretDirectory := filepath.Join(directory, "secrets")
 	prepare := exec.Command("sh", filepath.Join(repo, "deploy/raw/prepare-secrets.sh"))
-	prepare.Env = append(os.Environ(), "XISNOVE_SECRET_DIR="+secretDirectory, "XISNOVE_ADMIN_PASSWORD=test-password-123")
+	prepare.Env = append(os.Environ(), "XISNOVE_SECRET_DIR="+secretDirectory, "XISNOVE_ADMIN_PASSWORD=test-password-123", testControlPlaneOwner(t))
 	if output, err := prepare.CombinedOutput(); err != nil {
 		t.Fatalf("prepare secrets: %v: %s", err, output)
 	}
@@ -221,7 +222,7 @@ func TestRawLocalTursoIsPersistentAndSingleton(t *testing.T) {
 	}
 	secretDirectory := filepath.Join(directory, "secrets")
 	prepare := exec.Command("sh", filepath.Join(repo, "deploy/raw/prepare-secrets.sh"))
-	prepare.Env = append(os.Environ(), "XISNOVE_SECRET_DIR="+secretDirectory, "XISNOVE_ADMIN_PASSWORD=test-password-123")
+	prepare.Env = append(os.Environ(), "XISNOVE_SECRET_DIR="+secretDirectory, "XISNOVE_ADMIN_PASSWORD=test-password-123", testControlPlaneOwner(t))
 	if output, err := prepare.CombinedOutput(); err != nil {
 		t.Fatalf("prepare secrets: %v: %s", err, output)
 	}
@@ -300,7 +301,7 @@ func TestRawPostgresProfileStartsReplicaAndCleansUp(t *testing.T) {
 	}
 	secretDirectory := filepath.Join(directory, "secrets")
 	prepare := exec.Command("sh", filepath.Join(repo, "deploy/raw/prepare-secrets.sh"))
-	prepare.Env = append(os.Environ(), "XISNOVE_SECRET_DIR="+secretDirectory, "XISNOVE_ADMIN_PASSWORD=test-password-123")
+	prepare.Env = append(os.Environ(), "XISNOVE_SECRET_DIR="+secretDirectory, "XISNOVE_ADMIN_PASSWORD=test-password-123", testControlPlaneOwner(t))
 	if output, err := prepare.CombinedOutput(); err != nil {
 		t.Fatalf("prepare secrets: %v: %s", err, output)
 	}
@@ -387,6 +388,244 @@ func TestComposeAndSystemdContracts(t *testing.T) {
 	if !strings.Contains(migration, "TimeoutStartSec=60s") {
 		t.Fatal("migration is not bounded")
 	}
+}
+
+func TestRawBootstrapKeepsSensitiveValuesOutOfProcessArguments(t *testing.T) {
+	script := read(t, filepath.Join(repositoryRoot(t), "deploy/raw/bootstrap.sh"))
+	for _, forbidden := range []string{
+		`--arg password "$password"`,
+		`Authorization: Bearer $session`,
+		`--arg token "$token"`,
+		`--arg credential "$enrollment_credential"`,
+	} {
+		if strings.Contains(script, forbidden) {
+			t.Fatalf("bootstrap exposes sensitive value through argv: %s", forbidden)
+		}
+	}
+	for _, required := range []string{
+		"--rawfile password", "--rawfile token", "--rawfile credential",
+		`--header @"$authorization_header_file"`, "session-token", "authorization-header",
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("bootstrap missing private file mechanism %q", required)
+		}
+	}
+}
+
+func TestComposeCommandSupportsPluginBinaryAndOverride(t *testing.T) {
+	repo := repositoryRoot(t)
+	helper := filepath.Join(repo, "deploy/compose/compose-command.sh")
+	tests := []struct {
+		name             string
+		dockerExit       int
+		override         string
+		wantInvocation   string
+		forbidInvocation string
+	}{
+		{name: "plugin preferred", wantInvocation: "docker compose version", forbidInvocation: "docker-compose version"},
+		{name: "binary fallback", dockerExit: 1, wantInvocation: "docker-compose version"},
+		{name: "plugin override", override: "docker compose", wantInvocation: "docker compose version", forbidInvocation: "docker-compose version"},
+		{name: "binary override", override: "docker-compose", wantInvocation: "docker-compose version", forbidInvocation: "docker compose version"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			logPath := filepath.Join(directory, "invocations")
+			docker := fmt.Sprintf("#!/bin/sh\nprintf 'docker %%s\\n' \"$*\" >>%q\nexit %d\n", logPath, test.dockerExit)
+			if err := os.WriteFile(filepath.Join(directory, "docker"), []byte(docker), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			binary := fmt.Sprintf("#!/bin/sh\nprintf 'docker-compose %%s\\n' \"$*\" >>%q\n", logPath)
+			if err := os.WriteFile(filepath.Join(directory, "docker-compose"), []byte(binary), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			command := exec.Command("sh", "-c", `. "$1"; compose version`, "sh", helper)
+			command.Env = append(withoutEnvironment(os.Environ(), "COMPOSE_COMMAND"),
+				"PATH="+directory+":"+os.Getenv("PATH"),
+				"COMPOSE_COMMAND="+test.override,
+			)
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("compose selection: %v: %s", err, output)
+			}
+			invocations, err := os.ReadFile(logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(invocations), test.wantInvocation) {
+				t.Fatalf("invocations %q do not contain %q", invocations, test.wantInvocation)
+			}
+			if test.forbidInvocation != "" && strings.Contains(string(invocations), test.forbidInvocation) {
+				t.Fatalf("invocations %q contain %q", invocations, test.forbidInvocation)
+			}
+		})
+	}
+}
+
+func TestComposeEndpointNormalizationUsesLoopbackOnDesktopAndLinux(t *testing.T) {
+	directory := t.TempDir()
+	docker := filepath.Join(directory, "docker")
+	if err := os.WriteFile(docker, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	helper := filepath.Join(repositoryRoot(t), "deploy/compose/compose-command.sh")
+	for input, expected := range map[string]string{
+		"127.0.0.1:49152": "127.0.0.1:49152",
+		"0.0.0.0:49153":   "127.0.0.1:49153",
+		"[::]:49154":      "127.0.0.1:49154",
+	} {
+		command := exec.Command("sh", "-c", `. "$1"; normalize_compose_endpoint "$2"`, "sh", helper, input)
+		command.Env = append(withoutEnvironment(os.Environ(), "COMPOSE_COMMAND"), "PATH="+directory+":"+os.Getenv("PATH"))
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("normalize %q: %v: %s", input, err, output)
+		}
+		if actual := strings.TrimSpace(string(output)); actual != expected {
+			t.Errorf("normalize %q = %q, want %q", input, actual, expected)
+		}
+	}
+}
+
+func TestRemoteComposeStartsReplicaSetWithoutHostPortCollision(t *testing.T) {
+	repo := repositoryRoot(t)
+	compose := read(t, filepath.Join(repo, "deploy/compose/compose.yaml"))
+	remoteStart := strings.Index(compose, "  server-remote:")
+	remoteEnd := strings.Index(compose, "\n  ui:")
+	if remoteStart < 0 || remoteEnd <= remoteStart {
+		t.Fatal("server-remote service not found")
+	}
+	remote := compose[remoteStart:remoteEnd]
+	if !strings.Contains(remote, `ports: ["127.0.0.1::8080"]`) {
+		t.Fatal("remote replicas must use collision-free loopback host ports")
+	}
+	if strings.Contains(remote, `ports: ["127.0.0.1:8080:8080"]`) {
+		t.Fatal("remote replicas retain a fixed colliding host port")
+	}
+	bootstrap := read(t, filepath.Join(repo, "deploy/compose/bootstrap.sh"))
+	for _, required := range []string{
+		`--scale "$server_service=$server_replicas"`,
+		`port --index 1 "$server_service" 8080`,
+		`XISNOVE_SERVER_REPLICAS:-2`,
+	} {
+		if !strings.Contains(bootstrap, required) {
+			t.Errorf("remote bootstrap missing %q", required)
+		}
+	}
+}
+
+func TestRawSecretOwnershipIsExplicitAndFailClosed(t *testing.T) {
+	repo := repositoryRoot(t)
+	prepare := filepath.Join(repo, "deploy/raw/prepare-secrets.sh")
+	directory := t.TempDir()
+	command := exec.Command("sh", prepare)
+	command.Env = append(withoutEnvironment(os.Environ(), "XISNOVE_CONTROL_PLANE_SECRET_OWNER"),
+		"XISNOVE_SECRET_DIR="+directory,
+		"XISNOVE_REQUIRE_SECRET_OWNERSHIP=true",
+		"XISNOVE_ADMIN_PASSWORD=test-password-123",
+	)
+	if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "control-plane secret owner is required") {
+		t.Fatalf("missing owner result = %v, %q", err, output)
+	}
+	bootstrap := filepath.Join(repo, "deploy/raw/bootstrap.sh")
+	command = exec.Command("sh", bootstrap)
+	command.Env = append(withoutEnvironment(os.Environ(), "XISNOVE_AGENT_CREDENTIAL_OWNER"),
+		"XISNOVE_BOOTSTRAP_ONLINE=true",
+		"XISNOVE_REQUIRE_SECRET_OWNERSHIP=true",
+		"XISNOVE_CONTROL_PLANE_SECRET_OWNER=xisnove:xisnove",
+	)
+	if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "Agent credential owner is required") {
+		t.Fatalf("missing Agent owner result = %v, %q", err, output)
+	}
+
+	chownLog := filepath.Join(t.TempDir(), "chown.log")
+	chownCommand := filepath.Join(t.TempDir(), "chown")
+	contents := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$*\" >>%q\n", chownLog)
+	if err := os.WriteFile(chownCommand, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command = exec.Command("sh", prepare)
+	command.Env = append(os.Environ(),
+		"XISNOVE_SECRET_DIR="+directory,
+		"XISNOVE_REQUIRE_SECRET_OWNERSHIP=true",
+		"XISNOVE_CONTROL_PLANE_SECRET_OWNER=xisnove:xisnove",
+		"XISNOVE_CHOWN_COMMAND="+chownCommand,
+		"XISNOVE_ADMIN_PASSWORD=test-password-123",
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("owned secret preparation: %v: %s", err, output)
+	}
+	ownership, err := os.ReadFile(chownLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{directory, filepath.Join(directory, "cursor-signing-key"), filepath.Join(directory, "ui-cookie-secret")} {
+		if !strings.Contains(string(ownership), "xisnove:xisnove "+path) {
+			t.Errorf("ownership log missing control-plane path %s: %s", path, ownership)
+		}
+	}
+
+	bootstrapContents := read(t, bootstrap)
+	for _, required := range []string{"XISNOVE_AGENT_CREDENTIAL_OWNER", "Agent credential owner is required"} {
+		if !strings.Contains(bootstrapContents, required) {
+			t.Errorf("bootstrap missing Agent ownership contract %q", required)
+		}
+	}
+}
+
+func TestPrepareSecretsRootComposePathDoesNotRequireSystemdOwner(t *testing.T) {
+	repo := repositoryRoot(t)
+	directory := t.TempDir()
+	fakeBin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(fakeBin, "id"), []byte("#!/bin/sh\nprintf '0\\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("sh", filepath.Join(repo, "deploy/raw/prepare-secrets.sh"))
+	command.Env = append(withoutEnvironment(os.Environ(), "XISNOVE_CONTROL_PLANE_SECRET_OWNER", "XISNOVE_REQUIRE_SECRET_OWNERSHIP"),
+		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+		"XISNOVE_SECRET_DIR="+directory,
+		"XISNOVE_ADMIN_PASSWORD=test-password-123",
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("root-compatible Compose secret preparation: %v: %s", err, output)
+	}
+}
+
+func withoutEnvironment(environment []string, names ...string) []string {
+	result := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		keep := true
+		for _, name := range names {
+			if strings.HasPrefix(entry, name+"=") {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+func testControlPlaneOwner(t *testing.T) string {
+	t.Helper()
+	uid, err := exec.Command("id", "-u").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(uid)) != "0" {
+		return "XISNOVE_CONTROL_PLANE_SECRET_OWNER="
+	}
+	gid, err := exec.Command("id", "-g").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "XISNOVE_CONTROL_PLANE_SECRET_OWNER=0:" + strings.TrimSpace(string(gid))
+}
+
+func testAgentOwner(t *testing.T) string {
+	t.Helper()
+	owner := strings.TrimPrefix(testControlPlaneOwner(t), "XISNOVE_CONTROL_PLANE_SECRET_OWNER=")
+	return "XISNOVE_AGENT_CREDENTIAL_OWNER=" + owner
 }
 
 func repositoryRoot(t *testing.T) string {
@@ -482,6 +721,8 @@ func bootstrapAgentAcrossInterruptions(t *testing.T, repo, directory, server, da
 			"XISNOVE_API_URL="+baseURL,
 			"XISNOVE_ADMIN_EMAIL=admin@example.test",
 			"XISNOVE_AGENT_NAME=raw-agent",
+			testControlPlaneOwner(t),
+			testAgentOwner(t),
 		)
 		output, err := command.CombinedOutput()
 		if wantSuccess && err != nil {
