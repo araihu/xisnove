@@ -583,6 +583,8 @@ func runNormalizeSBOM(args []string) error {
 	input := flags.String("input", "", "raw SPDX JSON")
 	output := flags.String("output", "", "normalized SPDX JSON")
 	subjectDigest := flags.String("subject-sha256", "", "subject SHA-256")
+	var firstPartyDigests stringList
+	flags.Var(&firstPartyDigests, "first-party-sha256", "additional exact first-party payload SHA-256 (repeatable)")
 	epochValue := flags.String("source-date-epoch", "", "Unix timestamp")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -593,6 +595,11 @@ func runNormalizeSBOM(args []string) error {
 	}
 	if *input == "" || *output == "" || !digestPattern.MatchString(*subjectDigest) {
 		return errors.New("--input, --output, and valid --subject-sha256 are required")
+	}
+	for _, digest := range firstPartyDigests {
+		if !digestPattern.MatchString(digest) {
+			return errors.New("--first-party-sha256 must be a valid SHA-256")
+		}
 	}
 	contents, err := os.ReadFile(*input)
 	if err != nil {
@@ -611,7 +618,7 @@ func runNormalizeSBOM(args []string) error {
 		document["creationInfo"] = creation
 	}
 	creation["created"] = epoch.Format(time.RFC3339)
-	applyFirstPartyLicense(document, *subjectDigest)
+	applyFirstPartyLicense(document, append([]string{*subjectDigest}, firstPartyDigests...))
 	normalized, err := marshalCanonical(document)
 	if err != nil {
 		return err
@@ -619,11 +626,11 @@ func runNormalizeSBOM(args []string) error {
 	return atomicWrite(*output, normalized, 0o644)
 }
 
-func applyFirstPartyLicense(document map[string]any, subjectDigest string) {
+func applyFirstPartyLicense(document map[string]any, firstPartyDigests []string) {
 	packages, _ := document["packages"].([]any)
 	for _, value := range packages {
 		pkg, _ := value.(map[string]any)
-		if !packageHasFirstPartyPURL(pkg) && !packageHasSHA256(pkg, subjectDigest) {
+		if !packageHasFirstPartyPURL(pkg) && !packageHasAnySHA256(pkg, firstPartyDigests) {
 			continue
 		}
 		declared, _ := pkg["licenseDeclared"].(string)
@@ -634,6 +641,15 @@ func applyFirstPartyLicense(document map[string]any, subjectDigest string) {
 		pkg["licenseDeclared"] = "Apache-2.0"
 		pkg["licenseConcluded"] = "Apache-2.0"
 	}
+}
+
+func packageHasAnySHA256(pkg map[string]any, digests []string) bool {
+	for _, digest := range digests {
+		if packageHasSHA256(pkg, digest) {
+			return true
+		}
+	}
+	return false
 }
 
 func packageHasFirstPartyPURL(pkg map[string]any) bool {

@@ -257,6 +257,25 @@ func TestSBOMNormalizationAndLicensePolicyFailClosed(t *testing.T) {
 	}
 }
 
+func TestSBOMNormalizationLicensesExactFirstPartyPayloadDigest(t *testing.T) {
+	tool := buildReleaseBundleTool(t)
+	root := t.TempDir()
+	raw := filepath.Join(root, "raw.spdx.json")
+	normalized := filepath.Join(root, "normalized.spdx.json")
+	subjectDigest := strings.Repeat("a", 64)
+	payloadDigest := strings.Repeat("b", 64)
+	mustWriteFile(t, raw, `{"spdxVersion":"SPDX-2.3","packages":[{"name":"chart-payload","checksums":[{"algorithm":"SHA256","checksumValue":"`+payloadDigest+`"}],"licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"},{"name":"unknown-third-party","checksums":[{"algorithm":"SHA256","checksumValue":"`+strings.Repeat("c", 64)+`"}],"licenseDeclared":"NOASSERTION","licenseConcluded":"NOASSERTION"}]}`, 0o644)
+	runTool(t, tool, "normalize-sbom", "--input", raw, "--output", normalized, "--subject-sha256", subjectDigest, "--first-party-sha256", payloadDigest, "--source-date-epoch", releaseEpoch)
+
+	contents := string(mustReadFile(t, normalized))
+	if !strings.Contains(contents, `"name":"chart-payload"`) || !strings.Contains(contents, `"licenseConcluded":"Apache-2.0"`) {
+		t.Fatalf("exact first-party payload was not licensed: %s", contents)
+	}
+	if strings.Count(contents, `"licenseConcluded":"Apache-2.0"`) != 1 {
+		t.Fatalf("non-matching payload was licensed: %s", contents)
+	}
+}
+
 func TestLicensePolicyV2ScopesGoAndUbuntuDecisions(t *testing.T) {
 	tool := buildReleaseBundleTool(t)
 	root := t.TempDir()

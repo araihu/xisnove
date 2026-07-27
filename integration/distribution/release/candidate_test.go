@@ -231,18 +231,23 @@ printf '%s\n' '{"spdxVersion":"SPDX-2.3","packages":[]}' > "$output"
 	fakeReleasebundle := filepath.Join(root, "releasebundle")
 	mustWriteFile(t, fakeReleasebundle, `#!/bin/sh
 set -eu
+printf '%s\n' "$*" > "$RELEASEBUNDLE_CAPTURE"
 shift
 while [ "$#" -gt 0 ]; do case "$1" in --input) input=$2; shift 2 ;; --output) output=$2; shift 2 ;; *) shift ;; esac; done
 cp "$input" "$output"
 `, 0o755)
+	releasebundleCapture := filepath.Join(root, "releasebundle.log")
 	output := filepath.Join(root, "sboms")
 	cmd := exec.Command(tool, "sbom-oci", "--layout-dir", layout, "--kind", "oci-manifest", "--name", "xisnove", "--output-dir", output, "--source-date-epoch", releaseEpoch, "--syft", fakeSyft, "--releasebundle", fakeReleasebundle, "--platforms=false")
-	cmd.Env = append(os.Environ(), "CAPTURE="+capture)
+	cmd.Env = append(os.Environ(), "CAPTURE="+capture, "RELEASEBUNDLE_CAPTURE="+releasebundleCapture)
 	if combined, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("sbom-oci: %v\n%s", err, combined)
 	}
 	if got := strings.TrimSpace(string(mustReadFile(t, capture))); !strings.HasPrefix(got, wantSource+" ") || !strings.Contains(got, "--enrich golang") {
 		t.Fatalf("Syft chart source = %q, want exact chart layer %q", got, wantSource)
+	}
+	if got := strings.TrimSpace(string(mustReadFile(t, releasebundleCapture))); !strings.Contains(got, "--first-party-sha256 "+hex.EncodeToString(chartDigest[:])) {
+		t.Fatalf("chart layer digest was not passed as first-party evidence: %s", got)
 	}
 	if _, err := os.Stat(filepath.Join(output, "oci-manifest--xisnove.spdx.json")); err != nil {
 		t.Fatalf("missing chart OCI SBOM: %v", err)

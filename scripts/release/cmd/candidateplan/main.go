@@ -507,11 +507,12 @@ func sbomOCI(args []string) error {
 	}
 	root, indexBytes, platforms, err := selectImageSubjects(blobs, top)
 	syftSource := "oci-dir:" + *layoutDir
+	firstPartyDigest := ""
 	if !*platformsRequired {
 		root, indexBytes, err = selectArtifactSubject(blobs, top)
 		platforms = nil
 		if err == nil {
-			syftSource, err = artifactLayerSource(*layoutDir, blobs, indexBytes)
+			syftSource, firstPartyDigest, err = artifactLayerSource(*layoutDir, blobs, indexBytes)
 		}
 	}
 	if err != nil {
@@ -553,7 +554,12 @@ func sbomOCI(args []string) error {
 		if combined, err := exec.Command(*syft, syftArgs...).CombinedOutput(); err != nil {
 			return fmt.Errorf("syft %s: %w: %s", item.suffix, err, strings.TrimSpace(string(combined)))
 		}
-		command := exec.Command(*releasebundle, "normalize-sbom", "--input", raw, "--output", output, "--subject-sha256", item.digest, "--source-date-epoch", *epochValue)
+		normalizeArgs := []string{"normalize-sbom", "--input", raw, "--output", output, "--subject-sha256", item.digest}
+		if firstPartyDigest != "" {
+			normalizeArgs = append(normalizeArgs, "--first-party-sha256", firstPartyDigest)
+		}
+		normalizeArgs = append(normalizeArgs, "--source-date-epoch", *epochValue)
+		command := exec.Command(*releasebundle, normalizeArgs...)
 		if combined, err := command.CombinedOutput(); err != nil {
 			return fmt.Errorf("normalize %s: %w: %s", item.suffix, err, strings.TrimSpace(string(combined)))
 		}
@@ -611,10 +617,10 @@ func sbomOCI(args []string) error {
 	return nil
 }
 
-func artifactLayerSource(layoutDir string, blobs map[string][]byte, manifestBytes []byte) (string, error) {
+func artifactLayerSource(layoutDir string, blobs map[string][]byte, manifestBytes []byte) (string, string, error) {
 	var manifest imageManifest
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		return "", err
+		return "", "", err
 	}
 	var selected descriptor
 	for _, layer := range manifest.Layers {
@@ -622,17 +628,21 @@ func artifactLayerSource(layoutDir string, blobs map[string][]byte, manifestByte
 			continue
 		}
 		if selected.Digest != "" {
-			return "", errors.New("artifact manifest has multiple Helm chart layers")
+			return "", "", errors.New("artifact manifest has multiple Helm chart layers")
 		}
 		selected = layer
 	}
 	if selected.Digest == "" {
-		return "", errors.New("artifact manifest has no Helm chart layer")
+		return "", "", errors.New("artifact manifest has no Helm chart layer")
 	}
 	if _, ok := blobs[blobPath(selected.Digest)]; !ok {
-		return "", fmt.Errorf("artifact layer %s missing", selected.Digest)
+		return "", "", fmt.Errorf("artifact layer %s missing", selected.Digest)
 	}
-	return "file:" + filepath.Join(layoutDir, filepath.FromSlash(blobPath(selected.Digest))), nil
+	if !digestPattern.MatchString(selected.Digest) {
+		return "", "", errors.New("artifact layer digest is not SHA-256")
+	}
+	digest := strings.TrimPrefix(selected.Digest, "sha256:")
+	return "file:" + filepath.Join(layoutDir, filepath.FromSlash(blobPath(selected.Digest))), digest, nil
 }
 
 func validateSubjectName(name string) error {
