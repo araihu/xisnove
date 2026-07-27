@@ -96,6 +96,60 @@
       "trigger": "M6.3 protected provider acceptance before release publication",
       "owner": "Xisnove release workflow",
       "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-003"
+    },
+    {
+      "id": "QD-2026-07-27-004",
+      "status": "open",
+      "feature": "M6.2B credentialed managed Turso Helm release smoke",
+      "exact_sha": "879c67364cbcb662455ba13bfe02a540a7ec51c7",
+      "skipped_gate": "install the control-plane chart with three server replicas against a disposable managed Turso database using protected credentials",
+      "reason": "The chart feature is rendered and locally validated; provider-backed acceptance requires protected credentials and a disposable remote database lifecycle reserved for M6.4.",
+      "risk": "medium",
+      "affected_paths": [
+        "charts/xisnove/**",
+        "integration/distribution/helm/**"
+      ],
+      "current_evidence": [
+        "managed Turso three-replica render and schema validation pass",
+        "database URL and token use existingSecret file references only",
+        "focused runtime secret and timeout tests pass"
+      ],
+      "acceptance": [
+        "provision a disposable managed Turso database and disposable Kubernetes cluster",
+        "install the chart with three server replicas and protected existingSecret references",
+        "prove migration, bootstrap, API read-write, redacted logs, and exact cluster/database teardown",
+        "close this receipt against the verified descendant SHA"
+      ],
+      "trigger": "M6.4 protected pre-release acceptance",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-004"
+    },
+    {
+      "id": "QD-2026-07-27-005",
+      "status": "open",
+      "feature": "M6.2B real N-1 and N chart upgrade certification",
+      "exact_sha": "879c67364cbcb662455ba13bfe02a540a7ec51c7",
+      "skipped_gate": "run immutable release-image N-1/N expand-migrate-contract upgrades for SQLite, PostgreSQL, and managed Turso",
+      "reason": "Feature delivery includes a representative shell-free three-node SQLite and Agent upgrade journey. The exhaustive real-image/provider permutation matrix is a release-certification gate.",
+      "risk": "medium",
+      "affected_paths": [
+        "charts/xisnove/**",
+        "integration/distribution/helm/**"
+      ],
+      "current_evidence": [
+        "three-node SQLite v1-v2 UID replacement and Agent enrollment Kind journey passes without Multi-Attach",
+        "M6.1 compatibility and migration fence contracts pass",
+        "SQLite, PostgreSQL, and managed Turso chart renders pass"
+      ],
+      "acceptance": [
+        "run immutable N-1 and N release images for every supported relational profile",
+        "prove expand, mixed-version readiness, contract fence, documented rollback limit, and final convergence",
+        "cover SQLite downtime plus PostgreSQL and managed Turso rolling paths",
+        "close this receipt against the verified descendant SHA"
+      ],
+      "trigger": "M6.4 upgrade certification before release publication",
+      "owner": "Xisnove release workflow",
+      "tracker": ".control-plane/quality-debt.json#QD-2026-07-27-005"
     }
   ]
 }
