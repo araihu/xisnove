@@ -97,6 +97,13 @@ func TestToolchainPinsAreImmutableAndComplete(t *testing.T) {
 				t.Errorf("tool %q missing %s checksum", pin.Name, target)
 			}
 		}
+		if pin.Name == "buildx" {
+			for _, target := range []string{"darwin-amd64", "darwin-arm64"} {
+				if _, ok := pin.Checksums[target]; !ok {
+					t.Errorf("tool %q missing local integration target %s checksum", pin.Name, target)
+				}
+			}
+		}
 		for target, value := range pin.Checksums {
 			if !checksum.MatchString(value) {
 				t.Errorf("tool %q target %q checksum %q is invalid", pin.Name, target, value)
