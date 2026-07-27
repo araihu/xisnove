@@ -20,7 +20,11 @@ const MinimumMigrationVersion = LatestMigrationVersion - 1
 const migrationAdvisoryLockID int64 = 0x7869736e6f7665
 
 var SupportedSchemaInterval = migrationcontract.SchemaInterval{Minimum: MinimumMigrationVersion, Maximum: LatestMigrationVersion}
+
+// PreviousRuntimeSchemaInterval freezes M6.1 for the next release transition;
+// pre-M6.1 binaries accepted only exact schema 10.
 var PreviousRuntimeSchemaInterval = migrationcontract.SchemaInterval{Minimum: MinimumMigrationVersion, Maximum: LatestMigrationVersion}
+var SchemaMigrationPlan = migrationcontract.PhasePlan{ExpandThrough: LatestMigrationVersion, ContractThrough: LatestMigrationVersion}
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	return MigrateWithOptions(ctx, db, migrationcontract.DefaultOptions(randomMigrationOwnerID()))
@@ -30,6 +34,15 @@ func MigrateWithOptions(ctx context.Context, db *sql.DB, options migrationcontra
 	if err := options.Validate(); err != nil {
 		return err
 	}
+	if err := SchemaMigrationPlan.Validate(migrations.LatestVersion); err != nil {
+		return err
+	}
+	return withMigrationLock(ctx, db, options, func(lockCtx context.Context) error {
+		return migrateTo(lockCtx, db, SchemaMigrationPlan.Target(migrationcontract.PhaseExpand))
+	})
+}
+
+func withMigrationLock(ctx context.Context, db *sql.DB, options migrationcontract.Options, action func(context.Context) error) error {
 	locker := &advisoryLocker{lockID: migrationAdvisoryLockID, poll: options.PollInterval}
 	lockCtx, cancel := context.WithTimeout(ctx, options.LockTimeout)
 	conn, err := db.Conn(lockCtx)
@@ -48,11 +61,15 @@ func MigrateWithOptions(ctx context.Context, db *sql.DB, options migrationcontra
 	cancel()
 	defer conn.Close()
 	defer func() { _ = locker.SessionUnlock(context.Background(), conn) }()
+	return action(ctx)
+}
+
+func migrateTo(ctx context.Context, db *sql.DB, target int64) error {
 	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.Files, goose.WithTableName("schema_migrations"))
 	if err != nil {
 		return fmt.Errorf("create migration provider: %w", err)
 	}
-	if _, err := provider.Up(ctx); err != nil {
+	if _, err := provider.UpTo(ctx, target); err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
 	return nil
@@ -117,7 +134,22 @@ func AcquireProcessLease(ctx context.Context, db *sql.DB, lease migrationcontrac
 	if err := lease.Validate(); err != nil {
 		return err
 	}
-	_, err := db.ExecContext(ctx, `INSERT INTO process_version_leases (
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire process lease connection: %w", err)
+	}
+	defer conn.Close()
+	var acquired bool
+	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock_shared($1)", migrationAdvisoryLockID).Scan(&acquired); err != nil {
+		return fmt.Errorf("enter process version lease fence: %w", err)
+	}
+	if !acquired {
+		return migrationcontract.NewContentionError("migration fence is active")
+	}
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock_shared($1)", migrationAdvisoryLockID)
+	}()
+	_, err = conn.ExecContext(ctx, `INSERT INTO process_version_leases (
 		installation_id, process_id, process_version, minimum_schema_version,
 		maximum_schema_version, heartbeat_at_ms, expires_at_ms
 	) VALUES ($1, $2, $3, $4, $5, `+postgresNowMillis+`, `+postgresNowMillis+` + $6)
@@ -131,6 +163,27 @@ func AcquireProcessLease(ctx context.Context, db *sql.DB, lease migrationcontrac
 		lease.Readable.Minimum, lease.Readable.Maximum, lease.TTL.Milliseconds())
 	if err != nil {
 		return fmt.Errorf("acquire process version lease: %w", err)
+	}
+	return nil
+}
+
+func RenewProcessLease(ctx context.Context, db *sql.DB, lease migrationcontract.ProcessLease) error {
+	if err := lease.Validate(); err != nil {
+		return err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE process_version_leases SET
+		process_version = $1, minimum_schema_version = $2, maximum_schema_version = $3,
+		heartbeat_at_ms = `+postgresNowMillis+`, expires_at_ms = `+postgresNowMillis+` + $4
+		WHERE installation_id = $5 AND process_id = $6`,
+		lease.ProcessVersion, lease.Readable.Minimum, lease.Readable.Maximum,
+		lease.TTL.Milliseconds(), lease.InstallationID, lease.ProcessID)
+	if err != nil {
+		return fmt.Errorf("renew process version lease: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return fmt.Errorf("inspect process version lease renewal: %w", err)
+	} else if affected != 1 {
+		return fmt.Errorf("renew process version lease: lease is absent")
 	}
 	return nil
 }
@@ -170,22 +223,25 @@ func CheckContractWithOptions(ctx context.Context, db *sql.DB, options migration
 	if err := options.Validate(); err != nil {
 		return err
 	}
-	lockCtx, cancel := context.WithTimeout(ctx, options.LockTimeout)
-	defer cancel()
-	conn, err := db.Conn(lockCtx)
-	if err != nil {
-		return migrationcontract.ClassifyLockError(err)
-	}
-	defer conn.Close()
-	locker := &advisoryLocker{lockID: migrationAdvisoryLockID, poll: options.PollInterval}
-	if err := locker.SessionLock(lockCtx, conn); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return migrationcontract.NewTimeoutError("PostgreSQL advisory lock deadline exceeded")
-		}
+	return withMigrationLock(ctx, db, options, func(lockCtx context.Context) error {
+		return CheckContractAllowed(lockCtx, db, options.InstallationID, targetSchema)
+	})
+}
+
+func ContractWithOptions(ctx context.Context, db *sql.DB, options migrationcontract.Options) error {
+	if err := options.Validate(); err != nil {
 		return err
 	}
-	defer func() { _ = locker.SessionUnlock(context.Background(), conn) }()
-	return CheckContractAllowed(lockCtx, db, options.InstallationID, targetSchema)
+	if err := SchemaMigrationPlan.Validate(migrations.LatestVersion); err != nil {
+		return err
+	}
+	target := SchemaMigrationPlan.Target(migrationcontract.PhaseContract)
+	return withMigrationLock(ctx, db, options, func(lockCtx context.Context) error {
+		if err := CheckContractAllowed(lockCtx, db, options.InstallationID, target); err != nil {
+			return err
+		}
+		return migrateTo(lockCtx, db, target)
+	})
 }
 
 func randomMigrationOwnerID() string {

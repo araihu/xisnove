@@ -39,15 +39,18 @@ func migrate(ctx context.Context, db *sql.DB) error {
 }
 
 func migrateWithOptions(ctx context.Context, db *sql.DB, options migration.Options) error {
+	if err := sqlitecompat.SchemaMigrationPlan.Validate(migrations.LatestVersion); err != nil {
+		return err
+	}
 	migrationCtx, release, err := sqlitecompat.AcquireDatabaseMigrationLease(ctx, db, options)
 	if err != nil {
 		return err
 	}
 	defer release()
-	return migrateUnlocked(migrationCtx, db)
+	return migrateUnlocked(migrationCtx, db, sqlitecompat.SchemaMigrationPlan.Target(migration.PhaseExpand))
 }
 
-func migrateUnlocked(ctx context.Context, db *sql.DB) error {
+func migrateUnlocked(ctx context.Context, db *sql.DB, target int64) error {
 	if _, err := db.ExecContext(ctx, initializeVersionTable); err != nil {
 		return fmt.Errorf("initialize managed Turso migration table: %w", err)
 	}
@@ -74,6 +77,9 @@ func migrateUnlocked(ctx context.Context, db *sql.DB) error {
 		}
 		if version <= current {
 			continue
+		}
+		if version > target {
+			break
 		}
 		content, err := migrations.Files.ReadFile(name)
 		if err != nil {

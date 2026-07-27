@@ -17,6 +17,37 @@ const (
 	PhaseContract Phase = "contract"
 )
 
+// PhasePlan forces every embedded migration version to be classified before
+// it can run. Expand never crosses ExpandThrough; contract owns the remainder.
+type PhasePlan struct {
+	ExpandThrough   int64
+	ContractThrough int64
+}
+
+func (p PhasePlan) Validate(available int64) error {
+	if p.ExpandThrough <= 0 {
+		return fmt.Errorf("expand migration target must be positive")
+	}
+	if p.ContractThrough < p.ExpandThrough {
+		return fmt.Errorf("contract migration target %d precedes expand target %d", p.ContractThrough, p.ExpandThrough)
+	}
+	if p.ContractThrough != available {
+		return fmt.Errorf("migration phase plan covers %d but embedded migrations end at %d", p.ContractThrough, available)
+	}
+	return nil
+}
+
+func (p PhasePlan) Target(phase Phase) int64 {
+	switch phase {
+	case PhaseExpand:
+		return p.ExpandThrough
+	case PhaseContract:
+		return p.ContractThrough
+	default:
+		return 0
+	}
+}
+
 type SchemaInterval struct {
 	Minimum int64
 	Maximum int64

@@ -47,6 +47,10 @@ func AcquireProcessLease(ctx context.Context, db *sql.DB, lease migration.Proces
 	return sqlitecompat.AcquireProcessLease(ctx, db, lease)
 }
 
+func RenewProcessLease(ctx context.Context, db *sql.DB, lease migration.ProcessLease) error {
+	return sqlitecompat.RenewProcessLease(ctx, db, lease)
+}
+
 func ReleaseProcessLease(ctx context.Context, db *sql.DB, installationID, processID string) error {
 	return sqlitecompat.ReleaseProcessLease(ctx, db, installationID, processID)
 }
@@ -62,6 +66,22 @@ func CheckContractWithOptions(ctx context.Context, db *sql.DB, options migration
 	}
 	defer release()
 	return sqlitecompat.CheckContractAllowed(migrationCtx, db, options.InstallationID, targetSchema)
+}
+
+func ContractWithOptions(ctx context.Context, db *sql.DB, options migration.Options) error {
+	if err := sqlitecompat.SchemaMigrationPlan.Validate(sqlitecompat.LatestMigrationVersion); err != nil {
+		return err
+	}
+	migrationCtx, release, err := sqlitecompat.AcquireDatabaseMigrationLease(ctx, db, options)
+	if err != nil {
+		return err
+	}
+	defer release()
+	target := sqlitecompat.SchemaMigrationPlan.Target(migration.PhaseContract)
+	if err := sqlitecompat.CheckContractAllowed(migrationCtx, db, options.InstallationID, target); err != nil {
+		return err
+	}
+	return migrateUnlocked(migrationCtx, db, target)
 }
 
 func NewStore(db *sql.DB) application.Store {

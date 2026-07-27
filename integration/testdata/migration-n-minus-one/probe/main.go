@@ -1,5 +1,5 @@
-// Frozen compatibility probe for the Xisnove runtime immediately preceding
-// schema 11. Keep this source standalone: it must not import Xisnove packages.
+// Frozen M6.1 compatibility baseline for a future N-1 runtime. Keep this
+// source standalone: it must not import Xisnove packages.
 package main
 
 import (

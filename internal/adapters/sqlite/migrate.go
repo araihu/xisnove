@@ -27,6 +27,10 @@ func AcquireProcessLease(ctx context.Context, db *sql.DB, lease migration.Proces
 	return sqlitecompat.AcquireProcessLease(ctx, db, lease)
 }
 
+func RenewProcessLease(ctx context.Context, db *sql.DB, lease migration.ProcessLease) error {
+	return sqlitecompat.RenewProcessLease(ctx, db, lease)
+}
+
 func ReleaseProcessLease(ctx context.Context, db *sql.DB, installationID, processID string) error {
 	return sqlitecompat.ReleaseProcessLease(ctx, db, installationID, processID)
 }
@@ -37,4 +41,8 @@ func CheckContractAllowed(ctx context.Context, db *sql.DB, installationID string
 
 func CheckContractWithOptions(ctx context.Context, db *sql.DB, options migration.Options, targetSchema int64) error {
 	return sqlitecompat.CheckContractWithOptions(ctx, db, options, targetSchema)
+}
+
+func ContractWithOptions(ctx context.Context, db *sql.DB, options migration.Options) error {
+	return sqlitecompat.ContractWithOptions(ctx, db, options)
 }

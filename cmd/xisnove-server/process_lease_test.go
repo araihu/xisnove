@@ -27,6 +27,10 @@ func (s *processLeaseStoreStub) AcquireProcessLease(context.Context, migration.P
 	return nil
 }
 
+func (s *processLeaseStoreStub) RenewProcessLease(ctx context.Context, lease migration.ProcessLease) error {
+	return s.AcquireProcessLease(ctx, lease)
+}
+
 func (s *processLeaseStoreStub) ReleaseProcessLease(context.Context, string, string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

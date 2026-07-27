@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -25,7 +24,7 @@ import (
 )
 
 func serveCommand(parent context.Context, args []string) (returnErr error) {
-	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
+	flags := newCommandFlagSet("serve")
 	databaseFlags := addDatabaseFlags(flags)
 	keyFlags := addNotificationKeyFlags(flags, os.Getenv)
 	cursorKeyFlags := addCursorSigningKeyFlags(flags, os.Getenv)
@@ -35,7 +34,7 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 	listen := flags.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	replicas := flags.Int("replicas", 1, "expected number of server replicas")
 	installationID := flags.String("installation-id", "default", "stable installation identifier for migration fencing")
-	if err := flags.Parse(args); err != nil {
+	if err := parseCommandFlags(flags, args); err != nil {
 		return err
 	}
 	config, err := databaseFlags.config()

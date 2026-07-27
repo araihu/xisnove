@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"strings"
 	"time"
@@ -16,11 +15,11 @@ import (
 )
 
 func bootstrapCommand(ctx context.Context, args []string) error {
-	flags := flag.NewFlagSet("admin bootstrap", flag.ContinueOnError)
+	flags := newCommandFlagSet("admin bootstrap")
 	databaseFlags := addDatabaseFlags(flags)
 	email := flags.String("email", "", "administrator email")
 	passwordFile := flags.String("password-file", "", "password secret file")
-	if err := flags.Parse(args); err != nil {
+	if err := parseCommandFlags(flags, args); err != nil {
 		return err
 	}
 	if *email == "" || *passwordFile == "" {

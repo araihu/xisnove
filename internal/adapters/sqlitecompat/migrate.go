@@ -22,8 +22,13 @@ var SupportedSchemaInterval = migrationcontract.SchemaInterval{
 	Maximum: LatestMigrationVersion,
 }
 
-// PreviousRuntimeSchemaInterval is the frozen N-1 fixture. Migration 11 is an
-// additive expand migration, so both N-1 and N declare it readable.
+var SchemaMigrationPlan = migrationcontract.PhasePlan{
+	ExpandThrough:   LatestMigrationVersion,
+	ContractThrough: LatestMigrationVersion,
+}
+
+// PreviousRuntimeSchemaInterval freezes M6.1 as the compatibility baseline for
+// the next release. It does not describe binaries shipped before M6.1.
 var PreviousRuntimeSchemaInterval = migrationcontract.SchemaInterval{
 	Minimum: MinimumMigrationVersion,
 	Maximum: LatestMigrationVersion,
@@ -37,15 +42,18 @@ func MigrateWithOptions(ctx context.Context, db *sql.DB, options migrationcontra
 	if err := options.Validate(); err != nil {
 		return err
 	}
+	if err := SchemaMigrationPlan.Validate(migrations.LatestVersion); err != nil {
+		return err
+	}
 	migrationCtx, release, err := acquireMigrationLock(ctx, db, options)
 	if err != nil {
 		return err
 	}
 	defer release()
-	return migrateUnlocked(migrationCtx, db)
+	return migrateUnlocked(migrationCtx, db, SchemaMigrationPlan.Target(migrationcontract.PhaseExpand))
 }
 
-func migrateUnlocked(ctx context.Context, db *sql.DB) error {
+func migrateUnlocked(ctx context.Context, db *sql.DB, target int64) error {
 	provider, err := goose.NewProvider(
 		goose.DialectSQLite3,
 		db,
@@ -55,7 +63,7 @@ func migrateUnlocked(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("create migration provider: %w", err)
 	}
-	if _, err := provider.Up(ctx); err != nil {
+	if _, err := provider.UpTo(ctx, target); err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
 	return nil
@@ -106,7 +114,15 @@ func acquireMigrationLock(ctx context.Context, db *sql.DB, options migrationcont
 		if err != nil {
 			return nil, nil, err
 		}
-		return ctx, func() { _ = lock.Close() }, nil
+		leaseCtx, releaseLease, err := acquireDatabaseLease(ctx, db, options)
+		if err != nil {
+			_ = lock.Close()
+			return nil, nil, err
+		}
+		return leaseCtx, func() {
+			releaseLease()
+			_ = lock.Close()
+		}, nil
 	}
 	return acquireDatabaseLease(ctx, db, options)
 }
@@ -206,11 +222,16 @@ func AcquireProcessLease(ctx context.Context, db *sql.DB, lease migrationcontrac
 		return err
 	}
 	ttlMillis := lease.TTL.Milliseconds()
-	_, err := db.ExecContext(ctx, `
+	result, err := db.ExecContext(ctx, `
 		INSERT INTO process_version_leases (
 			installation_id, process_id, process_version, minimum_schema_version,
 			maximum_schema_version, heartbeat_at_ms, expires_at_ms
-		) VALUES (?, ?, ?, ?, ?, `+sqliteNowMillis+`, `+sqliteNowMillis+` + ?)
+		)
+		SELECT ?, ?, ?, ?, ?, `+sqliteNowMillis+`, `+sqliteNowMillis+` + ?
+		WHERE NOT EXISTS (
+			SELECT 1 FROM migration_leases
+			WHERE installation_id = ? AND expires_at_ms > `+sqliteNowMillis+`
+		)
 		ON CONFLICT (installation_id, process_id) DO UPDATE SET
 			process_version = excluded.process_version,
 			minimum_schema_version = excluded.minimum_schema_version,
@@ -218,10 +239,37 @@ func AcquireProcessLease(ctx context.Context, db *sql.DB, lease migrationcontrac
 			heartbeat_at_ms = excluded.heartbeat_at_ms,
 			expires_at_ms = excluded.expires_at_ms`,
 		lease.InstallationID, lease.ProcessID, lease.ProcessVersion,
-		lease.Readable.Minimum, lease.Readable.Maximum, ttlMillis,
+		lease.Readable.Minimum, lease.Readable.Maximum, ttlMillis, lease.InstallationID,
 	)
 	if err != nil {
 		return fmt.Errorf("acquire process version lease: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return fmt.Errorf("inspect process version lease acquisition: %w", err)
+	} else if affected != 1 {
+		return migrationcontract.NewContentionError("migration fence is active")
+	}
+	return nil
+}
+
+func RenewProcessLease(ctx context.Context, db *sql.DB, lease migrationcontract.ProcessLease) error {
+	if err := lease.Validate(); err != nil {
+		return err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE process_version_leases SET
+		process_version = ?, minimum_schema_version = ?, maximum_schema_version = ?,
+		heartbeat_at_ms = `+sqliteNowMillis+`, expires_at_ms = `+sqliteNowMillis+` + ?
+		WHERE installation_id = ? AND process_id = ?`,
+		lease.ProcessVersion, lease.Readable.Minimum, lease.Readable.Maximum,
+		lease.TTL.Milliseconds(), lease.InstallationID, lease.ProcessID,
+	)
+	if err != nil {
+		return fmt.Errorf("renew process version lease: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return fmt.Errorf("inspect process version lease renewal: %w", err)
+	} else if affected != 1 {
+		return fmt.Errorf("renew process version lease: lease is absent")
 	}
 	return nil
 }
@@ -264,6 +312,25 @@ func CheckContractWithOptions(ctx context.Context, db *sql.DB, options migration
 	}
 	defer release()
 	return CheckContractAllowed(migrationCtx, db, options.InstallationID, targetSchema)
+}
+
+func ContractWithOptions(ctx context.Context, db *sql.DB, options migrationcontract.Options) error {
+	if err := options.Validate(); err != nil {
+		return err
+	}
+	if err := SchemaMigrationPlan.Validate(migrations.LatestVersion); err != nil {
+		return err
+	}
+	migrationCtx, release, err := acquireMigrationLock(ctx, db, options)
+	if err != nil {
+		return err
+	}
+	defer release()
+	target := SchemaMigrationPlan.Target(migrationcontract.PhaseContract)
+	if err := CheckContractAllowed(migrationCtx, db, options.InstallationID, target); err != nil {
+		return err
+	}
+	return migrateUnlocked(migrationCtx, db, target)
 }
 
 func randomOwnerID() string {

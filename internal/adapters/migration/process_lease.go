@@ -9,12 +9,21 @@ import (
 
 type ProcessLeaseStore interface {
 	AcquireProcessLease(context.Context, ProcessLease) error
+	RenewProcessLease(context.Context, ProcessLease) error
 	ReleaseProcessLease(context.Context, string, string) error
 }
 
 type ProcessLeaseStoreFuncs struct {
 	Acquire func(context.Context, ProcessLease) error
+	Renew   func(context.Context, ProcessLease) error
 	Release func(context.Context, string, string) error
+}
+
+func (s ProcessLeaseStoreFuncs) RenewProcessLease(ctx context.Context, lease ProcessLease) error {
+	if s.Renew == nil {
+		return fmt.Errorf("process lease renew function is required")
+	}
+	return s.Renew(ctx, lease)
 }
 
 func (s ProcessLeaseStoreFuncs) AcquireProcessLease(ctx context.Context, lease ProcessLease) error {
@@ -71,7 +80,7 @@ func (h *ProcessLeaseHandle) heartbeat(ctx context.Context, interval time.Durati
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := h.store.AcquireProcessLease(ctx, h.lease); err != nil {
+			if err := h.store.RenewProcessLease(ctx, h.lease); err != nil {
 				select {
 				case h.errors <- fmt.Errorf("heartbeat process version lease: %w", err):
 				default:

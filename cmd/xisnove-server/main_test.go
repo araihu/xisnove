@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,6 +28,26 @@ func TestExecuteVersionSkipsCommandDependencies(t *testing.T) {
 	want := "xisnove-server version=1.2.3 commit=0123456789abcdef0123456789abcdef01234567 build_date=2026-07-27T03:04:05Z dirty=false\n"
 	if stdout.String() != want {
 		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestExecuteUsageErrorIsSingleDiagnosticAndExitTwo(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	exit := execute(context.Background(), []string{"db", "migrate", "--definitely-invalid"}, &stdout, &stderr, run)
+	if exit != 2 || stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 {
+		t.Fatalf("execute = exit %d stdout %q stderr %q, want exit 2 and one diagnostic", exit, stdout.String(), stderr.String())
+	}
+}
+
+func TestMigrateInvalidPhaseDoesNotCreateDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid-phase.db")
+	err := migrateCommand(context.Background(), []string{"--database", path, "--phase", "drop"})
+	var usageErr *commandUsageError
+	if !errors.As(err, &usageErr) {
+		t.Fatalf("migrateCommand() error = %v, want commandUsageError", err)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("invalid phase created database: stat error = %v", statErr)
 	}
 }
 

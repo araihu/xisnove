@@ -82,11 +82,11 @@ func logNotificationKeyring(sealer port.ConfigSealer) {
 }
 
 func rotateNotificationKeysCommand(ctx context.Context, args []string) error {
-	flags := flag.NewFlagSet("notifications keys rotate", flag.ContinueOnError)
+	flags := newCommandFlagSet("notifications keys rotate")
 	databaseFlags := addDatabaseFlags(flags)
 	keyFlags := addNotificationKeyFlags(flags, os.Getenv)
 	batchSize := flags.Int("batch-size", 100, "maximum channels re-encrypted per transaction")
-	if err := flags.Parse(args); err != nil {
+	if err := parseCommandFlags(flags, args); err != nil {
 		return err
 	}
 	if *batchSize <= 0 || *batchSize > 1000 {

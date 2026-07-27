@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +32,10 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer, comma
 	}
 	if err := command(ctx, args); err != nil {
 		fmt.Fprintln(stderr, err)
+		var usageErr *commandUsageError
+		if errors.As(err, &usageErr) {
+			return 2
+		}
 		if len(args) == 0 || strings.HasPrefix(args[0], "-") || !knownCommand(args) {
 			return 2
 		}

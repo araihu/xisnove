@@ -19,7 +19,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-const frozenNMinusOneManifestSHA256 = "67d1425e39e51603d364bf6acaaa288a656dd6e7b1f5b3c7e7acc771fa2ad13c"
+const frozenNMinusOneManifestSHA256 = "0e64e6797a305abce6c14f1eabfbafc2586edd4ebbf2983c7c1673a206fdf74c"
 
 type frozenNMinusOneManifest struct {
 	FormatVersion  int               `json:"format_version"`
@@ -41,7 +41,7 @@ func TestNMinusOneBinaryRemainsReadyAfterExpandMigration(t *testing.T) {
 	fixtureRoot := filepath.Join(repositoryRoot, "integration", "testdata", "migration-n-minus-one")
 	manifest := loadFrozenNMinusOneManifest(t, fixtureRoot)
 
-	if manifest.FormatVersion != 1 || manifest.RuntimeVersion != "m6.0-n-minus-one" {
+	if manifest.FormatVersion != 1 || manifest.RuntimeVersion != "m6.1-future-n-minus-one-baseline" {
 		t.Fatalf("unexpected frozen fixture identity: format=%d runtime=%q", manifest.FormatVersion, manifest.RuntimeVersion)
 	}
 	if manifest.Schema != (frozenSchemaRange{Baseline: 10, Expand: 11, Minimum: 10, Maximum: 11}) {

@@ -131,6 +131,33 @@ func TestPostgresMigrationAdvisoryLockTimeoutIsStable(t *testing.T) {
 	}
 }
 
+func TestPostgresProcessLeaseCannotEnterExclusiveMigrationFence(t *testing.T) {
+	db := openMigrationSchema(t, "process_fence")
+	ctx := context.Background()
+	if err := postgres.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	const migrationLockID int64 = 0x7869736e6f7665
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, migrationLockID); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock($1)`, migrationLockID)
+	}()
+	lease := migrationcontract.ProcessLease{
+		InstallationID: "home", ProcessID: "late-old", ProcessVersion: "0.0.1",
+		Readable: migrationcontract.SchemaInterval{Minimum: 10, Maximum: 10}, TTL: time.Minute,
+	}
+	if err := postgres.AcquireProcessLease(ctx, db, lease); !errors.Is(err, migrationcontract.ErrContention) {
+		t.Fatalf("AcquireProcessLease() error = %v, want migration contention", err)
+	}
+}
+
 func openMigrationSchema(t *testing.T, prefix string) *sql.DB {
 	t.Helper()
 	baseURL := postgrescontainer.URL(t, os.Getenv("XISNOVE_TEST_POSTGRES_URL"))

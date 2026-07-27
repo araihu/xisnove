@@ -197,6 +197,13 @@ type MaintenanceInterval struct {
 	UpdatedAt               time.Time      `json:"updated_at"`
 }
 
+type MigrationLease struct {
+	InstallationID string `json:"installation_id"`
+	OwnerID        string `json:"owner_id"`
+	HeartbeatAtMs  int64  `json:"heartbeat_at_ms"`
+	ExpiresAtMs    int64  `json:"expires_at_ms"`
+}
+
 type Monitor struct {
 	ID                string          `json:"id"`
 	Name              string          `json:"name"`
@@ -320,6 +327,16 @@ type ProbeResult struct {
 	ObservedValuesJson  pqtype.NullRawMessage `json:"observed_values_json"`
 	TlsNotAfter         sql.NullTime          `json:"tls_not_after"`
 	ProtocolTimingsJson pqtype.NullRawMessage `json:"protocol_timings_json"`
+}
+
+type ProcessVersionLease struct {
+	InstallationID       string `json:"installation_id"`
+	ProcessID            string `json:"process_id"`
+	ProcessVersion       string `json:"process_version"`
+	MinimumSchemaVersion int64  `json:"minimum_schema_version"`
+	MaximumSchemaVersion int64  `json:"maximum_schema_version"`
+	HeartbeatAtMs        int64  `json:"heartbeat_at_ms"`
+	ExpiresAtMs          int64  `json:"expires_at_ms"`
 }
 
 type Session struct {

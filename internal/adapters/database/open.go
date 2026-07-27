@@ -157,6 +157,9 @@ func (h *Handle) ProcessLeaseStore() migrationcontract.ProcessLeaseStore {
 			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
 				return sqlitestore.AcquireProcessLease(ctx, h.DB, lease)
 			},
+			Renew: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return sqlitestore.RenewProcessLease(ctx, h.DB, lease)
+			},
 			Release: func(ctx context.Context, installationID, processID string) error {
 				return sqlitestore.ReleaseProcessLease(ctx, h.DB, installationID, processID)
 			},
@@ -165,6 +168,9 @@ func (h *Handle) ProcessLeaseStore() migrationcontract.ProcessLeaseStore {
 		return migrationcontract.ProcessLeaseStoreFuncs{
 			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
 				return tursolocal.AcquireProcessLease(ctx, h.DB, lease)
+			},
+			Renew: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return tursolocal.RenewProcessLease(ctx, h.DB, lease)
 			},
 			Release: func(ctx context.Context, installationID, processID string) error {
 				return tursolocal.ReleaseProcessLease(ctx, h.DB, installationID, processID)
@@ -175,6 +181,9 @@ func (h *Handle) ProcessLeaseStore() migrationcontract.ProcessLeaseStore {
 			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
 				return tursocloud.AcquireProcessLease(ctx, h.DB, lease)
 			},
+			Renew: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return tursocloud.RenewProcessLease(ctx, h.DB, lease)
+			},
 			Release: func(ctx context.Context, installationID, processID string) error {
 				return tursocloud.ReleaseProcessLease(ctx, h.DB, installationID, processID)
 			},
@@ -183,6 +192,9 @@ func (h *Handle) ProcessLeaseStore() migrationcontract.ProcessLeaseStore {
 		return migrationcontract.ProcessLeaseStoreFuncs{
 			Acquire: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
 				return postgresstore.AcquireProcessLease(ctx, h.DB, lease)
+			},
+			Renew: func(ctx context.Context, lease migrationcontract.ProcessLease) error {
+				return postgresstore.RenewProcessLease(ctx, h.DB, lease)
 			},
 			Release: func(ctx context.Context, installationID, processID string) error {
 				return postgresstore.ReleaseProcessLease(ctx, h.DB, installationID, processID)

@@ -10,7 +10,15 @@ import (
 type recordingLeaseStore struct {
 	mu       sync.Mutex
 	acquired int
+	renewed  int
 	released int
+}
+
+func (s *recordingLeaseStore) RenewProcessLease(context.Context, ProcessLease) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.renewed++
+	return nil
 }
 
 func (s *recordingLeaseStore) AcquireProcessLease(context.Context, ProcessLease) error {
@@ -41,7 +49,7 @@ func TestProcessLeaseHeartbeatsAndReleasesEagerly(t *testing.T) {
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	if store.acquired < 3 || store.released != 1 {
-		t.Fatalf("acquired=%d released=%d", store.acquired, store.released)
+	if store.acquired != 1 || store.renewed < 2 || store.released != 1 {
+		t.Fatalf("acquired=%d renewed=%d released=%d", store.acquired, store.renewed, store.released)
 	}
 }

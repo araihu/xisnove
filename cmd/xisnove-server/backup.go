@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 
 	"github.com/araihu/xisnove/internal/adapters/backup"
@@ -10,10 +9,10 @@ import (
 )
 
 func backupCommand(ctx context.Context, args []string) error {
-	flags := flag.NewFlagSet("db backup", flag.ContinueOnError)
+	flags := newCommandFlagSet("db backup")
 	databaseFlags := addDatabaseFlags(flags)
 	output := flags.String("output", "", "non-existing backup destination")
-	if err := flags.Parse(args); err != nil {
+	if err := parseCommandFlags(flags, args); err != nil {
 		return err
 	}
 	if *output == "" {

@@ -48,3 +48,26 @@ func TestContentionErrorHasStableRetryableClass(t *testing.T) {
 		t.Fatalf("contention error = %v, retryable=%v, code=%q", err, Retryable(err), Code(err))
 	}
 }
+
+func TestPhasePlanRequiresExplicitExpandAndContractTargets(t *testing.T) {
+	t.Parallel()
+	plan := PhasePlan{ExpandThrough: 11, ContractThrough: 12}
+	if err := plan.Validate(12); err != nil {
+		t.Fatal(err)
+	}
+	if got := plan.Target(PhaseExpand); got != 11 {
+		t.Fatalf("expand target = %d, want 11", got)
+	}
+	if got := plan.Target(PhaseContract); got != 12 {
+		t.Fatalf("contract target = %d, want 12", got)
+	}
+	for _, invalid := range []PhasePlan{
+		{},
+		{ExpandThrough: 12, ContractThrough: 11},
+		{ExpandThrough: 11, ContractThrough: 11},
+	} {
+		if err := invalid.Validate(12); err == nil {
+			t.Fatalf("Validate(%+v) error = nil", invalid)
+		}
+	}
+}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"time"
 
@@ -10,19 +9,25 @@ import (
 	"github.com/araihu/xisnove/internal/adapters/migration"
 	"github.com/araihu/xisnove/internal/adapters/postgres"
 	"github.com/araihu/xisnove/internal/adapters/sqlite"
-	"github.com/araihu/xisnove/internal/adapters/sqlitecompat"
 	"github.com/araihu/xisnove/internal/adapters/tursocloud"
 	"github.com/araihu/xisnove/internal/adapters/tursolocal"
 )
 
 func migrateCommand(ctx context.Context, args []string) error {
-	flags := flag.NewFlagSet("db migrate", flag.ContinueOnError)
+	flags := newCommandFlagSet("db migrate")
 	databaseFlags := addDatabaseFlags(flags)
 	phase := flags.String("phase", string(migration.PhaseExpand), "migration phase: expand or contract")
 	installationID := flags.String("installation-id", "default", "migration and process-lease namespace")
 	lockTimeout := flags.Duration("lock-timeout", 30*time.Second, "bounded migration lock timeout")
-	if err := flags.Parse(args); err != nil {
+	if err := parseCommandFlags(flags, args); err != nil {
 		return err
+	}
+	selectedPhase := migration.Phase(*phase)
+	if selectedPhase != migration.PhaseExpand && selectedPhase != migration.PhaseContract {
+		return newCommandUsageError(fmt.Errorf("invalid migration phase %q", *phase))
+	}
+	if *lockTimeout <= 0 {
+		return newCommandUsageError(fmt.Errorf("migration lock timeout must be positive"))
 	}
 	config, err := databaseFlags.config()
 	if err != nil {
@@ -39,14 +44,13 @@ func migrateCommand(ctx context.Context, args []string) error {
 	if options.PollInterval > options.LockTimeout {
 		options.PollInterval = options.LockTimeout
 	}
-	switch migration.Phase(*phase) {
+	switch selectedPhase {
 	case migration.PhaseExpand:
 		return migrateProfile(ctx, handle, options)
 	case migration.PhaseContract:
-		return checkContractProfile(ctx, handle, options, sqlitecompat.LatestMigrationVersion)
-	default:
-		return fmt.Errorf("invalid migration phase %q", *phase)
+		return migrateContractProfile(ctx, handle, options)
 	}
+	panic("validated migration phase is not handled")
 }
 
 func migrateProfile(ctx context.Context, handle *database.Handle, options migration.Options) error {
@@ -64,16 +68,16 @@ func migrateProfile(ctx context.Context, handle *database.Handle, options migrat
 	}
 }
 
-func checkContractProfile(ctx context.Context, handle *database.Handle, options migration.Options, targetSchema int64) error {
+func migrateContractProfile(ctx context.Context, handle *database.Handle, options migration.Options) error {
 	switch handle.Profile {
 	case database.ProfileSQLite:
-		return sqlite.CheckContractWithOptions(ctx, handle.DB, options, targetSchema)
+		return sqlite.ContractWithOptions(ctx, handle.DB, options)
 	case database.ProfileTursoLocal:
-		return tursolocal.CheckContractWithOptions(ctx, handle.DB, options, targetSchema)
+		return tursolocal.ContractWithOptions(ctx, handle.DB, options)
 	case database.ProfileTursoCloud:
-		return tursocloud.CheckContractWithOptions(ctx, handle.DB, options, targetSchema)
+		return tursocloud.ContractWithOptions(ctx, handle.DB, options)
 	case database.ProfilePostgres:
-		return postgres.CheckContractWithOptions(ctx, handle.DB, options, targetSchema)
+		return postgres.ContractWithOptions(ctx, handle.DB, options)
 	default:
 		return fmt.Errorf("unsupported database profile %q", handle.Profile)
 	}

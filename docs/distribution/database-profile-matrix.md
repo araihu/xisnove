@@ -18,6 +18,13 @@ StatefulSet pod, confirms singleton ownership, attaches its RWO volume, runs a
 bounded migration init container, then starts the replacement. Local Turso
 uses the equivalent single-process raw/Compose sequence.
 
+An explicit phase plan classifies the highest expand and contract migration
+versions; startup fails if embedded migrations outgrow that plan. Expand never
+crosses its target. Contract holds the same serialization fence, rejects live
+incompatible leases, then applies only through its contract target. M6.1 has no
+destructive schema migration, so both targets are schema 11 and contract is a
+fenced no-op. A later destructive migration advances only the contract target.
+
 Expand migrations preserve the N-1 readable interval. Contract migration waits
 until no live incompatible process-version lease remains. `serve` and
 `db migrate` must receive the same stable `--installation-id`; its default is
@@ -25,6 +32,8 @@ until no live incompatible process-version lease remains. `serve` and
 release it during clean shutdown. Lease failure removes readiness and stops the
 server. Migration contention and lock timeout exit with retryable status `75`
 (`EX_TEMPFAIL`); incompatible schema or live-process fences exit `1` and fail
-closed. Remote profiles use provider-native backup/restore. SQLite/local Turso
+closed. New process-lease acquisition participates in the migration fence;
+heartbeats renew an existing row without reopening that admission race. Remote
+profiles use provider-native backup/restore. SQLite/local Turso
 require a consistent file backup while the singleton is stopped or through the
 documented online backup command.
