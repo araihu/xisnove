@@ -44,7 +44,17 @@ export XISNOVE_RELEASE_COMMIT="$release_commit"
 export XISNOVE_BUILD_DATE="$build_date"
 export SOURCE_DATE_EPOCH
 export XISNOVE_RELEASE_OUTPUT="${XISNOVE_RELEASE_OUTPUT:-dist}"
+if [[ ! "$XISNOVE_RELEASE_OUTPUT" =~ ^[A-Za-z0-9_./-]+$ ]]; then
+  echo "XISNOVE_RELEASE_OUTPUT must be a simple filesystem path" >&2
+  exit 2
+fi
 
-goreleaser_args=(release --snapshot --clean)
+goreleaser_config="$(mktemp "${TMPDIR:-/tmp}/xisnove-goreleaser.XXXXXXXX.yaml")"
+cleanup() { rm -f "$goreleaser_config"; }
+trap cleanup EXIT INT TERM
+awk -v dist="$XISNOVE_RELEASE_OUTPUT" '
+  $1 == "dist:" { print "dist: \"" dist "\""; next }
+  { print }
+' .goreleaser.yaml >"$goreleaser_config"
 
-exec "$goreleaser_bin" "${goreleaser_args[@]}"
+"$goreleaser_bin" release --snapshot --clean --config "$goreleaser_config"
