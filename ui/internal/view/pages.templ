@@ -1,0 +1,493 @@
+package view
+
+import (
+	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/araihu/goshtoso/components/alert"
+	"github.com/araihu/goshtoso/components/appshell"
+	"github.com/araihu/goshtoso/components/badge"
+	"github.com/araihu/goshtoso/components/button"
+	"github.com/araihu/goshtoso/components/card"
+	"github.com/araihu/goshtoso/components/drawer"
+	"github.com/araihu/goshtoso/components/emptystate"
+	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/link"
+	"github.com/araihu/goshtoso/components/navbar"
+	"github.com/araihu/goshtoso/components/pageheader"
+	"github.com/araihu/goshtoso/components/sidebar"
+	"github.com/araihu/goshtoso/components/skeleton"
+	"github.com/araihu/goshtoso/components/table"
+	"github.com/araihu/goshtoso/components/textinput"
+	"github.com/araihu/goshtoso/components/toolbar"
+	"github.com/araihu/xisnove/sdk"
+)
+
+type MonitorList struct {
+	Monitors []sdk.Monitor
+	Health map[string]sdk.MonitorHealth
+	Cursor string
+	NextCursor string
+	Query string
+	Selected string
+	HealthFailures int
+	SearchPages int
+}
+
+type Problem struct {
+	Title string
+	Detail string
+	Code string
+	CorrelationID string
+	RetryURL string
+}
+
+templ Document(title string, content templ.Component) {
+	<!doctype html>
+	<html lang="en" data-theme="araihu" x-data="{ theme: localStorage.getItem('xisnove-theme') || 'araihu', dark: localStorage.getItem('xisnove-mode') === 'dark' }" x-init="$el.dataset.theme = theme; localStorage.setItem('xisnove-theme', theme); $el.classList.toggle('dark', dark)">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · X-9</title>
+			<link rel="icon" type="image/svg+xml" href="/ui/x9-v11-icon-9aef3646.svg"/>
+			@head.Dependencies()
+			<link rel="stylesheet" href="/ui/araihu-f841fe90.css"/>
+			<script src="/ui/app.js" defer nonce={ templ.GetNonce(ctx) }></script>
+			<style>
+				:root { --xis-gap: 1rem; --xis-action-bg: var(--color-primary); --xis-action-fg: var(--color-on-primary); --xis-link: var(--color-primary); --xis-control-outline: var(--color-outline-strong, var(--color-outline)); }
+				.dark { --xis-action-bg: var(--color-primary-dark); --xis-action-fg: var(--color-on-primary-dark); --xis-link: var(--color-primary-dark); --xis-control-outline: var(--color-outline-dark-strong); }
+				body { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }
+				.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }
+				.xis-brand { display: inline-flex; align-items: center; min-width: 0; color: var(--color-on-surface-strong); --araihu-logo-surface: var(--color-surface); --araihu-logo-ink: var(--color-on-surface-strong); --araihu-logo-signal: #c7ff4a; }
+				.xis-brand svg { display: block; width: 8.5rem; height: auto; }
+				.dark .xis-brand { color: var(--color-on-surface-dark-strong); --araihu-logo-surface: var(--color-surface-dark); --araihu-logo-ink: var(--color-on-surface-dark-strong); --araihu-logo-signal: var(--color-primary-dark); }
+				.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; }
+				.xis-stack { display: grid; gap: var(--xis-gap); }
+				.xis-theme-controls { display: flex; align-items: end; gap: .5rem; min-width: 0; }
+				.xis-field { display: grid; gap: .25rem; font-size: .875rem; }
+				.xis-monitor-search-field { min-width: 19rem; }
+				.xis-select, .xis-input { min-height: 3rem; min-width: 0; max-width: 100%; border: 1px solid var(--xis-control-outline); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }
+				.xis-login-form input:not([type="hidden"]) { min-height: 3rem; }
+				.dark .xis-select, .dark .xis-input { background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }
+				.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+				a[href]:focus-visible { outline: 3px solid currentColor !important; outline-offset: 2px !important; }
+				button:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; }
+				.dark button:focus-visible { outline-color: var(--color-primary-dark) !important; }
+				.xis-native-link, .xis-action-link { color: var(--xis-link); display: inline-flex; align-items: center; min-width: 2.75rem; min-height: 2.75rem; }
+				.xis-action-link { justify-content: center; }
+				.xis-visual-test *, .xis-visual-test *::before, .xis-visual-test *::after { transition: none; animation: none; }
+				.xis-public-nav a:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; box-shadow: 0 0 0 3px var(--color-surface); }
+				.dark .xis-public-nav a:focus-visible { outline-color: var(--color-primary-dark); box-shadow: 0 0 0 3px var(--color-surface-dark); }
+				.xis-primary-action { background: var(--xis-action-bg); border-color: var(--xis-action-bg); color: var(--xis-action-fg); }
+				button.xis-primary-action:focus, button.xis-primary-action:focus-visible, a.xis-primary-action:focus, a.xis-primary-action:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; box-shadow: 0 0 0 3px var(--color-primary) !important; }
+				.dark button.xis-primary-action:focus, .dark button.xis-primary-action:focus-visible, .dark a.xis-primary-action:focus, .dark a.xis-primary-action:focus-visible { outline-color: var(--color-primary-dark) !important; box-shadow: 0 0 0 3px var(--color-primary-dark) !important; }
+				.xis-primary-action, .xis-mobile-nav button[aria-controls] { min-width: 2.75rem; min-height: 2.75rem; }
+				button { min-width: 2.75rem; min-height: 2.75rem; }
+				.xis-recovery-action { border: 1px solid var(--xis-action-bg); border-radius: .5rem; padding: .5rem .75rem; font: inherit; cursor: pointer; }
+				.xis-results { display: grid; gap: 1rem; min-width: 0; min-height: 16rem; }
+				.xis-results-surface { width: 100%; min-width: 0; min-height: 16rem; }
+				.xis-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
+				.xis-table-scroll table { min-width: 48rem; }
+				.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }
+				.dark .xis-meta { color: var(--color-on-surface-dark-muted); }
+				.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }
+				.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
+				.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+				.xis-status-results { align-content: start; align-items: start; min-height: 0; }
+				.xis-monitor-drawer-panel { top: var(--xis-shell-header-bottom, 4rem) !important; }
+				.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
+				.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
+				.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
+				.xis-detail-identity { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+				.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }
+				.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
+				.xis-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }
+				.xis-detail-facts dt { color: var(--color-on-surface-muted); }
+				.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }
+				.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
+				.xis-password { width: 100%; }
+				.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
+				.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
+				#monitor-loading.htmx-request ~ .xis-results, #status-loading.htmx-request ~ .xis-status-results { display: none; }
+				.xis-state-info { color: var(--color-info-text); }
+				.xis-state-warning { color: var(--color-warning-text); }
+				.xis-state-success { color: var(--color-success-text); }
+				.xis-state-danger { color: var(--color-danger-text); }
+				.xis-state-info *, .xis-state-warning *, .xis-state-success *, .xis-state-danger * { color: inherit; }
+				.dark .xis-state-info { color: var(--color-info-text-dark); }
+				.dark .xis-state-warning { color: var(--color-warning-text-dark); }
+				.dark .xis-state-success { color: var(--color-success-text-dark); }
+				.dark .xis-state-danger { color: var(--color-danger-text-dark); }
+				.xis-mobile-nav { display: none; }
+				.xis-mobile-nav-backdrop { position: fixed; top: var(--xis-shell-header-bottom, 4rem); right: 0; bottom: 0; left: 0; }
+				#mobile-monitoring-panel { position: fixed; top: var(--xis-shell-header-bottom, 4rem); bottom: 0; left: 0; max-height: calc(100vh - var(--xis-shell-header-bottom, 4rem)); }
+				tr[aria-selected="true"] { background: var(--color-surface-alt); box-shadow: inset .25rem 0 0 var(--color-primary); }
+				.dark tr[aria-selected="true"] { background: var(--color-surface-dark-alt); box-shadow: inset .25rem 0 0 var(--color-primary-dark); }
+				.xis-topbar { min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--color-outline); background: var(--color-surface); }
+				.dark .xis-topbar { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark); }
+				.xis-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
+				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-topbar { min-height: 4rem; gap: .35rem; padding: .35rem .5rem; } .xis-topbar > .xis-brand svg { width: 6rem; } .xis-topbar-actions { gap: .25rem; min-width: 0; } .xis-topbar .xis-theme-controls { width: auto; align-items: end; flex-direction: row; gap: .2rem; } .xis-topbar .xis-field { font-size: .6875rem; } .xis-topbar .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; } .xis-topbar #theme-choice { width: 5.75rem; } .xis-topbar #mode-choice { width: 4.75rem; } .xis-topbar form button { padding-inline: .45rem; font-size: .75rem; } .xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; } .xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; } .xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; } .dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); } .xis-mobile-nav { display: block; } }
+			</style>
+		</head>
+		<body>
+			@content
+		</body>
+	</html>
+}
+
+templ Brand() { <span class="xis-brand" role="img" aria-label="X-9">@templ.Raw(x9LogoSVG)</span> }
+
+templ ThemeControls() {
+	<div class="xis-theme-controls" aria-label="Appearance controls">
+		<label class="xis-field" for="theme-choice">Theme
+			<select id="theme-choice" class="xis-select" x-model="theme" x-on:change="$root.dataset.theme = theme; localStorage.setItem('xisnove-theme', theme)">
+				<option value="araihu">Arai Hû</option>
+				<option value="goshtoso">Goshtoso</option>
+				<option value="minimal">Minimal</option>
+			</select>
+		</label>
+		<label class="xis-field" for="mode-choice">Mode
+			<select id="mode-choice" class="xis-select" x-bind:value="dark ? 'dark' : 'light'" x-on:change="dark = $event.target.value === 'dark'; $root.classList.toggle('dark', dark); localStorage.setItem('xisnove-mode', dark ? 'dark' : 'light')">
+				<option value="light">Light</option>
+				<option value="dark">Dark</option>
+			</select>
+		</label>
+	</div>
+}
+
+templ LoginPage(csrfToken, errorMessage string) { @Document("Sign in", LoginContent(csrfToken, errorMessage)) }
+
+templ LoginContent(csrfToken, errorMessage string) {
+	<main id="login-content" aria-labelledby="login-heading" class="xis-content">
+		<div class="xis-stack" style="max-width:32rem;margin:8vh auto 0">
+			<h1 id="login-heading" class="sr-only">Administrator sign in</h1>
+			if errorMessage != "" {
+				@alert.Alert(alert.Config{Title: "Sign-in failed", Description: errorMessage, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+			}
+			@card.Card(card.Config{Title: "Administrator sign in", Description: "Use the local X-9 administrator account. Credentials are sent only to this BFF.", Footer: LoginForm(csrfToken), RootClass: "max-w-none"})
+			<a class="xis-native-link" href="/status">View public status</a>
+		</div>
+	</main>
+}
+
+templ LoginForm(csrfToken string) {
+	<form method="post" action="/login" class="xis-stack xis-login-form" autocomplete="on">
+		<input type="hidden" name="_csrf" value={ csrfToken }/>
+		@textinput.TextInput(textinput.Config{ID: "email", Name: "email", Label: "Administrator email", Type: textinput.TypeEmail, Autocomplete: "username", Required: true})
+		<label class="xis-field" for="password">Password
+			<input id="password" name="password" type="password" autocomplete="current-password" required class="xis-input xis-password"/>
+		</label>
+		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithRootClass("w-full xis-primary-action")) { Sign in }
+	</form>
+}
+
+templ LogoutForm(csrfToken string) {
+	<form method="post" action="/logout">
+		<input type="hidden" name="_csrf" value={ csrfToken }/>
+		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithSize(button.SizeSmall), button.WithRootClass("xis-primary-action")) { Sign out }
+	</form>
+}
+
+templ ShellPage(title, csrfToken string, content templ.Component) { @Document(title, Shell(csrfToken, content)) }
+
+templ Shell(csrfToken string, content templ.Component) {
+	@appshell.AppShell(appshell.Config{
+		Header: TopBar(csrfToken),
+		Sidebar: sidebar.Sidebar(sidebar.Config{
+			DisableSkipLink: true,
+			SectionsTitle: "Monitoring",
+			Sections: []sidebar.Section{{Items: []sidebar.Item{
+				{ID: "nav-monitors", Label: "Monitors", Href: "/monitors", Active: true, LinkAttrs: templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"}},
+				{ID: "nav-incidents", Label: "Incidents", Disabled: true, Badge: "Soon"},
+				{ID: "nav-agents", Label: "Agents", Disabled: true, Badge: "Soon"},
+			}}},
+		}),
+		Content: content,
+		MainID: "main-content",
+		MainAttrs: templ.Attributes{"aria-live": "polite"},
+	})
+}
+
+templ TopBar(csrfToken string) {
+	<div class="xis-topbar">
+		@MobileNavigation()
+		<a class="xis-brand xis-native-link" href="/monitors" aria-label="X-9">@templ.Raw(x9LogoSVG)</a>
+		<div class="xis-topbar-actions">@ThemeControls() @LogoutForm(csrfToken)</div>
+	</div>
+}
+
+templ MobileNavigation() {
+	<div class="xis-mobile-nav">
+		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-monitoring", TriggerLabel: "Open monitoring navigation", PanelPositionClass: "fixed bottom-0 left-0", BackdropPositionClass: "fixed bottom-0 inset-x-0", BackdropClass: "xis-mobile-nav-backdrop", Sidebar: sidebar.Config{
+			DisableSkipLink: true,
+			SectionsTitle: "Monitoring",
+			Sections: []sidebar.Section{{Items: []sidebar.Item{
+				{ID: "mobile-nav-monitors", Label: "Monitors", Href: "/monitors", Active: true, LinkAttrs: templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"}},
+				{ID: "mobile-nav-status", Label: "Public status", Href: "/status"},
+			}}},
+		}})
+	</div>
+}
+
+templ MonitorPage(csrfToken string, data MonitorList) { @ShellPage("Monitors", csrfToken, MonitorContent(data)) }
+
+templ MonitorErrorPage(csrfToken string, problem Problem) { @ShellPage("Monitors", csrfToken, MonitorErrorContent(problem)) }
+
+templ MonitorErrorContent(problem Problem) {
+	<section id="monitor-content" class="xis-content xis-stack" aria-labelledby="monitor-heading">
+		@pageheader.PageHeader(pageheader.Config{Title: "Monitors", Description: "Monitor inventory and current health.", TitleAttrs: templ.Attributes{"id": "monitor-heading"}})
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+		<a class="xis-native-link" href={ templ.SafeURL(problem.RetryURL) } hx-get={ problem.RetryURL } hx-target="#main-content" hx-push-url="true">Retry</a>
+	</section>
+}
+
+templ MonitorContent(data MonitorList) {
+	<section id="monitor-content" class="xis-content xis-stack" aria-labelledby="monitor-heading">
+		@pageheader.PageHeader(pageheader.Config{Title: "Monitors", Description: monitorDescription(data), TitleAttrs: templ.Attributes{"id": "monitor-heading"}})
+		@toolbar.Toolbar(toolbar.Config{Label: "Monitor tools", Search: MonitorSearch(data.Query), Actions: MonitorRefresh(data)})
+		<div id="monitor-loading" class="htmx-indicator xis-search-indicator xis-skeleton xis-results-surface" aria-live="polite">
+			@skeleton.Skeleton(skeleton.Config{Shape: skeleton.ShapeRectangle, Count: 1, Label: "Loading monitors", RootClass: "min-h-64"})
+		</div>
+		<div id="monitor-results" class="xis-results xis-results-surface" aria-live="polite" aria-busy="false">
+			if data.HealthFailures > 0 {
+				@alert.Alert(alert.Config{Title: "Some health is unavailable", Description: fmt.Sprintf("%d monitor health result(s) could not be loaded. Available monitors remain usable and unknown states are shown explicitly.", data.HealthFailures), Tone: alert.ToneWarning, RootClass: "xis-state-warning"})
+			}
+			if len(data.Monitors) == 0 {
+				if data.Query != "" {
+					@emptystate.EmptyState(emptystate.Config{Title: "No matching monitors", Description: "No monitor matches the active search. Clear the search to return to the complete list.", Action: ClearSearch()})
+				} else {
+					@emptystate.EmptyState(emptystate.Config{Title: "No monitors yet", Description: "Create a monitor through the API or CLI; it will appear here on the next refresh."})
+				}
+			} else {
+				<div class="xis-table-scroll">@table.Table(monitorTable(data))</div>
+			}
+			if data.NextCursor != "" {
+				@NextPage(data)
+			}
+			if data.Selected != "" {
+				if monitor, health, ok := selectedMonitor(data); ok {
+					@MonitorDetailDrawer(data, monitor, health)
+				} else {
+					@alert.Alert(alert.Config{Title: "Selected monitor unavailable", Description: "The selected monitor is not present in this result page. The monitor list remains available; close the detail or select a visible row.", Tone: alert.ToneWarning, RootClass: "xis-state-warning", Link: &alert.LinkConfig{Label: "Close detail", Href: monitorURL(data.Query, data.Cursor, "")}})
+				}
+			}
+		</div>
+	</section>
+}
+
+templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	<div
+		class="xis-monitor-drawer"
+		data-monitor-id={ monitor.Id.String() }
+		x-data="{}"
+		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer') { $event.preventDefault(); document.getElementById('monitor-detail-close')?.click() }"
+	>
+		@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: "Monitor detail", Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
+			@MonitorDetail(data, monitor, health)
+		}
+	</div>
+}
+
+templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-heading" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(health.State) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) }>
+		<div class="xis-detail-main">
+			<div class="xis-detail-identity">
+				<div>
+					<p class="xis-meta">Selected monitor</p>
+					<h3 id="monitor-detail-heading" tabindex="-1" data-autofocus>{ monitor.Name }</h3>
+					<p class="xis-meta"><code>{ monitor.Id.String() }</code></p>
+				</div>
+				@healthBadge(health.State)
+			</div>
+			<section class="xis-detail-section" aria-labelledby="monitor-health-heading">
+				<h3 id="monitor-health-heading">Current health</h3>
+				<p>{ monitor.Description }</p>
+				<dl class="xis-detail-facts">
+					<dt>State</dt><dd>{ strings.ToUpper(string(health.State)) }</dd>
+					<dt>Last transition</dt><dd>{ formattedTime(health.LastTransitionAt) }</dd>
+					<dt>Locations observed</dt><dd>{ fmt.Sprintf("%d", len(health.Locations)) }</dd>
+				</dl>
+			</section>
+			<section class="xis-detail-section" aria-labelledby="monitor-configuration-heading">
+				<h3 id="monitor-configuration-heading">Configuration</h3>
+				<dl class="xis-detail-facts">
+					<dt>Kind</dt><dd>{ strings.ToUpper(string(monitor.Kind)) }</dd>
+					<dt>Interval</dt><dd>{ fmt.Sprintf("%d seconds", monitor.IntervalSeconds) }</dd>
+					<dt>Timeout</dt><dd>{ fmt.Sprintf("%d ms", monitor.TimeoutMillis) }</dd>
+					<dt>Open after</dt><dd>{ fmt.Sprintf("%d failures", monitor.FailureThreshold) }</dd>
+					<dt>Recover after</dt><dd>{ fmt.Sprintf("%d successes", monitor.RecoveryThreshold) }</dd>
+				</dl>
+			</section>
+			<section class="xis-detail-section" aria-labelledby="monitor-history-heading">
+				<h3 id="monitor-history-heading">Observation history</h3>
+				@alert.Alert(alert.Config{Title: "History unavailable in this view", Description: "History is not exposed by the current public API. Current health and configuration remain available without replacing the monitor list.", Tone: alert.ToneInfo, RootClass: "xis-state-info"})
+			</section>
+		</div>
+		<aside class="xis-detail-rail" aria-label="Monitor metadata and actions">
+			<h3>Monitor metadata</h3>
+			<dl class="xis-detail-facts">
+				<dt>Enabled</dt><dd>{ enabledLabel(monitor.Enabled) }</dd>
+				<dt>Public</dt><dd>{ enabledLabel(monitor.Public) }</dd>
+				<dt>Location</dt><dd><code>{ monitor.LocationId.String() }</code></dd>
+				<dt>Required</dt><dd>{ enabledLabel(monitor.RequiredLocation) }</dd>
+				<dt>Updated</dt><dd>{ formattedTime(monitor.UpdatedAt) }</dd>
+			</dl>
+			<a id="monitor-detail-close" class="xis-native-link" data-monitor-drawer-close data-monitor-id={ monitor.Id.String() } href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-push-url="true">Close detail</a>
+		</aside>
+	</section>
+}
+
+templ MonitorSearch(query string) {
+	<form method="get" action="/monitors" hx-get="/monitors" hx-target="#main-content" hx-push-url="true" hx-indicator=".xis-search-indicator" hx-disabled-elt="find button[type='submit']" data-preserve-focus class="xis-theme-controls xis-search-indicator">
+		<label class="xis-field xis-monitor-search-field" for="monitor-search">Search monitors
+			<input class="xis-input" id="monitor-search" type="search" name="q" value={ query } placeholder="Name, kind, or description"/>
+		</label>
+		@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithLoadingText("Searching…"), button.WithRootClass("xis-primary-action")) { Search }
+	</form>
+}
+
+templ MonitorRefresh(data MonitorList) {
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.Cursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Refresh</a>
+}
+
+templ ClearSearch() { @link.Link("/monitors", link.WithAppearance(link.AppearanceButton), link.WithRootClass("xis-primary-action"), link.WithAttrs(templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"})) { Clear search } }
+
+templ NextPage(data MonitorList) {
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.NextCursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Next page</a>
+}
+
+templ MonitorActions(data MonitorList, id string) {
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, id)) } aria-label={ "Select monitor " + id } hx-get={ monitorURL(data.Query, data.Cursor, id) } hx-target="#main-content" hx-push-url="true">Select</a>
+}
+
+templ StatusPage(data sdk.PublicStatusPage) { @Document("Public status", PublicStatusShell(data)) }
+templ StatusErrorPage(problem Problem) { @Document("Public status", PublicStatusErrorShell(problem)) }
+
+templ PublicStatusErrorShell(problem Problem) {
+	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", NavClass: "xis-public-nav", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}})
+	@PublicStatusError(problem)
+}
+
+templ PublicStatusShell(data sdk.PublicStatusPage) {
+	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", NavClass: "xis-public-nav", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}})
+	@StatusContent(data)
+}
+
+templ StatusContent(data sdk.PublicStatusPage) {
+	<main id="status-content" aria-live="polite" class="xis-content xis-stack">
+		<div class="xis-status-header">
+			@pageheader.PageHeader(pageheader.Config{Title: "X-9 status", Description: "Aggregate status for public monitors."})
+			<a class="xis-native-link" href="/status" hx-get="/status" hx-target="#status-content" hx-swap="outerHTML" hx-indicator="#status-loading">Refresh</a>
+		</div>
+		<div id="status-loading" class="htmx-indicator xis-skeleton xis-results-surface" aria-live="polite">@skeleton.Skeleton(skeleton.Config{Label: "Refreshing public status", Count: 3, RootClass: "min-h-64"})</div>
+		<div class="xis-status-results xis-stack">
+			@alert.Alert(alert.Config{Title: publicStatusTitle(data.State), Description: "Generated " + formattedTime(data.GeneratedAt) + ".", Tone: healthTone(data.State), RootClass: healthStateClass(data.State)})
+			if len(data.Monitors) == 0 {
+				@emptystate.EmptyState(emptystate.Config{Title: "No public monitors", Description: "Public monitors will appear here after they are configured."})
+			} else {
+				<section aria-label="Public monitors">
+					for _, monitor := range data.Monitors {
+						<article id={ "monitor-" + monitor.Id.String() } class="xis-public-row">
+							<div><h2>{ monitor.Name }</h2><p class="xis-meta">{ monitor.Description }</p></div>
+							@healthBadge(monitor.State)
+						</article>
+					}
+				</section>
+			}
+			if len(data.ActiveIncidents) > 0 {
+				@alert.Alert(alert.Config{Title: "Active incidents", Description: fmt.Sprintf("%d incident(s) currently affect public monitors.", len(data.ActiveIncidents)), Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+			}
+		</div>
+	</main>
+}
+
+templ PublicStatusError(problem Problem) {
+	<main id="status-content" aria-live="polite" class="xis-content xis-stack">
+		@pageheader.PageHeader(pageheader.Config{Title: "X-9 status", Description: "Aggregate status for public monitors."})
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+		<a class="xis-native-link" href="/status" hx-get="/status" hx-target="#status-content" hx-swap="outerHTML">Retry</a>
+	</main>
+}
+
+templ ProblemPage(problem Problem) { @Document(problem.Title, ProblemContent(problem)) }
+templ ShellProblemPage(csrfToken string, problem Problem) { @ShellPage(problem.Title, csrfToken, ShellProblemContent(problem)) }
+templ ShellProblemContent(problem Problem) {
+	<section id="problem-content" class="xis-content xis-stack" aria-labelledby="problem-heading">
+		@pageheader.PageHeader(pageheader.Config{Title: problem.Title, Description: "The requested workspace is not available.", TitleAttrs: templ.Attributes{"id": "problem-heading"}})
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+		<div class="xis-meta"><p>Error code: <code>{ problem.Code }</code></p><p>Correlation ID: <code>{ problem.CorrelationID }</code></p></div>
+		<a class="xis-native-link" href="/monitors" hx-get="/monitors" hx-target="#main-content" hx-push-url="true">Return to monitors</a>
+	</section>
+}
+templ ProblemContent(problem Problem) {
+	<main id="problem-content" class="xis-content xis-stack">
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+		<div class="xis-meta"><p>Error code: <code>{ problem.Code }</code></p><p>Correlation ID: <code>{ problem.CorrelationID }</code></p></div>
+		<a class="xis-native-link" href="/login">Return to sign in</a>
+	</main>
+}
+
+func monitorDescription(data MonitorList) string {
+	if data.Query != "" { return fmt.Sprintf("%d result(s) for %q across %d API page(s). Search is bounded to 4 pages at a time; continue when offered.", len(data.Monitors), data.Query, data.SearchPages) }
+	return fmt.Sprintf("%d monitor(s) in this page. Health is enriched with bounded control-plane requests.", len(data.Monitors))
+}
+
+func monitorURL(query, cursor, selected string) string {
+	values := url.Values{}
+	if query != "" { values.Set("q", query) }
+	if cursor != "" { values.Set("cursor", cursor) }
+	if selected != "" { values.Set("selected", selected) }
+	if encoded := values.Encode(); encoded != "" { return "/monitors?" + encoded }
+	return "/monitors"
+}
+
+func monitorTable(data MonitorList) table.Config {
+	rows := make([]table.Row, 0, len(data.Monitors))
+	for _, monitor := range data.Monitors {
+		id := monitor.Id.String()
+		health := data.Health[id]
+		state := health.State
+		if state == "" { state = sdk.Unknown }
+		name := monitor.Name
+		selected := data.Selected == id
+		attrs := map[string]string{"data-monitor-id": id, "aria-selected": fmt.Sprint(selected)}
+		rows = append(rows, table.Row{ID: id, Link: monitorURL(data.Query, data.Cursor, id), LinkMode: table.LinkFull, Actions: MonitorActions(data, id), AlpineAttrs: attrs, Cells: map[string]table.Cell{
+			"name": {Text: name, Description: id}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
+		}})
+	}
+	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
+}
+
+func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {
+	for _, monitor := range data.Monitors {
+		if monitor.Id.String() != data.Selected { continue }
+		health := data.Health[data.Selected]
+		if health.State == "" { health = sdk.MonitorHealth{MonitorId: monitor.Id, State: sdk.Unknown} }
+		return monitor, health, true
+	}
+	return sdk.Monitor{}, sdk.MonitorHealth{}, false
+}
+
+func enabledLabel(enabled bool) string { if enabled { return "Yes" }; return "No" }
+
+func healthBadge(state sdk.HealthState) templ.Component {
+	tone := badge.ToneDefault
+	switch state { case sdk.Up: tone = badge.ToneSuccess; case sdk.Down: tone = badge.ToneDanger; case sdk.Degraded: tone = badge.ToneWarning; case sdk.Pending: tone = badge.ToneInfo }
+	return badge.Badge(badge.Config{Label: strings.ToUpper(string(state)), Tone: tone, Appearance: badge.AppearanceSoft, Indicator: true, RootClass: "xis-status-badge " + healthStateClass(state)})
+}
+
+func healthStateClass(state sdk.HealthState) string {
+	switch state { case sdk.Up: return "xis-state-success"; case sdk.Degraded: return "xis-state-warning"; case sdk.Down: return "xis-state-danger"; default: return "xis-state-info" }
+}
+
+func healthTone(state sdk.HealthState) alert.Tone {
+	switch state { case sdk.Up: return alert.ToneSuccess; case sdk.Down: return alert.ToneDanger; case sdk.Degraded: return alert.ToneWarning; default: return alert.ToneInfo }
+}
+
+func publicStatusTitle(state sdk.HealthState) string {
+	switch state { case sdk.Up: return "All public systems operational"; case sdk.Down: return "Public systems disrupted"; case sdk.Degraded: return "Some public systems degraded"; case sdk.Pending: return "Public status pending"; default: return "Public status unknown" }
+}
+
+func formattedTime(value time.Time) string { if value.IsZero() { return "time unavailable" }; return value.UTC().Format("2 Jan 2006 15:04 UTC") }
