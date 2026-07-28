@@ -78,7 +78,7 @@ func New(cfg Config) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
-	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
+	mux.HandleFunc("GET /ui/araihu-a8a9647.css", serveAraiHuThemeCSS)
 	mux.HandleFunc("GET /ui/x9-v11-icon-9aef3646.svg", serveX9V11Icon)
 	mux.HandleFunc("GET /ui/xisnove-bffc2ac.svg", servePreviousV3XisnoveFavicon)
 	mux.HandleFunc("GET /ui/xisnove-81300f5.svg", servePreviousXisnoveFavicon)
@@ -94,7 +94,7 @@ func New(cfg Config) (http.Handler, error) {
 	return handler, nil
 }
 
-//go:embed static/araihu-f841fe90.css
+//go:embed static/araihu-a8a9647.css
 var araiHuThemeCSS string
 
 //go:embed static/x9-icon-background.svg
