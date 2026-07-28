@@ -6,6 +6,8 @@ on:
       - ".github/workflows/deploy-x9-site.yml"
       - "site/**"
   push:
+    branches:
+      - "codex/milestone-2b-persistence"
     paths:
       - ".github/workflows/deploy-x9-site.yml"
       - "site/**"
