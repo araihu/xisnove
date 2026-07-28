@@ -46,7 +46,7 @@ func TestHandlerMountsEveryGoshtosoRuntimeAssetDirectly(t *testing.T) {
 
 func TestHandlerServesPinnedAraiHuThemeAsImmutableCSS(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/araihu-f841fe90.css", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/araihu-a8a9647.css", nil)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, request)
@@ -135,7 +135,7 @@ func TestLoginPageUsesBundledHeadAndDoesNotRenderCredentials(t *testing.T) {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-f841fe90.css`, `/ui/x9-v11-icon-9aef3646.svg`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
+	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-a8a9647.css`, `/ui/x9-v11-icon-9aef3646.svg`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("login body missing %q", want)
 		}

@@ -29,7 +29,7 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 		t.Fatalf("document does not reference the approved v11 X-9 favicon: %s", body)
 	}
 	goshtoso := strings.Index(body, `/assets/styles.css`)
-	araihu := strings.Index(body, `/ui/araihu-f841fe90.css`)
+	araihu := strings.Index(body, `/ui/araihu-a8a9647.css`)
 	if goshtoso < 0 || araihu < 0 || araihu <= goshtoso {
 		t.Fatalf("Arai Hû stylesheet must follow Goshtoso: %s", body)
 	}
