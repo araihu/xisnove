@@ -4,3 +4,4 @@
 !.env.example
 .superpowers/
 .worktrees/
+site/public/
