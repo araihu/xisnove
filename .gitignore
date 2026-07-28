@@ -5,3 +5,4 @@
 .superpowers/
 .worktrees/
 site/public/
+site/.wrangler/

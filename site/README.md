@@ -6,3 +6,11 @@ Identity uses adaptive X-9 v11 logo and icon from `araihu/assets@a8a9647`.
 ```sh
 make check
 ```
+
+Deploys as a Cloudflare Worker with static assets on the exact custom domain
+`x9.araihu.com`:
+
+```sh
+make deploy-dry-run
+make deploy
+```
