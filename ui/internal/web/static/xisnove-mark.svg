@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Xisnove mark</title>
+  <desc id="desc">A three-state monitoring signal emitting one external probe.</desc>
+  <rect x="14" y="10" width="66" height="108" rx="33" fill="none" stroke="#07111f" stroke-width="14" />
+  <circle cx="47" cy="38" r="10" fill="#07111f" />
+  <circle cx="47" cy="64" r="10" fill="#c7ff4a" stroke="#07111f" stroke-width="5" />
+  <circle cx="47" cy="90" r="10" fill="#31588f" />
+  <path d="M80 64h9c15 0 25 10 25 25v5" fill="none" stroke="#31588f" stroke-width="10" stroke-linecap="round" />
+</svg>
