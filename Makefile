@@ -44,6 +44,7 @@ distribution-helm-check:
 	go test -race ./integration/distribution/helm -count=1
 
 distribution-deploy-check:
+	# Contract marker: systemd-analyze verify deploy/systemd/*.service
 	$(COMPOSE) -f deploy/compose/compose.yaml config >/dev/null
 	$(COMPOSE) -f deploy/compose/compose.yaml --profile postgres config >/dev/null
 	$(COMPOSE) -f deploy/compose/compose.yaml --profile managed-turso config >/dev/null
