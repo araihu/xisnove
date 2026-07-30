@@ -3,6 +3,7 @@ package deploy_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -84,11 +85,24 @@ func TestSingletonWrapperRefusesSecondProcessAndRecovers(t *testing.T) {
 	lock := filepath.Join(t.TempDir(), "server.lock")
 	ready := filepath.Join(t.TempDir(), "server-ready")
 	script := filepath.Join(repo, "deploy/raw/run-singleton.sh")
+	_, flockErr := exec.LookPath("flock")
+	hasFlock := flockErr == nil
 	first := exec.Command("sh", script, lock, "sh", "-c", `printf acquired >"$1"; sleep 30`, "sh", ready)
+	configureProcessGroup(first)
 	if err := first.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = first.Process.Kill(); _, _ = first.Process.Wait() })
+	firstStopped := false
+	stopFirst := func() {
+		if firstStopped {
+			return
+		}
+		firstStopped = true
+		if err := terminateProcessGroup(first); err != nil {
+			t.Errorf("terminate first wrapper process group: %v", err)
+		}
+	}
+	t.Cleanup(stopFirst)
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
@@ -107,17 +121,18 @@ func TestSingletonWrapperRefusesSecondProcessAndRecovers(t *testing.T) {
 	}
 	second := exec.Command("sh", script, lock, "sh", "-c", "printf damaged >\"$1\"", "sh", sentinel)
 	output, err := second.CombinedOutput()
-	if err == nil || !strings.Contains(string(output), "another Xisnove server owns") {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 75 {
 		t.Fatalf("second wrapper = %v, %q", err, output)
+	}
+	if !hasFlock && !strings.Contains(string(output), "another Xisnove server owns") {
+		t.Fatalf("fallback contention message = %q", output)
 	}
 	if contents, _ := os.ReadFile(sentinel); string(contents) != "intact" {
 		t.Fatal("refused second process changed persistent data")
 	}
 
-	if err := first.Process.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	_, _ = first.Process.Wait()
+	stopFirst()
 	time.Sleep(50 * time.Millisecond)
 	recovered := exec.Command("sh", script, lock, "sh", "-c", "exit 0")
 	if output, err := recovered.CombinedOutput(); err != nil {
