@@ -1006,7 +1006,7 @@ func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir st
 				assertInteractiveActions(t, ctx)
 				if err := chromedp.Run(ctx,
 					chromedp.FullScreenshot(&screenshot, 100),
-					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false`, nil),
+					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false && document.activeElement?.id === 'monitor-search' && document.querySelector('#monitor-search')?.selectionStart === 1 && document.querySelector('#monitor-search')?.selectionEnd === 2 && document.title === 'Monitors · X-9'`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 				); err != nil {
 					t.Fatalf("finish held search at %dpx/%s/%s: %v", width, theme, mode, err)
 				}
