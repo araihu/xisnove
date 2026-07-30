@@ -106,6 +106,7 @@ func TestDeliveryWorkerRetriesCapsAttemptsAndPreservesReplayOrdinals(t *testing.
 		return NewTransportResult(TransportDelivered, "", "", "")
 	})
 	worker := fixture.worker(t, transport, func(config *DeliveryWorkerConfig) {
+		config.BatchSize = 1
 		config.BackoffBase = time.Millisecond
 		config.BackoffCap = time.Millisecond
 	})
