@@ -82,11 +82,16 @@ fi
 
 printf '%s\n' 'kind-e2e-admin-password-with-sufficient-length' >"${TEMP_DIR}/admin-password"
 printf '%s\n' 'kind-e2e-cursor-signing-key-32-bytes-minimum' >"${TEMP_DIR}/cursor-key"
-chmod 0400 "${TEMP_DIR}/admin-password" "${TEMP_DIR}/cursor-key"
+chmod 0440 "${TEMP_DIR}/admin-password" "${TEMP_DIR}/cursor-key"
+if SECRET_FILE_GROUP="$(stat -c '%g' "${TEMP_DIR}/admin-password" 2>/dev/null)"; then
+  :
+else
+  SECRET_FILE_GROUP="$(stat -f '%g' "${TEMP_DIR}/admin-password")"
+fi
 "${DOCKER_BIN}" volume create "${DATA_VOLUME}" >/dev/null
 "${DOCKER_BIN}" run --rm -v "${DATA_VOLUME}:/data" "${SERVER_IMAGE}" db migrate --database-profile sqlite --database-url /data/xisnove.db
-"${DOCKER_BIN}" run --rm -v "${DATA_VOLUME}:/data" -v "${TEMP_DIR}/admin-password:/run/admin-password:ro" "${SERVER_IMAGE}" admin bootstrap --database-profile sqlite --database-url /data/xisnove.db --email kind-e2e@example.test --password-file /run/admin-password
-"${DOCKER_BIN}" run -d --name "${SERVER_CONTAINER}" --network kind -p 127.0.0.1::8080 -v "${DATA_VOLUME}:/data" -v "${TEMP_DIR}/cursor-key:/run/cursor-key:ro" "${SERVER_IMAGE}" serve --listen 0.0.0.0:8080 --database-profile sqlite --database-url /data/xisnove.db --cursor-signing-key-file /run/cursor-key >/dev/null
+"${DOCKER_BIN}" run --rm --group-add "${SECRET_FILE_GROUP}" -v "${DATA_VOLUME}:/data" -v "${TEMP_DIR}/admin-password:/run/admin-password:ro" "${SERVER_IMAGE}" admin bootstrap --database-profile sqlite --database-url /data/xisnove.db --email kind-e2e@example.test --password-file /run/admin-password
+"${DOCKER_BIN}" run -d --name "${SERVER_CONTAINER}" --network kind --group-add "${SECRET_FILE_GROUP}" -p 127.0.0.1::8080 -v "${DATA_VOLUME}:/data" -v "${TEMP_DIR}/cursor-key:/run/cursor-key:ro" "${SERVER_IMAGE}" serve --listen 0.0.0.0:8080 --database-profile sqlite --database-url /data/xisnove.db --cursor-signing-key-file /run/cursor-key >/dev/null
 
 SERVER_PORT="$("${DOCKER_BIN}" port "${SERVER_CONTAINER}" 8080/tcp | awk -F: 'NR==1 {print $NF}')"
 HOST_URL="http://127.0.0.1:${SERVER_PORT}"
