@@ -59,6 +59,7 @@ func TestDeliveryWorkerObservesCommittedBoundedOutcomeWithoutDiagnosticPayload(t
 			"secret provider receipt",
 		)
 	}), func(config *DeliveryWorkerConfig) {
+		config.BatchSize = 1
 		config.ObserveDelivery = func(observation DeliveryObservation) {
 			if fixture.store.inTransaction.Load() != 0 {
 				t.Error("delivery observed before transaction committed")

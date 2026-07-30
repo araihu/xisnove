@@ -239,7 +239,8 @@ func TestEdgeChartRejectsUnsafeShutdownBudget(t *testing.T) {
 			if err == nil {
 				t.Fatalf("helm template accepted unsafe shutdown budget:\n%s", output)
 			}
-			if !bytes.Contains(output, []byte(test.message)) {
+			normalizedOutput := bytes.ReplaceAll(output, []byte("/"), []byte("."))
+			if !bytes.Contains(normalizedOutput, []byte(test.message)) {
 				t.Fatalf("unexpected shutdown validation error:\n%s", output)
 			}
 		})

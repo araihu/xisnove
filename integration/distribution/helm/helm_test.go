@@ -65,7 +65,7 @@ func TestProfileRenderings(t *testing.T) {
 
 func TestSQLiteRejectsMultipleReplicas(t *testing.T) {
 	_, err := helm(t, "template", "xisnove", chart(t), "--set", "database.profile=sqlite", "--set", "server.replicas=2")
-	if err == nil || !strings.Contains(err.Error(), "server.replicas") {
+	if err == nil || !strings.Contains(strings.ReplaceAll(err.Error(), "/", "."), "server.replicas") {
 		t.Fatalf("error = %v, want SQLite singleton refusal", err)
 	}
 }

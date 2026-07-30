@@ -90,8 +90,12 @@ func TestSingletonWrapperRefusesSecondProcessAndRecovers(t *testing.T) {
 	t.Cleanup(func() { _ = first.Process.Kill(); _, _ = first.Process.Wait() })
 
 	deadline := time.Now().Add(3 * time.Second)
+	lockMarker := lock
+	if _, err := exec.LookPath("flock"); err != nil {
+		lockMarker = lock + ".d/owner"
+	}
 	for {
-		if _, err := os.Stat(lock + ".d/owner"); err == nil {
+		if _, err := os.Stat(lockMarker); err == nil {
 			break
 		}
 		if time.Now().After(deadline) {
