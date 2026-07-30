@@ -1029,7 +1029,8 @@ func assertSelectedMonitorIdentity(t *testing.T, ctx context.Context, id string)
 		URL, Detail, Focus, Selected string
 		SelectedCount                int
 	}
-	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='monitor-detail-heading'`, nil, chromedp.WithPollingTimeout(5*time.Second)), chromedp.Evaluate(`(()=>{const selected=document.querySelector('tr[aria-selected="true"]');return {url:new URL(location.href).searchParams.get('selected')||'',detail:document.querySelector('#monitor-detail')?.dataset.monitorId||'',focus:document.activeElement?.closest('[data-monitor-id]')?.dataset.monitorId||'',selected:selected?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length}})()`, &identity)); err != nil {
+	pollIdentity := fmt.Sprintf(`(()=>{const selected=document.querySelector('tr[aria-selected="true"]'),result={url:new URL(location.href).searchParams.get('selected')||'',detail:document.querySelector('#monitor-detail')?.dataset.monitorId||'',focus:document.activeElement?.closest('[data-monitor-id]')?.dataset.monitorId||'',selected:selected?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length};return result.url===%[1]q&&result.detail===%[1]q&&result.focus===%[1]q&&result.selected===%[1]q&&result.selectedCount===1?result:false})()`, id)
+	if err := chromedp.Run(ctx, chromedp.Poll(pollIdentity, &identity, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
 		var active string
 		_ = chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.outerHTML?.slice(0,240)||''`, &active))
 		t.Fatalf("selected monitor focus did not settle: active=%s err=%v", active, err)
