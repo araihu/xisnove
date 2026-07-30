@@ -82,20 +82,17 @@ func TestSingletonWrapperRefusesSecondProcessAndRecovers(t *testing.T) {
 	}
 	repo := repositoryRoot(t)
 	lock := filepath.Join(t.TempDir(), "server.lock")
+	ready := filepath.Join(t.TempDir(), "server-ready")
 	script := filepath.Join(repo, "deploy/raw/run-singleton.sh")
-	first := exec.Command("sh", script, lock, "sh", "-c", "sleep 30")
+	first := exec.Command("sh", script, lock, "sh", "-c", `printf acquired >"$1"; sleep 30`, "sh", ready)
 	if err := first.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = first.Process.Kill(); _, _ = first.Process.Wait() })
 
 	deadline := time.Now().Add(3 * time.Second)
-	lockMarker := lock
-	if _, err := exec.LookPath("flock"); err != nil {
-		lockMarker = lock + ".d/owner"
-	}
 	for {
-		if _, err := os.Stat(lockMarker); err == nil {
+		if _, err := os.Stat(ready); err == nil {
 			break
 		}
 		if time.Now().After(deadline) {
