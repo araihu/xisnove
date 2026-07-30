@@ -48,7 +48,28 @@ distribution-deploy-check:
 	$(COMPOSE) -f deploy/compose/compose.yaml --profile postgres config >/dev/null
 	$(COMPOSE) -f deploy/compose/compose.yaml --profile managed-turso config >/dev/null
 	XISNOVE_AGENT_CREDENTIAL_FILE=deploy/compose/secrets/agent-credential.json $(COMPOSE) -f deploy/compose/remote-agent.yaml config >/dev/null
-	systemd-analyze verify deploy/systemd/*.service
+	systemd_verify_root="$$(mktemp -d)"; \
+	trap 'rm -rf "$$systemd_verify_root"' EXIT; \
+	mkdir -p "$$systemd_verify_root/etc/systemd/system" "$$systemd_verify_root/etc/xisnove/secrets" \
+		"$$systemd_verify_root/usr/bin" "$$systemd_verify_root/usr/libexec/xisnove"; \
+	install -m 0644 deploy/systemd/*.service "$$systemd_verify_root/etc/systemd/system/"; \
+	install -m 0755 /dev/null "$$systemd_verify_root/usr/bin/xisnove-agent"; \
+	install -m 0755 /dev/null "$$systemd_verify_root/usr/bin/xisnove-ui"; \
+	install -m 0755 /dev/null "$$systemd_verify_root/usr/libexec/xisnove/migrate.sh"; \
+	install -m 0755 /dev/null "$$systemd_verify_root/usr/libexec/xisnove/run-server.sh"; \
+	install -m 0644 /dev/null "$$systemd_verify_root/etc/xisnove/agent.env"; \
+	install -m 0644 /dev/null "$$systemd_verify_root/etc/xisnove/server.env"; \
+	install -m 0644 /dev/null "$$systemd_verify_root/etc/xisnove/ui.env"; \
+	install -m 0600 /dev/null "$$systemd_verify_root/etc/xisnove/secrets/cursor-signing-key"; \
+	install -m 0600 /dev/null "$$systemd_verify_root/etc/xisnove/secrets/notification-keyring.json"; \
+	install -m 0600 /dev/null "$$systemd_verify_root/etc/xisnove/secrets/ui-cookie-secret"; \
+	printf 'xisnove:x:1000:1000::/var/lib/xisnove:/usr/sbin/nologin\nxisnove-agent:x:1001:1001::/var/lib/xisnove-agent:/usr/sbin/nologin\n' > "$$systemd_verify_root/etc/passwd"; \
+	printf 'xisnove:x:1000:\nxisnove-agent:x:1001:\n' > "$$systemd_verify_root/etc/group"; \
+	systemd-analyze --root="$$systemd_verify_root" verify \
+		"$$systemd_verify_root/etc/systemd/system/xisnove-agent.service" \
+		"$$systemd_verify_root/etc/systemd/system/xisnove-migrate.service" \
+		"$$systemd_verify_root/etc/systemd/system/xisnove-server.service" \
+		"$$systemd_verify_root/etc/systemd/system/xisnove-ui.service"
 	shellcheck deploy/raw/*.sh deploy/compose/bootstrap.sh
 	go test -race ./integration/distribution/deploy -count=1
 
