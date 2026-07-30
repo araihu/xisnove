@@ -30,7 +30,7 @@ distribution-contract-check:
 distribution-image-native-check:
 	docker buildx bake --print default test-amd64 test-arm64 oci-layout >/dev/null
 	docker buildx bake test-$(DISTRIBUTION_ARCH) --load
-	go test -race ./integration/distribution/images -skip '^TestOCILayout' -count=1
+	XISNOVE_REQUIRE_NATIVE_IMAGES=1 go test -race ./integration/distribution/images -skip '^TestOCILayout' -count=1
 
 distribution-image-oci-check:
 	docker buildx bake oci-layout
