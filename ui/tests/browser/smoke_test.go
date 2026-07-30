@@ -931,9 +931,11 @@ func assertDrawerCloseAndRestore(t *testing.T, ctx context.Context, id string) {
 	}
 	assertSelectedMonitorIdentity(t, ctx, id)
 	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`window.__xisMonitorCloseSettled=false;document.body.addEventListener('htmx:afterSettle',()=>{window.__xisMonitorCloseSettled=true},{once:true})`, nil),
 		chromedp.Click("#monitor-detail-close"),
 		chromedp.Poll(`new URL(location.href).searchParams.has('selected') === false`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 		chromedp.Poll(`document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]') === null`, nil, chromedp.WithPollingTimeout(5*time.Second)),
+		chromedp.Poll(`window.__xisMonitorCloseSettled === true`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 	); err != nil {
 		t.Fatalf("close reopened monitor drawer: %v", err)
 	}
