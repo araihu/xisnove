@@ -931,7 +931,7 @@ func assertDrawerCloseAndRestore(t *testing.T, ctx context.Context, id string) {
 	}
 	assertSelectedMonitorIdentity(t, ctx, id)
 	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`window.__xisMonitorCloseSettled=false;document.body.addEventListener('htmx:afterSettle',()=>{window.__xisMonitorCloseSettled=true},{once:true})`, nil),
+		chromedp.Evaluate(`(()=>{const body=document.body;window.__xisMonitorCloseSettled=false;window.__xisMonitorCloseXHR=null;const before=event=>{if(event.detail?.elt?.id==='monitor-detail-close'){window.__xisMonitorCloseXHR=event.detail.xhr;body.removeEventListener('htmx:beforeRequest',before)}};const after=event=>{if(window.__xisMonitorCloseXHR&&event.detail?.xhr===window.__xisMonitorCloseXHR){window.__xisMonitorCloseSettled=true;body.removeEventListener('htmx:afterSettle',after)}};body.addEventListener('htmx:beforeRequest',before);body.addEventListener('htmx:afterSettle',after)})()`, nil),
 		chromedp.Click("#monitor-detail-close"),
 		chromedp.Poll(`new URL(location.href).searchParams.has('selected') === false`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 		chromedp.Poll(`document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]') === null`, nil, chromedp.WithPollingTimeout(5*time.Second)),
