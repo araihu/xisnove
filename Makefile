@@ -72,7 +72,7 @@ distribution-deploy-check:
 		"$$systemd_verify_root/etc/systemd/system/xisnove-migrate.service" \
 		"$$systemd_verify_root/etc/systemd/system/xisnove-server.service" \
 		"$$systemd_verify_root/etc/systemd/system/xisnove-ui.service"
-	shellcheck deploy/raw/*.sh deploy/compose/bootstrap.sh
+	shellcheck deploy/raw/*.sh deploy/compose/compose-command.sh deploy/compose/bootstrap.sh
 	go test -race ./integration/distribution/deploy -count=1
 
 distribution-release-candidate:
