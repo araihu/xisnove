@@ -4,10 +4,10 @@ go 1.26.5
 
 require (
 	github.com/a-h/templ v0.3.1020
-	github.com/araihu/goshtoso v0.0.13
+	github.com/araihu/goshtoso v0.1.1
 	github.com/araihu/xisnove v0.0.0-20260726092612-07467ccf39e6
-	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
-	github.com/chromedp/chromedp v0.15.1
+	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
+	github.com/chromedp/chromedp v0.16.0
 	github.com/google/uuid v1.6.0
 	github.com/oapi-codegen/runtime v1.6.0
 )
@@ -21,7 +21,7 @@ require (
 	github.com/cli/browser v1.3.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
