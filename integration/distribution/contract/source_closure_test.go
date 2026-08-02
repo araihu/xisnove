@@ -248,7 +248,8 @@ func TestM62DistributionGatesAreWired(t *testing.T) {
 		"helm lint charts/xisnove",
 		"go test -race ./integration/distribution/helm",
 		"systemd-analyze verify deploy/systemd/*.service",
-		"shellcheck deploy/raw/*.sh deploy/compose/bootstrap.sh",
+		"sysinit.target",
+		"shellcheck deploy/raw/*.sh deploy/compose/compose-command.sh deploy/compose/bootstrap.sh",
 		"go test -race ./integration/distribution/deploy",
 	} {
 		if !strings.Contains(makefile, required) {

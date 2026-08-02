@@ -118,7 +118,7 @@ func verifyOCIManifest(t *testing.T, blobs map[string][]byte, item descriptor, n
 	}
 	for path, want := range map[string]string{
 		"usr/share/licenses/xisnove/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
-		"usr/share/licenses/xisnove/NOTICE":  "e3ad5f2f51b2365c85478db227c5fdf36e7f193cab97d132904af61765e4e7ba",
+		"usr/share/licenses/xisnove/NOTICE":  "3e070f4f594a3d97af28e694792dc3af63a15c9bb2b592648b7f48b852e0292f",
 	} {
 		contents, ok := files[path]
 		if !ok || sha256Hex(contents) != want {
