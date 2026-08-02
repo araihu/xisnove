@@ -132,7 +132,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	defer ui.Close()
 
 	browser := browserBinary(t)
-	allocator, cancelAllocator := chromedp.NewExecAllocator(t.Context(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(browser), chromedp.Flag("headless", true), chromedp.Flag("ignore-certificate-errors", true), chromedp.Flag("disable-background-networking", true), chromedp.NoFirstRun, chromedp.NoDefaultBrowserCheck)...)
+	allocator, cancelAllocator := chromedp.NewExecAllocator(t.Context(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(browser), chromedp.Flag("headless", true), chromedp.Flag("ignore-certificate-errors", true), chromedp.Flag("disable-background-networking", true), chromedp.NoSandbox, chromedp.NoFirstRun, chromedp.NoDefaultBrowserCheck)...)
 	defer cancelAllocator()
 	ctx, cancel := chromedp.NewContext(allocator)
 	defer cancel()
@@ -931,9 +931,11 @@ func assertDrawerCloseAndRestore(t *testing.T, ctx context.Context, id string) {
 	}
 	assertSelectedMonitorIdentity(t, ctx, id)
 	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`(()=>{const body=document.body;window.__xisMonitorCloseSettled=false;window.__xisMonitorCloseXHR=null;const before=event=>{if(event.detail?.elt?.id==='monitor-detail-close'){window.__xisMonitorCloseXHR=event.detail.xhr;body.removeEventListener('htmx:beforeRequest',before)}};const after=event=>{if(window.__xisMonitorCloseXHR&&event.detail?.xhr===window.__xisMonitorCloseXHR){window.__xisMonitorCloseSettled=true;body.removeEventListener('htmx:afterSettle',after)}};body.addEventListener('htmx:beforeRequest',before);body.addEventListener('htmx:afterSettle',after)})()`, nil),
 		chromedp.Click("#monitor-detail-close"),
 		chromedp.Poll(`new URL(location.href).searchParams.has('selected') === false`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 		chromedp.Poll(`document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]') === null`, nil, chromedp.WithPollingTimeout(5*time.Second)),
+		chromedp.Poll(`window.__xisMonitorCloseSettled === true`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 	); err != nil {
 		t.Fatalf("close reopened monitor drawer: %v", err)
 	}
@@ -1004,7 +1006,7 @@ func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir st
 				assertInteractiveActions(t, ctx)
 				if err := chromedp.Run(ctx,
 					chromedp.FullScreenshot(&screenshot, 100),
-					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false`, nil),
+					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false && document.activeElement?.id === 'monitor-search' && document.querySelector('#monitor-search')?.selectionStart === 1 && document.querySelector('#monitor-search')?.selectionEnd === 2 && document.title === 'Monitors · X-9'`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 				); err != nil {
 					t.Fatalf("finish held search at %dpx/%s/%s: %v", width, theme, mode, err)
 				}
@@ -1027,7 +1029,8 @@ func assertSelectedMonitorIdentity(t *testing.T, ctx context.Context, id string)
 		URL, Detail, Focus, Selected string
 		SelectedCount                int
 	}
-	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='monitor-detail-heading'`, nil, chromedp.WithPollingTimeout(5*time.Second)), chromedp.Evaluate(`(()=>{const selected=document.querySelector('tr[aria-selected="true"]');return {url:new URL(location.href).searchParams.get('selected')||'',detail:document.querySelector('#monitor-detail')?.dataset.monitorId||'',focus:document.activeElement?.closest('[data-monitor-id]')?.dataset.monitorId||'',selected:selected?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length}})()`, &identity)); err != nil {
+	pollIdentity := fmt.Sprintf(`(()=>{const selected=document.querySelector('tr[aria-selected="true"]'),result={url:new URL(location.href).searchParams.get('selected')||'',detail:document.querySelector('#monitor-detail')?.dataset.monitorId||'',focus:document.activeElement?.closest('[data-monitor-id]')?.dataset.monitorId||'',selected:selected?.dataset.monitorId||'',selectedCount:document.querySelectorAll('tr[aria-selected="true"]').length};return result.url===%[1]q&&result.detail===%[1]q&&result.focus===%[1]q&&result.selected===%[1]q&&result.selectedCount===1?result:false})()`, id)
+	if err := chromedp.Run(ctx, chromedp.Poll(pollIdentity, &identity, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
 		var active string
 		_ = chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.outerHTML?.slice(0,240)||''`, &active))
 		t.Fatalf("selected monitor focus did not settle: active=%s err=%v", active, err)

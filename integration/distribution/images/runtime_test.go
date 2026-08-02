@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -17,6 +18,7 @@ const (
 )
 
 func TestServerLocalProfilesRunReadOnlyAndTerminateGracefully(t *testing.T) {
+	requireNativeImageRuntime(t)
 	image := "xisnove-server:test-" + runtime.GOARCH
 	for _, profile := range []string{"sqlite", "turso-local"} {
 		t.Run(profile, func(t *testing.T) {
@@ -43,6 +45,7 @@ func TestServerLocalProfilesRunReadOnlyAndTerminateGracefully(t *testing.T) {
 }
 
 func TestServerPostgresProfileRunsReadOnlyAndTerminatesGracefully(t *testing.T) {
+	requireNativeImageRuntime(t)
 	image := "xisnove-server:test-" + runtime.GOARCH
 	network := uniqueName("xisnove-image-network")
 	docker(t, "network", "create", network)
@@ -71,6 +74,7 @@ func TestServerPostgresProfileRunsReadOnlyAndTerminatesGracefully(t *testing.T) 
 }
 
 func TestUIAndAgentHealthchecksRunReadOnlyAndTerminateGracefully(t *testing.T) {
+	requireNativeImageRuntime(t)
 	t.Run("ui", func(t *testing.T) {
 		name := uniqueName("xisnove-ui")
 		docker(t, "run", "-d", "--name", name, "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m",
@@ -109,6 +113,13 @@ func TestUIAndAgentHealthchecksRunReadOnlyAndTerminateGracefully(t *testing.T) {
 		docker(t, "exec", name, "/usr/bin/wget", "--quiet", "--spider", "--timeout=1", "http://127.0.0.1:9090/readyz")
 		stopAndRequireCleanExit(t, name, 15*time.Second)
 	})
+}
+
+func requireNativeImageRuntime(t *testing.T) {
+	t.Helper()
+	if os.Getenv("XISNOVE_REQUIRE_NATIVE_IMAGES") != "1" {
+		t.Skip("native image runtime requires images built by the distribution gate")
+	}
 }
 
 func createVolume(t *testing.T, prefix string) string {
