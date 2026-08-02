@@ -64,6 +64,7 @@ distribution-deploy-check:
 	install -m 0600 /dev/null "$$systemd_verify_root/etc/xisnove/secrets/cursor-signing-key"; \
 	install -m 0600 /dev/null "$$systemd_verify_root/etc/xisnove/secrets/notification-keyring.json"; \
 	install -m 0600 /dev/null "$$systemd_verify_root/etc/xisnove/secrets/ui-cookie-secret"; \
+	printf '[Unit]\nDescription=System initialization\n' > "$$systemd_verify_root/etc/systemd/system/sysinit.target"; \
 	printf 'xisnove:x:1000:1000::/var/lib/xisnove:/usr/sbin/nologin\nxisnove-agent:x:1001:1001::/var/lib/xisnove-agent:/usr/sbin/nologin\n' > "$$systemd_verify_root/etc/passwd"; \
 	printf 'xisnove:x:1000:\nxisnove-agent:x:1001:\n' > "$$systemd_verify_root/etc/group"; \
 	systemd-analyze --root="$$systemd_verify_root" verify \

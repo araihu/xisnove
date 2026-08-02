@@ -248,6 +248,7 @@ func TestM62DistributionGatesAreWired(t *testing.T) {
 		"helm lint charts/xisnove",
 		"go test -race ./integration/distribution/helm",
 		"systemd-analyze verify deploy/systemd/*.service",
+		"sysinit.target",
 		"shellcheck deploy/raw/*.sh deploy/compose/bootstrap.sh",
 		"go test -race ./integration/distribution/deploy",
 	} {
