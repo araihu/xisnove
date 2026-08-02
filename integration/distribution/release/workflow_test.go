@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	checkoutAction         = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
+	checkoutAction         = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 	setupGoAction          = "actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16"
 	setupQEMUAction        = "docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8"
 	setupBuildxAction      = "docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c"
