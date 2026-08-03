@@ -5,7 +5,7 @@ go 1.26.0
 toolchain go1.26.1
 
 require (
-	github.com/getkin/kin-openapi v0.144.0
+	github.com/getkin/kin-openapi v0.145.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lib/pq v1.12.3
@@ -15,7 +15,7 @@ require (
 	github.com/sqlc-dev/pqtype v0.3.0
 	github.com/tursodatabase/libsql-client-go v0.0.0-20260528064733-9d5d30a29a60
 	golang.org/x/crypto v0.54.0
-	modernc.org/sqlite v1.54.0
+	modernc.org/sqlite v1.55.0
 	turso.tech/database/tursogo v0.7.1
 )
 
