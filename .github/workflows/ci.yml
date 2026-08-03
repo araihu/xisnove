@@ -7,7 +7,19 @@ on:
 
 jobs:
   root:
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.user.login == github.actor &&
+        github.event.pull_request.base.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.fork == false &&
+        contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        'ubuntu-latest'
+      }}
     services:
       postgres:
         image: postgres:18.3-alpine3.23
@@ -67,7 +79,19 @@ jobs:
           fi
 
   agent:
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.user.login == github.actor &&
+        github.event.pull_request.base.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.fork == false &&
+        contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        'ubuntu-latest'
+      }}
     defaults:
       run:
         working-directory: agent
@@ -83,7 +107,19 @@ jobs:
       - run: GOWORK=off go test -race ./...
 
   agent-workspace:
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.user.login == github.actor &&
+        github.event.pull_request.base.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.fork == false &&
+        contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        'ubuntu-latest'
+      }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
