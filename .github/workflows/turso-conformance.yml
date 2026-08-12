@@ -16,34 +16,60 @@ concurrency:
 
 jobs:
   conformance:
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{
+        github.event_name == 'release' &&
+        startsWith(github.ref, 'refs/tags/') &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
+        github.event_name == 'workflow_dispatch' &&
+        (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
+        'ubuntu-latest'
+      }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+
+      - name: Materialize managed Turso Dagger input
+        shell: bash
+        env:
+          DAGGER_EVENT_NAME: ${{ github.event_name }}
+          DAGGER_REF: ${{ github.ref }}
+          DAGGER_RUN_ID: ${{ github.run_id }}
+          DAGGER_RUN_ATTEMPT: ${{ github.run_attempt }}
+          TURSO_ORG: ${{ vars.TURSO_ORG }}
+          TURSO_GROUP: ${{ vars.TURSO_GROUP }}
+        run: bash scripts/materialize-dagger-input.sh turso .dagger-inputs/turso.json
+
+      - name: Install exact Dagger CLI on GitHub-hosted runner
+        if: runner.environment == 'github-hosted'
+        uses: dagger/dagger-for-github@456fc3af63a2ba6f9789af9c55045b459115541b # v8.3.0
         with:
-          go-version: "1.26.1"
-          cache-dependency-path: go.sum
-      - name: Install pinned test reporter
-        run: go install gotest.tools/gotestsum@v1.13.0
-      - name: Run managed Turso repository conformance
+          version: "0.21.8"
+
+      - name: Require exact Dagger CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+
+      - name: Run managed Turso conformance through Dagger
+        shell: bash
         env:
           TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
-          TURSO_ORG: ${{ vars.TURSO_ORG }}
-          TURSO_GROUP: ${{ vars.TURSO_GROUP }}
-        run: go test -race ./internal/adapters/tursocloud -run Conformance -count=1
-      - name: Run managed Turso storage journey
-        env:
-          TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
-          TURSO_ORG: ${{ vars.TURSO_ORG }}
-          TURSO_GROUP: ${{ vars.TURSO_GROUP }}
         run: >-
-          gotestsum --junitfile managed-turso-storage-matrix.xml --
-          -race ./integration -run '^TestStorageMatrix/TursoCloud$' -count=1
+          dagger call turso-conformance --source=. --input=.dagger-inputs/turso.json
+          --turso-api-key=env:TURSO_API_KEY export --path=turso-output
+
       - name: Upload managed Turso test report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: managed-turso-storage-matrix
-          path: managed-turso-storage-matrix.xml
+          path: turso-output/managed-turso-storage-matrix.xml
           if-no-files-found: error
+
+      - name: Propagate managed Turso test status
+        if: always()
+        shell: bash
+        run: test "$(cat turso-output/status)" = 0

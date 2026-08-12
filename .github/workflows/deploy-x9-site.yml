@@ -4,12 +4,20 @@ on:
   pull_request:
     paths:
       - ".github/workflows/deploy-x9-site.yml"
+      - ".dagger/**"
+      - "dagger.json"
+      - "scripts/materialize-dagger-input.sh"
+      - "scripts/check-dagger-runner-contract.sh"
       - "site/**"
   push:
     branches:
       - "codex/milestone-2b-persistence"
     paths:
       - ".github/workflows/deploy-x9-site.yml"
+      - ".dagger/**"
+      - "dagger.json"
+      - "scripts/materialize-dagger-input.sh"
+      - "scripts/check-dagger-runner-contract.sh"
       - "site/**"
   workflow_dispatch:
 
@@ -33,40 +41,48 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.head.repo.fork == false &&
         contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
-        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-pr"]') ||
+        github.event_name != 'pull_request' &&
+        github.ref == 'refs/heads/main' &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
         'ubuntu-24.04'
       }}
-    defaults:
-      run:
-        working-directory: site
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Materialize site Dagger input
+        shell: bash
+        env:
+          DAGGER_EVENT_NAME: ${{ github.event_name }}
+          DAGGER_REF: ${{ github.ref }}
+          DAGGER_RUN_ID: ${{ github.run_id }}
+          DAGGER_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: bash scripts/materialize-dagger-input.sh site .dagger-inputs/site.json
+
+      - name: Install exact Dagger CLI on GitHub-hosted runner
+        if: runner.environment == 'github-hosted'
+        uses: dagger/dagger-for-github@456fc3af63a2ba6f9789af9c55045b459115541b # v8.3.0
         with:
-          go-version: "1.26.5"
-          cache-dependency-path: site/go.sum
+          version: "0.21.8"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22.13.0
+      - name: Require exact Dagger CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
 
-      - name: Build and test site
-        run: make check
-
-      - name: Validate Cloudflare deployment
-        run: npx --yes wrangler@4.114.0 deploy --dry-run
+      - name: Validate static site through Dagger
+        shell: bash
+        run: dagger call site-validate --source=. --input=.dagger-inputs/site.json export --path=x9-site-output
 
       - name: Upload validated site
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: x9-site-public
-          path: site/public
+          path: x9-site-output
           if-no-files-found: error
 
   deploy:
@@ -85,7 +101,10 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.head.repo.fork == false &&
         contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
-        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-pr"]') ||
+        github.event_name != 'pull_request' &&
+        github.ref == 'refs/heads/main' &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
         'ubuntu-24.04'
       }}
     environment:
@@ -103,19 +122,33 @@ jobs:
           name: x9-site-public
           path: site/public
 
-      - name: Require Cloudflare credentials
+      - name: Materialize deploy Dagger input
+        shell: bash
+        env:
+          DAGGER_EVENT_NAME: ${{ github.event_name }}
+          DAGGER_REF: ${{ github.ref }}
+          DAGGER_RUN_ID: ${{ github.run_id }}
+          DAGGER_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/materialize-dagger-input.sh deploy .dagger-inputs/deploy.json
+
+      - name: Install exact Dagger CLI on GitHub-hosted runner
+        if: runner.environment == 'github-hosted'
+        uses: dagger/dagger-for-github@456fc3af63a2ba6f9789af9c55045b459115541b # v8.3.0
+        with:
+          version: "0.21.8"
+
+      - name: Require exact Dagger CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+
+      - name: Deploy validated site through Dagger
+        shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Missing CLOUDFLARE_API_TOKEN Actions secret" >&2; exit 1; }
-          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Missing CLOUDFLARE_ACCOUNT_ID Actions variable" >&2; exit 1; }
-
-      - name: Deploy with Wrangler
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: site
-          wranglerVersion: "4.114.0"
-          command: deploy
+        run: >-
+          dagger call site-deploy --source=. --artifact=site/public
+          --input=.dagger-inputs/deploy.json
+          --cloudflare-api-token=env:CLOUDFLARE_API_TOKEN

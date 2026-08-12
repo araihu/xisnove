@@ -17,66 +17,62 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.head.repo.fork == false &&
         contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
-        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-pr"]') ||
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
         'ubuntu-latest'
       }}
-    services:
-      postgres:
-        image: postgres:18.3-alpine3.23
-        env:
-          POSTGRES_DB: xisnove
-          POSTGRES_PASSWORD: xisnove
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d xisnove"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.26.1"
-          cache-dependency-path: |
-            go.sum
-            agent/go.sum
-      - run: go tool vacuum lint -d api/openapi.yaml
-      - run: go generate ./...
-      - run: go tool sqlc generate
-      - run: go tool sqlc diff
-      - run: git diff --exit-code
-      - run: go vet ./...
-      - run: go test -race ./...
+
+      - name: Materialize root Dagger input
+        shell: bash
         env:
-          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
-      - name: Verify identical storage journey across local profiles
-        env:
-          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
-        run: go test -race ./integration -run TestStorageMatrix -count=1
-      - name: PostgreSQL backup and restore smoke
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: "5432"
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: xisnove
-          POSTGRES_DATABASE: xisnove
-          POSTGRES_RESTORE_DATABASE: xisnove_restore_smoke
-          XISNOVE_TEST_POSTGRES_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove?sslmode=disable
-          XISNOVE_TEST_POSTGRES_RESTORE_URL: postgres://postgres:xisnove@127.0.0.1:5432/xisnove_restore_smoke?sslmode=disable
-        run: bash scripts/postgres-backup-smoke.sh
-      - name: Check OpenAPI compatibility
-        if: github.event_name == 'pull_request'
-        env:
+          DAGGER_EVENT_NAME: ${{ github.event_name }}
+          DAGGER_REF: ${{ github.ref }}
+          DAGGER_RUN_ID: ${{ github.run_id }}
+          DAGGER_RUN_ATTEMPT: ${{ github.run_attempt }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if git show "origin/${BASE_REF}:api/openapi.yaml" > /tmp/base-openapi.yaml 2>/dev/null; then
-            go tool oasdiff breaking /tmp/base-openapi.yaml api/openapi.yaml
+          set -euo pipefail
+          umask 077
+          if [[ -e .dagger-inputs || -L .dagger-inputs ]]; then
+            [[ -d .dagger-inputs && ! -L .dagger-inputs ]] || { echo ".dagger-inputs must be a real directory" >&2; exit 1; }
           else
-            echo "No API compatibility baseline exists."
+            mkdir -m 700 .dagger-inputs
           fi
+          [[ ! -L .dagger-inputs/base-openapi.yaml && ( ! -e .dagger-inputs/base-openapi.yaml || -f .dagger-inputs/base-openapi.yaml ) ]] || { echo "OpenAPI baseline input must be a regular file" >&2; exit 1; }
+          DAGGER_HAS_BASELINE=false
+          : > .dagger-inputs/base-openapi.yaml
+          if [[ "$DAGGER_EVENT_NAME" == pull_request ]]; then
+            [[ "$BASE_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || { echo "Invalid pull request base ref" >&2; exit 1; }
+            if git show "origin/${BASE_REF}:api/openapi.yaml" > .dagger-inputs/base-openapi.yaml 2>/dev/null; then
+              DAGGER_HAS_BASELINE=true
+            else
+              echo "No API compatibility baseline exists."
+            fi
+          fi
+          export DAGGER_HAS_BASELINE
+          bash scripts/materialize-dagger-input.sh ci .dagger-inputs/root.json
+
+      - name: Install exact Dagger CLI on GitHub-hosted runner
+        if: runner.environment == 'github-hosted'
+        uses: dagger/dagger-for-github@456fc3af63a2ba6f9789af9c55045b459115541b # v8.3.0
+        with:
+          version: "0.21.8"
+
+      - name: Require exact Dagger CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+
+      - name: Root Dagger gates
+        shell: bash
+        run: dagger call root-ci --source=. --input=.dagger-inputs/root.json --baseline=.dagger-inputs/base-openapi.yaml
 
   agent:
     runs-on: >-
@@ -89,22 +85,40 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.head.repo.fork == false &&
         contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
-        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-pr"]') ||
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
         'ubuntu-latest'
       }}
-    defaults:
-      run:
-        working-directory: agent
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+
+      - name: Materialize agent Dagger input
+        shell: bash
+        env:
+          DAGGER_EVENT_NAME: ${{ github.event_name }}
+          DAGGER_REF: ${{ github.ref }}
+          DAGGER_RUN_ID: ${{ github.run_id }}
+          DAGGER_RUN_ATTEMPT: ${{ github.run_attempt }}
+          DAGGER_HAS_BASELINE: "false"
+        run: bash scripts/materialize-dagger-input.sh ci .dagger-inputs/agent.json
+
+      - name: Install exact Dagger CLI on GitHub-hosted runner
+        if: runner.environment == 'github-hosted'
+        uses: dagger/dagger-for-github@456fc3af63a2ba6f9789af9c55045b459115541b # v8.3.0
         with:
-          go-version: "1.26.1"
-          cache-dependency-path: agent/go.sum
-      - run: GOWORK=off go generate ./...
-      - run: git diff --exit-code
-      - run: GOWORK=off go vet ./...
-      - run: GOWORK=off go test -race ./...
+          version: "0.21.8"
+
+      - name: Require exact Dagger CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+
+      - name: Agent Dagger gates
+        shell: bash
+        run: dagger call agent-ci --source=. --input=.dagger-inputs/agent.json
 
   agent-workspace:
     runs-on: >-
@@ -117,15 +131,37 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.head.repo.fork == false &&
         contains(fromJSON(vars.HOSTINGER_PR_ACTORS_JSON || '[]'), github.actor) &&
-        fromJSON('["self-hosted","Linux","X64","hostinger-vps"]') ||
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-pr"]') ||
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' &&
+        fromJSON('["self-hosted","Linux","X64","hostinger-vps-trusted"]') ||
         'ubuntu-latest'
       }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+
+      - name: Materialize workspace Dagger input
+        shell: bash
+        env:
+          DAGGER_EVENT_NAME: ${{ github.event_name }}
+          DAGGER_REF: ${{ github.ref }}
+          DAGGER_RUN_ID: ${{ github.run_id }}
+          DAGGER_RUN_ATTEMPT: ${{ github.run_attempt }}
+          DAGGER_HAS_BASELINE: "false"
+        run: bash scripts/materialize-dagger-input.sh ci .dagger-inputs/agent-workspace.json
+
+      - name: Install exact Dagger CLI on GitHub-hosted runner
+        if: runner.environment == 'github-hosted'
+        uses: dagger/dagger-for-github@456fc3af63a2ba6f9789af9c55045b459115541b # v8.3.0
         with:
-          go-version: "1.26.1"
-          cache-dependency-path: |
-            go.sum
-            agent/go.sum
-      - run: go test -race ./agent/...
+          version: "0.21.8"
+
+      - name: Require exact Dagger CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+
+      - name: Agent workspace Dagger gate
+        shell: bash
+        run: dagger call agent-workspace-ci --source=. --input=.dagger-inputs/agent-workspace.json

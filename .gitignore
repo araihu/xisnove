@@ -6,3 +6,8 @@
 .worktrees/
 site/public/
 site/.wrangler/
+.dagger/node_modules/
+.dagger/sdk/
+.dagger-inputs/
+x9-site-output/
+turso-output/
