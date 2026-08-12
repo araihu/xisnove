@@ -52,15 +52,25 @@ never changes group protection. Each test creates one cryptographically unique
 that exact database, and polls until absence is confirmed.
 
 For a local protected run, load the Platform API token without printing it and
-set the same non-secret organization and dedicated group values:
+set the same non-secret organization and dedicated group values. The Dagger
+path uses the same conformance function as CI and keeps the token in a Dagger
+`Secret`:
 
 ```bash
-TURSO_API_KEY='<redacted>' \
-TURSO_ORG='your-organization' \
-TURSO_GROUP='xisnove-ci' \
-go test -race ./internal/adapters/tursocloud -run Conformance -count=1
-go test -race ./integration -run 'TestStorageMatrix/TursoCloud' -count=1
+export TURSO_API_KEY='<redacted>'
+export TURSO_ORG='your-organization'
+export TURSO_GROUP='xisnove-ci'
+DAGGER_EVENT_NAME=local DAGGER_RUN_ID="$(date +%s)" DAGGER_RUN_ATTEMPT=1 \
+  bash scripts/materialize-dagger-input.sh turso .dagger-inputs/turso-local.json
+dagger call turso-conformance --source=. \
+  --input=.dagger-inputs/turso-local.json \
+  --turso-api-key=env:TURSO_API_KEY \
+  export --path=.dagger-output
+test "$(cat .dagger-output/status)" = 0
 ```
+
+The local input selects a local cache namespace. CI cache isolation is selected
+by the host-owned runner lane, not by this JSON metadata.
 
 Alternatively, `XISNOVE_TEST_TURSO_URL` and `XISNOVE_TEST_TURSO_TOKEN` may be
 set together to run against a database whose lifecycle is managed externally.
