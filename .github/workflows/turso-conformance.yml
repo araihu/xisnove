@@ -59,17 +59,17 @@ jobs:
           TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
         run: >-
           dagger call turso-conformance --source=. --input=.dagger-inputs/turso.json
-          --turso-api-key=env:TURSO_API_KEY export --path=.dagger-output
+          --turso-api-key=env:TURSO_API_KEY export --path=turso-output
 
       - name: Upload managed Turso test report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: managed-turso-storage-matrix
-          path: .dagger-output/managed-turso-storage-matrix.xml
+          path: turso-output/managed-turso-storage-matrix.xml
           if-no-files-found: error
 
       - name: Propagate managed Turso test status
         if: always()
         shell: bash
-        run: test "$(cat .dagger-output/status)" = 0
+        run: test "$(cat turso-output/status)" = 0

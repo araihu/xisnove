@@ -14,6 +14,14 @@ for workflow in "${workflows[@]}"; do
     echo "legacy generic Hostinger runner label in $workflow" >&2
     exit 1
   fi
+  if grep -nF '.dagger-output' "$workflow"; then
+    echo "hidden Dagger output path in provider workflow: $workflow" >&2
+    exit 1
+  fi
+  if grep -nE 'export --path=\.[^[:space:]]+|^[[:space:]]+path:[[:space:]]*\.[^[:space:]]+' "$workflow"; then
+    echo "provider workflow uploads hidden output path: $workflow" >&2
+    exit 1
+  fi
 
   while IFS=: read -r line _; do
     start=$((line > 8 ? line - 8 : 1))

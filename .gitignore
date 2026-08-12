@@ -9,4 +9,5 @@ site/.wrangler/
 .dagger/node_modules/
 .dagger/sdk/
 .dagger-inputs/
-.dagger-output/
+x9-site-output/
+turso-output/

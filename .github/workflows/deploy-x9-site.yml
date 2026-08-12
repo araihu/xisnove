@@ -76,13 +76,13 @@ jobs:
 
       - name: Validate static site through Dagger
         shell: bash
-        run: dagger call site-validate --source=. --input=.dagger-inputs/site.json export --path=.dagger-output
+        run: dagger call site-validate --source=. --input=.dagger-inputs/site.json export --path=x9-site-output
 
       - name: Upload validated site
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: x9-site-public
-          path: .dagger-output
+          path: x9-site-output
           if-no-files-found: error
 
   deploy:

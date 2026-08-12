@@ -65,8 +65,8 @@ DAGGER_EVENT_NAME=local DAGGER_RUN_ID="$(date +%s)" DAGGER_RUN_ATTEMPT=1 \
 dagger call turso-conformance --source=. \
   --input=.dagger-inputs/turso-local.json \
   --turso-api-key=env:TURSO_API_KEY \
-  export --path=.dagger-output
-test "$(cat .dagger-output/status)" = 0
+  export --path=turso-output
+test "$(cat turso-output/status)" = 0
 ```
 
 The local input selects a local cache namespace. CI cache isolation is selected
