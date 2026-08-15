@@ -127,6 +127,111 @@ func TestFutureMaintenanceDoesNotRecordBeforeActivation(t *testing.T) {
 	}
 }
 
+func TestFutureMaintenanceWorkerPreservesAuthenticatedProvenanceAfterRestart(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	createdAt, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	creationNow := createdAt.Add(-2 * time.Minute)
+	startsAt := createdAt.Add(-time.Minute)
+	principal := Principal{Kind: PrincipalAdmin, SubjectID: "admin-1"}
+	service := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return creationNow }, NewID: concurrentIDs(),
+	})
+	record, err := service.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: startsAt, Reason: "future user request", Principal: principal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A fresh worker instance represents a process restart: provenance must be
+	// recovered from durable audit state, not from the creating request.
+	worker := newMaintenanceWorker(t, fixture.store, "maintenance-worker-restarted", concurrentIDs())
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("restart worker RunOnce() = %d, %v", count, err)
+	}
+	workerNow, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, createdAt.Add(-time.Minute), workerNow.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 1 {
+		t.Fatalf("future activation ticks = %#v", ticks)
+	}
+	tick := ticks[0]
+	if tick.Actor != (domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID}) ||
+		tick.UserActionID == nil || tick.Lifecycle != domain.MonitorLifecyclePaused || tick.ReasonCode != domain.StateTickReasonMaintenance {
+		t.Fatalf("future activation provenance = %#v", tick)
+	}
+
+	// The record remains addressable after activation; this assertion keeps the
+	// test tied to the same durable maintenance subject used for the lookup.
+	if stored, err := fixture.repositories.Maintenance.Get(ctx, record.Interval.ID); err != nil || stored.Interval.ID != record.Interval.ID {
+		t.Fatalf("activated maintenance = %#v, %v", stored, err)
+	}
+}
+
+func TestMaintenanceWorkerEmitsStartBeforeShortLivedExpiry(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	now, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endsAt := now.Add(-time.Minute)
+	interval, err := domain.NewMaintenanceInterval(
+		"maintenance-short-lived", fixture.monitor.ID, now.Add(-2*time.Minute), &endsAt, "short-lived",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interval.CreatedAt = now.Add(-2 * time.Minute)
+	if err := fixture.repositories.Maintenance.Create(ctx, port.MaintenanceRecord{Interval: interval, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	worker := newMaintenanceWorker(t, fixture.store, "maintenance-worker-short-lived", concurrentIDs())
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("short-lived RunOnce() = %d, %v", count, err)
+	}
+	workerNow, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, now.Add(-3*time.Minute), workerNow.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 2 {
+		t.Fatalf("short-lived lifecycle ticks = %#v", ticks)
+	}
+	var startAt, expiryAt time.Time
+	for _, tick := range ticks {
+		if tick.ReasonCode != domain.StateTickReasonMaintenance {
+			t.Fatalf("short-lived tick reasons = %#v", ticks)
+		}
+		switch tick.Lifecycle {
+		case domain.MonitorLifecyclePaused:
+			startAt = tick.OccurredAt
+		case domain.MonitorLifecycleActive:
+			expiryAt = tick.OccurredAt
+		}
+	}
+	if startAt.IsZero() || expiryAt.IsZero() || startAt.After(expiryAt) {
+		t.Fatalf("short-lived lifecycle times = %#v", ticks)
+	}
+}
+
 func TestCancelledFutureMaintenanceDoesNotActivate(t *testing.T) {
 	ctx := context.Background()
 	fixture := newProjectionFixture(t, ctx)
@@ -330,8 +435,19 @@ func TestMaintenanceWorkerRecordsNaturalExpiryTick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ticks) != 1 || ticks[0].ReasonCode != domain.StateTickReasonMaintenance ||
-		ticks[0].Actor.Kind != domain.StateTickActorSystem || ticks[0].Lifecycle != domain.MonitorLifecycleActive {
+	active, paused := 0, 0
+	for _, tick := range ticks {
+		if tick.ReasonCode != domain.StateTickReasonMaintenance || tick.Actor.Kind != domain.StateTickActorSystem {
+			t.Fatalf("expiry tick = %#v", ticks)
+		}
+		switch tick.Lifecycle {
+		case domain.MonitorLifecycleActive:
+			active++
+		case domain.MonitorLifecyclePaused:
+			paused++
+		}
+	}
+	if len(ticks) != 2 || active != 1 || paused != 1 {
 		t.Fatalf("expiry tick = %#v", ticks)
 	}
 }

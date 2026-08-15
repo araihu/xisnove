@@ -74,8 +74,9 @@ func (w *MaintenanceWorker) Run(ctx context.Context) error {
 	}
 }
 
-// RunOnce activates due intervals and claims/processes at most BatchSize total
-// lifecycle transitions.
+// RunOnce activates due intervals and claims/processes at most BatchSize ended
+// intervals. An ended interval discovered for the first time receives its
+// deterministic start tick before the terminal tick in the same cycle.
 func (w *MaintenanceWorker) RunOnce(ctx context.Context) (int, error) {
 	processed, err := w.activateDue(ctx)
 	if err != nil {
@@ -108,23 +109,32 @@ func (w *MaintenanceWorker) activateDue(ctx context.Context) (int, error) {
 		if err != nil {
 			return err
 		}
-		for offset := 0; offset < maintenanceActivationScanLimit && activated < w.config.BatchSize; {
+		activationCandidates := 0
+		for offset := 0; offset < maintenanceActivationScanLimit && activationCandidates < w.config.BatchSize; {
 			records, err := repositories.Maintenance.List(ctx, maintenanceActivationPageSize, offset)
 			if err != nil {
 				return err
 			}
 			for _, record := range records {
-				if !record.Interval.ActiveAt(now) {
+				startsDue := !record.Interval.StartsAt.After(now)
+				endedUnprocessed := record.Interval.EndsAt != nil &&
+					!record.Interval.EndsAt.After(now) && !record.Interval.EndedNotificationSent
+				if !startsDue || (!record.Interval.ActiveAt(now) && !endedUnprocessed) {
 					continue
 				}
+				activationCandidates++
 				monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
+				if err != nil {
+					return err
+				}
+				actor, userActionID, err := maintenanceActivationProvenance(ctx, repositories, record.Interval.ID)
 				if err != nil {
 					return err
 				}
 				inserted, err := appendMaintenanceActivationStateTick(
 					ctx, repositories, monitor, record.Interval.ID,
 					maintenanceLifecycle(monitor, true),
-					domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil,
+					actor, userActionID,
 					// The worker owns the effective transition, so delayed discovery
 					// is recorded at the observation time rather than scheduled time.
 					now,
@@ -132,10 +142,10 @@ func (w *MaintenanceWorker) activateDue(ctx context.Context) (int, error) {
 				if err != nil {
 					return err
 				}
-				if inserted {
+				if inserted && !endedUnprocessed {
 					activated++
 				}
-				if activated >= w.config.BatchSize {
+				if activationCandidates >= w.config.BatchSize {
 					break
 				}
 			}

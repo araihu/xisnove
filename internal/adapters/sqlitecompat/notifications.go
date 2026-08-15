@@ -398,6 +398,32 @@ func (r *auditRepository) ListByIncident(ctx context.Context, id domain.Incident
 	return result, nil
 }
 
+func (r *auditRepository) ListBySubject(ctx context.Context, subjectKind, subjectID string) ([]application.AuditEventRecord, error) {
+	records, err := r.queries.ListAuditEventsBySubject(ctx, dbsqlite.ListAuditEventsBySubjectParams{
+		SubjectKind: subjectKind, SubjectID: subjectID,
+	})
+	if err != nil {
+		return nil, repositoryError("list audit events by subject", err)
+	}
+	result := make([]application.AuditEventRecord, 0, len(records))
+	for _, record := range records {
+		createdAt, err := parseTime(record.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("map audit event: %w", err)
+		}
+		mapped := application.AuditEventRecord{
+			ID: record.ID, Kind: record.Kind, SubjectKind: record.SubjectKind,
+			SubjectID: record.SubjectID, Payload: append([]byte(nil), record.PayloadJson...), CreatedAt: createdAt,
+		}
+		if record.IncidentID.Valid {
+			incidentID := domain.IncidentID(record.IncidentID.String)
+			mapped.IncidentID = &incidentID
+		}
+		result = append(result, mapped)
+	}
+	return result, nil
+}
+
 type retentionRepository struct{ queries *dbsqlite.Queries }
 
 func (r *retentionRepository) ClaimLease(ctx context.Context, lease application.OperationLeaseRecord, now time.Time) (application.OperationLeaseRecord, error) {

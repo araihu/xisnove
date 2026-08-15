@@ -173,3 +173,9 @@ INSERT INTO audit_events (
 SELECT * FROM audit_events
 WHERE incident_id = ?
 ORDER BY created_at, id;
+
+-- name: ListAuditEventsBySubject :many
+SELECT * FROM audit_events
+WHERE subject_kind = sqlc.arg(subject_kind)
+  AND subject_id = sqlc.arg(subject_id)
+ORDER BY created_at, id;

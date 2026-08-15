@@ -53,11 +53,15 @@ type Repositories struct {
 	NotificationOutbox   NotificationOutboxRepository
 	Maintenance          MaintenanceRepository
 	Audit                AuditRepository
-	Retention            RetentionRepository
-	Management           ManagementQueryRepository
-	ManagementCommands   ManagementCommandRepository
-	Discovery            DiscoveryRepository
-	Operator             OperatorRepository
+	// AuditSubjectReader is optional while stores migrate the audit read seam.
+	// When state history is persisted, workers use it to recover provenance for
+	// delayed lifecycle transitions after a process restart.
+	AuditSubjectReader AuditSubjectReader
+	Retention          RetentionRepository
+	Management         ManagementQueryRepository
+	ManagementCommands ManagementCommandRepository
+	Discovery          DiscoveryRepository
+	Operator           OperatorRepository
 }
 
 type AdminRecord struct {

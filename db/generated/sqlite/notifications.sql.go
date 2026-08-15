@@ -364,6 +364,49 @@ func (q *Queries) ListAuditEventsByIncident(ctx context.Context, incidentID sql.
 	return items, nil
 }
 
+const listAuditEventsBySubject = `-- name: ListAuditEventsBySubject :many
+SELECT id, kind, subject_kind, subject_id, incident_id, payload_json, created_at FROM audit_events
+WHERE subject_kind = ?1
+  AND subject_id = ?2
+ORDER BY created_at, id
+`
+
+type ListAuditEventsBySubjectParams struct {
+	SubjectKind string `json:"subject_kind"`
+	SubjectID   string `json:"subject_id"`
+}
+
+func (q *Queries) ListAuditEventsBySubject(ctx context.Context, arg ListAuditEventsBySubjectParams) ([]AuditEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listAuditEventsBySubject, arg.SubjectKind, arg.SubjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditEvent{}
+	for rows.Next() {
+		var i AuditEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.SubjectKind,
+			&i.SubjectID,
+			&i.IncidentID,
+			&i.PayloadJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEnabledNotificationRoutes = `-- name: ListEnabledNotificationRoutes :many
 SELECT id, name, channel_id, monitor_id, label_matchers_json, actions_json, severities_json, template, enabled, precedence, created_at, updated_at FROM notification_routes
 WHERE enabled = 1

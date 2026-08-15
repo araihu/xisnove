@@ -175,6 +175,13 @@ type AuditRepository interface {
 	ListByIncident(context.Context, domain.IncidentID) ([]AuditEventRecord, error)
 }
 
+// AuditSubjectReader reads immutable audit events for one durable subject.
+// It is intentionally a separate optional port so older stores can continue
+// to append audit events while lifecycle workers adopt restart-safe reads.
+type AuditSubjectReader interface {
+	ListBySubject(context.Context, string, string) ([]AuditEventRecord, error)
+}
+
 type RetentionRepository interface {
 	ClaimLease(context.Context, OperationLeaseRecord, time.Time) (OperationLeaseRecord, error)
 	UpdateLease(context.Context, OperationLeaseRecord) (bool, error)

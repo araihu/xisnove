@@ -380,6 +380,7 @@ func (s *NotificationAdminService) CreateMaintenance(ctx context.Context, comman
 	now := s.now().UTC()
 	interval.CreatedAt = now
 	record := port.MaintenanceRecord{Interval: interval, UpdatedAt: now}
+	actor, userActionID := stateTickProvenance(command.Principal, s.newID)
 	err = s.store.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
 		monitor, err := repositories.Monitors.Get(ctx, command.MonitorID)
 		if err != nil {
@@ -388,13 +389,12 @@ func (s *NotificationAdminService) CreateMaintenance(ctx context.Context, comman
 		if err := repositories.Maintenance.Create(ctx, record); err != nil {
 			return err
 		}
-		if err := appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.created", record, now); err != nil {
+		if err := appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.created", record, now, actor, userActionID); err != nil {
 			return err
 		}
 		if now.Before(interval.StartsAt) {
 			return nil
 		}
-		actor, userActionID := stateTickProvenance(command.Principal, s.newID)
 		_, err = appendMaintenanceActivationStateTick(
 			ctx, repositories, monitor, interval.ID, maintenanceLifecycle(monitor, true),
 			actor, userActionID, now,
@@ -458,7 +458,8 @@ func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain
 		if err != nil {
 			return err
 		}
-		if err := appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.ended", record, now); err != nil {
+		actor, userActionID := stateTickProvenance(principal, s.newID)
+		if err := appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.ended", record, now, actor, userActionID); err != nil {
 			return err
 		}
 		monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
@@ -470,7 +471,6 @@ func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain
 			return err
 		}
 		lifecycle := maintenanceLifecycle(monitor, len(activeMaintenance) != 0)
-		actor, userActionID := stateTickProvenance(principal, s.newID)
 		return appendMaintenanceStateTick(
 			ctx, repositories, monitor, lifecycle,
 			actor, userActionID, now, s.newID,
@@ -499,7 +499,8 @@ func (s *NotificationAdminService) DeleteMaintenance(ctx context.Context, id dom
 		if !changed {
 			return port.ErrConflict
 		}
-		return appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.deleted", record, now)
+		return appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.deleted", record, now,
+			domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil)
 	})
 }
 
@@ -510,15 +511,13 @@ func appendMaintenanceAudit(
 	kind string,
 	record port.MaintenanceRecord,
 	at time.Time,
+	actor domain.StateTickActor,
+	userActionID *string,
 ) error {
-	payload, err := json.Marshal(struct {
-		MonitorID domain.MonitorID `json:"monitorId"`
-		StartsAt  time.Time        `json:"startsAt"`
-		EndsAt    *time.Time       `json:"endsAt,omitempty"`
-		Reason    string           `json:"reason,omitempty"`
-	}{
+	payload, err := json.Marshal(maintenanceAuditPayload{
 		MonitorID: record.Interval.MonitorID, StartsAt: record.Interval.StartsAt,
 		EndsAt: record.Interval.EndsAt, Reason: record.Interval.Reason,
+		ActorKind: actor.Kind, ActorID: actor.ID, UserActionID: cloneOptionalString(userActionID),
 	})
 	if err != nil {
 		return fmt.Errorf("encode maintenance audit: %w", err)

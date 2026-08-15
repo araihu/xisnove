@@ -80,6 +80,7 @@ type Querier interface {
 	ListAPITokensAfter(ctx context.Context, arg ListAPITokensAfterParams) ([]ApiToken, error)
 	ListActiveMaintenanceIntervals(ctx context.Context, arg ListActiveMaintenanceIntervalsParams) ([]MaintenanceInterval, error)
 	ListAuditEventsByIncident(ctx context.Context, incidentID sql.NullString) ([]AuditEvent, error)
+	ListAuditEventsBySubject(ctx context.Context, arg ListAuditEventsBySubjectParams) ([]AuditEvent, error)
 	ListDailyUptime(ctx context.Context, arg ListDailyUptimeParams) ([]DailyUptime, error)
 	ListDiscoveryCandidates(ctx context.Context, arg ListDiscoveryCandidatesParams) ([]DiscoveryCandidate, error)
 	ListDueMonitorLocations(ctx context.Context, arg ListDueMonitorLocationsParams) ([]ListDueMonitorLocationsRow, error)

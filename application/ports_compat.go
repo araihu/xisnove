@@ -73,6 +73,7 @@ type NotificationRouteRepository = port.NotificationRouteRepository
 type NotificationOutboxRepository = port.NotificationOutboxRepository
 type MaintenanceRepository = port.MaintenanceRepository
 type AuditRepository = port.AuditRepository
+type AuditSubjectReader = port.AuditSubjectReader
 type RetentionRepository = port.RetentionRepository
 type ManagementQueryRepository = port.ManagementQueryRepository
 type ManagementCommandRepository = port.ManagementCommandRepository

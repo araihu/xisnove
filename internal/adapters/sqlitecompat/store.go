@@ -137,6 +137,7 @@ func newRepositories(queries *dbsqlite.Queries) application.Repositories {
 		NotificationOutbox:   &notificationOutboxRepository{queries: queries},
 		Maintenance:          &maintenanceRepository{queries: queries},
 		Audit:                &auditRepository{queries: queries},
+		AuditSubjectReader:   &auditRepository{queries: queries},
 		Retention:            &retentionRepository{queries: queries},
 		Management:           management,
 		ManagementCommands:   management,
