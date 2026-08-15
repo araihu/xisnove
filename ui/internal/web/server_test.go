@@ -30,6 +30,35 @@ const (
 	testCredential = "opaque.control-plane/credential"
 )
 
+func TestNoneAuthServesProtectedRoutesWithoutSession(t *testing.T) {
+	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+	client.Monitors = []sdk.Monitor{{
+		Id: uuid.New(), Name: "Home DNS", Description: "Resolver", Kind: sdk.MonitorKindDns, Enabled: true,
+	}}
+	handler, _ := newTestHandlerWithModes(t, client, time.Second, []AuthMode{AuthModeNone})
+
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "Home DNS") {
+		t.Fatalf("none-mode monitors = %d %s", recorder.Code, recorder.Body.String())
+	}
+	if cookies := recorder.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("none-mode monitors issued cookies: %#v", cookies)
+	}
+	if strings.Contains(recorder.Body.String(), DevelopmentNoneCredential) {
+		t.Fatal("none-mode control-plane credential reached browser response")
+	}
+
+	loginRequest := httptest.NewRequest(http.MethodGet, "https://ui.example.test/login", nil)
+	loginRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(loginRecorder, loginRequest)
+	if loginRecorder.Code != http.StatusSeeOther || loginRecorder.Header().Get("Location") != "/monitors" {
+		t.Fatalf("none-mode login = %d Location %q", loginRecorder.Code, loginRecorder.Header().Get("Location"))
+	}
+}
+
 var csrfValuePattern = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
 func TestHandlerMountsEveryGoshtosoRuntimeAssetDirectly(t *testing.T) {
@@ -646,6 +675,10 @@ func TestLogoutRejectsMissingCSRFWithProblemPresentation(t *testing.T) {
 }
 
 func newTestHandler(t *testing.T, client controlplane.Client, timeout time.Duration) (http.Handler, *bytes.Buffer) {
+	return newTestHandlerWithModes(t, client, timeout, nil)
+}
+
+func newTestHandlerWithModes(t *testing.T, client controlplane.Client, timeout time.Duration, authModes []AuthMode) (http.Handler, *bytes.Buffer) {
 	t.Helper()
 	var logs bytes.Buffer
 	handler, err := New(Config{
@@ -653,6 +686,7 @@ func newTestHandler(t *testing.T, client controlplane.Client, timeout time.Durat
 		CookieSecret:   []byte("0123456789abcdef0123456789abcdef"),
 		CookieSecure:   true,
 		RequestTimeout: timeout,
+		AuthModes:      authModes,
 		Random:         bytes.NewReader(bytes.Repeat([]byte{0x2a}, 4096)),
 		Logger:         slog.New(slog.NewJSONHandler(&logs, nil)),
 	})

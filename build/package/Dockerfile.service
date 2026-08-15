@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1.18
+
+FROM golang:1.26.5-bookworm AS build
+WORKDIR /workspace
+COPY go.mod go.sum ./
+RUN go mod download github.com/miekg/dns
+COPY cmd/xisnove-service ./cmd/xisnove-service
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/xisnove-service ./cmd/xisnove-service
+
+FROM debian:bookworm-slim
+COPY --from=build /out/xisnove-service /usr/local/bin/xisnove-service
+USER 65532:65532
+EXPOSE 8080 9090 5353/tcp 5353/udp
+ENTRYPOINT ["/usr/local/bin/xisnove-service"]

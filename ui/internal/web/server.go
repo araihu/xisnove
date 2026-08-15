@@ -31,11 +31,25 @@ const (
 	maxSearchPageWalk = 4
 )
 
+type AuthMode string
+
+const (
+	AuthModeBasic AuthMode = "basic"
+	AuthModeNone  AuthMode = "none"
+	AuthModeOIDC  AuthMode = "oidc"
+
+	// DevelopmentNoneCredential stays server-side. It lets the local fake
+	// control-plane exercise protected reads without placing a bearer token in
+	// the browser.
+	DevelopmentNoneCredential = "development-none"
+)
+
 type Config struct {
 	ControlPlane   controlplane.Client
 	CookieSecret   []byte
 	CookieSecure   bool
 	RequestTimeout time.Duration
+	AuthModes      []AuthMode
 	Random         io.Reader
 	Logger         *slog.Logger
 }
@@ -47,6 +61,7 @@ type server struct {
 	random       io.Reader
 	logger       *slog.Logger
 	fallbackID   atomic.Uint64
+	noneAuth     bool
 }
 
 func New(cfg Config) (http.Handler, error) {
@@ -74,6 +89,16 @@ func New(cfg Config) (http.Handler, error) {
 		timeout:      cfg.RequestTimeout,
 		random:       random,
 		logger:       logger,
+	}
+	authModes := cfg.AuthModes
+	if len(authModes) == 0 {
+		authModes = []AuthMode{AuthModeBasic}
+	}
+	for _, mode := range authModes {
+		if mode == AuthModeNone {
+			s.noneAuth = true
+			break
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -529,7 +554,7 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) search(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	credential, ok := s.cookies.Session(r)
+	credential, ok := s.authCredential(r)
 	if !ok {
 		w.Header().Set("X-Xisnove-App-Status", "401")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -556,9 +581,13 @@ func (s *server) search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
+	if s.noneAuth {
+		http.Redirect(w, r, "/monitors", http.StatusSeeOther)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
-		if _, ok := s.cookies.Session(r); ok {
+		if _, ok := s.authCredential(r); ok {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -576,6 +605,10 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) loginPost(w http.ResponseWriter, r *http.Request) {
+	if s.noneAuth {
+		http.Redirect(w, r, "/monitors", http.StatusSeeOther)
+		return
+	}
 	if err := parseForm(w, r); err != nil {
 		s.writeProblem(w, r, invalidRequestProblem())
 		return
@@ -630,7 +663,7 @@ func (s *server) loginError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
-	credential, ok := s.cookies.Session(r)
+	credential, ok := s.authCredential(r)
 	if !ok {
 		s.redirectLogin(w, r)
 		return
@@ -685,7 +718,7 @@ func (s *server) listMonitorMatches(ctx context.Context, credential, cursor, que
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {
-	credential, ok := s.cookies.Session(r)
+	credential, ok := s.authCredential(r)
 	if !ok {
 		s.writeProblem(w, r, unauthorizedProblem())
 		return
@@ -698,20 +731,26 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(w, r, csrfProblem())
 		return
 	}
-	if err := s.controlPlane.RevokeSession(r.Context(), credential); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			s.writeProblem(w, r, gatewayTimeoutProblem())
+	if !s.noneAuth {
+		if err := s.controlPlane.RevokeSession(r.Context(), credential); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				s.writeProblem(w, r, gatewayTimeoutProblem())
+				return
+			}
+			if errors.Is(err, controlplane.ErrUnauthorized) {
+				s.cookies.ClearSession(w)
+				s.writeProblem(w, r, unauthorizedProblem())
+				return
+			}
+			s.writeProblem(w, r, upstreamProblem())
 			return
 		}
-		if errors.Is(err, controlplane.ErrUnauthorized) {
-			s.cookies.ClearSession(w)
-			s.writeProblem(w, r, unauthorizedProblem())
-			return
-		}
-		s.writeProblem(w, r, upstreamProblem())
-		return
 	}
 	s.cookies.ClearSession(w)
+	if s.noneAuth {
+		http.Redirect(w, r, "/monitors", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
@@ -756,6 +795,10 @@ func (s *server) renderStateFailure(w http.ResponseWriter, r *http.Request, stat
 }
 
 func (s *server) redirectLogin(w http.ResponseWriter, r *http.Request) {
+	if s.noneAuth {
+		s.writeProblem(w, r, unauthorizedProblem())
+		return
+	}
 	if isHTMX(r) {
 		w.Header().Set("HX-Redirect", "/login")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -890,12 +933,19 @@ func (s *server) writeProblem(w http.ResponseWriter, r *http.Request, p problem)
 		return
 	}
 	v := view.Problem{Title: p.Title, Detail: p.Detail, Code: p.Code, CorrelationID: p.CorrelationID}
-	if credential, ok := s.cookies.Session(r); ok && r.URL.Path != "/login" && r.URL.Path != "/status" {
+	if credential, ok := s.authCredential(r); ok && r.URL.Path != "/login" && r.URL.Path != "/status" {
 		csrfToken := s.cookies.SessionCSRF(credential)
 		s.renderAdaptive(w, r, p.Status, view.ShellProblemPage(csrfToken, v), view.ShellProblemContent(v))
 		return
 	}
 	s.renderAdaptive(w, r, p.Status, view.ProblemPage(v), view.ProblemContent(v))
+}
+
+func (s *server) authCredential(r *http.Request) (string, bool) {
+	if s.noneAuth {
+		return DevelopmentNoneCredential, true
+	}
+	return s.cookies.Session(r)
 }
 
 func acceptsProblemJSON(r *http.Request) bool {

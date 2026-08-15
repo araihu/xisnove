@@ -15,6 +15,7 @@ import (
 
 	"github.com/araihu/xisnove/ui/internal/buildinfo"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
+	"github.com/araihu/xisnove/ui/internal/web"
 )
 
 func TestExecuteVersionSkipsConfigurationAndServer(t *testing.T) {
@@ -191,6 +192,95 @@ func TestLoadConfigBuildsProductionSDKClient(t *testing.T) {
 	}
 	if cfg.controlPlane == nil || cfg.requestTimeout != 2*time.Second {
 		t.Fatalf("production config = %#v", cfg)
+	}
+}
+
+func TestLoadConfigRejectsUnknownAuthMode(t *testing.T) {
+	env := testEnv(map[string]string{
+		"AUTH_MODES":               "basic,magic",
+		"XISNOVE_UI_COOKIE_SECRET": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_API_BASE_URL":  "https://control.example.test",
+	})
+
+	_, err := loadConfig(env)
+	if err == nil || !strings.Contains(err.Error(), "unsupported auth mode") {
+		t.Fatalf("load config error = %v, want unsupported auth mode", err)
+	}
+}
+
+func TestLoadConfigRejectsOIDCUntilImplemented(t *testing.T) {
+	env := testEnv(map[string]string{
+		"AUTH_MODES":               "oidc",
+		"XISNOVE_UI_COOKIE_SECRET": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_API_BASE_URL":  "https://control.example.test",
+	})
+
+	_, err := loadConfig(env)
+	if err == nil || !strings.Contains(err.Error(), "OIDC authentication is not implemented") {
+		t.Fatalf("load config error = %v, want OIDC not implemented", err)
+	}
+}
+
+func TestLoadConfigRejectsNoneCombinedWithBasic(t *testing.T) {
+	env := testEnv(map[string]string{
+		"AUTH_MODES":                    "none,basic",
+		"XISNOVE_UI_COOKIE_SECRET":      base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_DEV_FAKE":           "true",
+		"XISNOVE_UI_DEV_ADMIN_EMAIL":    "local-admin@example.test",
+		"XISNOVE_UI_DEV_ADMIN_PASSWORD": "server-side-password",
+		"XISNOVE_UI_DEV_SESSION":        "server-side-session",
+	})
+
+	_, err := loadConfig(env)
+	if err == nil || !strings.Contains(err.Error(), "none auth mode cannot be combined") {
+		t.Fatalf("load config error = %v, want none exclusivity failure", err)
+	}
+}
+
+func TestLoadConfigDefaultsAuthModesToBasic(t *testing.T) {
+	env := testEnv(map[string]string{
+		"XISNOVE_UI_COOKIE_SECRET": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_API_BASE_URL":  "https://control.example.test",
+	})
+
+	cfg, err := loadConfig(env)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if len(cfg.authModes) != 1 || cfg.authModes[0] != web.AuthModeBasic {
+		t.Fatalf("auth modes = %#v, want [basic]", cfg.authModes)
+	}
+}
+
+func TestLoadConfigAllowsNoneForDevelopmentFake(t *testing.T) {
+	env := testEnv(map[string]string{
+		"AUTH_MODES":               "none",
+		"XISNOVE_UI_COOKIE_SECRET": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_DEV_FAKE":      "true",
+	})
+
+	cfg, err := loadConfig(env)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if len(cfg.authModes) != 1 || cfg.authModes[0] != web.AuthModeNone {
+		t.Fatalf("auth modes = %#v, want [none]", cfg.authModes)
+	}
+	if cfg.controlPlane == nil {
+		t.Fatal("none mode did not configure development control plane")
+	}
+}
+
+func TestLoadConfigRejectsNoneOutsideDevelopmentFake(t *testing.T) {
+	env := testEnv(map[string]string{
+		"AUTH_MODES":               "none",
+		"XISNOVE_UI_COOKIE_SECRET": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_API_BASE_URL":  "https://control.example.test",
+	})
+
+	_, err := loadConfig(env)
+	if err == nil || !strings.Contains(err.Error(), "AUTH_MODES=none requires XISNOVE_UI_DEV_FAKE=true") {
+		t.Fatalf("load config error = %v, want development-only none failure", err)
 	}
 }
 

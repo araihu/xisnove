@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1.18@sha256:dabfc0969b935b2080555ace70ee69a5261af8a8f1b4df97b9e7fbcf6722eddf
+FROM golang:1.26.5-bookworm
+
+WORKDIR /workspace
+COPY . .
+
+ENV GOCACHE=/tmp/gocache \
+    GOMODCACHE=/tmp/gomodcache \
+    GOTOOLCHAIN=local \
+    XISNOVE_UI_ADDR=0.0.0.0:8081
+
+ENTRYPOINT ["go", "run", "./ui/cmd/server"]

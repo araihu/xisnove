@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -22,8 +21,24 @@ import (
 	"github.com/araihu/xisnove/ui/internal/buildinfo"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/web"
+	"github.com/caarlos0/env/v11"
 	"github.com/google/uuid"
 )
+
+type environment struct {
+	Addr             string        `env:"XISNOVE_UI_ADDR" envDefault:"127.0.0.1:8081"`
+	CookieSecret     string        `env:"XISNOVE_UI_COOKIE_SECRET"`
+	CookieSecretFile string        `env:"XISNOVE_UI_COOKIE_SECRET_FILE"`
+	CookieSecure     bool          `env:"XISNOVE_UI_COOKIE_SECURE" envDefault:"true"`
+	RequestTimeout   time.Duration `env:"XISNOVE_UI_REQUEST_TIMEOUT" envDefault:"5s"`
+	ShutdownTimeout  time.Duration `env:"XISNOVE_UI_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	DevFake          bool          `env:"XISNOVE_UI_DEV_FAKE" envDefault:"false"`
+	DevAdminEmail    string        `env:"XISNOVE_UI_DEV_ADMIN_EMAIL"`
+	DevAdminPassword string        `env:"XISNOVE_UI_DEV_ADMIN_PASSWORD"`
+	DevSession       string        `env:"XISNOVE_UI_DEV_SESSION"`
+	APIBaseURL       string        `env:"XISNOVE_UI_API_BASE_URL"`
+	AuthModes        []string      `env:"AUTH_MODES" envDefault:"basic"`
+}
 
 type config struct {
 	addr            string
@@ -31,6 +46,7 @@ type config struct {
 	cookieSecure    bool
 	requestTimeout  time.Duration
 	shutdownTimeout time.Duration
+	authModes       []web.AuthMode
 	controlPlane    controlplane.Client
 }
 
@@ -72,58 +88,54 @@ func execute(args []string, stdout, stderr io.Writer, start func() error) int {
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
+	environmentConfig, err := parseEnvironment(getenv)
+	if err != nil {
+		return config{}, err
+	}
+	authModes, err := parseAuthModes(environmentConfig.AuthModes)
+	if err != nil {
+		return config{}, err
+	}
 	cfg := config{
-		addr:            "127.0.0.1:8081",
-		cookieSecure:    true,
-		requestTimeout:  5 * time.Second,
-		shutdownTimeout: 10 * time.Second,
+		addr:            environmentConfig.Addr,
+		cookieSecure:    environmentConfig.CookieSecure,
+		requestTimeout:  environmentConfig.RequestTimeout,
+		shutdownTimeout: environmentConfig.ShutdownTimeout,
+		authModes:       authModes,
 	}
-	if value := getenv("XISNOVE_UI_ADDR"); value != "" {
-		cfg.addr = value
-	}
-	if value := getenv("XISNOVE_UI_COOKIE_SECURE"); value != "" {
-		parsed, err := strconv.ParseBool(value)
-		if err != nil {
-			return config{}, fmt.Errorf("parse XISNOVE_UI_COOKIE_SECURE: %w", err)
+	secret, err := loadCookieSecret(func(key string) string {
+		switch key {
+		case "XISNOVE_UI_COOKIE_SECRET":
+			return environmentConfig.CookieSecret
+		case "XISNOVE_UI_COOKIE_SECRET_FILE":
+			return environmentConfig.CookieSecretFile
+		default:
+			return ""
 		}
-		cfg.cookieSecure = parsed
-	}
-	if value := getenv("XISNOVE_UI_REQUEST_TIMEOUT"); value != "" {
-		parsed, err := time.ParseDuration(value)
-		if err != nil || parsed <= 0 {
-			return config{}, errors.New("XISNOVE_UI_REQUEST_TIMEOUT must be a positive duration")
-		}
-		cfg.requestTimeout = parsed
-	}
-	if value := getenv("XISNOVE_UI_SHUTDOWN_TIMEOUT"); value != "" {
-		parsed, err := time.ParseDuration(value)
-		if err != nil || parsed <= 0 {
-			return config{}, errors.New("XISNOVE_UI_SHUTDOWN_TIMEOUT must be a positive duration")
-		}
-		cfg.shutdownTimeout = parsed
-	}
-
-	secret, err := loadCookieSecret(getenv)
+	})
 	if err != nil {
 		return config{}, fmt.Errorf("load UI cookie secret: %w", err)
 	}
 	cfg.cookieSecret = secret
 
-	devFake, err := strconv.ParseBool(defaultValue(getenv("XISNOVE_UI_DEV_FAKE"), "false"))
-	if err != nil {
-		return config{}, fmt.Errorf("parse XISNOVE_UI_DEV_FAKE: %w", err)
+	if containsAuthMode(authModes, web.AuthModeNone) {
+		if !environmentConfig.DevFake {
+			return config{}, errors.New("AUTH_MODES=none requires XISNOVE_UI_DEV_FAKE=true")
+		}
+		cfg.controlPlane = developmentFake("none", "none", web.DevelopmentNoneCredential)
+		return cfg, nil
 	}
-	if devFake {
-		email := getenv("XISNOVE_UI_DEV_ADMIN_EMAIL")
-		password := getenv("XISNOVE_UI_DEV_ADMIN_PASSWORD")
-		session := getenv("XISNOVE_UI_DEV_SESSION")
+	if environmentConfig.DevFake {
+		email := environmentConfig.DevAdminEmail
+		password := environmentConfig.DevAdminPassword
+		session := environmentConfig.DevSession
 		if email == "" || password == "" || session == "" {
 			return config{}, errors.New("development fake requires explicit email, password, and session values")
 		}
 		cfg.controlPlane = developmentFake(email, password, session)
 		return cfg, nil
 	}
-	baseURL := getenv("XISNOVE_UI_API_BASE_URL")
+	baseURL := environmentConfig.APIBaseURL
 	parsed, err := url.ParseRequestURI(baseURL)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return config{}, errors.New("XISNOVE_UI_API_BASE_URL must be an absolute http or https URL")
@@ -134,6 +146,71 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	cfg.controlPlane = client
 	return cfg, nil
+}
+
+func parseEnvironment(getenv func(string) string) (environment, error) {
+	values := make(map[string]string)
+	for _, key := range []string{
+		"XISNOVE_UI_ADDR",
+		"XISNOVE_UI_COOKIE_SECRET",
+		"XISNOVE_UI_COOKIE_SECRET_FILE",
+		"XISNOVE_UI_COOKIE_SECURE",
+		"XISNOVE_UI_REQUEST_TIMEOUT",
+		"XISNOVE_UI_SHUTDOWN_TIMEOUT",
+		"XISNOVE_UI_DEV_FAKE",
+		"XISNOVE_UI_DEV_ADMIN_EMAIL",
+		"XISNOVE_UI_DEV_ADMIN_PASSWORD",
+		"XISNOVE_UI_DEV_SESSION",
+		"XISNOVE_UI_API_BASE_URL",
+		"AUTH_MODES",
+	} {
+		if value := getenv(key); value != "" {
+			values[key] = value
+		}
+	}
+	var parsed environment
+	if err := env.ParseWithOptions(&parsed, env.Options{Environment: values}); err != nil {
+		return environment{}, fmt.Errorf("parse UI environment: %w", err)
+	}
+	return parsed, nil
+}
+
+func parseAuthModes(values []string) ([]web.AuthMode, error) {
+	if len(values) == 0 {
+		values = []string{string(web.AuthModeBasic)}
+	}
+	seen := make(map[web.AuthMode]struct{}, len(values))
+	for _, value := range values {
+		mode := web.AuthMode(strings.TrimSpace(value))
+		switch mode {
+		case web.AuthModeBasic, web.AuthModeNone, web.AuthModeOIDC:
+		default:
+			return nil, fmt.Errorf("AUTH_MODES contains unsupported auth mode %q", value)
+		}
+		if mode == web.AuthModeOIDC {
+			return nil, errors.New("OIDC authentication is not implemented")
+		}
+		seen[mode] = struct{}{}
+	}
+	if _, ok := seen[web.AuthModeNone]; ok && len(seen) > 1 {
+		return nil, errors.New("none auth mode cannot be combined with another auth mode")
+	}
+	modes := make([]web.AuthMode, 0, len(seen))
+	for _, mode := range []web.AuthMode{web.AuthModeBasic, web.AuthModeNone} {
+		if _, ok := seen[mode]; ok {
+			modes = append(modes, mode)
+		}
+	}
+	return modes, nil
+}
+
+func containsAuthMode(modes []web.AuthMode, want web.AuthMode) bool {
+	for _, mode := range modes {
+		if mode == want {
+			return true
+		}
+	}
+	return false
 }
 
 func loadCookieSecret(getenv func(string) string) ([]byte, error) {
@@ -198,19 +275,13 @@ func decodeSecret(value string) ([]byte, error) {
 	return secret, nil
 }
 
-func defaultValue(value, fallback string) string {
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-
 func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	application, err := web.New(web.Config{
 		ControlPlane:   cfg.controlPlane,
 		CookieSecret:   cfg.cookieSecret,
 		CookieSecure:   cfg.cookieSecure,
 		RequestTimeout: cfg.requestTimeout,
+		AuthModes:      cfg.authModes,
 		Logger:         logger,
 	})
 	if err != nil {

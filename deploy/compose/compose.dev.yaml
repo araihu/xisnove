@@ -1,0 +1,93 @@
+x-service-fixture: &service-fixture
+  image: xisnove-service:watch
+  pull_policy: build
+  build:
+    context: ../..
+    dockerfile: build/package/Dockerfile.service
+  read_only: true
+  tmpfs: [/tmp]
+  restart: unless-stopped
+  stop_grace_period: 2s
+  develop:
+    watch:
+      - action: rebuild
+        path: ../../cmd/xisnove-service
+      - action: rebuild
+        path: ../../build/package/Dockerfile.service
+      - action: rebuild
+        path: ../../go.mod
+      - action: rebuild
+        path: ../../go.sum
+      - action: rebuild
+        path: ../../go.work
+      - action: rebuild
+        path: ../../go.work.sum
+
+services:
+  monitor-http:
+    <<: *service-fixture
+    command: [http, --listen=0.0.0.0:8080]
+    expose: ["8080"]
+    ports:
+      - "127.0.0.1:${XISNOVE_FIXTURE_HTTP_PORT:-18080}:8080"
+    labels:
+      org.xisnove.fixture.kind: http
+      org.xisnove.monitor.target: http://monitor-http:8080/healthz
+
+  monitor-tcp:
+    <<: *service-fixture
+    command: [tcp, --listen=0.0.0.0:9090]
+    expose: ["9090"]
+    ports:
+      - "127.0.0.1:${XISNOVE_FIXTURE_TCP_PORT:-19090}:9090"
+    labels:
+      org.xisnove.fixture.kind: tcp
+      org.xisnove.monitor.target: monitor-tcp:9090
+
+  monitor-dns:
+    <<: *service-fixture
+    command: [dns, --listen=0.0.0.0:5353, --name=service.test]
+    ports:
+      - "127.0.0.1:${XISNOVE_FIXTURE_DNS_PORT:-15353}:5353/udp"
+      - "127.0.0.1:${XISNOVE_FIXTURE_DNS_PORT:-15353}:5353/tcp"
+    labels:
+      org.xisnove.fixture.kind: dns
+      org.xisnove.monitor.target: monitor-dns:5353
+
+  ui:
+    image: xisnove-ui:watch
+    pull_policy: build
+    build:
+      context: ../..
+      dockerfile: build/package/Dockerfile.ui.dev
+    environment:
+      AUTH_MODES: ${AUTH_MODES:-none}
+      XISNOVE_UI_API_BASE_URL: ""
+      XISNOVE_UI_COOKIE_SECRET: ${XISNOVE_UI_COOKIE_SECRET:-QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=}
+      XISNOVE_UI_COOKIE_SECRET_FILE: ""
+      XISNOVE_UI_COOKIE_SECURE: "false"
+      XISNOVE_UI_DEV_FAKE: "true"
+      XISNOVE_UI_DEV_ADMIN_EMAIL: ${XISNOVE_UI_DEV_ADMIN_EMAIL:-admin@example.test}
+      XISNOVE_UI_DEV_ADMIN_PASSWORD: ${XISNOVE_UI_DEV_ADMIN_PASSWORD:-development-only}
+      XISNOVE_UI_DEV_SESSION: ${XISNOVE_UI_DEV_SESSION:-development-session}
+      GOCACHE: /tmp/gocache
+      GOMODCACHE: /tmp/gomodcache
+      GOTOOLCHAIN: local
+    develop:
+      watch:
+        - action: rebuild
+          path: ../../ui
+        - action: rebuild
+          path: ../../sdk
+        - action: rebuild
+          path: ../../go.mod
+        - action: rebuild
+          path: ../../go.sum
+        - action: rebuild
+          path: ../../go.work
+        - action: rebuild
+          path: ../../go.work.sum
+    healthcheck:
+      disable: true
+    tmpfs: !override
+      - /tmp:exec

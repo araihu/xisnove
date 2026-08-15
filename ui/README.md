@@ -28,18 +28,22 @@ release so old and new replicas never break immutable asset URLs.
 
 ## Development
 
-Generate a 32-byte cookie HMAC secret, keep the fake values server-side, and
-disable Secure cookies only for local plain HTTP:
+For local development, select the explicit no-auth mode. It is restricted to
+the fake control plane; the default remains authenticated `basic` mode. Generate
+a 32-byte cookie HMAC secret and disable Secure cookies only for local plain HTTP:
 
 ```bash
+export AUTH_MODES=none
 export XISNOVE_UI_COOKIE_SECRET="$(openssl rand -base64 32)"
 export XISNOVE_UI_COOKIE_SECURE=false
 export XISNOVE_UI_DEV_FAKE=true
-export XISNOVE_UI_DEV_ADMIN_EMAIL='admin@example.test'
-export XISNOVE_UI_DEV_ADMIN_PASSWORD='<local value>'
-export XISNOVE_UI_DEV_SESSION='<local opaque value>'
 go run ./cmd/server
 ```
+
+`AUTH_MODES` is a comma-separated list. Supported values are `basic`, `none`,
+and `oidc`; `basic` is the default. `none` must be used alone and only with
+`XISNOVE_UI_DEV_FAKE=true`. OIDC is reserved and currently fails startup until
+its provider integration exists.
 
 Production defaults to Secure cookies. Put TLS at the BFF or its trusted
 reverse proxy, do not enable the development fake, and configure:

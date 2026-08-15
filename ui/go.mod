@@ -6,6 +6,7 @@ require (
 	github.com/a-h/templ v0.3.1020
 	github.com/araihu/goshtoso v0.0.13
 	github.com/araihu/xisnove v0.0.0-20260815003007-4a5bbf6e2100
+	github.com/caarlos0/env/v11 v11.4.1
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
 	github.com/google/uuid v1.6.0

@@ -30,6 +30,47 @@ Direct `docker compose up` assumes bootstrap already completed. Example files
 contain only `CHANGE-ME` placeholders. Never commit `secrets/`, `.env`, or the
 bootstrap state directory.
 
+## Local UI development
+
+Use the dev overlay for the UI and the disposable HTTP/TCP/DNS monitor
+fixtures. It builds the local `ui/` module, enables `AUTH_MODES=none` with the
+development fake control plane, and rebuilds the containers when their sources
+change:
+
+```sh
+docker compose \
+  -f deploy/compose/compose.yaml \
+  -f deploy/compose/compose.dev.yaml \
+  watch ui monitor-http monitor-tcp monitor-dns
+```
+
+The fixtures share the `xisnove-service` entrypoint. Their Compose commands
+select the service type (`http`, `tcp`, or `dns`) and expose host ports
+`18080`, `19090`, and `15353` respectively. From another Compose service, use
+`http://monitor-http:8080/healthz`, `monitor-tcp:9090` with the `PONG` response,
+or DNS resolver `monitor-dns:5353` for `service.test A 192.0.2.10`. The host
+ports can be changed with `XISNOVE_FIXTURE_HTTP_PORT`,
+`XISNOVE_FIXTURE_TCP_PORT`, and `XISNOVE_FIXTURE_DNS_PORT`.
+
+To run the fixture CLI directly, build `build/package/Dockerfile.service` and
+pass the type as the entrypoint's first argument, for example:
+
+```sh
+docker build -f build/package/Dockerfile.service -t xisnove-service:watch .
+docker run --rm -p 18080:8080 xisnove-service:watch \
+  http --listen=0.0.0.0:8080
+```
+
+The overlay keeps the production Compose file on its prebuilt-image path. Stop
+the watcher with `Ctrl-C`; remove the dev container with:
+
+```sh
+docker compose \
+  -f deploy/compose/compose.yaml \
+  -f deploy/compose/compose.dev.yaml \
+  down
+```
+
 ## Profiles
 
 SQLite is the default and supports exactly one server. The named PostgreSQL

@@ -222,6 +222,7 @@ services:
     environment:
       XISNOVE_UI_ADDR: 0.0.0.0:8081
       XISNOVE_UI_API_BASE_URL: http://${XISNOVE_SERVER_HOST:-server}:8080
+      AUTH_MODES: ${AUTH_MODES:-basic}
       XISNOVE_UI_COOKIE_SECRET_FILE: /run/xisnove-secrets/ui-cookie-secret
       XISNOVE_UI_COOKIE_SECURE: ${XISNOVE_UI_COOKIE_SECURE:-false}
     volumes:
