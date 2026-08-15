@@ -96,6 +96,7 @@ type Querier interface {
 	ListPublicStatusMonitors(ctx context.Context) ([]ListPublicStatusMonitorsRow, error)
 	ListRequiredLocationHealth(ctx context.Context, monitorID string) ([]ListRequiredLocationHealthRow, error)
 	ListStaleLocationHealth(ctx context.Context, arg ListStaleLocationHealthParams) ([]LocationHealth, error)
+	ListStateTicks(ctx context.Context, arg ListStateTicksParams) ([]StateTick, error)
 	ManagementAdvanceAgentGeneration(ctx context.Context, arg ManagementAdvanceAgentGenerationParams) (int64, error)
 	ManagementDeleteMonitorAssignments(ctx context.Context, monitorID string) error
 	ManagementDisableLocation(ctx context.Context, arg ManagementDisableLocationParams) (int64, error)

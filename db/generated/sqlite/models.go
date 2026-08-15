@@ -342,3 +342,20 @@ type Session struct {
 	ExpiresAt string         `json:"expires_at"`
 	RevokedAt sql.NullString `json:"revoked_at"`
 }
+
+type StateTick struct {
+	ID                 string         `json:"id"`
+	MonitorID          string         `json:"monitor_id"`
+	LocationID         sql.NullString `json:"location_id"`
+	Lifecycle          string         `json:"lifecycle"`
+	Health             string         `json:"health"`
+	ReasonCode         string         `json:"reason_code"`
+	ActionID           string         `json:"action_id"`
+	UserActionID       sql.NullString `json:"user_action_id"`
+	ActorKind          string         `json:"actor_kind"`
+	ActorID            sql.NullString `json:"actor_id"`
+	OccurredAt         string         `json:"occurred_at"`
+	ObservationID      sql.NullString `json:"observation_id"`
+	CausalTickID       sql.NullString `json:"causal_tick_id"`
+	CausalDependencyID sql.NullString `json:"causal_dependency_id"`
+}

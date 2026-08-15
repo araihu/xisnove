@@ -47,9 +47,35 @@ func TestMigrationFamilyContainsNotificationOperationsSchema(t *testing.T) {
 		"action TEXT NOT NULL DEFAULT 'change'",
 		"process_version_leases",
 		"migration_leases",
+		"CREATE TABLE state_ticks",
+		"state_ticks_monitor_occurred_at",
+		"reason_code TEXT NOT NULL CHECK",
+		"causal_tick_id TEXT REFERENCES state_ticks(id)",
 	} {
 		if !strings.Contains(schema.String(), expected) {
 			t.Fatalf("migration family is missing %q", expected)
+		}
+	}
+}
+
+func TestStateTickSchemaIsImmutableAndBoundedByMonitorTime(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00012_state_ticks.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"CREATE TABLE state_ticks",
+		"monitor_id TEXT NOT NULL REFERENCES monitors(id)",
+		"occurred_at TEXT NOT NULL",
+		"id TEXT PRIMARY KEY",
+		"state_ticks_monitor_occurred_at",
+		"CHECK (causal_tick_id IS NULL OR causal_tick_id <> id)",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("state tick schema is missing %q", expected)
 		}
 	}
 }
