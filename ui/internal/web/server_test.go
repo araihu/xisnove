@@ -885,3 +885,7 @@ func (blockingClient) GetMonitorHealth(ctx context.Context, _ string, _ openapi_
 	<-ctx.Done()
 	return sdk.MonitorHealth{}, ctx.Err()
 }
+func (blockingClient) GetMonitorAvailabilityHistory(ctx context.Context, _ string, _ openapi_types.UUID, _ time.Time, _ time.Time, _ int32) (sdk.MonitorAvailabilityHistory, error) {
+	<-ctx.Done()
+	return sdk.MonitorAvailabilityHistory{}, ctx.Err()
+}

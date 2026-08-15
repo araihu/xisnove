@@ -24,6 +24,7 @@ type ServerConfig struct {
 	Lease         *application.LeaseService
 	Results       *application.ResultService
 	Health        *application.HealthService
+	History       *application.MonitorHistoryService
 	Notifications *application.NotificationAdminService
 	Management    *application.ManagementService
 	PublicStatus  *application.PublicStatusService
@@ -42,6 +43,7 @@ type Server struct {
 	lease         *application.LeaseService
 	results       *application.ResultService
 	health        *application.HealthService
+	history       *application.MonitorHistoryService
 	notifications *application.NotificationAdminService
 	management    *application.ManagementService
 	publicStatus  *application.PublicStatusService
@@ -58,6 +60,7 @@ func NewServer(config ServerConfig) *Server {
 		lease:         config.Lease,
 		results:       config.Results,
 		health:        config.Health,
+		history:       config.History,
 		notifications: config.Notifications,
 		management:    config.Management,
 		publicStatus:  config.PublicStatus,

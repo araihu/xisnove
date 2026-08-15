@@ -27,6 +27,7 @@ type NewRunRecord = port.NewRunRecord
 type ClaimRunParams = port.ClaimRunParams
 type RunRecord = port.RunRecord
 type ProbeResultRecord = port.ProbeResultRecord
+type ProbeHistoryRecord = port.ProbeHistoryRecord
 type ProtocolTimings = port.ProtocolTimings
 type NotificationChannelRecord = port.NotificationChannelRecord
 type NotificationOutboxRecord = port.NotificationOutboxRecord

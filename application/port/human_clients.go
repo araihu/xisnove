@@ -41,7 +41,7 @@ var recognizedScopes = map[Scope]struct{}{
 	ScopeNotificationsRead: {}, ScopeNotificationsWrite: {},
 	ScopeMaintenanceRead: {}, ScopeMaintenanceWrite: {},
 	ScopeDiscoveryRead: {}, ScopeDiscoveryWrite: {},
-	ScopeStatusRead: {},
+	ScopeStatusRead:        {},
 	ScopeOperatorProvision: {},
 }
 
@@ -85,6 +85,22 @@ func NormalizePageLimit(limit int) int {
 	}
 	if limit > MaxPageLimit {
 		return MaxPageLimit
+	}
+	return limit
+}
+
+// NormalizeMonitorHistoryQueryLimit keeps one extra row available for
+// truncation checks while preserving the public history limit.
+func NormalizeMonitorHistoryQueryLimit(limit int) int {
+	const (
+		defaultLimit = 4096
+		maxLimit     = 10001
+	)
+	if limit <= 0 {
+		return defaultLimit
+	}
+	if limit > maxLimit {
+		return maxLimit
 	}
 	return limit
 }

@@ -46,6 +46,12 @@ func TestSDKClientUsesGeneratedOperationsAndBearerEditor(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors/"+monitorID.String()+"/health":
 			assertBearer(t, r)
 			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Degraded, LastTransitionAt: time.Now()})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors/"+monitorID.String()+"/availability/history":
+			assertBearer(t, r)
+			if r.URL.Query().Get("limit") != "64" {
+				t.Errorf("history query = %q", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(sdk.MonitorAvailabilityHistory{MonitorId: monitorID, Samples: []sdk.MonitorAvailabilitySample{{Id: uuid.New(), LocationId: uuid.New(), ObservedAt: time.Now(), Outcome: sdk.MonitorAvailabilitySampleOutcomePassed}}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -70,10 +76,14 @@ func TestSDKClientUsesGeneratedOperationsAndBearerEditor(t *testing.T) {
 	if err != nil || health.State != sdk.Degraded {
 		t.Fatalf("health = %#v, %v", health, err)
 	}
+	history, err := client.GetMonitorAvailabilityHistory(t.Context(), token, monitorID, time.Now().Add(-time.Hour), time.Now(), 64)
+	if err != nil || len(history.Samples) != 1 || history.Samples[0].Outcome != sdk.MonitorAvailabilitySampleOutcomePassed {
+		t.Fatalf("history = %#v, %v", history, err)
+	}
 	if err := client.RevokeSession(t.Context(), token); err != nil {
 		t.Fatal(err)
 	}
-	if len(calls) != 5 {
+	if len(calls) != 6 {
 		t.Fatalf("calls = %#v", calls)
 	}
 }

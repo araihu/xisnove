@@ -148,6 +148,19 @@ type ProbeResultRecord struct {
 	ProtocolTimings     ProtocolTimings
 }
 
+// ProbeHistoryRecord is the bounded, redacted view of one accepted probe
+// result used by historical availability readers. The record intentionally
+// omits probe diagnostics and payloads; callers only need the timestamp,
+// outcome, and latency to render availability history.
+type ProbeHistoryRecord struct {
+	ID         string
+	MonitorID  domain.MonitorID
+	LocationID domain.LocationID
+	At         time.Time
+	Passed     bool
+	Latency    time.Duration
+}
+
 type ProtocolTimings struct {
 	DNS       time.Duration
 	Connect   time.Duration
@@ -245,6 +258,10 @@ type ResultRepository interface {
 	GetByID(context.Context, string) (ProbeResultRecord, error)
 	GetByRun(context.Context, domain.CheckRunID) (ProbeResultRecord, error)
 	Insert(context.Context, ProbeResultRecord) (bool, error)
+	// ListMonitorHistory returns accepted probe samples in [start, end), in
+	// chronological order, bounded by limit. Implementations must not return
+	// diagnostics, payloads, or rows outside the requested monitor/window.
+	ListMonitorHistory(context.Context, domain.MonitorID, time.Time, time.Time, int) ([]ProbeHistoryRecord, error)
 }
 
 type IncidentRepository interface {

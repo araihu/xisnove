@@ -22,3 +22,19 @@ WHERE id = sqlc.arg(id);
 SELECT *
 FROM probe_results
 WHERE run_id = sqlc.arg(run_id);
+
+-- name: ListMonitorHistory :many
+SELECT
+  pr.id,
+  cr.monitor_id,
+  cr.location_id,
+  pr.received_at,
+  pr.outcome,
+  pr.latency_ms
+FROM probe_results pr
+JOIN check_runs cr ON cr.id = pr.run_id
+WHERE cr.monitor_id = sqlc.arg(monitor_id)
+  AND pr.received_at >= sqlc.arg(starts_at)
+  AND pr.received_at < sqlc.arg(ends_at)
+ORDER BY pr.received_at DESC, pr.id DESC
+LIMIT sqlc.arg(row_limit);

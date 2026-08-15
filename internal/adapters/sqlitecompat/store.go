@@ -604,6 +604,41 @@ func (r *resultRepository) Insert(
 	return affected == 1, nil
 }
 
+func (r *resultRepository) ListMonitorHistory(
+	ctx context.Context,
+	monitorID domain.MonitorID,
+	start time.Time,
+	end time.Time,
+	limit int,
+) ([]application.ProbeHistoryRecord, error) {
+	start = start.UTC()
+	end = end.UTC()
+	if end.Before(start) {
+		return nil, errors.New("list monitor history: end precedes start")
+	}
+	records, err := r.queries.ListMonitorHistory(ctx, dbsqlite.ListMonitorHistoryParams{
+		MonitorID: string(monitorID), StartsAt: formatTime(start), EndsAt: formatTime(end),
+		RowLimit: int64(application.NormalizeMonitorHistoryQueryLimit(limit)),
+	})
+	if err != nil {
+		return nil, repositoryError("list monitor history", err)
+	}
+	result := make([]application.ProbeHistoryRecord, 0, len(records))
+	for index := len(records) - 1; index >= 0; index-- {
+		record := records[index]
+		at, err := parseTime(record.ReceivedAt)
+		if err != nil {
+			return nil, fmt.Errorf("map monitor history timestamp: %w", err)
+		}
+		result = append(result, application.ProbeHistoryRecord{
+			ID: record.ID, MonitorID: domain.MonitorID(record.MonitorID),
+			LocationID: domain.LocationID(record.LocationID), At: at,
+			Passed: record.Outcome == "passed", Latency: time.Duration(record.LatencyMs) * time.Millisecond,
+		})
+	}
+	return result, nil
+}
+
 func (r *incidentRepository) GetActive(
 	ctx context.Context,
 	monitorID domain.MonitorID,

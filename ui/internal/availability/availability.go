@@ -13,7 +13,9 @@ const (
 	Down     = "Down"
 	Unknown  = "Unknown"
 
-	DefaultWindow = 24
+	DefaultWindow   = 24
+	HistoryWindow   = 4096
+	HistoryLookback = 3 * time.Hour
 )
 
 var seriesNames = []string{Healthy, Degraded, Down, Unknown}
@@ -74,6 +76,17 @@ func (h *History) Add(state sdk.HealthState, observedAt time.Time) {
 	remove := len(h.categories) - h.window
 	h.categories = append([]string(nil), h.categories[remove:]...)
 	h.values = append([][]float64(nil), h.values[remove:]...)
+}
+
+// AddOutcome maps an accepted probe result into the chart's health palette.
+// Missing observations remain absent so callers can represent gaps as
+// Unknown without conflating them with failed probes.
+func (h *History) AddOutcome(outcome sdk.MonitorAvailabilitySampleOutcome, observedAt time.Time) {
+	state := sdk.Down
+	if outcome == sdk.MonitorAvailabilitySampleOutcomePassed {
+		state = sdk.Up
+	}
+	h.Add(state, observedAt)
 }
 
 // Snapshot returns a complete renderer-neutral payload for goshtoso-charts.

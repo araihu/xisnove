@@ -155,6 +155,41 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 	if health.State != domain.HealthDown {
 		t.Fatalf("health = %s", health.State)
 	}
+	history, err := repositories.Results.ListMonitorHistory(
+		ctx, monitor.ID, now.Add(-time.Minute), now.Add(2*time.Minute), 2,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 {
+		t.Fatalf("history length = %d, want bounded length 2", len(history))
+	}
+	if history[0].At.After(history[1].At) {
+		t.Fatalf("history is not chronological: %#v", history)
+	}
+	if history[0].MonitorID != monitor.ID || history[0].LocationID != location.ID {
+		t.Fatalf("history identity = %#v", history[0])
+	}
+	if history[0].Passed || history[1].Passed {
+		t.Fatalf("history outcome unexpectedly passed: %#v", history)
+	}
+	if history[0].Latency != time.Second || history[1].Latency != time.Second {
+		t.Fatalf("history latency = %#v", history)
+	}
+	historyView, err := application.NewMonitorHistoryServiceWithClock(store, func() time.Time { return now.Add(2 * time.Minute) }).GetMonitorAvailabilityHistory(
+		ctx, monitor.ID, ptrTime(now.Add(-time.Minute)), ptrTime(now.Add(2*time.Minute)), ptrInt(2),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !historyView.Truncated || len(historyView.Samples) != 2 || historyView.Samples[0].At.After(historyView.Samples[1].At) {
+		t.Fatalf("history view = %#v", historyView)
+	}
+	if _, err := repositories.Results.ListMonitorHistory(
+		ctx, monitor.ID, now.Add(time.Minute), now, 10,
+	); err == nil {
+		t.Fatal("reversed history window was accepted")
+	}
 	locationHealth, err := repositories.Health.GetLocation(ctx, monitor.ID, location.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -213,3 +248,7 @@ func TestThirdFailureOpensOneIncidentAndDuplicateIsHarmless(t *testing.T) {
 		t.Fatalf("audit events = %d", auditCount)
 	}
 }
+
+func ptrTime(value time.Time) *time.Time { return &value }
+
+func ptrInt(value int) *int { return &value }

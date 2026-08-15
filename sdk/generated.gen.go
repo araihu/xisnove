@@ -364,6 +364,24 @@ func (e MonitorKind) Valid() bool {
 	}
 }
 
+// Defines values for MonitorAvailabilitySampleOutcome.
+const (
+	MonitorAvailabilitySampleOutcomeFailed MonitorAvailabilitySampleOutcome = "failed"
+	MonitorAvailabilitySampleOutcomePassed MonitorAvailabilitySampleOutcome = "passed"
+)
+
+// Valid indicates whether the value is a known member of the MonitorAvailabilitySampleOutcome enum.
+func (e MonitorAvailabilitySampleOutcome) Valid() bool {
+	switch e {
+	case MonitorAvailabilitySampleOutcomeFailed:
+		return true
+	case MonitorAvailabilitySampleOutcomePassed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotificationAction.
 const (
 	NotificationActionChange           NotificationAction = "change"
@@ -549,16 +567,16 @@ func (e ProbeResultInputErrorCode) Valid() bool {
 
 // Defines values for ProbeResultInputOutcome.
 const (
-	Failed ProbeResultInputOutcome = "failed"
-	Passed ProbeResultInputOutcome = "passed"
+	ProbeResultInputOutcomeFailed ProbeResultInputOutcome = "failed"
+	ProbeResultInputOutcomePassed ProbeResultInputOutcome = "passed"
 )
 
 // Valid indicates whether the value is a known member of the ProbeResultInputOutcome enum.
 func (e ProbeResultInputOutcome) Valid() bool {
 	switch e {
-	case Failed:
+	case ProbeResultInputOutcomeFailed:
 		return true
-	case Passed:
+	case ProbeResultInputOutcomePassed:
 		return true
 	default:
 		return false
@@ -1066,6 +1084,28 @@ type Monitor struct {
 // MonitorKind defines model for Monitor.Kind.
 type MonitorKind string
 
+// MonitorAvailabilityHistory defines model for MonitorAvailabilityHistory.
+type MonitorAvailabilityHistory struct {
+	EndsAt      time.Time                   `json:"endsAt"`
+	GeneratedAt time.Time                   `json:"generatedAt"`
+	MonitorId   openapi_types.UUID          `json:"monitorId"`
+	Samples     []MonitorAvailabilitySample `json:"samples"`
+	StartsAt    time.Time                   `json:"startsAt"`
+	Truncated   bool                        `json:"truncated"`
+}
+
+// MonitorAvailabilitySample defines model for MonitorAvailabilitySample.
+type MonitorAvailabilitySample struct {
+	Id            openapi_types.UUID               `json:"id"`
+	LatencyMillis int64                            `json:"latencyMillis"`
+	LocationId    openapi_types.UUID               `json:"locationId"`
+	ObservedAt    time.Time                        `json:"observedAt"`
+	Outcome       MonitorAvailabilitySampleOutcome `json:"outcome"`
+}
+
+// MonitorAvailabilitySampleOutcome defines model for MonitorAvailabilitySample.Outcome.
+type MonitorAvailabilitySampleOutcome string
+
 // MonitorHealth defines model for MonitorHealth.
 type MonitorHealth struct {
 	LastTransitionAt time.Time          `json:"lastTransitionAt"`
@@ -1504,6 +1544,15 @@ type Cursor = string
 // DiscoveryCandidateID defines model for DiscoveryCandidateID.
 type DiscoveryCandidateID = openapi_types.UUID
 
+// HistoryEndsAt defines model for HistoryEndsAt.
+type HistoryEndsAt = time.Time
+
+// HistoryLimit defines model for HistoryLimit.
+type HistoryLimit = int32
+
+// HistoryStartsAt defines model for HistoryStartsAt.
+type HistoryStartsAt = time.Time
+
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
@@ -1701,6 +1750,18 @@ type CreateMonitorParams struct {
 type UpdateMonitorParams struct {
 	// IdempotencyKey Caller-generated key that makes a retry return the original mutation result.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// GetMonitorAvailabilityHistoryParams defines parameters for GetMonitorAvailabilityHistory.
+type GetMonitorAvailabilityHistoryParams struct {
+	// StartsAt Inclusive UTC start of the bounded history window. Defaults to three hours before endsAt.
+	StartsAt *HistoryStartsAt `form:"startsAt,omitempty" json:"startsAt,omitempty"`
+
+	// EndsAt Exclusive UTC end of the bounded history window. Defaults to the current control-plane time.
+	EndsAt *HistoryEndsAt `form:"endsAt,omitempty" json:"endsAt,omitempty"`
+
+	// Limit Maximum number of probe samples to return. Newest samples are retained when truncated.
+	Limit *HistoryLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListNotificationChannelsParams defines parameters for ListNotificationChannels.
@@ -2463,6 +2524,9 @@ type ClientInterface interface {
 
 	// GetActiveMonitorIncident performs a GET /v1/monitors/{monitorId}/active-incident (the `GetActiveMonitorIncident` operationId) request.
 	GetActiveMonitorIncident(ctx context.Context, monitorId MonitorID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMonitorAvailabilityHistory performs a GET /v1/monitors/{monitorId}/availability/history (the `GetMonitorAvailabilityHistory` operationId) request.
+	GetMonitorAvailabilityHistory(ctx context.Context, monitorId MonitorID, params *GetMonitorAvailabilityHistoryParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMonitorHealth performs a GET /v1/monitors/{monitorId}/health (the `GetMonitorHealth` operationId) request.
 	GetMonitorHealth(ctx context.Context, monitorId MonitorID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3476,6 +3540,19 @@ func (c *Client) UpdateMonitor(ctx context.Context, monitorId MonitorID, params 
 // GetActiveMonitorIncident performs a GET /v1/monitors/{monitorId}/active-incident (the `GetActiveMonitorIncident` operationId) request.
 func (c *Client) GetActiveMonitorIncident(ctx context.Context, monitorId MonitorID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActiveMonitorIncidentRequest(c.Server, monitorId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMonitorAvailabilityHistory performs a GET /v1/monitors/{monitorId}/availability/history (the `GetMonitorAvailabilityHistory` operationId) request.
+func (c *Client) GetMonitorAvailabilityHistory(ctx context.Context, monitorId MonitorID, params *GetMonitorAvailabilityHistoryParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMonitorAvailabilityHistoryRequest(c.Server, monitorId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6060,6 +6137,91 @@ func NewGetActiveMonitorIncidentRequest(server string, monitorId MonitorID) (*ht
 	return req, nil
 }
 
+// NewGetMonitorAvailabilityHistoryRequest constructs an http.Request for the GetMonitorAvailabilityHistory method
+func NewGetMonitorAvailabilityHistoryRequest(server string, monitorId MonitorID, params *GetMonitorAvailabilityHistoryParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "monitorId", monitorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/monitors/%s/availability/history", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.StartsAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "startsAt", *params.StartsAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EndsAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "endsAt", *params.EndsAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetMonitorHealthRequest constructs an http.Request for the GetMonitorHealth method
 func NewGetMonitorHealthRequest(server string, monitorId MonitorID) (*http.Request, error) {
 	var err error
@@ -7688,6 +7850,11 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetActiveMonitorIncidentWithResponse(ctx context.Context, monitorId MonitorID, reqEditors ...RequestEditorFn) (*GetActiveMonitorIncidentResponse, error)
+
+	// GetMonitorAvailabilityHistoryWithResponse performs a GET /v1/monitors/{monitorId}/availability/history (the `GetMonitorAvailabilityHistory` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetMonitorAvailabilityHistoryWithResponse(ctx context.Context, monitorId MonitorID, params *GetMonitorAvailabilityHistoryParams, reqEditors ...RequestEditorFn) (*GetMonitorAvailabilityHistoryResponse, error)
 
 	// GetMonitorHealthWithResponse performs a GET /v1/monitors/{monitorId}/health (the `GetMonitorHealth` operationId) request.
 	//
@@ -9782,6 +9949,54 @@ func (r GetActiveMonitorIncidentResponse) ContentType() string {
 	return ""
 }
 
+type GetMonitorAvailabilityHistoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MonitorAvailabilityHistory
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMonitorAvailabilityHistoryResponse) GetJSON200() *MonitorAvailabilityHistory {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetMonitorAvailabilityHistoryResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMonitorAvailabilityHistoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMonitorAvailabilityHistoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMonitorAvailabilityHistoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMonitorAvailabilityHistoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetMonitorHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11621,6 +11836,17 @@ func (c *ClientWithResponses) GetActiveMonitorIncidentWithResponse(ctx context.C
 	return ParseGetActiveMonitorIncidentResponse(rsp)
 }
 
+// GetMonitorAvailabilityHistoryWithResponse performs a GET /v1/monitors/{monitorId}/availability/history (the `GetMonitorAvailabilityHistory` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetMonitorAvailabilityHistoryWithResponse(ctx context.Context, monitorId MonitorID, params *GetMonitorAvailabilityHistoryParams, reqEditors ...RequestEditorFn) (*GetMonitorAvailabilityHistoryResponse, error) {
+	rsp, err := c.GetMonitorAvailabilityHistory(ctx, monitorId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMonitorAvailabilityHistoryResponse(rsp)
+}
+
 // GetMonitorHealthWithResponse performs a GET /v1/monitors/{monitorId}/health (the `GetMonitorHealth` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -13364,6 +13590,39 @@ func ParseGetActiveMonitorIncidentResponse(rsp *http.Response) (*GetActiveMonito
 
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMonitorAvailabilityHistoryResponse parses an HTTP response from a GetMonitorAvailabilityHistoryWithResponse call
+func ParseGetMonitorAvailabilityHistoryResponse(rsp *http.Response) (*GetMonitorAvailabilityHistoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMonitorAvailabilityHistoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MonitorAvailabilityHistory
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

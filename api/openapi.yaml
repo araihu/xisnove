@@ -559,6 +559,25 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/MonitorHealth'}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/monitors/{monitorId}/availability/history:
+    parameters:
+      - {$ref: '#/components/parameters/MonitorID'}
+    get:
+      operationId: getMonitorAvailabilityHistory
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [monitors:read]
+      parameters:
+        - {$ref: '#/components/parameters/HistoryStartsAt'}
+        - {$ref: '#/components/parameters/HistoryEndsAt'}
+        - {$ref: '#/components/parameters/HistoryLimit'}
+      responses:
+        '200':
+          description: Bounded monitor availability history
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MonitorAvailabilityHistory'}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/monitors/{monitorId}/active-incident:
     parameters:
       - {$ref: '#/components/parameters/MonitorID'}
@@ -1255,6 +1274,21 @@ components:
       in: query
       description: Maximum number of records to return.
       schema: {type: integer, format: int32, minimum: 1, maximum: 200, default: 50}
+    HistoryStartsAt:
+      name: startsAt
+      in: query
+      description: Inclusive UTC start of the bounded history window. Defaults to three hours before endsAt.
+      schema: {type: string, format: date-time}
+    HistoryEndsAt:
+      name: endsAt
+      in: query
+      description: Exclusive UTC end of the bounded history window. Defaults to the current control-plane time.
+      schema: {type: string, format: date-time}
+    HistoryLimit:
+      name: limit
+      in: query
+      description: Maximum number of probe samples to return. Newest samples are retained when truncated.
+      schema: {type: integer, format: int32, minimum: 1, maximum: 10000, default: 4096}
     Cursor:
       name: cursor
       in: query
@@ -1969,6 +2003,29 @@ components:
         locations:
           type: array
           items: {$ref: '#/components/schemas/LocationHealth'}
+    MonitorAvailabilityHistory:
+      type: object
+      additionalProperties: false
+      required: [monitorId, startsAt, endsAt, generatedAt, samples, truncated]
+      properties:
+        monitorId: {type: string, format: uuid}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        generatedAt: {type: string, format: date-time}
+        samples:
+          type: array
+          items: {$ref: '#/components/schemas/MonitorAvailabilitySample'}
+        truncated: {type: boolean}
+    MonitorAvailabilitySample:
+      type: object
+      additionalProperties: false
+      required: [id, locationId, observedAt, outcome, latencyMillis]
+      properties:
+        id: {type: string, format: uuid}
+        locationId: {type: string, format: uuid}
+        observedAt: {type: string, format: date-time}
+        outcome: {type: string, enum: [passed, failed]}
+        latencyMillis: {type: integer, format: int64, minimum: 0}
     LocationHealth:
       type: object
       additionalProperties: false

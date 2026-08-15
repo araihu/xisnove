@@ -128,3 +128,71 @@ func (q *Queries) InsertProbeResult(ctx context.Context, arg InsertProbeResultPa
 	}
 	return result.RowsAffected()
 }
+
+const listMonitorHistory = `-- name: ListMonitorHistory :many
+SELECT
+  pr.id,
+  cr.monitor_id,
+  cr.location_id,
+  pr.received_at,
+  pr.outcome,
+  pr.latency_ms
+FROM probe_results pr
+JOIN check_runs cr ON cr.id = pr.run_id
+WHERE cr.monitor_id = $1
+  AND pr.received_at >= $2
+  AND pr.received_at < $3
+ORDER BY pr.received_at DESC, pr.id DESC
+LIMIT $4
+`
+
+type ListMonitorHistoryParams struct {
+	MonitorID string    `json:"monitor_id"`
+	StartsAt  time.Time `json:"starts_at"`
+	EndsAt    time.Time `json:"ends_at"`
+	RowLimit  int32     `json:"row_limit"`
+}
+
+type ListMonitorHistoryRow struct {
+	ID         string    `json:"id"`
+	MonitorID  string    `json:"monitor_id"`
+	LocationID string    `json:"location_id"`
+	ReceivedAt time.Time `json:"received_at"`
+	Outcome    string    `json:"outcome"`
+	LatencyMs  int64     `json:"latency_ms"`
+}
+
+func (q *Queries) ListMonitorHistory(ctx context.Context, arg ListMonitorHistoryParams) ([]ListMonitorHistoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMonitorHistory,
+		arg.MonitorID,
+		arg.StartsAt,
+		arg.EndsAt,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMonitorHistoryRow{}
+	for rows.Next() {
+		var i ListMonitorHistoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MonitorID,
+			&i.LocationID,
+			&i.ReceivedAt,
+			&i.Outcome,
+			&i.LatencyMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

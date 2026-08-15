@@ -613,18 +613,32 @@ func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	history := availability.NewHistory(availability.DefaultWindow)
 	send := func() bool {
+		windowEnd := time.Now().UTC()
+		history := availability.NewHistory(availability.HistoryWindow)
 		pollCtx, cancel := context.WithTimeout(r.Context(), s.timeout)
-		health, healthErr := s.controlPlane.GetMonitorHealth(pollCtx, credential, monitorID)
-		cancel()
-		state := sdk.Unknown
-		if healthErr == nil {
-			state = health.State
-		} else if !errors.Is(healthErr, context.Canceled) && !errors.Is(healthErr, context.DeadlineExceeded) {
-			s.logger.WarnContext(r.Context(), "availability health poll failed", "monitor_id", monitorID.String(), "error", healthErr)
+		availabilityHistory, historyErr := s.controlPlane.GetMonitorAvailabilityHistory(
+			pollCtx, credential, monitorID, windowEnd.Add(-availability.HistoryLookback), windowEnd, availability.HistoryWindow,
+		)
+		if historyErr == nil {
+			for _, sample := range availabilityHistory.Samples {
+				history.AddOutcome(sample.Outcome, sample.ObservedAt)
+			}
 		}
-		history.Add(state, time.Now().UTC())
+		if historyErr != nil || len(availabilityHistory.Samples) == 0 {
+			health, healthErr := s.controlPlane.GetMonitorHealth(pollCtx, credential, monitorID)
+			state := sdk.Unknown
+			if healthErr == nil {
+				state = health.State
+			} else if historyErr == nil || (!errors.Is(healthErr, context.Canceled) && !errors.Is(healthErr, context.DeadlineExceeded)) {
+				s.logger.WarnContext(r.Context(), "availability health poll failed", "monitor_id", monitorID.String(), "error", healthErr)
+			}
+			history.Add(state, windowEnd)
+		}
+		cancel()
+		if historyErr != nil && !errors.Is(historyErr, context.Canceled) && !errors.Is(historyErr, context.DeadlineExceeded) {
+			s.logger.WarnContext(r.Context(), "availability history fetch failed", "monitor_id", monitorID.String(), "error", historyErr)
+		}
 		payload, marshalErr := json.Marshal(history.Snapshot())
 		if marshalErr != nil {
 			s.logger.ErrorContext(r.Context(), "availability snapshot encode failed", "monitor_id", monitorID.String(), "error", marshalErr)

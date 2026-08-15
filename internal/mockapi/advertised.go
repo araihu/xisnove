@@ -91,6 +91,12 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 			"monitorId": "00000000-0000-4200-8000-000000000101", "state": "down",
 			"lastTransitionAt": fixtureTime, "locations": []any{},
 		})
+	case "GetMonitorAvailabilityHistory":
+		writeJSON(w, http.StatusOK, map[string]any{
+			"monitorId": "00000000-0000-4200-8000-000000000101",
+			"startsAt":  "2026-07-25T09:00:00Z", "endsAt": fixtureTime,
+			"generatedAt": fixtureTime, "samples": []any{}, "truncated": false,
+		})
 	case "GetActiveMonitorIncident":
 		s.mu.Lock()
 		incident := cloneMap(s.incidents[0])
@@ -228,7 +234,7 @@ func advertisedScope(operationID string) string {
 		return "locations:write"
 	case "ListLocations", "GetLocation":
 		return "locations:read"
-	case "SearchResources", "GetMonitorHealth":
+	case "SearchResources", "GetMonitorHealth", "GetMonitorAvailabilityHistory":
 		return "monitors:read"
 	case "GetActiveMonitorIncident":
 		return "incidents:read"
