@@ -101,7 +101,7 @@ func (s *ManagementService) UpdateLocation(
 			return "", domain.Location{}, err
 		}
 		if current.Enabled != updated.Enabled {
-			reason := domain.StateTickReasonPausedByUser
+			reason := domain.StateTickReasonLocationPaused
 			lifecycle := domain.MonitorLifecycleDisabled
 			if updated.Enabled {
 				reason = domain.StateTickReasonResumedByUser
@@ -219,7 +219,7 @@ func (s *ManagementService) UpdateMonitor(
 		}
 		if current.Monitor.Enabled != candidate.Monitor.Enabled {
 			locationID := candidate.LocationID
-			reason := domain.StateTickReasonPausedByUser
+			reason := domain.StateTickReasonMonitorPaused
 			lifecycle := domain.MonitorLifecycleDisabled
 			if candidate.Monitor.Enabled {
 				reason = domain.StateTickReasonResumedByUser
@@ -275,7 +275,7 @@ func (s *ManagementService) DisableMonitor(ctx context.Context, principal Princi
 		locationID := current.LocationID
 		return appendAdministrativeStateTick(
 			ctx, repositories, current.Monitor, &locationID,
-			domain.MonitorLifecycleDisabled, domain.StateTickReasonPausedByUser,
+			domain.MonitorLifecycleDisabled, domain.StateTickReasonMonitorPaused,
 			domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID},
 			stateTickUserActionID(s.newID), now, s.newID,
 		)
