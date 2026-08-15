@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+	chartsassets "github.com/araihu/goshtoso-charts/assets"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/google/uuid"
@@ -115,6 +116,22 @@ func TestConsolePageEmitsSocialMetadataWithoutHeadTagDuplication(t *testing.T) {
 		if strings.Count(body, want) != 1 {
 			t.Errorf("console document metadata count for %q = %d", want, strings.Count(body, want))
 		}
+	}
+}
+
+func TestConsolePageIncludesChartDependenciesWithRequestNonce(t *testing.T) {
+	var rendered strings.Builder
+	ctx := templ.WithNonce(t.Context(), "console-chart-nonce")
+	if err := ConsolePage("Monitors", "csrf-token", MonitorContent(MonitorList{})).Render(ctx, &rendered); err != nil {
+		t.Fatalf("render console document: %v", err)
+	}
+	body := rendered.String()
+	chartRuntime := `<script src="` + chartsassets.RuntimeURL + `" nonce="console-chart-nonce"></script>`
+	if strings.Count(body, chartRuntime) != 1 {
+		t.Fatalf("chart runtime script count = %d, want 1: %s", strings.Count(body, chartRuntime), body)
+	}
+	if strings.Count(body, chartsassets.RuntimeURL) != 1 {
+		t.Fatalf("chart runtime URL was duplicated")
 	}
 }
 

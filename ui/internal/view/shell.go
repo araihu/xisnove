@@ -10,6 +10,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso-app-shells/consoleshell"
+	"github.com/araihu/goshtoso-charts/components/dependencies"
 	"github.com/araihu/goshtoso/components/head"
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
@@ -77,6 +78,9 @@ func consoleDescription(title string) string {
 func consoleHead(metadata head.MetadataConfig) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, writer io.Writer) error {
 		if err := consoleSocialMetadata(metadata).Render(ctx, writer); err != nil {
+			return err
+		}
+		if err := dependencies.Dependencies().Render(ctx, writer); err != nil {
 			return err
 		}
 		return AppStyles().Render(ctx, writer)
