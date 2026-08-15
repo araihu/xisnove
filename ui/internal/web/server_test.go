@@ -152,9 +152,9 @@ func TestHandlerServesPinnedSeasonalX9Assets(t *testing.T) {
 	}
 }
 
-func TestHandlerServesPinnedAraiHuThemeAsImmutableCSS(t *testing.T) {
+func TestHandlerServesLatestAraiHuThemeAsImmutableCSS(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/araihu-f841fe90.css", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/araihu-v0.2.1.css", nil)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, request)
@@ -178,8 +178,26 @@ func TestHandlerServesPinnedAraiHuThemeAsImmutableCSS(t *testing.T) {
 		t.Fatal("theme body omits canonical @layer block")
 	}
 	canonicalBody := recorder.Body.String()[canonicalStart:]
-	if got, want := fmt.Sprintf("%x", sha256.Sum256([]byte(canonicalBody))), "f44a204d777951b5ba140e56143cf22f887ca7b8be913ed1586a73aaa8047235"; got != want {
+	if got, want := fmt.Sprintf("%x", sha256.Sum256([]byte(canonicalBody))), "bda734da2ce1a65badb12221cb74f5cf478359e743a683ab5e17e4330b532f8d"; got != want {
 		t.Fatalf("canonical Arai Hû body SHA-256 = %s, want %s", got, want)
+	}
+	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "9ec3f3187b736252b18f3aefef4737ba2025ef1c637611c3d0ecf58748043f1b"; got != want {
+		t.Fatalf("Arai Hû v0.2.1 CSS SHA-256 = %s, want %s", got, want)
+	}
+}
+
+func TestHandlerKeepsPreviousAraiHuThemeRouteForRollingCompatibility(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/araihu-f841fe90.css", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("legacy theme status = %d", recorder.Code)
+	}
+	if got, want := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())), "eb47ecd7d3360a3b48f858b60d4c14322011f0aed6a520eb1ce2ecbc56ffb498"; got != want {
+		t.Fatalf("legacy Arai Hû CSS SHA-256 = %s, want %s", got, want)
 	}
 }
 
@@ -262,7 +280,7 @@ func TestLoginPageUsesBundledHeadAndDoesNotRenderCredentials(t *testing.T) {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-f841fe90.css`, `/ui/xisnove-ab01f1a.svg`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
+	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-v0.2.1.css`, `/ui/xisnove-ab01f1a.svg`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("login body missing %q", want)
 		}

@@ -113,7 +113,10 @@ func New(cfg Config) (http.Handler, error) {
 	mux.Handle("GET "+chartassets.Prefix, chartassets.Handler())
 	mux.Handle("GET /consoleshell/assets/", shellassets.Handler())
 	mux.Handle("GET /ui/seasonal/", seasonalassets.Handler())
-	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
+	// Keep the previous immutable theme URL available during a rolling
+	// deployment while new pages move to the v0.2.1 asset bytes.
+	mux.HandleFunc("GET /ui/araihu-v0.2.1.css", serveAraiHuThemeCSS)
+	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveLegacyAraiHuThemeCSS)
 	mux.HandleFunc("GET /ui/xisnove-ab01f1a.svg", serveXisnoveFavicon)
 	mux.HandleFunc("GET /ui/xisnove-logo-ab01f1a.svg", serveXisnoveLogo)
 	mux.HandleFunc("GET /ui/xisnove-mark-ab01f1a.svg", serveXisnoveMark)
@@ -133,8 +136,11 @@ func New(cfg Config) (http.Handler, error) {
 	return handler, nil
 }
 
-//go:embed static/araihu-f841fe90.css
+//go:embed static/araihu-v0.2.1.css
 var araiHuThemeCSS string
+
+//go:embed static/araihu-f841fe90.css
+var legacyAraiHuThemeCSS string
 
 //go:embed static/xisnove-favicon.svg
 var xisnoveFavicon string
@@ -185,9 +191,17 @@ func servePreviousXisnoveFavicon(w http.ResponseWriter, _ *http.Request) {
 }
 
 func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableCSS(w, araiHuThemeCSS)
+}
+
+func serveLegacyAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableCSS(w, legacyAraiHuThemeCSS)
+}
+
+func serveImmutableCSS(w http.ResponseWriter, body string) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	_, _ = io.WriteString(w, araiHuThemeCSS)
+	_, _ = io.WriteString(w, body)
 }
 
 const applicationJS = `(() => {

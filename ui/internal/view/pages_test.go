@@ -34,7 +34,7 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 		t.Fatalf("document does not reference the canonical versioned Xisnove favicon: %s", body)
 	}
 	goshtoso := strings.Index(body, `/assets/styles.css`)
-	araihu := strings.Index(body, `/ui/araihu-f841fe90.css`)
+	araihu := strings.Index(body, `/ui/araihu-v0.2.1.css`)
 	if goshtoso < 0 || araihu < 0 || araihu <= goshtoso {
 		t.Fatalf("Arai Hû stylesheet must follow Goshtoso: %s", body)
 	}
@@ -81,7 +81,7 @@ func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 		`/consoleshell/assets/shell.css`,
 		`/consoleshell/assets/shell.js`,
 		`/assets/styles.css`,
-		`/ui/araihu-f841fe90.css`,
+		`/ui/araihu-v0.2.1.css`,
 		seasonalassets.LogoPath,
 		seasonalassets.FaviconPath,
 		`/assets/icons/heroicons.svg#hi-16-solid-magnifying-glass`,

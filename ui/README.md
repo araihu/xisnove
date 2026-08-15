@@ -18,12 +18,16 @@ Authenticated monitor pages use `github.com/araihu/goshtoso-app-shells`
 `consoleshell.Fragment`, and Xisnove supplies the monitor content, search,
 appearance controls, and session actions through the shell slots.
 
-The default theme is the organization-owned Arai Hû theme, pinned from
-`araihu/assets` commit `f841fe90b967b16ab2ad9efaee5aa636468e1afd` and served
-same-origin as `/ui/araihu-f841fe90.css` after Goshtoso's stylesheet. The
-Goshtoso and Minimal base themes remain available through the theme selector
-and are not modified. The shared repository is public and licenses the theme
-under Apache-2.0 as of commit `a5e1afb1f3df2cc50aa88c9558370fd8fd177e9b`.
+The default theme is the organization-owned Arai Hû theme, pinned from the
+`araihu/assets` `v0.2.1` release (content commit
+`fdfb1c2aad8fa61779e7b8c6f208e52a6cf825ce`) and served same-origin as
+`/ui/araihu-v0.2.1.css` after Goshtoso's stylesheet. Its SHA-256 is
+`9ec3f3187b736252b18f3aefef4737ba2025ef1c637611c3d0ecf58748043f1b`, matching
+the release theme manifest. The Goshtoso and Minimal base themes remain
+available through the theme selector and are not modified. The previous
+`/ui/araihu-f841fe90.css` route remains available during the rolling transition
+with its original bytes. The shared repository is public and licenses the
+theme under Apache-2.0.
 The Xisnove favicon is likewise pinned from the canonical
 `logos/xisnove-favicon.svg` at `araihu/assets` commit `bffc2acfc9380eaf84473abfeaacbba625ac73d5`
 and served from the immutable, versioned `/ui/xisnove-bffc2ac.svg` URL. Its

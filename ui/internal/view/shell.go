@@ -69,7 +69,7 @@ func consoleConfig(csrfToken string) consoleshell.Config {
 			DefaultTheme:       "araihu",
 			InitialColorScheme: consoleshell.ColorSchemeSystem,
 			PersistPreferences: true,
-			ThemeStylesheets:   []string{"/ui/araihu-f841fe90.css"},
+			ThemeStylesheets:   []string{"/ui/araihu-v0.2.1.css"},
 		},
 		Interactions: consoleshell.InteractionConfig{
 			EnableHTMX: true,
