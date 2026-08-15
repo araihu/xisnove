@@ -211,7 +211,7 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 		`x-trap.noscroll="monitorDetailDrawerIsOpen"`, `xis-monitor-drawer-panel`,
 		`$event.preventDefault()`,
 		`id="monitor-detail"`, `aria-labelledby="monitor-detail-heading"`,
-		`data-monitor-id="` + monitorID.String() + `"`, `aria-selected="true"`,
+		`data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors?cursor=opaque%2Fpage&amp;q=dns&amp;selected=` + monitorID.String() + `"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `aria-selected="true"`,
 		`id="monitor-detail-heading" tabindex="-1" data-autofocus`, `id="monitor-detail-close"`, "Home DNS", "DEGRADED",
 		"Current health", "Configuration", "Observation history",
 		"History is not exposed by the current public API",
@@ -221,6 +221,11 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("selected monitor workspace missing %q", want)
+		}
+	}
+	for _, absent := range []string{`aria-label="Select monitor `, `>Select</a>`} {
+		if strings.Contains(body, absent) {
+			t.Errorf("selected monitor workspace retained removed row action/detail %q", absent)
 		}
 	}
 	if strings.Count(body, "<h1") != 1 {

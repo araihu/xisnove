@@ -400,7 +400,7 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
 		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
 	}
-	for _, want := range []string{`event.metaKey || event.ctrlKey`, `event.key.toLowerCase() !== "k"`, `goshtoso-search-open`} {
+	for _, want := range []string{`event.metaKey || event.ctrlKey`, `event.key.toLowerCase() !== "k"`, `goshtoso-search-open`, `row?.querySelector("a[href]") || row`} {
 		if strings.Count(recorder.Body.String(), want) == 0 {
 			t.Errorf("application search shortcut missing %q", want)
 		}
@@ -480,9 +480,14 @@ func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{`id="monitor-content"`, `aria-selected="true"`, `data-monitor-id="` + monitorID.String() + `"`, `id="monitor-detail"`, `data-autofocus`, "UNKNOWN", "Some health is unavailable", `hx-target="#main-content"`} {
+	for _, want := range []string{`id="monitor-content"`, `aria-selected="true"`, `data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors?q=dns&amp;selected=` + monitorID.String() + `"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `id="monitor-detail"`, `data-autofocus`, "UNKNOWN", "Some health is unavailable"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("monitor fragment missing %q", want)
+		}
+	}
+	for _, absent := range []string{`aria-label="Select monitor `, `>Select</a>`} {
+		if strings.Contains(body, absent) {
+			t.Errorf("monitor fragment retained removed row action %q", absent)
 		}
 	}
 	if strings.Contains(body, "<html") || strings.Contains(body, testCredential) {
@@ -537,7 +542,7 @@ func TestMonitorSearchEmptyWindowStillOffersOpaqueContinuation(t *testing.T) {
 		"Remote DNS",
 		"Next page",
 		`href="/monitors?cursor=offset%3A125&amp;q=dns&amp;selected=kept"`,
-		`href="/monitors?cursor=offset%3A25&amp;q=dns&amp;selected=` + matchID.String() + `"`,
+		`hx-get="/monitors?cursor=offset%3A25&amp;q=dns&amp;selected=` + matchID.String() + `"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("stateful continuation response missing %q", want)

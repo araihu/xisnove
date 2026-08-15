@@ -293,10 +293,10 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	captureMatrix(t, ctx, screenshotDir, "monitor-detail", "#monitor-detail")
 	assertDrawerCloseAndRestore(t, ctx, monitorID.String())
 	if err := chromedp.Run(ctx,
-		chromedp.Click(`[aria-label="Select monitor `+unknownID.String()+`"]`),
+		chromedp.Click(`tr[data-monitor-id="`+unknownID.String()+`"] td:first-child`),
 		chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+unknownID.String()+`'`, nil),
 	); err != nil {
-		t.Fatalf("HTMX monitor selection: %v", err)
+		t.Fatalf("monitor row selection: %v", err)
 	}
 	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
 	beforeHistoryRead := monitorRequests.Load()
@@ -942,15 +942,15 @@ func assertShellGeometry(t *testing.T, ctx context.Context) {
 	var mobile struct {
 		PageOverflow  bool `json:"pageOverflow"`
 		TableOverflow bool `json:"tableOverflow"`
-		ActionFocus   bool `json:"actionFocus"`
+		RowFocus      bool `json:"rowFocus"`
 		ClientWidth   int  `json:"clientWidth"`
 		ScrollWidth   int  `json:"scrollWidth"`
 		TableWidth    int  `json:"tableWidth"`
 	}
-	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 900), chromedp.Evaluate(`(()=>{const table=document.querySelector('.xis-table-scroll table'),wrap=table?.closest('.overflow-x-auto');const action=document.querySelector('[aria-label^="Select monitor"]');action?.focus();return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,tableOverflow:!!wrap&&wrap.scrollWidth>wrap.clientWidth,actionFocus:document.activeElement===action,clientWidth:wrap?.clientWidth||0,scrollWidth:wrap?.scrollWidth||0,tableWidth:Math.round(table?.getBoundingClientRect().width||0)}})()`, &mobile)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 900), chromedp.Evaluate(`(()=>{const table=document.querySelector('.xis-table-scroll table'),wrap=table?.closest('.overflow-x-auto'),row=table?.querySelector('tr[data-monitor-id]');row?.focus();return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,tableOverflow:!!wrap&&wrap.scrollWidth>wrap.clientWidth,rowFocus:document.activeElement===row,clientWidth:wrap?.clientWidth||0,scrollWidth:wrap?.scrollWidth||0,tableWidth:Math.round(table?.getBoundingClientRect().width||0)}})()`, &mobile)); err != nil {
 		t.Fatal(err)
 	}
-	if mobile.PageOverflow || !mobile.TableOverflow || !mobile.ActionFocus {
+	if mobile.PageOverflow || !mobile.TableOverflow || !mobile.RowFocus {
 		t.Errorf("mobile shell geometry = %#v", mobile)
 	}
 }
@@ -1032,7 +1032,7 @@ func assertDrawerCloseAndRestore(t *testing.T, ctx context.Context, id string) {
 	if closed.DrawerVisible || closed.Focused != id || closed.SelectedCount != 0 {
 		t.Fatalf("drawer close state = %#v, want hidden drawer and focus restored to %s", closed, id)
 	}
-	if err := chromedp.Run(ctx, chromedp.Click(`[aria-label="Select monitor `+id+`"]`), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+id+`'`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Click(`tr[data-monitor-id="`+id+`"] td:first-child`), chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+id+`'`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
 		t.Fatalf("reopen monitor drawer URL: %v", err)
 	}
 	if err := chromedp.Run(ctx, chromedp.Poll(`document.querySelector('#monitor-detail') !== null`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {

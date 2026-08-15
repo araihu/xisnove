@@ -219,7 +219,7 @@ const applicationJS = `(() => {
 	  const id = pendingDrawerReturnFocus;
 	  pendingDrawerReturnFocus = null;
 	  const row = Array.from(document.querySelectorAll("#main-content tr[data-monitor-id]")).find(candidate => candidate.dataset.monitorId === id);
-	  const target = row?.querySelector("a[href]");
+	  const target = row?.querySelector("a[href]") || row;
 	  if (target) {
 		target.focus({preventScroll: true});
 		return;

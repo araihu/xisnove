@@ -471,10 +471,6 @@ templ NextPage(data MonitorList) {
 	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.NextCursor, data.Selected) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#monitor-loading">Next page</a>
 }
 
-templ MonitorActions(data MonitorList, id string) {
-	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, id)) } aria-label={ "Select monitor " + id } hx-get={ monitorURL(data.Query, data.Cursor, id) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Select</a>
-}
-
 templ StatusPage(data sdk.PublicStatusPage) { @Document("Public status", PublicStatusShell(data)) }
 templ StatusErrorPage(problem Problem) { @Document("Public status", PublicStatusErrorShell(problem)) }
 
@@ -568,8 +564,8 @@ func monitorTable(data MonitorList) table.Config {
 		name := monitor.Name
 		selected := data.Selected == id
 		attrs := map[string]string{"data-monitor-id": id, "aria-selected": fmt.Sprint(selected)}
-		rows = append(rows, table.Row{ID: id, Link: monitorURL(data.Query, data.Cursor, id), LinkMode: table.LinkFull, Actions: MonitorActions(data, id), AlpineAttrs: attrs, Cells: map[string]table.Cell{
-			"name": {Text: name, Description: id}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
+		rows = append(rows, table.Row{ID: id, HTMX: &table.RowHTMXConfig{Get: monitorURL(data.Query, data.Cursor, id), Target: "#main-content", Swap: "outerHTML", PushURL: true}, AlpineAttrs: attrs, Cells: map[string]table.Cell{
+			"name": {Text: name}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
 		}})
 	}
 	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
