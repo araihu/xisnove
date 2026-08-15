@@ -23,7 +23,8 @@ const (
 var ErrInvalidStateTickHistory = errors.New("invalid state tick history")
 
 // StateTickHistoryView is a bounded immutable history snapshot for one
-// monitor. Ticks are ordered by occurredAt, then stable tick ID.
+// monitor. Ticks are ordered by occurredAt, then causal parent/child relation,
+// then stable tick ID.
 type StateTickHistoryView struct {
 	MonitorID   domain.MonitorID
 	StartsAt    time.Time
@@ -127,18 +128,7 @@ func (s *StateTickHistoryService) GetMonitorStateHistory(
 		seenIDs[tick.ID] = struct{}{}
 		projected[index] = tick.Clone()
 	}
-	slices.SortStableFunc(projected, func(left, right domain.StateTick) int {
-		if order := left.OccurredAt.Compare(right.OccurredAt); order != 0 {
-			return order
-		}
-		if left.ID < right.ID {
-			return -1
-		}
-		if left.ID > right.ID {
-			return 1
-		}
-		return 0
-	})
+	slices.SortStableFunc(projected, compareStateTicks)
 	truncated := len(projected) > requestedLimit
 	if truncated {
 		projected = projected[len(projected)-requestedLimit:]
@@ -147,6 +137,29 @@ func (s *StateTickHistoryService) GetMonitorStateHistory(
 		MonitorID: monitorID, StartsAt: start, EndsAt: end, GeneratedAt: now,
 		Ticks: projected, Truncated: truncated,
 	}, nil
+}
+
+// compareStateTicks keeps causal lifecycle transitions ordered when storage
+// timestamps tie. A maintenance terminal tick points at its deterministic
+// activation tick through CausalTickID, so the start remains before the end
+// without imposing a global lifecycle rank on unrelated observations.
+func compareStateTicks(left, right domain.StateTick) int {
+	if order := left.OccurredAt.Compare(right.OccurredAt); order != 0 {
+		return order
+	}
+	if left.CausalTickID != nil && *left.CausalTickID == right.ID {
+		return 1
+	}
+	if right.CausalTickID != nil && *right.CausalTickID == left.ID {
+		return -1
+	}
+	if left.ID < right.ID {
+		return -1
+	}
+	if left.ID > right.ID {
+		return 1
+	}
+	return 0
 }
 
 // NormalizeStateTickHistoryQueryLimit returns a bounded storage limit with

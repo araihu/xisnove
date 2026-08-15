@@ -109,8 +109,12 @@ func (w *MaintenanceWorker) activateDue(ctx context.Context) (int, error) {
 		if err != nil {
 			return err
 		}
-		activationCandidates := 0
-		for offset := 0; offset < maintenanceActivationScanLimit && activationCandidates < w.config.BatchSize; {
+		type activationCandidate struct {
+			record           port.MaintenanceRecord
+			endedUnprocessed bool
+		}
+		var endedCandidates, activeCandidates []activationCandidate
+		for offset := 0; offset < maintenanceActivationScanLimit; {
 			records, err := repositories.Maintenance.List(ctx, maintenanceActivationPageSize, offset)
 			if err != nil {
 				return err
@@ -122,37 +126,49 @@ func (w *MaintenanceWorker) activateDue(ctx context.Context) (int, error) {
 				if !startsDue || (!record.Interval.ActiveAt(now) && !endedUnprocessed) {
 					continue
 				}
-				activationCandidates++
-				monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
-				if err != nil {
-					return err
-				}
-				actor, userActionID, err := maintenanceActivationProvenance(ctx, repositories, record.Interval.ID)
-				if err != nil {
-					return err
-				}
-				inserted, err := appendMaintenanceActivationStateTick(
-					ctx, repositories, monitor, record.Interval.ID,
-					maintenanceLifecycle(monitor, true),
-					actor, userActionID,
-					// The worker owns the effective transition, so delayed discovery
-					// is recorded at the observation time rather than scheduled time.
-					now,
-				)
-				if err != nil {
-					return err
-				}
-				if inserted && !endedUnprocessed {
-					activated++
-				}
-				if activationCandidates >= w.config.BatchSize {
-					break
+				candidate := activationCandidate{record: record, endedUnprocessed: endedUnprocessed}
+				if endedUnprocessed {
+					endedCandidates = append(endedCandidates, candidate)
+				} else {
+					activeCandidates = append(activeCandidates, candidate)
 				}
 			}
 			if len(records) < maintenanceActivationPageSize {
 				break
 			}
 			offset += len(records)
+		}
+
+		activationCandidates := 0
+		for _, candidate := range append(endedCandidates, activeCandidates...) {
+			if activationCandidates >= w.config.BatchSize {
+				break
+			}
+			activationCandidates++
+			record := candidate.record
+			endedUnprocessed := candidate.endedUnprocessed
+			monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
+			if err != nil {
+				return err
+			}
+			actor, userActionID, err := maintenanceActivationProvenance(ctx, repositories, record.Interval.ID)
+			if err != nil {
+				return err
+			}
+			inserted, err := appendMaintenanceActivationStateTick(
+				ctx, repositories, monitor, record.Interval.ID,
+				maintenanceLifecycle(monitor, true),
+				actor, userActionID,
+				// The worker owns the effective transition, so delayed discovery
+				// is recorded at the observation time rather than scheduled time.
+				now,
+			)
+			if err != nil {
+				return err
+			}
+			if inserted && !endedUnprocessed {
+				activated++
+			}
 		}
 		return nil
 	})
@@ -193,6 +209,16 @@ func (w *MaintenanceWorker) process(ctx context.Context, record port.Maintenance
 		if err != nil {
 			return err
 		}
+		activationActor, activationUserActionID, err := maintenanceActivationProvenance(ctx, repositories, record.Interval.ID)
+		if err != nil {
+			return err
+		}
+		if _, err := appendMaintenanceActivationStateTick(
+			ctx, repositories, monitor, record.Interval.ID, maintenanceLifecycle(monitor, true),
+			activationActor, activationUserActionID, now,
+		); err != nil {
+			return err
+		}
 		if domain.ShouldNotifyAfterMaintenance(health.State, record.Interval.EndedNotificationSent) {
 			incident, err := repositories.Incidents.GetActive(ctx, record.Interval.MonitorID)
 			if err != nil {
@@ -216,9 +242,10 @@ func (w *MaintenanceWorker) process(ctx context.Context, record port.Maintenance
 			return err
 		}
 		lifecycle := maintenanceLifecycle(monitor, len(activeMaintenance) != 0)
-		if err := appendMaintenanceStateTick(
+		startTickID, _ := maintenanceStartStateTickIDs(record.Interval.ID)
+		if err := appendMaintenanceStateTickCausal(
 			ctx, repositories, monitor, lifecycle,
-			domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil, now, w.config.NewID,
+			domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil, &startTickID, now, w.config.NewID,
 		); err != nil {
 			return err
 		}

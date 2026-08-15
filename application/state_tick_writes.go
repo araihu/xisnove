@@ -133,6 +133,25 @@ func appendAdministrativeStateTick(
 	at time.Time,
 	newID func() string,
 ) error {
+	return appendAdministrativeStateTickCausal(
+		ctx, repositories, monitor, locationID, lifecycle, reason, actor,
+		userActionID, nil, at, newID,
+	)
+}
+
+func appendAdministrativeStateTickCausal(
+	ctx context.Context,
+	repositories Repositories,
+	monitor domain.Monitor,
+	locationID *domain.LocationID,
+	lifecycle domain.MonitorLifecycle,
+	reason domain.StateTickReasonCode,
+	actor domain.StateTickActor,
+	userActionID *string,
+	causalTickID *string,
+	at time.Time,
+	newID func() string,
+) error {
 	tickID, actionID, err := stateTickIDs(newID)
 	if err != nil {
 		return err
@@ -146,6 +165,7 @@ func appendAdministrativeStateTick(
 		ReasonCode:   reason,
 		ActionID:     actionID,
 		UserActionID: userActionID,
+		CausalTickID: causalTickID,
 		Actor:        actor,
 		OccurredAt:   at.UTC(),
 	})
@@ -165,9 +185,25 @@ func appendMaintenanceStateTick(
 	at time.Time,
 	newID func() string,
 ) error {
-	return appendAdministrativeStateTick(
+	return appendMaintenanceStateTickCausal(
+		ctx, repositories, monitor, lifecycle, actor, userActionID, nil, at, newID,
+	)
+}
+
+func appendMaintenanceStateTickCausal(
+	ctx context.Context,
+	repositories Repositories,
+	monitor domain.Monitor,
+	lifecycle domain.MonitorLifecycle,
+	actor domain.StateTickActor,
+	userActionID *string,
+	causalTickID *string,
+	at time.Time,
+	newID func() string,
+) error {
+	return appendAdministrativeStateTickCausal(
 		ctx, repositories, monitor, nil, lifecycle,
-		domain.StateTickReasonMaintenance, actor, userActionID, at, newID,
+		domain.StateTickReasonMaintenance, actor, userActionID, causalTickID, at, newID,
 	)
 }
 

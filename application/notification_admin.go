@@ -447,6 +447,20 @@ func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain
 			record = existing
 			return nil
 		}
+		monitor, err := repositories.Monitors.Get(ctx, existing.Interval.MonitorID)
+		if err != nil {
+			return err
+		}
+		activationActor, activationUserActionID, err := maintenanceActivationProvenance(ctx, repositories, existing.Interval.ID)
+		if err != nil {
+			return err
+		}
+		if _, err := appendMaintenanceActivationStateTick(
+			ctx, repositories, monitor, existing.Interval.ID, maintenanceLifecycle(monitor, true),
+			activationActor, activationUserActionID, now,
+		); err != nil {
+			return err
+		}
 		changed, err := repositories.Maintenance.End(ctx, id, now)
 		if err != nil {
 			return err
@@ -462,18 +476,15 @@ func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain
 		if err := appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.ended", record, now, actor, userActionID); err != nil {
 			return err
 		}
-		monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
-		if err != nil {
-			return err
-		}
 		activeMaintenance, err := repositories.Maintenance.ListActive(ctx, monitor.ID, now)
 		if err != nil {
 			return err
 		}
 		lifecycle := maintenanceLifecycle(monitor, len(activeMaintenance) != 0)
-		return appendMaintenanceStateTick(
+		startTickID, _ := maintenanceStartStateTickIDs(record.Interval.ID)
+		return appendMaintenanceStateTickCausal(
 			ctx, repositories, monitor, lifecycle,
-			actor, userActionID, now, s.newID,
+			actor, userActionID, &startTickID, now, s.newID,
 		)
 	})
 	return record, err

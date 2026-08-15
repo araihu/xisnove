@@ -300,6 +300,75 @@ func TestMaintenanceEndTickPreservesUserPrincipalAndAction(t *testing.T) {
 	}
 }
 
+func TestEndingDueFutureMaintenanceAppendsStartBeforeTerminal(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	now, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	creationNow := now.Add(-2 * time.Minute)
+	createService := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return creationNow }, NewID: concurrentIDs(),
+	})
+	createPrincipal := Principal{Kind: PrincipalAdmin, SubjectID: "creator-1"}
+	record, err := createService.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: now.Add(-time.Minute), Reason: "future request",
+		Principal: createPrincipal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	endService := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return now }, NewID: concurrentIDs(),
+	})
+	endPrincipal := Principal{Kind: PrincipalAdmin, SubjectID: "ender-1"}
+	if _, err := endService.EndMaintenance(ctx, record.Interval.ID, endPrincipal); err != nil {
+		t.Fatal(err)
+	}
+
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, now.Add(-2*time.Minute), now.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 2 {
+		t.Fatalf("manual end lifecycle ticks = %#v", ticks)
+	}
+	var start, terminal domain.StateTick
+	for _, tick := range ticks {
+		if tick.Lifecycle == domain.MonitorLifecyclePaused {
+			start = tick
+		}
+		if tick.Lifecycle == domain.MonitorLifecycleActive {
+			terminal = tick
+		}
+	}
+	if start.ID == "" || terminal.ID == "" {
+		t.Fatalf("manual end lifecycle ticks = %#v", ticks)
+	}
+	if start.Actor != (domain.StateTickActor{Kind: domain.StateTickActorUser, ID: createPrincipal.SubjectID}) || start.UserActionID == nil {
+		t.Fatalf("manual end start provenance = %#v", start)
+	}
+	if terminal.Actor != (domain.StateTickActor{Kind: domain.StateTickActorUser, ID: endPrincipal.SubjectID}) || terminal.UserActionID == nil {
+		t.Fatalf("manual end terminal provenance = %#v", terminal)
+	}
+	if terminal.CausalTickID == nil || *terminal.CausalTickID != start.ID {
+		t.Fatalf("manual end causal ordering = %#v", ticks)
+	}
+
+	history := NewStateTickHistoryServiceWithClock(fixture.store, func() time.Time { return now.Add(time.Second) })
+	view, err := history.GetMonitorStateHistory(ctx, fixture.monitor.ID, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Ticks) < 2 || view.Ticks[len(view.Ticks)-2].ID != start.ID || view.Ticks[len(view.Ticks)-1].ID != terminal.ID {
+		t.Fatalf("manual end public ordering = %#v", view.Ticks)
+	}
+}
+
 func isMaintenanceStartValidation(err error) bool {
 	var validation *ValidationError
 	return errors.As(err, &validation) && strings.Contains(validation.Fields["maintenance.startsAt"], "before it starts")
@@ -598,7 +667,7 @@ func TestMaintenanceWorkerExpiryStaysPausedUntilLastOverlapEnds(t *testing.T) {
 			active++
 		}
 	}
-	if paused != 1 || active != 1 {
+	if paused != 3 || active != 1 {
 		t.Fatalf("expiry overlap lifecycle counts paused=%d active=%d ticks=%#v", paused, active, ticks)
 	}
 }
