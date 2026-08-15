@@ -52,6 +52,12 @@ or DNS resolver `monitor-dns:5353` for `service.test A 192.0.2.10`. The host
 ports can be changed with `XISNOVE_FIXTURE_HTTP_PORT`,
 `XISNOVE_FIXTURE_TCP_PORT`, and `XISNOVE_FIXTURE_DNS_PORT`.
 
+The development fake control plane seeds matching non-public monitors named
+`Compose HTTP`, `Compose TCP`, and `Compose DNS`, including their HTTP, TCP,
+and DNS probe definitions. Their initial health is `UP` so the UI can exercise
+the monitor inventory without starting the production server and Agent;
+actual probe scheduling still requires the normal control-plane stack.
+
 To run the fixture CLI directly, build `build/package/Dockerfile.service` and
 pass the type as the entrypoint's first argument, for example:
 

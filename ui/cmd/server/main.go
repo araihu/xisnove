@@ -243,19 +243,114 @@ func loadCookieSecret(getenv func(string) string) ([]byte, error) {
 
 func developmentFake(email, password, session string) *controlplane.Fake {
 	fake := controlplane.NewFake(email, password, session)
+	now := time.Now().UTC()
 	dnsID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
 	wanID := uuid.MustParse("10000000-0000-4000-8000-000000000002")
+	httpFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000003")
+	tcpFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000004")
+	dnsFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000005")
 	fake.Monitors = []sdk.Monitor{
 		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability from the control plane", Kind: sdk.MonitorKindDns, Enabled: true, Public: true},
 		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", Kind: sdk.MonitorKindHttp, Enabled: true, Public: true},
+		composeHTTPMonitor(httpFixtureID, now),
+		composeTCPMonitor(tcpFixtureID, now),
+		composeDNSMonitor(dnsFixtureID, now),
 	}
 	fake.Health[dnsID] = sdk.MonitorHealth{MonitorId: dnsID, State: sdk.Up}
 	fake.Health[wanID] = sdk.MonitorHealth{MonitorId: wanID, State: sdk.Unknown}
+	for _, monitorID := range []uuid.UUID{httpFixtureID, tcpFixtureID, dnsFixtureID} {
+		fake.Health[monitorID] = sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up, LastTransitionAt: now}
+	}
 	fake.PublicStatus = sdk.PublicStatusPage{GeneratedAt: time.Now().UTC(), State: sdk.Degraded, Monitors: []sdk.PublicStatusMonitor{
 		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability", State: sdk.Up},
 		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", State: sdk.Unknown},
 	}}
 	return fake
+}
+
+func composeHTTPMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
+	return sdk.Monitor{
+		Id:                id,
+		Name:              "Compose HTTP",
+		Description:       "Local HTTP fixture at monitor-http:8080/healthz",
+		Kind:              sdk.MonitorKindHttp,
+		Labels:            map[string]string{"environment": "compose-dev", "fixture": "monitor-http"},
+		Enabled:           true,
+		IntervalSeconds:   30,
+		TimeoutMillis:     2000,
+		FailureThreshold:  3,
+		RecoveryThreshold: 2,
+		Public:            false,
+		DisplayOrder:      10,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		Probe: mustDevelopmentProbe(func(probe *sdk.ProbeDefinition) error {
+			return probe.FromHTTPProbeDefinition(sdk.HTTPProbeDefinition{
+				Body: []byte{}, BodyContains: []string{"ok"}, BodyDoesNotContain: []string{},
+				ExpectedStatus:  []sdk.StatusRange{{Minimum: 200, Maximum: 299}},
+				FollowRedirects: false, Headers: map[string]string{}, Kind: sdk.HTTPProbeDefinitionKindHttp,
+				Method: sdk.GET, Url: "http://monitor-http:8080/healthz",
+			})
+		}),
+	}
+}
+
+func composeTCPMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
+	return sdk.Monitor{
+		Id:                id,
+		Name:              "Compose TCP",
+		Description:       "Local TCP fixture at monitor-tcp:9090",
+		Kind:              sdk.MonitorKindTcp,
+		Labels:            map[string]string{"environment": "compose-dev", "fixture": "monitor-tcp"},
+		Enabled:           true,
+		IntervalSeconds:   30,
+		TimeoutMillis:     2000,
+		FailureThreshold:  3,
+		RecoveryThreshold: 2,
+		Public:            false,
+		DisplayOrder:      11,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		Probe: mustDevelopmentProbe(func(probe *sdk.ProbeDefinition) error {
+			return probe.FromTCPProbeDefinition(sdk.TCPProbeDefinition{
+				Expect: []byte("PONG"), Host: "monitor-tcp", Kind: sdk.TCPProbeDefinitionKindTcp,
+				Port: 9090, Send: []byte("PING"),
+			})
+		}),
+	}
+}
+
+func composeDNSMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
+	return sdk.Monitor{
+		Id:                id,
+		Name:              "Compose DNS",
+		Description:       "Local DNS fixture at monitor-dns:5353 for service.test",
+		Kind:              sdk.MonitorKindDns,
+		Labels:            map[string]string{"environment": "compose-dev", "fixture": "monitor-dns"},
+		Enabled:           true,
+		IntervalSeconds:   30,
+		TimeoutMillis:     2000,
+		FailureThreshold:  3,
+		RecoveryThreshold: 2,
+		Public:            false,
+		DisplayOrder:      12,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		Probe: mustDevelopmentProbe(func(probe *sdk.ProbeDefinition) error {
+			return probe.FromDNSProbeDefinition(sdk.DNSProbeDefinition{
+				ExpectedValues: []string{"192.0.2.10"}, Kind: sdk.DNSProbeDefinitionKindDns,
+				Name: "service.test", RecordType: sdk.A, Resolver: "monitor-dns:5353",
+			})
+		}),
+	}
+}
+
+func mustDevelopmentProbe(build func(*sdk.ProbeDefinition) error) sdk.ProbeDefinition {
+	var probe sdk.ProbeDefinition
+	if err := build(&probe); err != nil {
+		panic(fmt.Sprintf("build development monitor probe: %v", err))
+	}
+	return probe
 }
 
 func decodeSecret(value string) ([]byte, error) {

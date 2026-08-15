@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/buildinfo"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/web"
@@ -327,6 +329,55 @@ func TestLoadConfigAllowsExplicitInsecureCookieForLocalHTTP(t *testing.T) {
 	}
 	if cfg.cookieSecure || cfg.requestTimeout != 750*time.Millisecond || cfg.addr != "127.0.0.1:0" {
 		t.Fatalf("explicit config = addr %q secure %t timeout %v", cfg.addr, cfg.cookieSecure, cfg.requestTimeout)
+	}
+}
+
+func TestDevelopmentFakeSeedsComposeFixtureMonitors(t *testing.T) {
+	fake := developmentFake("admin@example.test", "password", "session")
+	if len(fake.Monitors) != 5 {
+		t.Fatalf("development monitor count = %d, want 5", len(fake.Monitors))
+	}
+
+	want := map[string]struct {
+		kind   string
+		detail string
+	}{
+		"Compose HTTP": {kind: "http", detail: "http://monitor-http:8080/healthz"},
+		"Compose TCP":  {kind: "tcp", detail: "monitor-tcp:9090"},
+		"Compose DNS":  {kind: "dns", detail: "monitor-dns:5353"},
+	}
+	for _, monitor := range fake.Monitors[2:] {
+		expectation, ok := want[monitor.Name]
+		if !ok {
+			t.Fatalf("unexpected compose monitor %q", monitor.Name)
+		}
+		if monitor.Public || !monitor.Enabled || monitor.Labels["environment"] != "compose-dev" {
+			t.Fatalf("compose monitor metadata = %#v", monitor)
+		}
+		if state := fake.Health[monitor.Id].State; state != sdk.Up {
+			t.Fatalf("%s health = %q, want %q", monitor.Name, state, sdk.Up)
+		}
+		kind, err := monitor.Probe.Discriminator()
+		if err != nil || kind != expectation.kind {
+			t.Fatalf("%s probe kind = %q, %v; want %q", monitor.Name, kind, err, expectation.kind)
+		}
+		switch monitor.Name {
+		case "Compose HTTP":
+			probe, err := monitor.Probe.AsHTTPProbeDefinition()
+			if err != nil || probe.Url != expectation.detail || len(probe.BodyContains) != 1 || probe.BodyContains[0] != "ok" {
+				t.Fatalf("HTTP fixture probe = %#v, %v", probe, err)
+			}
+		case "Compose TCP":
+			probe, err := monitor.Probe.AsTCPProbeDefinition()
+			if err != nil || probe.Host+":"+fmt.Sprint(probe.Port) != expectation.detail || string(probe.Send) != "PING" || string(probe.Expect) != "PONG" {
+				t.Fatalf("TCP fixture probe = %#v, %v", probe, err)
+			}
+		case "Compose DNS":
+			probe, err := monitor.Probe.AsDNSProbeDefinition()
+			if err != nil || probe.Resolver != expectation.detail || probe.Name != "service.test" || len(probe.ExpectedValues) != 1 || probe.ExpectedValues[0] != "192.0.2.10" {
+				t.Fatalf("DNS fixture probe = %#v, %v", probe, err)
+			}
+		}
 	}
 }
 
