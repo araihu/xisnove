@@ -93,7 +93,7 @@ func TestMonitorStateHistoryPreservesAuditableProvenance(t *testing.T) {
 			t.Errorf("MonitorStateTick does not require %s", field)
 		}
 	}
-	for _, field := range []string{"userActionId", "observationId", "causalTickId", "locationId"} {
+	for _, field := range []string{"userActionId", "observationId", "causalTickId", "causalDependencyId", "locationId"} {
 		if tick.Value.Properties[field] == nil {
 			t.Errorf("MonitorStateTick omits optional provenance field %s", field)
 		}

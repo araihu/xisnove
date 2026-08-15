@@ -80,7 +80,7 @@ func (s *Server) seedFixtures() {
 			"userActionId": "00000000-0000-4d00-8000-000000000003",
 			"actor":        map[string]any{"kind": "user", "id": "00000000-0000-4e00-8000-000000000003"},
 			"occurredAt":   "2026-07-25T11:40:00Z",
-			"causalTickId": "00000000-0000-4a00-8000-000000000002",
+			"causalDependencyId": dnsID,
 		},
 	}
 

@@ -1207,7 +1207,7 @@ type MonitorHealth struct {
 	State            HealthState        `json:"state"`
 }
 
-// MonitorLifecycle defines model for MonitorLifecycle.
+// MonitorLifecycle Lifecycle applied to the monitor when the state tick was recorded.
 type MonitorLifecycle string
 
 // MonitorPage defines model for MonitorPage.
@@ -1216,7 +1216,7 @@ type MonitorPage struct {
 	Page  PageMetadata `json:"page"`
 }
 
-// MonitorStateHistory defines model for MonitorStateHistory.
+// MonitorStateHistory Bounded immutable lifecycle and health state-tick history for one monitor.
 type MonitorStateHistory struct {
 	EndsAt      time.Time          `json:"endsAt"`
 	GeneratedAt time.Time          `json:"generatedAt"`
@@ -1226,20 +1226,27 @@ type MonitorStateHistory struct {
 	Truncated   bool               `json:"truncated"`
 }
 
-// MonitorStateTick defines model for MonitorStateTick.
+// MonitorStateTick One immutable monitor evaluation with auditable provenance.
 type MonitorStateTick struct {
-	ActionId      openapi_types.UUID  `json:"actionId"`
-	Actor         StateTickActor      `json:"actor"`
-	CausalTickId  *openapi_types.UUID `json:"causalTickId,omitempty"`
-	Health        HealthState         `json:"health"`
-	Id            openapi_types.UUID  `json:"id"`
+	ActionId openapi_types.UUID `json:"actionId"`
+
+	// Actor Actor that caused or recorded the state evaluation.
+	Actor              StateTickActor      `json:"actor"`
+	CausalDependencyId *openapi_types.UUID `json:"causalDependencyId,omitempty"`
+	CausalTickId       *openapi_types.UUID `json:"causalTickId,omitempty"`
+	Health             HealthState         `json:"health"`
+	Id                 openapi_types.UUID  `json:"id"`
+
+	// Lifecycle Lifecycle applied to the monitor when the state tick was recorded.
 	Lifecycle     MonitorLifecycle    `json:"lifecycle"`
 	LocationId    *openapi_types.UUID `json:"locationId,omitempty"`
 	MonitorId     openapi_types.UUID  `json:"monitorId"`
 	ObservationId *openapi_types.UUID `json:"observationId,omitempty"`
 	OccurredAt    time.Time           `json:"occurredAt"`
-	ReasonCode    StateTickReasonCode `json:"reasonCode"`
-	UserActionId  *openapi_types.UUID `json:"userActionId,omitempty"`
+
+	// ReasonCode Stable reason for the state or lifecycle evaluation.
+	ReasonCode   StateTickReasonCode `json:"reasonCode"`
+	UserActionId *openapi_types.UUID `json:"userActionId,omitempty"`
 }
 
 // NotificationAction defines model for NotificationAction.
@@ -1588,7 +1595,7 @@ type ShoutrrrChannelConfigurationInput struct {
 // ShoutrrrChannelConfigurationInputKind defines model for ShoutrrrChannelConfigurationInput.Kind.
 type ShoutrrrChannelConfigurationInputKind string
 
-// StateTickActor defines model for StateTickActor.
+// StateTickActor Actor that caused or recorded the state evaluation.
 type StateTickActor struct {
 	Id   *openapi_types.UUID `json:"id,omitempty"`
 	Kind StateTickActorKind  `json:"kind"`
@@ -1597,7 +1604,7 @@ type StateTickActor struct {
 // StateTickActorKind defines model for StateTickActor.Kind.
 type StateTickActorKind string
 
-// StateTickReasonCode defines model for StateTickReasonCode.
+// StateTickReasonCode Stable reason for the state or lifecycle evaluation.
 type StateTickReasonCode string
 
 // StatusRange defines model for StatusRange.
@@ -1894,7 +1901,7 @@ type GetMonitorAvailabilityHistoryParams struct {
 	// EndsAt Exclusive UTC end of the bounded history window. Defaults to the current control-plane time.
 	EndsAt *HistoryEndsAt `form:"endsAt,omitempty" json:"endsAt,omitempty"`
 
-	// Limit Maximum number of probe samples to return. Newest samples are retained when truncated.
+	// Limit Maximum number of history records to return. Newest records are retained when truncated.
 	Limit *HistoryLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
@@ -1906,7 +1913,7 @@ type GetMonitorStateHistoryParams struct {
 	// EndsAt Exclusive UTC end of the bounded history window. Defaults to the current control-plane time.
 	EndsAt *HistoryEndsAt `form:"endsAt,omitempty" json:"endsAt,omitempty"`
 
-	// Limit Maximum number of probe samples to return. Newest samples are retained when truncated.
+	// Limit Maximum number of history records to return. Newest records are retained when truncated.
 	Limit *HistoryLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 

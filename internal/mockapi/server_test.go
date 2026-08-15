@@ -142,21 +142,86 @@ func TestMonitorStateHistoryFixturePreservesProvenance(t *testing.T) {
 	)
 	assertStatus(t, response, http.StatusOK)
 	body := decodeObject(t, response)
+	if body["monitorId"] != "00000000-0000-4200-8000-000000000101" ||
+		body["startsAt"] != "2026-07-25T09:00:00Z" || body["endsAt"] != "2026-07-25T12:00:00Z" ||
+		body["generatedAt"] != "2026-07-25T12:00:00Z" || body["truncated"] != false {
+		t.Fatalf("state history envelope = %#v", body)
+	}
 	ticks, ok := body["ticks"].([]any)
 	if !ok || len(ticks) != 3 {
 		t.Fatalf("state history ticks = %#v", body["ticks"])
 	}
 	first := ticks[0].(map[string]any)
+	second := ticks[1].(map[string]any)
 	last := ticks[2].(map[string]any)
-	if first["health"] != "up" || first["reasonCode"] != "probe_success" {
+	if first["health"] != "up" || first["reasonCode"] != "probe_success" ||
+		first["actionId"] == nil || first["occurredAt"] != "2026-07-25T09:10:00Z" ||
+		second["occurredAt"] != "2026-07-25T10:20:00Z" || last["occurredAt"] != "2026-07-25T11:40:00Z" {
 		t.Fatalf("first state tick = %#v", first)
 	}
 	if last["health"] != "unknown" || last["reasonCode"] != "dependency_paused" {
 		t.Fatalf("last state tick = %#v", last)
 	}
 	actor := last["actor"].(map[string]any)
-	if actor["kind"] != "user" || last["userActionId"] == nil || last["causalTickId"] == nil {
+	if actor["kind"] != "user" || last["userActionId"] == nil ||
+		last["causalDependencyId"] != "00000000-0000-4200-8000-000000000102" {
 		t.Fatalf("last provenance = %#v", last)
+	}
+
+	limited := request(
+		t,
+		server.URL,
+		http.MethodGet,
+		"/v1/monitors/00000000-0000-4200-8000-000000000101/state-ticks?limit=1",
+		mockapi.FixtureReadOnlyAPIToken,
+		nil,
+		nil,
+	)
+	assertStatus(t, limited, http.StatusOK)
+	limitedBody := decodeObject(t, limited)
+	limitedTicks := limitedBody["ticks"].([]any)
+	if len(limitedTicks) != 1 || limitedTicks[0].(map[string]any)["id"] != last["id"] || limitedBody["truncated"] != true {
+		t.Fatalf("limited state history = %#v", limitedBody)
+	}
+
+	windowed := request(
+		t,
+		server.URL,
+		http.MethodGet,
+		"/v1/monitors/00000000-0000-4200-8000-000000000101/state-ticks?startsAt=2026-07-25T10:00:00Z&endsAt=2026-07-25T11:00:00Z",
+		mockapi.FixtureReadOnlyAPIToken,
+		nil,
+		nil,
+	)
+	assertStatus(t, windowed, http.StatusOK)
+	windowedBody := decodeObject(t, windowed)
+	windowedTicks := windowedBody["ticks"].([]any)
+	if len(windowedTicks) != 1 || windowedTicks[0].(map[string]any)["id"] != second["id"] ||
+		windowedBody["startsAt"] != "2026-07-25T10:00:00Z" || windowedBody["endsAt"] != "2026-07-25T11:00:00Z" {
+		t.Fatalf("windowed state history = %#v", windowedBody)
+	}
+
+	for _, test := range []struct {
+		name  string
+		query string
+	}{
+		{name: "reversed", query: "startsAt=2026-07-25T11:00:00Z&endsAt=2026-07-25T10:00:00Z"},
+		{name: "too wide", query: "startsAt=2026-07-25T08:00:00Z&endsAt=2026-07-25T12:00:00Z"},
+		{name: "future", query: "startsAt=2026-07-25T11:00:00Z&endsAt=2026-07-25T13:00:00Z"},
+		{name: "limit out of range", query: "limit=0"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			invalid := request(
+				t,
+				server.URL,
+				http.MethodGet,
+				"/v1/monitors/00000000-0000-4200-8000-000000000101/state-ticks?"+test.query,
+				mockapi.FixtureReadOnlyAPIToken,
+				nil,
+				nil,
+			)
+			assertProblem(t, invalid, http.StatusBadRequest, "validation_failed")
+		})
 	}
 
 	unauthorized := request(

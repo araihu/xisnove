@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 const (
@@ -92,9 +93,14 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 			"lastTransitionAt": fixtureTime, "locations": []any{},
 		})
 	case "GetMonitorAvailabilityHistory":
+		bounds, err := parseHistoryBounds(r)
+		if err != nil {
+			writeProblem(w, r, http.StatusBadRequest, "validation_failed", err.Error(), nil)
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"monitorId": "00000000-0000-4200-8000-000000000101",
-			"startsAt":  "2026-07-25T09:00:00Z", "endsAt": fixtureTime,
+			"startsAt":  bounds.startsAt.Format(time.RFC3339), "endsAt": bounds.endsAt.Format(time.RFC3339),
 			"generatedAt": fixtureTime, "samples": []any{}, "truncated": false,
 		})
 	case "GetMonitorStateHistory":
@@ -102,16 +108,29 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 			writeProblem(w, r, http.StatusNotFound, "monitor_not_found", "Monitor not found", nil)
 			return
 		}
+		bounds, err := parseHistoryBounds(r)
+		if err != nil {
+			writeProblem(w, r, http.StatusBadRequest, "validation_failed", err.Error(), nil)
+			return
+		}
 		s.mu.Lock()
-		ticks := make([]map[string]any, len(s.stateTicks["00000000-0000-4200-8000-000000000101"]))
-		for index, tick := range s.stateTicks["00000000-0000-4200-8000-000000000101"] {
-			ticks[index] = cloneMap(tick)
+		ticks := make([]map[string]any, 0, len(s.stateTicks["00000000-0000-4200-8000-000000000101"]))
+		for _, tick := range s.stateTicks["00000000-0000-4200-8000-000000000101"] {
+			occurredAt, parseErr := time.Parse(time.RFC3339, tick["occurredAt"].(string))
+			if parseErr != nil || occurredAt.Before(bounds.startsAt) || !occurredAt.Before(bounds.endsAt) {
+				continue
+			}
+			ticks = append(ticks, cloneMap(tick))
 		}
 		s.mu.Unlock()
+		truncated := len(ticks) > bounds.limit
+		if truncated {
+			ticks = ticks[len(ticks)-bounds.limit:]
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"monitorId": "00000000-0000-4200-8000-000000000101",
-			"startsAt":  "2026-07-25T09:00:00Z", "endsAt": fixtureTime,
-			"generatedAt": fixtureTime, "ticks": ticks, "truncated": false,
+			"startsAt":  bounds.startsAt.Format(time.RFC3339), "endsAt": bounds.endsAt.Format(time.RFC3339),
+			"generatedAt": fixtureTime, "ticks": ticks, "truncated": truncated,
 		})
 	case "GetActiveMonitorIncident":
 		s.mu.Lock()
@@ -169,6 +188,52 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 	default:
 		writeProblem(w, r, http.StatusNotFound, "not_found", "Resource not found", nil)
 	}
+}
+
+type historyBounds struct {
+	startsAt time.Time
+	endsAt   time.Time
+	limit    int
+}
+
+func parseHistoryBounds(r *http.Request) (historyBounds, error) {
+	endsAt, err := time.Parse(time.RFC3339, fixtureTime)
+	if err != nil {
+		return historyBounds{}, fmt.Errorf("mock fixture clock is invalid: %w", err)
+	}
+	if raw := r.URL.Query().Get("endsAt"); raw != "" {
+		endsAt, err = time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return historyBounds{}, fmt.Errorf("endsAt must be an RFC3339 timestamp")
+		}
+	}
+	endsAt = endsAt.UTC()
+	startsAt := endsAt.Add(-3 * time.Hour)
+	if raw := r.URL.Query().Get("startsAt"); raw != "" {
+		startsAt, err = time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return historyBounds{}, fmt.Errorf("startsAt must be an RFC3339 timestamp")
+		}
+	}
+	startsAt = startsAt.UTC()
+	fixtureClock, _ := time.Parse(time.RFC3339, fixtureTime)
+	if endsAt.After(fixtureClock) {
+		return historyBounds{}, fmt.Errorf("endsAt cannot be in the future")
+	}
+	if !startsAt.Before(endsAt) {
+		return historyBounds{}, fmt.Errorf("startsAt must be before endsAt")
+	}
+	if endsAt.Sub(startsAt) > 3*time.Hour {
+		return historyBounds{}, fmt.Errorf("history window cannot exceed three hours")
+	}
+	limit := 4096
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil || limit < 1 || limit > 10000 {
+			return historyBounds{}, fmt.Errorf("limit must be between 1 and 10000")
+		}
+	}
+	return historyBounds{startsAt: startsAt, endsAt: endsAt, limit: limit}, nil
 }
 
 func (s *Server) rotateAgentCredential(w http.ResponseWriter, r *http.Request) (int64, string, bool) {

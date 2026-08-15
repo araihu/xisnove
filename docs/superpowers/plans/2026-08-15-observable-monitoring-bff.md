@@ -31,7 +31,7 @@
 **Contract requirements:**
 
 1. Add `GET /v1/monitors/{monitorId}/state-ticks` (`getMonitorStateHistory`) with monitor-read authorization and the existing bounded UTC history parameters.
-2. Add `MonitorStateHistory`, `MonitorStateTick`, `StateTickActor`, `MonitorLifecycle`, and `StateTickReasonCode` schemas. A tick carries `id`, `monitorId`, optional `locationId`, `lifecycle`, `health`, `reasonCode`, `actionId`, actor kind/optional ID, `occurredAt`, and optional `userActionId`, `observationId`, and `causalTickId`.
+2. Add `MonitorStateHistory`, `MonitorStateTick`, `StateTickActor`, `MonitorLifecycle`, and `StateTickReasonCode` schemas. A tick carries `id`, `monitorId`, optional `locationId`, `lifecycle`, `health`, `reasonCode`, `actionId`, actor kind/optional ID, `occurredAt`, and optional `userActionId`, `observationId`, `causalTickId`, and `causalDependencyId`.
 3. Keep `MonitorAvailabilityHistory` probe samples intact; the two histories are intentionally distinct so an absence is not silently converted into a failure.
 4. Seed the strict mock with at least three chronologically ordered ticks spanning `up`, `degraded`, and `unknown`, including a user action and a causal dependency tick. The fixture must honor bearer scope checks and return an empty valid history for an unknown monitor only through the contract's normal not-found behavior.
 5. Add a mock integration test that requests the endpoint with the fixture token and verifies ordering, reason/action/actor provenance, bounded envelope fields, and unauthorized behavior.

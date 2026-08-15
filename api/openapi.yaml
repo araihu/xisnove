@@ -1311,7 +1311,7 @@ components:
     HistoryLimit:
       name: limit
       in: query
-      description: Maximum number of probe samples to return. Newest samples are retained when truncated.
+      description: Maximum number of history records to return. Newest records are retained when truncated.
       schema: {type: integer, format: int32, minimum: 1, maximum: 10000, default: 4096}
     Cursor:
       name: cursor
@@ -2052,6 +2052,7 @@ components:
         latencyMillis: {type: integer, format: int64, minimum: 0}
     MonitorStateHistory:
       type: object
+      description: Bounded immutable lifecycle and health state-tick history for one monitor.
       additionalProperties: false
       required: [monitorId, startsAt, endsAt, generatedAt, ticks, truncated]
       properties:
@@ -2065,6 +2066,7 @@ components:
         truncated: {type: boolean}
     MonitorStateTick:
       type: object
+      description: One immutable monitor evaluation with auditable provenance.
       additionalProperties: false
       required:
         - id
@@ -2088,8 +2090,10 @@ components:
         occurredAt: {type: string, format: date-time}
         observationId: {type: string, format: uuid}
         causalTickId: {type: string, format: uuid}
+        causalDependencyId: {type: string, format: uuid}
     StateTickActor:
       type: object
+      description: Actor that caused or recorded the state evaluation.
       additionalProperties: false
       required: [kind]
       properties:
@@ -2097,10 +2101,12 @@ components:
         id: {type: string, format: uuid}
     MonitorLifecycle:
       type: string
+      description: Lifecycle applied to the monitor when the state tick was recorded.
       enum: [active, paused, disabled]
       x-enum-varnames: [Active, Paused, Disabled]
     StateTickReasonCode:
       type: string
+      description: Stable reason for the state or lifecycle evaluation.
       enum:
         - initial
         - probe_success
