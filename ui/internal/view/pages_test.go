@@ -602,6 +602,7 @@ func TestMonitorDetailInstallsStateTickSSEConsumer(t *testing.T) {
 	for _, want := range []string{
 		`data-state-ticks-consumer="true"`, `addEventListener('state-ticks'`, `new EventSource(`,
 		`data-state-ticks-list`, `xisnove:state-ticks`, `State history updated`,
+		`const monitorID = owner?.dataset.monitorId`, `encodeURIComponent(monitorID) + '/availability/events'`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("state tick SSE consumer missing %q", want)

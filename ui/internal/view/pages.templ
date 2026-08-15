@@ -546,9 +546,11 @@ templ StateTicksConsumer() {
 	<script data-state-ticks-consumer="true" nonce={ templ.GetNonce(ctx) }>
 		(() => {
 			const owner = document.querySelector('[data-state-ticks-owner="true"]');
+			const monitorID = owner?.dataset.monitorId;
 			const figure = owner?.querySelector('[data-goshtoso-charts-live-url]');
-			if (!owner || !figure || !window.EventSource || owner.dataset.stateTicksConnected === 'true') return;
-			const source = new EventSource(figure.getAttribute('data-goshtoso-charts-live-url'));
+			const streamURL = figure?.getAttribute('data-goshtoso-charts-live-url') || (monitorID ? '/monitors/' + encodeURIComponent(monitorID) + '/availability/events' : '');
+			if (!owner || !window.EventSource || !monitorID || !streamURL || owner.dataset.stateTicksConnected === 'true') return;
+			const source = new EventSource(streamURL);
 			const list = owner.querySelector('[data-state-ticks-list]');
 			const gap = owner.querySelector('[data-state-history-gap]');
 			const status = owner.querySelector('[data-state-history-live-status]');
