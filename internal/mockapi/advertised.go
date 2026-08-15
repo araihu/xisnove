@@ -97,6 +97,22 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 			"startsAt":  "2026-07-25T09:00:00Z", "endsAt": fixtureTime,
 			"generatedAt": fixtureTime, "samples": []any{}, "truncated": false,
 		})
+	case "GetMonitorStateHistory":
+		if monitorID := r.PathValue("monitorId"); monitorID != "" && monitorID != "00000000-0000-4200-8000-000000000101" {
+			writeProblem(w, r, http.StatusNotFound, "monitor_not_found", "Monitor not found", nil)
+			return
+		}
+		s.mu.Lock()
+		ticks := make([]map[string]any, len(s.stateTicks["00000000-0000-4200-8000-000000000101"]))
+		for index, tick := range s.stateTicks["00000000-0000-4200-8000-000000000101"] {
+			ticks[index] = cloneMap(tick)
+		}
+		s.mu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"monitorId": "00000000-0000-4200-8000-000000000101",
+			"startsAt":  "2026-07-25T09:00:00Z", "endsAt": fixtureTime,
+			"generatedAt": fixtureTime, "ticks": ticks, "truncated": false,
+		})
 	case "GetActiveMonitorIncident":
 		s.mu.Lock()
 		incident := cloneMap(s.incidents[0])
@@ -234,7 +250,7 @@ func advertisedScope(operationID string) string {
 		return "locations:write"
 	case "ListLocations", "GetLocation":
 		return "locations:read"
-	case "SearchResources", "GetMonitorHealth", "GetMonitorAvailabilityHistory":
+	case "SearchResources", "GetMonitorHealth", "GetMonitorAvailabilityHistory", "GetMonitorStateHistory":
 		return "monitors:read"
 	case "GetActiveMonitorIncident":
 		return "incidents:read"

@@ -46,6 +46,7 @@ func TestHumanClientOperationIDsAreFrozen(t *testing.T) {
 		"listLocations":                   {http.MethodGet, "/v1/locations"},
 		"getLocation":                     {http.MethodGet, "/v1/locations/{locationId}"},
 		"listMonitors":                    {http.MethodGet, "/v1/monitors"},
+		"getMonitorStateHistory":          {http.MethodGet, "/v1/monitors/{monitorId}/state-ticks"},
 		"updateMonitor":                   {http.MethodPut, "/v1/monitors/{monitorId}"},
 		"disableMonitor":                  {http.MethodDelete, "/v1/monitors/{monitorId}"},
 		"listAgents":                      {http.MethodGet, "/v1/agents"},
@@ -69,6 +70,41 @@ func TestHumanClientOperationIDsAreFrozen(t *testing.T) {
 		if item == nil || operationForMethod(item, expected.method) != operation {
 			t.Errorf("%s is not %s %s", operationID, expected.method, expected.path)
 		}
+	}
+}
+
+func TestMonitorStateHistoryPreservesAuditableProvenance(t *testing.T) {
+	doc := loadContract(t)
+	history := doc.Components.Schemas["MonitorStateHistory"]
+	if history == nil || history.Value == nil {
+		t.Fatal("MonitorStateHistory is missing")
+	}
+	for _, field := range []string{"monitorId", "startsAt", "endsAt", "generatedAt", "ticks", "truncated"} {
+		if !slices.Contains(history.Value.Required, field) {
+			t.Errorf("MonitorStateHistory does not require %s", field)
+		}
+	}
+	tick := doc.Components.Schemas["MonitorStateTick"]
+	if tick == nil || tick.Value == nil {
+		t.Fatal("MonitorStateTick is missing")
+	}
+	for _, field := range []string{"id", "monitorId", "lifecycle", "health", "reasonCode", "actionId", "actor", "occurredAt"} {
+		if !slices.Contains(tick.Value.Required, field) {
+			t.Errorf("MonitorStateTick does not require %s", field)
+		}
+	}
+	for _, field := range []string{"userActionId", "observationId", "causalTickId", "locationId"} {
+		if tick.Value.Properties[field] == nil {
+			t.Errorf("MonitorStateTick omits optional provenance field %s", field)
+		}
+	}
+	actor := doc.Components.Schemas["StateTickActor"]
+	if actor == nil || actor.Value == nil || !slices.Contains(actor.Value.Required, "kind") {
+		t.Fatal("StateTickActor must require kind")
+	}
+	reasons := doc.Components.Schemas["StateTickReasonCode"]
+	if reasons == nil || reasons.Value == nil || len(reasons.Value.Enum) < 10 {
+		t.Fatalf("StateTickReasonCode is incomplete: %#v", reasons)
 	}
 }
 

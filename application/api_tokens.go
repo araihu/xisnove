@@ -201,6 +201,7 @@ var operationScopes = map[string]Scope{
 	"revokeAgentCredentialGeneration": ScopeAgentsWrite,
 	"getMonitorHealth":                ScopeMonitorsRead,
 	"getMonitorAvailabilityHistory":   ScopeMonitorsRead,
+	"getMonitorStateHistory":          ScopeMonitorsRead,
 	"getActiveMonitorIncident":        ScopeIncidentsRead, "listIncidents": ScopeIncidentsRead,
 	"getIncident": ScopeIncidentsRead, "listIncidentEvents": ScopeIncidentsRead,
 	"listDiscoveryCandidates": ScopeDiscoveryRead, "getDiscoveryCandidate": ScopeDiscoveryRead,

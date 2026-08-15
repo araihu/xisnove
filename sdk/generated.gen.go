@@ -382,6 +382,27 @@ func (e MonitorAvailabilitySampleOutcome) Valid() bool {
 	}
 }
 
+// Defines values for MonitorLifecycle.
+const (
+	Active   MonitorLifecycle = "active"
+	Disabled MonitorLifecycle = "disabled"
+	Paused   MonitorLifecycle = "paused"
+)
+
+// Valid indicates whether the value is a known member of the MonitorLifecycle enum.
+func (e MonitorLifecycle) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Disabled:
+		return true
+	case Paused:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotificationAction.
 const (
 	NotificationActionChange           NotificationAction = "change"
@@ -622,6 +643,78 @@ const (
 func (e ShoutrrrChannelConfigurationInputKind) Valid() bool {
 	switch e {
 	case ShoutrrrChannelConfigurationInputKindShoutrrr:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StateTickActorKind.
+const (
+	StateTickActorKindAgent  StateTickActorKind = "agent"
+	StateTickActorKindSystem StateTickActorKind = "system"
+	StateTickActorKindUser   StateTickActorKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the StateTickActorKind enum.
+func (e StateTickActorKind) Valid() bool {
+	switch e {
+	case StateTickActorKindAgent:
+		return true
+	case StateTickActorKindSystem:
+		return true
+	case StateTickActorKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StateTickReasonCode.
+const (
+	StateTickReasonCodeAgentDisconnected StateTickReasonCode = "agent_disconnected"
+	StateTickReasonCodeDependencyPaused  StateTickReasonCode = "dependency_paused"
+	StateTickReasonCodeDependencyUnknown StateTickReasonCode = "dependency_unknown"
+	StateTickReasonCodeInitial           StateTickReasonCode = "initial"
+	StateTickReasonCodeLocationPaused    StateTickReasonCode = "location_paused"
+	StateTickReasonCodeMaintenance       StateTickReasonCode = "maintenance"
+	StateTickReasonCodeMonitorPaused     StateTickReasonCode = "monitor_paused"
+	StateTickReasonCodePausedByUser      StateTickReasonCode = "paused_by_user"
+	StateTickReasonCodeProbeFailure      StateTickReasonCode = "probe_failure"
+	StateTickReasonCodeProbeSuccess      StateTickReasonCode = "probe_success"
+	StateTickReasonCodeProbeTimeout      StateTickReasonCode = "probe_timeout"
+	StateTickReasonCodeResumedByUser     StateTickReasonCode = "resumed_by_user"
+	StateTickReasonCodeStaleObservation  StateTickReasonCode = "stale_observation"
+)
+
+// Valid indicates whether the value is a known member of the StateTickReasonCode enum.
+func (e StateTickReasonCode) Valid() bool {
+	switch e {
+	case StateTickReasonCodeAgentDisconnected:
+		return true
+	case StateTickReasonCodeDependencyPaused:
+		return true
+	case StateTickReasonCodeDependencyUnknown:
+		return true
+	case StateTickReasonCodeInitial:
+		return true
+	case StateTickReasonCodeLocationPaused:
+		return true
+	case StateTickReasonCodeMaintenance:
+		return true
+	case StateTickReasonCodeMonitorPaused:
+		return true
+	case StateTickReasonCodePausedByUser:
+		return true
+	case StateTickReasonCodeProbeFailure:
+		return true
+	case StateTickReasonCodeProbeSuccess:
+		return true
+	case StateTickReasonCodeProbeTimeout:
+		return true
+	case StateTickReasonCodeResumedByUser:
+		return true
+	case StateTickReasonCodeStaleObservation:
 		return true
 	default:
 		return false
@@ -1114,10 +1207,39 @@ type MonitorHealth struct {
 	State            HealthState        `json:"state"`
 }
 
+// MonitorLifecycle defines model for MonitorLifecycle.
+type MonitorLifecycle string
+
 // MonitorPage defines model for MonitorPage.
 type MonitorPage struct {
 	Items []Monitor    `json:"items"`
 	Page  PageMetadata `json:"page"`
+}
+
+// MonitorStateHistory defines model for MonitorStateHistory.
+type MonitorStateHistory struct {
+	EndsAt      time.Time          `json:"endsAt"`
+	GeneratedAt time.Time          `json:"generatedAt"`
+	MonitorId   openapi_types.UUID `json:"monitorId"`
+	StartsAt    time.Time          `json:"startsAt"`
+	Ticks       []MonitorStateTick `json:"ticks"`
+	Truncated   bool               `json:"truncated"`
+}
+
+// MonitorStateTick defines model for MonitorStateTick.
+type MonitorStateTick struct {
+	ActionId      openapi_types.UUID  `json:"actionId"`
+	Actor         StateTickActor      `json:"actor"`
+	CausalTickId  *openapi_types.UUID `json:"causalTickId,omitempty"`
+	Health        HealthState         `json:"health"`
+	Id            openapi_types.UUID  `json:"id"`
+	Lifecycle     MonitorLifecycle    `json:"lifecycle"`
+	LocationId    *openapi_types.UUID `json:"locationId,omitempty"`
+	MonitorId     openapi_types.UUID  `json:"monitorId"`
+	ObservationId *openapi_types.UUID `json:"observationId,omitempty"`
+	OccurredAt    time.Time           `json:"occurredAt"`
+	ReasonCode    StateTickReasonCode `json:"reasonCode"`
+	UserActionId  *openapi_types.UUID `json:"userActionId,omitempty"`
 }
 
 // NotificationAction defines model for NotificationAction.
@@ -1466,6 +1588,18 @@ type ShoutrrrChannelConfigurationInput struct {
 // ShoutrrrChannelConfigurationInputKind defines model for ShoutrrrChannelConfigurationInput.Kind.
 type ShoutrrrChannelConfigurationInputKind string
 
+// StateTickActor defines model for StateTickActor.
+type StateTickActor struct {
+	Id   *openapi_types.UUID `json:"id,omitempty"`
+	Kind StateTickActorKind  `json:"kind"`
+}
+
+// StateTickActorKind defines model for StateTickActor.Kind.
+type StateTickActorKind string
+
+// StateTickReasonCode defines model for StateTickReasonCode.
+type StateTickReasonCode string
+
 // StatusRange defines model for StatusRange.
 type StatusRange struct {
 	Maximum int32 `json:"maximum"`
@@ -1754,6 +1888,18 @@ type UpdateMonitorParams struct {
 
 // GetMonitorAvailabilityHistoryParams defines parameters for GetMonitorAvailabilityHistory.
 type GetMonitorAvailabilityHistoryParams struct {
+	// StartsAt Inclusive UTC start of the bounded history window. Defaults to three hours before endsAt.
+	StartsAt *HistoryStartsAt `form:"startsAt,omitempty" json:"startsAt,omitempty"`
+
+	// EndsAt Exclusive UTC end of the bounded history window. Defaults to the current control-plane time.
+	EndsAt *HistoryEndsAt `form:"endsAt,omitempty" json:"endsAt,omitempty"`
+
+	// Limit Maximum number of probe samples to return. Newest samples are retained when truncated.
+	Limit *HistoryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetMonitorStateHistoryParams defines parameters for GetMonitorStateHistory.
+type GetMonitorStateHistoryParams struct {
 	// StartsAt Inclusive UTC start of the bounded history window. Defaults to three hours before endsAt.
 	StartsAt *HistoryStartsAt `form:"startsAt,omitempty" json:"startsAt,omitempty"`
 
@@ -2530,6 +2676,11 @@ type ClientInterface interface {
 
 	// GetMonitorHealth performs a GET /v1/monitors/{monitorId}/health (the `GetMonitorHealth` operationId) request.
 	GetMonitorHealth(ctx context.Context, monitorId MonitorID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMonitorStateHistory performs a GET /v1/monitors/{monitorId}/state-ticks (the `GetMonitorStateHistory` operationId) request.
+	//
+	// Returns immutable lifecycle and health evaluations for the monitor in the bounded UTC window. State ticks preserve reason, action, actor, occurrence time, and causal links; they are distinct from raw probe availability samples.
+	GetMonitorStateHistory(ctx context.Context, monitorId MonitorID, params *GetMonitorStateHistoryParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListNotificationChannels List redacted notification channels
 	//
@@ -3566,6 +3717,21 @@ func (c *Client) GetMonitorAvailabilityHistory(ctx context.Context, monitorId Mo
 // GetMonitorHealth performs a GET /v1/monitors/{monitorId}/health (the `GetMonitorHealth` operationId) request.
 func (c *Client) GetMonitorHealth(ctx context.Context, monitorId MonitorID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMonitorHealthRequest(c.Server, monitorId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMonitorStateHistory performs a GET /v1/monitors/{monitorId}/state-ticks (the `GetMonitorStateHistory` operationId) request.
+//
+// Returns immutable lifecycle and health evaluations for the monitor in the bounded UTC window. State ticks preserve reason, action, actor, occurrence time, and causal links; they are distinct from raw probe availability samples.
+func (c *Client) GetMonitorStateHistory(ctx context.Context, monitorId MonitorID, params *GetMonitorStateHistoryParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMonitorStateHistoryRequest(c.Server, monitorId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6256,6 +6422,91 @@ func NewGetMonitorHealthRequest(server string, monitorId MonitorID) (*http.Reque
 	return req, nil
 }
 
+// NewGetMonitorStateHistoryRequest constructs an http.Request for the GetMonitorStateHistory method
+func NewGetMonitorStateHistoryRequest(server string, monitorId MonitorID, params *GetMonitorStateHistoryParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "monitorId", monitorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/monitors/%s/state-ticks", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.StartsAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "startsAt", *params.StartsAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EndsAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "endsAt", *params.EndsAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListNotificationChannelsRequest constructs an http.Request for the ListNotificationChannels method
 func NewListNotificationChannelsRequest(server string, params *ListNotificationChannelsParams) (*http.Request, error) {
 	var err error
@@ -7860,6 +8111,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetMonitorHealthWithResponse(ctx context.Context, monitorId MonitorID, reqEditors ...RequestEditorFn) (*GetMonitorHealthResponse, error)
+
+	// GetMonitorStateHistoryWithResponse performs a GET /v1/monitors/{monitorId}/state-ticks (the `GetMonitorStateHistory` operationId) request.
+	//
+	// Returns immutable lifecycle and health evaluations for the monitor in the bounded UTC window. State ticks preserve reason, action, actor, occurrence time, and causal links; they are distinct from raw probe availability samples.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetMonitorStateHistoryWithResponse(ctx context.Context, monitorId MonitorID, params *GetMonitorStateHistoryParams, reqEditors ...RequestEditorFn) (*GetMonitorStateHistoryResponse, error)
 
 	// ListNotificationChannelsWithResponse List redacted notification channels
 	//
@@ -10045,6 +10303,54 @@ func (r GetMonitorHealthResponse) ContentType() string {
 	return ""
 }
 
+type GetMonitorStateHistoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MonitorStateHistory
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMonitorStateHistoryResponse) GetJSON200() *MonitorStateHistory {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetMonitorStateHistoryResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMonitorStateHistoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMonitorStateHistoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMonitorStateHistoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMonitorStateHistoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListNotificationChannelsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11858,6 +12164,19 @@ func (c *ClientWithResponses) GetMonitorHealthWithResponse(ctx context.Context, 
 	return ParseGetMonitorHealthResponse(rsp)
 }
 
+// GetMonitorStateHistoryWithResponse performs a GET /v1/monitors/{monitorId}/state-ticks (the `GetMonitorStateHistory` operationId) request.
+//
+// Returns immutable lifecycle and health evaluations for the monitor in the bounded UTC window. State ticks preserve reason, action, actor, occurrence time, and causal links; they are distinct from raw probe availability samples.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetMonitorStateHistoryWithResponse(ctx context.Context, monitorId MonitorID, params *GetMonitorStateHistoryParams, reqEditors ...RequestEditorFn) (*GetMonitorStateHistoryResponse, error) {
+	rsp, err := c.GetMonitorStateHistory(ctx, monitorId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMonitorStateHistoryResponse(rsp)
+}
+
 // ListNotificationChannelsWithResponse List redacted notification channels
 //
 // Returns a wrapper object for the known response body format(s).
@@ -13652,6 +13971,39 @@ func ParseGetMonitorHealthResponse(rsp *http.Response) (*GetMonitorHealthRespons
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest MonitorHealth
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMonitorStateHistoryResponse parses an HTTP response from a GetMonitorStateHistoryWithResponse call
+func ParseGetMonitorStateHistoryResponse(rsp *http.Response) (*GetMonitorStateHistoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMonitorStateHistoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MonitorStateHistory
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

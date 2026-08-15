@@ -58,6 +58,31 @@ func (s *Server) seedFixtures() {
 			},
 		),
 	}
+	s.stateTicks[routerID] = []map[string]any{
+		{
+			"id": "00000000-0000-4a00-8000-000000000001", "monitorId": routerID,
+			"locationId": fixtureLocationID, "lifecycle": "active", "health": "up",
+			"reasonCode": "probe_success", "actionId": "00000000-0000-4b00-8000-000000000001",
+			"actor": map[string]any{"kind": "system"}, "occurredAt": "2026-07-25T09:10:00Z",
+			"observationId": "00000000-0000-4c00-8000-000000000001",
+		},
+		{
+			"id": "00000000-0000-4a00-8000-000000000002", "monitorId": routerID,
+			"locationId": fixtureLocationID, "lifecycle": "active", "health": "degraded",
+			"reasonCode": "probe_failure", "actionId": "00000000-0000-4b00-8000-000000000002",
+			"actor": map[string]any{"kind": "system"}, "occurredAt": "2026-07-25T10:20:00Z",
+			"observationId": "00000000-0000-4c00-8000-000000000002",
+		},
+		{
+			"id": "00000000-0000-4a00-8000-000000000003", "monitorId": routerID,
+			"lifecycle": "active", "health": "unknown", "reasonCode": "dependency_paused",
+			"actionId":     "00000000-0000-4b00-8000-000000000003",
+			"userActionId": "00000000-0000-4d00-8000-000000000003",
+			"actor":        map[string]any{"kind": "user", "id": "00000000-0000-4e00-8000-000000000003"},
+			"occurredAt":   "2026-07-25T11:40:00Z",
+			"causalTickId": "00000000-0000-4a00-8000-000000000002",
+		},
+	}
 
 	incidentID := "00000000-0000-4300-8000-000000000201"
 	s.incidents = []map[string]any{{

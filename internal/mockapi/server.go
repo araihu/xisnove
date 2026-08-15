@@ -35,6 +35,7 @@ type Server struct {
 	tokensByID                   map[string]*apiTokenRecord
 	tokensByValue                map[string]*apiTokenRecord
 	monitors                     []map[string]any
+	stateTicks                   map[string][]map[string]any
 	incidents                    []map[string]any
 	events                       map[string][]map[string]any
 	candidates                   []map[string]any
@@ -102,6 +103,7 @@ func NewServer() *Server {
 		tokensByID:                   map[string]*apiTokenRecord{},
 		tokensByValue:                map[string]*apiTokenRecord{},
 		events:                       map[string][]map[string]any{},
+		stateTicks:                   map[string][]map[string]any{},
 		idempotency:                  map[string]storedResponse{},
 		idempotencyLocks:             map[string]*sync.Mutex{},
 		agentCredentialsByToken:      map[string]*mockAgentCredential{},

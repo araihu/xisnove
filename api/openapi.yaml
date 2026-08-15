@@ -578,6 +578,30 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/MonitorAvailabilityHistory'}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/monitors/{monitorId}/state-ticks:
+    parameters:
+      - {$ref: '#/components/parameters/MonitorID'}
+    get:
+      operationId: getMonitorStateHistory
+      tags: [management]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [monitors:read]
+      description: >-
+        Returns immutable lifecycle and health evaluations for the monitor in
+        the bounded UTC window. State ticks preserve reason, action, actor,
+        occurrence time, and causal links; they are distinct from raw probe
+        availability samples.
+      parameters:
+        - {$ref: '#/components/parameters/HistoryStartsAt'}
+        - {$ref: '#/components/parameters/HistoryEndsAt'}
+        - {$ref: '#/components/parameters/HistoryLimit'}
+      responses:
+        '200':
+          description: Bounded monitor state-tick history
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MonitorStateHistory'}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/monitors/{monitorId}/active-incident:
     parameters:
       - {$ref: '#/components/parameters/MonitorID'}
@@ -2026,6 +2050,85 @@ components:
         observedAt: {type: string, format: date-time}
         outcome: {type: string, enum: [passed, failed]}
         latencyMillis: {type: integer, format: int64, minimum: 0}
+    MonitorStateHistory:
+      type: object
+      additionalProperties: false
+      required: [monitorId, startsAt, endsAt, generatedAt, ticks, truncated]
+      properties:
+        monitorId: {type: string, format: uuid}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        generatedAt: {type: string, format: date-time}
+        ticks:
+          type: array
+          items: {$ref: '#/components/schemas/MonitorStateTick'}
+        truncated: {type: boolean}
+    MonitorStateTick:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - monitorId
+        - lifecycle
+        - health
+        - reasonCode
+        - actionId
+        - actor
+        - occurredAt
+      properties:
+        id: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        locationId: {type: string, format: uuid}
+        lifecycle: {$ref: '#/components/schemas/MonitorLifecycle'}
+        health: {$ref: '#/components/schemas/HealthState'}
+        reasonCode: {$ref: '#/components/schemas/StateTickReasonCode'}
+        actionId: {type: string, format: uuid}
+        userActionId: {type: string, format: uuid}
+        actor: {$ref: '#/components/schemas/StateTickActor'}
+        occurredAt: {type: string, format: date-time}
+        observationId: {type: string, format: uuid}
+        causalTickId: {type: string, format: uuid}
+    StateTickActor:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: {type: string, enum: [user, system, agent]}
+        id: {type: string, format: uuid}
+    MonitorLifecycle:
+      type: string
+      enum: [active, paused, disabled]
+      x-enum-varnames: [Active, Paused, Disabled]
+    StateTickReasonCode:
+      type: string
+      enum:
+        - initial
+        - probe_success
+        - probe_failure
+        - probe_timeout
+        - stale_observation
+        - agent_disconnected
+        - dependency_unknown
+        - dependency_paused
+        - monitor_paused
+        - location_paused
+        - paused_by_user
+        - resumed_by_user
+        - maintenance
+      x-enum-varnames:
+        - Initial
+        - ProbeSuccess
+        - ProbeFailure
+        - ProbeTimeout
+        - StaleObservation
+        - AgentDisconnected
+        - DependencyUnknown
+        - DependencyPaused
+        - MonitorPaused
+        - LocationPaused
+        - PausedByUser
+        - ResumedByUser
+        - Maintenance
     LocationHealth:
       type: object
       additionalProperties: false

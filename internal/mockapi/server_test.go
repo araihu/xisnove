@@ -127,6 +127,61 @@ func TestMonitorsAreCursorPagedAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestMonitorStateHistoryFixturePreservesProvenance(t *testing.T) {
+	server := httptest.NewServer(mockapi.NewServer().Handler())
+	defer server.Close()
+
+	response := request(
+		t,
+		server.URL,
+		http.MethodGet,
+		"/v1/monitors/00000000-0000-4200-8000-000000000101/state-ticks",
+		mockapi.FixtureReadOnlyAPIToken,
+		nil,
+		nil,
+	)
+	assertStatus(t, response, http.StatusOK)
+	body := decodeObject(t, response)
+	ticks, ok := body["ticks"].([]any)
+	if !ok || len(ticks) != 3 {
+		t.Fatalf("state history ticks = %#v", body["ticks"])
+	}
+	first := ticks[0].(map[string]any)
+	last := ticks[2].(map[string]any)
+	if first["health"] != "up" || first["reasonCode"] != "probe_success" {
+		t.Fatalf("first state tick = %#v", first)
+	}
+	if last["health"] != "unknown" || last["reasonCode"] != "dependency_paused" {
+		t.Fatalf("last state tick = %#v", last)
+	}
+	actor := last["actor"].(map[string]any)
+	if actor["kind"] != "user" || last["userActionId"] == nil || last["causalTickId"] == nil {
+		t.Fatalf("last provenance = %#v", last)
+	}
+
+	unauthorized := request(
+		t,
+		server.URL,
+		http.MethodGet,
+		"/v1/monitors/00000000-0000-4200-8000-000000000101/state-ticks",
+		"",
+		nil,
+		nil,
+	)
+	assertProblem(t, unauthorized, http.StatusUnauthorized, "unauthorized")
+
+	missing := request(
+		t,
+		server.URL,
+		http.MethodGet,
+		"/v1/monitors/00000000-0000-4200-8000-000000000199/state-ticks",
+		mockapi.FixtureReadOnlyAPIToken,
+		nil,
+		nil,
+	)
+	assertProblem(t, missing, http.StatusNotFound, "monitor_not_found")
+}
+
 func TestIncidentsDiscoveryNotificationsAndPublicStatusFixtures(t *testing.T) {
 	server := httptest.NewServer(mockapi.NewServer().Handler())
 	defer server.Close()
