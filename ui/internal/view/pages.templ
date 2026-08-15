@@ -132,20 +132,19 @@ templ AppStyles() {
 		.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
 		.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
 		.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
-		.xis-detail-identity { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 		.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }
 		.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
 		.xis-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }
 		.xis-detail-facts dt { color: var(--color-on-surface-muted); }
 		.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }
 		.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
+		.xis-detail-section-heading { margin: 0; font-weight: 700; }
 		.xis-availability { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }
 		.dark .xis-availability { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }
 		.xis-availability-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 		.xis-availability-heading h3 { margin: 0; }
 		.xis-availability-heading p { margin: .25rem 0 0; }
 		.xis-availability-chart { margin: .25rem 0 0; width: 100%; }
-		.xis-availability-chart figcaption { margin-top: .25rem; }
 		.xis-password { width: 100%; }
 		.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
@@ -414,27 +413,22 @@ templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Moni
 	<div
 		class="xis-monitor-drawer"
 		data-monitor-id={ monitor.Id.String() }
+		data-monitor-drawer-close-url={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) }
 		x-data="{}"
-		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer') { $event.preventDefault(); document.getElementById('monitor-detail-close')?.click() }"
+		x-init="const close = $el.querySelector('aside[aria-labelledby=monitor-detail-drawerTitle] header button[aria-label=Close]'); if (close) { close.dataset.monitorDrawerClose = 'true'; close.dataset.monitorId = $el.dataset.monitorId }"
+		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer' && !$event.defaultPrevented) { const closeURL = $el.dataset.monitorDrawerCloseUrl; if (closeURL && window.htmx) { window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', pushURL: true}) } }"
 	>
-		@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: "Monitor detail", Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
+		@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: monitorDetailTitle(monitor, health), Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
 			@MonitorDetail(data, monitor, health)
 		}
 	</div>
 }
 
 templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
-	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-heading" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(health.State) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) }>
+	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-drawerTitle" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(health.State) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) }>
 		<div class="xis-detail-main">
-			<div class="xis-detail-identity">
-				<div>
-					<p class="xis-meta">Selected monitor</p>
-					<h3 id="monitor-detail-heading" tabindex="-1" data-autofocus>{ monitor.Name }</h3>
-				</div>
-				@healthBadge(health.State)
-			</div>
-			<section class="xis-detail-section" aria-labelledby="monitor-health-heading">
-				<h3 id="monitor-health-heading">Current health</h3>
+			<section class="xis-detail-section" aria-labelledby="monitor-detail-heading">
+				<h3 id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus>Current health</h3>
 				<p>{ monitor.Description }</p>
 				<dl class="xis-detail-facts">
 					<dt>State</dt><dd>{ strings.ToUpper(string(health.State)) }</dd>
@@ -456,9 +450,8 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 				<div class="xis-availability-heading">
 					<div>
 						<h3 id="monitor-availability-heading">Live availability</h3>
-						<p class="xis-meta">Probe state stream, last 24 samples.</p>
+						<p class="xis-meta">Last 3 hours.</p>
 					</div>
-					@healthBadge(health.State)
 				</div>
 				@monitorAvailabilityChart(monitor, health)
 			</section>
@@ -471,7 +464,6 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 				<dt>Required</dt><dd>{ enabledLabel(monitor.RequiredLocation) }</dd>
 				<dt>Updated</dt><dd>{ formattedTime(monitor.UpdatedAt) }</dd>
 			</dl>
-			<a id="monitor-detail-close" class="xis-native-link" data-monitor-drawer-close data-monitor-id={ monitor.Id.String() } href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Close detail</a>
 		</aside>
 	</section>
 }
@@ -590,6 +582,14 @@ func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {
 		return monitor, health, true
 	}
 	return sdk.Monitor{}, sdk.MonitorHealth{}, false
+}
+
+func monitorDetailTitle(monitor sdk.Monitor, health sdk.MonitorHealth) string {
+	state := health.State
+	if state == "" {
+		state = sdk.Unknown
+	}
+	return fmt.Sprintf("%s · %s", monitor.Name, strings.ToUpper(string(state)))
 }
 
 func enabledLabel(enabled bool) string { if enabled { return "Yes" }; return "No" }

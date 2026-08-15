@@ -995,7 +995,7 @@ func assertDrawerCloseAndRestore(t *testing.T, ctx context.Context, id string) {
 		Selected           string
 	}
 	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`window.__xisCancelDrawerClose=event=>{if(event.detail?.elt?.id==='monitor-detail-close'){event.preventDefault();document.removeEventListener('htmx:beforeRequest',window.__xisCancelDrawerClose)}};document.addEventListener('htmx:beforeRequest',window.__xisCancelDrawerClose)`, nil),
+		chromedp.Evaluate(`window.__xisCancelDrawerClose=event=>{if(event.detail?.id==='monitor-detail-drawer'){event.preventDefault();window.removeEventListener('drawer:close-request',window.__xisCancelDrawerClose,true)}};window.addEventListener('drawer:close-request',window.__xisCancelDrawerClose,true)`, nil),
 		chromedp.KeyEvent("\u001b"),
 		chromedp.Sleep(300*time.Millisecond),
 		chromedp.Evaluate(`(()=>{const owner=document.querySelector('.xis-monitor-drawer'),root=owner?.firstElementChild,panel=owner?.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');return {open:root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen===true,panelVisible:!!panel&&panel.getClientRects().length>0,selected:new URL(location.href).searchParams.get('selected')||''}})()`, &retained),
@@ -1045,11 +1045,9 @@ func assertDrawerCloseAndRestore(t *testing.T, ctx context.Context, id string) {
 	}
 	assertSelectedMonitorIdentity(t, ctx, id)
 	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`(()=>{const body=document.body;window.__xisMonitorCloseSettled=false;window.__xisMonitorCloseXHR=null;const before=event=>{if(event.detail?.elt?.id==='monitor-detail-close'){window.__xisMonitorCloseXHR=event.detail.xhr;body.removeEventListener('htmx:beforeRequest',before)}};const after=event=>{if(window.__xisMonitorCloseXHR&&event.detail?.xhr===window.__xisMonitorCloseXHR){window.__xisMonitorCloseSettled=true;body.removeEventListener('htmx:afterSettle',after)}};body.addEventListener('htmx:beforeRequest',before);body.addEventListener('htmx:afterSettle',after)})()`, nil),
-		chromedp.Click("#monitor-detail-close"),
+		chromedp.Click(`aside[aria-labelledby="monitor-detail-drawerTitle"] header button[aria-label="Close"]`),
 		chromedp.Poll(`new URL(location.href).searchParams.has('selected') === false`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 		chromedp.Poll(`document.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]') === null`, nil, chromedp.WithPollingTimeout(5*time.Second)),
-		chromedp.Poll(`window.__xisMonitorCloseSettled === true`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 	); err != nil {
 		t.Fatalf("close reopened monitor drawer: %v", err)
 	}

@@ -15,33 +15,43 @@ import (
 	"github.com/araihu/xisnove/ui/internal/availability"
 )
 
-func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
-	observedAt := time.Now().UTC()
-	values := availability.StateSeries(health.State)
+const (
+	// availabilityLookback is the visible dashboard window. The SSE endpoint
+	// replaces this seed with its complete renderer-neutral history snapshot.
+	availabilityLookback = 3 * time.Hour
+	availabilitySeedStep = 5 * time.Minute
+)
 
-	series := make([]interactive.BarSeries, 0, len(availability.SeriesNames()))
-	for index, name := range availability.SeriesNames() {
+func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
+	snapshot := availabilitySeedSnapshot(health.State, time.Now().UTC())
+
+	series := make([]interactive.BarSeries, 0, len(snapshot.Series))
+	for _, snapshotSeries := range snapshot.Series {
+		data := make([]interactive.BarData, len(snapshot.Categories))
+		for index, value := range snapshotSeries.Values {
+			data[index] = interactive.BarData{Value: value}
+		}
 		series = append(series, interactive.BarSeries{
-			Name: name,
-			Data: []interactive.BarData{{Value: values[index]}},
+			Name: snapshotSeries.Name,
+			Data: data,
 			Options: interactive.SeriesOptions{
 				Stack:    "availability",
-				BarWidth: "70%",
+				BarWidth: "4px",
+				BarGap:   "-100%",
 			},
 		})
 	}
 
 	chart := interactive.Bar(interactive.BarConfig{
-		Label:   "Live availability for " + monitor.Name,
-		Caption: "Each bar is one probe sample. Unknown means no confirmed observation.",
-		XAxis:   []string{observedAt.Format("15:04:05")},
-		Series:  series,
-		Width:   "100%",
-		Height:  "144px",
+		Label:  "Live availability for " + monitor.Name,
+		XAxis:  snapshot.Categories,
+		Series: series,
+		Width:  "100%",
+		Height: "168px",
 		Options: interactive.ChartOptions{
 			Legend:    &interactive.LegendOptions{Show: interactive.Bool(true), Orient: "horizontal", Bottom: "0"},
 			Tooltip:   &interactive.TooltipOptions{Show: interactive.Bool(true), Trigger: "axis"},
-			XAxis:     &interactive.AxisOptions{Show: interactive.Bool(false)},
+			XAxis:     &interactive.AxisOptions{Show: interactive.Bool(false), ShowFirstLabel: interactive.Bool(false), ShowLastLabel: interactive.Bool(false)},
 			YAxis:     &interactive.AxisOptions{Show: interactive.Bool(false), Min: interactive.Float(0), Max: interactive.Float(1)},
 			Animation: interactive.Bool(false),
 			Controls:  chartcontrol.Options{Expand: interactive.Bool(false)},
@@ -54,6 +64,31 @@ func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) tem
 		},
 	})
 	return nonceChart(chart)
+}
+
+// availabilitySeedSnapshot adapts the current health-only UI input to the
+// renderer-neutral CartesianSnapshot consumed by Goshtoso Charts. The latest
+// observation is placed at the right edge; the live SSE stream then replaces
+// this seed with historical samples without changing the chart component.
+func availabilitySeedSnapshot(state sdk.HealthState, now time.Time) interactive.CartesianSnapshot {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	now = now.UTC().Truncate(time.Second)
+	sampleCount := int(availabilityLookback/availabilitySeedStep) + 1
+	categories := make([]string, sampleCount)
+	series := make([]interactive.CartesianSnapshotSeries, len(availability.SeriesNames()))
+	for index, name := range availability.SeriesNames() {
+		series[index] = interactive.CartesianSnapshotSeries{Name: name, Values: make([]float64, sampleCount)}
+	}
+	for index := range categories {
+		categories[index] = now.Add(-availabilityLookback + time.Duration(index)*availabilitySeedStep).Format("15:04:05")
+	}
+	values := availability.StateSeries(state)
+	for index, value := range values {
+		series[index].Values[sampleCount-1] = value
+	}
+	return interactive.CartesianSnapshot{Categories: categories, Series: series}
 }
 
 // nonceChart keeps chart-generated inline runtimes compatible with the UI CSP.

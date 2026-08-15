@@ -230,17 +230,15 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	for _, want := range []string{
 		`id="monitor-detail-drawer-body"`, `role="dialog"`, `aria-labelledby="monitor-detail-drawerTitle"`,
 		`x-trap.noscroll="monitorDetailDrawerIsOpen"`, `xis-monitor-drawer-panel`,
-		`$event.preventDefault()`,
-		`id="monitor-detail"`, `aria-labelledby="monitor-detail-heading"`,
+		`data-monitor-drawer-close-url="/monitors?cursor=opaque%2Fpage&amp;q=dns"`,
+		`id="monitor-detail"`, `aria-labelledby="monitor-detail-drawerTitle"`,
 		`data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors?cursor=opaque%2Fpage&amp;q=dns&amp;selected=` + monitorID.String() + `"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `aria-selected="true"`,
-		`id="monitor-detail-heading" tabindex="-1" data-autofocus`, `id="monitor-detail-close"`, "Home DNS", "DEGRADED",
+		`id="monitor-detail-drawerTitle"`, `Home DNS · DEGRADED`, `id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus`, "Home DNS", "DEGRADED",
 		"Current health", "Configuration", "Live availability",
 		`data-goshtoso-charts-live-event="chart"`,
 		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events"`,
-		"Each bar is one probe sample",
-		"60 seconds", "2500 ms", "3 failures", "2 successes",
+		"Last 3 hours.", "60 seconds", "2500 ms", "3 failures", "2 successes",
 		"26 Jul 2026 12:30 UTC",
-		`href="/monitors?cursor=opaque%2Fpage&amp;q=dns"`, "Close detail",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("selected monitor workspace missing %q", want)
@@ -254,6 +252,7 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	for _, absent := range []string{
 		`<p class="xis-meta"><code>` + monitorID.String() + `</code></p>`,
 		`<dt>Location</dt><dd><code>` + locationID.String() + `</code></dd>`,
+		`Selected monitor`, `id="monitor-detail-close"`, "Each bar is one probe sample.",
 	} {
 		if strings.Contains(body, absent) {
 			t.Errorf("selected monitor workspace retained technical identifier %q", absent)
@@ -285,6 +284,33 @@ func TestMonitorAvailabilityChartUsesRequestNonceForInlineRuntime(t *testing.T) 
 	}
 	if strings.Contains(body, "<script>") {
 		t.Fatal("chart rendered an inline script without CSP nonce")
+	}
+}
+
+func TestAvailabilitySeedSnapshotPlacesCurrentStateAtRightEdge(t *testing.T) {
+	now := time.Date(2026, time.August, 15, 12, 0, 0, 0, time.UTC)
+	snapshot := availabilitySeedSnapshot(sdk.Down, now)
+	if got, want := len(snapshot.Categories), 37; got != want {
+		t.Fatalf("seed categories = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Categories[0], "09:00:00"; got != want {
+		t.Fatalf("seed first category = %q, want %q", got, want)
+	}
+	if got, want := snapshot.Categories[len(snapshot.Categories)-1], "12:00:00"; got != want {
+		t.Fatalf("seed latest category = %q, want %q", got, want)
+	}
+	for _, series := range snapshot.Series {
+		if len(series.Values) != len(snapshot.Categories) {
+			t.Fatalf("%s values = %d, want %d", series.Name, len(series.Values), len(snapshot.Categories))
+		}
+		for index, value := range series.Values[:len(series.Values)-1] {
+			if value != 0 {
+				t.Errorf("%s seed value[%d] = %v, want 0", series.Name, index, value)
+			}
+		}
+	}
+	if got := snapshot.Series[2].Values[len(snapshot.Categories)-1]; got != 1 {
+		t.Fatalf("down latest value = %v, want 1", got)
 	}
 }
 
