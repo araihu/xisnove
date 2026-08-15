@@ -1,0 +1,14 @@
+{
+  "format_version": 3,
+  "runtime_version": "m6.2-future-n-minus-one-postgres-v3",
+  "source": "probe/main.go",
+  "schema": {
+    "baseline": 12,
+    "expand": 13,
+    "minimum": 12,
+    "maximum": 13
+  },
+  "sha256": {
+    "probe/main.go": "3a6db147ee207040a675f5347ca8b103f42e2513f063c5c964f99946c1c956c1"
+  }
+}

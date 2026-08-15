@@ -17,7 +17,8 @@ the documented schema interval and fails closed outside it.
 The frozen portable fixture has explicit revisions under
 `integration/testdata/migration-n-minus-one`: the original M6.1 fixture remains
 at the root with manifest format 1 and schema interval `[10,11]`; the active
-state-ticks revision is `v2/`, with manifest format 2 and interval `[11,12]`.
+SQLite/local-Turso state-ticks revision is `v2/`, with manifest format 2 and
+interval `[11,12]`.
 The v2 revision is a separate checksum-anchored standalone probe, not a silent
 mutation of the M6.1 artifact. Its gate creates schema 11, expands through the
 state-ticks migration to schema 12, and proves both the v2 N-1 probe and the
@@ -28,10 +29,16 @@ The first upgrade from a pre-M6.1 binary is a singleton downtime transition:
 stop every old server, back up schema 10, run the M6.1 expand migration to
 schema 11, then start M6.1. Pre-M6.1 binaries accepted only exact schema 10;
 rollback after that migration therefore restores the schema-10 backup. For the
-state-ticks revision, start from a schema-11 backup, run the schema-12 expand
-migration, and keep the v2 N-1 probe and current runtime ready before the
-contract phase. Rolling mixed-version guarantees begin with the M6.1 baseline
-and its explicit v2 revision.
+SQLite/local-Turso state-ticks revision, start from a schema-11 backup, run the
+schema-12 expand migration, and keep the v2 N-1 probe and current runtime
+ready before the contract phase. Rolling mixed-version guarantees begin with
+the M6.1 baseline and its explicit v2 revision.
+
+PostgreSQL's additive state-tick revision is tracked separately as the
+`integration/testdata/migration-n-minus-one/v3-postgres` v3 N-1 fixture: it
+expands schema 12 to schema 13, keeps the legacy
+`occurred_at` timestamp readable, and adds the exact nanosecond ordering key
+and compatibility trigger before the contract phase.
 
 PostgreSQL and managed Turso allow N-1 and N replicas during the expand window.
 SQLite and local Turso use a singleton downtime upgrade: stop old process,

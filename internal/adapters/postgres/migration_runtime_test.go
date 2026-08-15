@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	migrations "github.com/araihu/xisnove/db/migrations/postgres"
 	migrationcontract "github.com/araihu/xisnove/internal/adapters/migration"
 	"github.com/araihu/xisnove/internal/adapters/postgres"
 	postgrescontainer "github.com/araihu/xisnove/internal/testsupport/postgrescontainer"
 	"github.com/google/uuid"
+	"github.com/pressly/goose/v3"
 )
 
 func TestPostgresReadyAndProcessLeaseFence(t *testing.T) {
@@ -65,6 +67,117 @@ func TestPostgresReadyAndProcessLeaseFence(t *testing.T) {
 	}
 	if err := postgres.CheckContractAllowed(ctx, db, "shared", 11); err != nil {
 		t.Fatalf("stale lease blocked contract: %v", err)
+	}
+}
+
+func TestPostgresSchema13ExpandKeepsLegacyStateTickReaderReady(t *testing.T) {
+	db := openMigrationSchema(t, "state_ticks_n_minus_one")
+	ctx := context.Background()
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.Files, goose.WithTableName("schema_migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 12); err != nil {
+		t.Fatalf("create schema-12 baseline: %v", err)
+	}
+	if err := postgres.Ready(ctx, db); err != nil {
+		t.Fatalf("N-1 runtime rejected schema 12 baseline: %v", err)
+	}
+	monitorID := uuid.New()
+	createdAt := time.Date(2026, 8, 15, 12, 0, 0, 123456000, time.UTC)
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO monitors (
+			id, name, kind, interval_ms, timeout_ms, failure_threshold,
+			recovery_threshold, http_json, enabled, next_run_at, created_at, updated_at
+		) VALUES ($1, $2, 'http', 60000, 5000, 1, 1, $3, true, $4, $4, $4)
+	`, monitorID, "state tick legacy reader", `{"method":"GET","url":"https://example.test/health"}`, createdAt); err != nil {
+		t.Fatal(err)
+	}
+	tickID := uuid.New()
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO state_ticks (
+			id, monitor_id, lifecycle, health, reason_code, action_id,
+			actor_kind, occurred_at
+		) VALUES ($1, $2, 'active', 'up', 'initial', $3, 'system', $4)
+	`, tickID, monitorID, uuid.New(), createdAt); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := postgres.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var version int64
+	if err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(version_id), 0)
+		FROM schema_migrations
+		WHERE is_applied
+	`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 13 || !postgres.PreviousRuntimeSchemaInterval.Contains(version) {
+		t.Fatalf("schema version = %d, previous runtime interval = %+v", version, postgres.PreviousRuntimeSchemaInterval)
+	}
+
+	var columnType string
+	if err := db.QueryRowContext(ctx, `
+		SELECT data_type
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = 'state_ticks'
+		  AND column_name = 'occurred_at_unix_nanos'
+	`).Scan(&columnType); err != nil {
+		t.Fatalf("read precision column: %v", err)
+	}
+	if columnType != "bigint" {
+		t.Fatalf("precision column type = %q, want bigint", columnType)
+	}
+	var triggerName string
+	if err := db.QueryRowContext(ctx, `
+		SELECT trigger_name
+		FROM information_schema.triggers
+		WHERE event_object_schema = current_schema()
+		  AND event_object_table = 'state_ticks'
+		  AND trigger_name = 'state_ticks_fill_occurred_at_unix_nanos'
+	`).Scan(&triggerName); err != nil {
+		t.Fatalf("read precision trigger: %v", err)
+	}
+	if triggerName != "state_ticks_fill_occurred_at_unix_nanos" {
+		t.Fatalf("precision trigger = %q", triggerName)
+	}
+
+	// This select is deliberately limited to the schema-12 columns. It is the
+	// shape used by an N-1 runtime and must remain valid after the additive
+	// precision migration.
+	var (
+		legacyID        string
+		legacyLifecycle string
+		legacyHealth    string
+		legacyReason    string
+		legacyActor     string
+		legacyOccurred  time.Time
+	)
+	if err := db.QueryRowContext(ctx, `
+		SELECT id, lifecycle, health, reason_code, actor_kind, occurred_at
+		FROM state_ticks
+		WHERE monitor_id = $1
+		  AND occurred_at >= $2
+		  AND occurred_at < $3
+		ORDER BY occurred_at, id
+	`, monitorID, createdAt, createdAt.Add(time.Microsecond)).Scan(
+		&legacyID, &legacyLifecycle, &legacyHealth, &legacyReason, &legacyActor, &legacyOccurred,
+	); err != nil {
+		t.Fatalf("legacy state-tick read: %v", err)
+	}
+	if legacyID != tickID.String() || legacyLifecycle != "active" || legacyHealth != "up" || legacyReason != "initial" || legacyActor != "system" || !legacyOccurred.Equal(createdAt) {
+		t.Fatalf("legacy state-tick row = id=%q lifecycle=%q health=%q reason=%q actor=%q occurred=%s", legacyID, legacyLifecycle, legacyHealth, legacyReason, legacyActor, legacyOccurred)
+	}
+
+	var occurredAtUnixNanos int64
+	if err := db.QueryRowContext(ctx, `SELECT occurred_at_unix_nanos FROM state_ticks WHERE id = $1`, tickID).Scan(&occurredAtUnixNanos); err != nil {
+		t.Fatal(err)
+	}
+	if occurredAtUnixNanos != createdAt.UnixNano() {
+		t.Fatalf("triggered nanosecond value = %d, want %d", occurredAtUnixNanos, createdAt.UnixNano())
 	}
 }
 

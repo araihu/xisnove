@@ -21,8 +21,8 @@ const migrationAdvisoryLockID int64 = 0x7869736e6f7665
 
 var SupportedSchemaInterval = migrationcontract.SchemaInterval{Minimum: MinimumMigrationVersion, Maximum: LatestMigrationVersion}
 
-// PreviousRuntimeSchemaInterval freezes M6.1 for the next release transition;
-// pre-M6.1 binaries accepted only exact schema 10.
+// PreviousRuntimeSchemaInterval freezes the schema-12 PostgreSQL runtime for
+// the precision expand transition; it remains readable through schema 13.
 var PreviousRuntimeSchemaInterval = migrationcontract.SchemaInterval{Minimum: MinimumMigrationVersion, Maximum: LatestMigrationVersion}
 var SchemaMigrationPlan = migrationcontract.PhasePlan{ExpandThrough: LatestMigrationVersion, ContractThrough: LatestMigrationVersion}
 

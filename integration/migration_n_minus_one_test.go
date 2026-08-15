@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	postgresmigrations "github.com/araihu/xisnove/db/migrations/postgres"
 	sqlitemigrations "github.com/araihu/xisnove/db/migrations/sqlite"
 	"github.com/araihu/xisnove/internal/adapters/database"
 	"github.com/pressly/goose/v3"
@@ -21,6 +22,8 @@ import (
 
 const frozenNMinusOneFixturePath = "integration/testdata/migration-n-minus-one/v2"
 const frozenNMinusOneManifestSHA256 = "0f2f52b37333b1bd1fea3930c220c83c731fdb1d1c965a94296e2e92635de031"
+const postgresNMinusOneFixturePath = "integration/testdata/migration-n-minus-one/v3-postgres"
+const postgresNMinusOneManifestSHA256 = "63944dd5544d7ff091b4c22c9c96d9e22ee88d8508945fb8029b41eaef86cd3c"
 
 type frozenNMinusOneManifest struct {
 	FormatVersion  int               `json:"format_version"`
@@ -121,6 +124,29 @@ func TestNMinusOneFixtureRejectsChecksumTampering(t *testing.T) {
 	}
 }
 
+func TestPostgresNMinusOneFixtureRemainsReadyAfterPrecisionExpand(t *testing.T) {
+	fixtureRoot := filepath.Join(nMinusOneRepositoryRoot(t), filepath.FromSlash(postgresNMinusOneFixturePath))
+	manifest, err := readFrozenNMinusOneManifestWithChecksum(fixtureRoot, postgresNMinusOneManifestSHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.FormatVersion != 3 || manifest.RuntimeVersion != "m6.2-future-n-minus-one-postgres-v3" {
+		t.Fatalf("unexpected PostgreSQL frozen fixture identity: format=%d runtime=%q", manifest.FormatVersion, manifest.RuntimeVersion)
+	}
+	if manifest.Schema != (frozenSchemaRange{Baseline: 12, Expand: 13, Minimum: 12, Maximum: 13}) {
+		t.Fatalf("PostgreSQL frozen schema range = %+v", manifest.Schema)
+	}
+	if postgresmigrations.LatestVersion != manifest.Schema.Expand {
+		t.Fatalf("PostgreSQL schema version = %d, fixture expand version = %d", postgresmigrations.LatestVersion, manifest.Schema.Expand)
+	}
+
+	probe := buildFrozenNMinusOneProbe(t, fixtureRoot, manifest)
+	assertFrozenNMinusOneNotReadyForInterval(t, probe, manifest.Schema.Minimum-1, manifest.Schema.Minimum, manifest.Schema.Maximum)
+	assertFrozenNMinusOneNotReadyForInterval(t, probe, manifest.Schema.Maximum+1, manifest.Schema.Minimum, manifest.Schema.Maximum)
+	assertFrozenNMinusOneReadyForInterval(t, probe, manifest.Schema.Baseline, manifest.Schema.Minimum, manifest.Schema.Maximum)
+	assertFrozenNMinusOneReadyForInterval(t, probe, manifest.Schema.Expand, manifest.Schema.Minimum, manifest.Schema.Maximum)
+}
+
 func loadFrozenNMinusOneManifest(t *testing.T, fixtureRoot string) frozenNMinusOneManifest {
 	t.Helper()
 	manifest, err := readFrozenNMinusOneManifest(fixtureRoot)
@@ -131,12 +157,16 @@ func loadFrozenNMinusOneManifest(t *testing.T, fixtureRoot string) frozenNMinusO
 }
 
 func readFrozenNMinusOneManifest(fixtureRoot string) (frozenNMinusOneManifest, error) {
+	return readFrozenNMinusOneManifestWithChecksum(fixtureRoot, frozenNMinusOneManifestSHA256)
+}
+
+func readFrozenNMinusOneManifestWithChecksum(fixtureRoot, expectedManifestSHA256 string) (frozenNMinusOneManifest, error) {
 	manifestBytes, err := os.ReadFile(filepath.Join(fixtureRoot, "manifest.json"))
 	if err != nil {
 		return frozenNMinusOneManifest{}, err
 	}
-	if got := sha256Hex(manifestBytes); got != frozenNMinusOneManifestSHA256 {
-		return frozenNMinusOneManifest{}, fmt.Errorf("frozen manifest checksum = %s, want %s", got, frozenNMinusOneManifestSHA256)
+	if got := sha256Hex(manifestBytes); got != expectedManifestSHA256 {
+		return frozenNMinusOneManifest{}, fmt.Errorf("frozen manifest checksum = %s, want %s", got, expectedManifestSHA256)
 	}
 	var manifest frozenNMinusOneManifest
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
@@ -179,19 +209,27 @@ func buildFrozenNMinusOneProbe(t *testing.T, fixtureRoot string, manifest frozen
 }
 
 func assertFrozenNMinusOneReady(t *testing.T, probe string, schemaVersion int64) {
+	assertFrozenNMinusOneReadyForInterval(t, probe, schemaVersion, 11, 12)
+}
+
+func assertFrozenNMinusOneReadyForInterval(t *testing.T, probe string, schemaVersion, minimum, maximum int64) {
 	t.Helper()
 	command := exec.Command(probe, "--schema-version", strconv.FormatInt(schemaVersion, 10))
 	combined, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("frozen N-1 probe rejected schema %d: %v\n%s", schemaVersion, err, combined)
 	}
-	want := fmt.Sprintf("ready schema=%d interval=[11,12]", schemaVersion)
+	want := fmt.Sprintf("ready schema=%d interval=[%d,%d]", schemaVersion, minimum, maximum)
 	if got := strings.TrimSpace(string(combined)); got != want {
 		t.Fatalf("frozen N-1 output = %q, want %q", got, want)
 	}
 }
 
 func assertFrozenNMinusOneNotReady(t *testing.T, probe string, schemaVersion int64) {
+	assertFrozenNMinusOneNotReadyForInterval(t, probe, schemaVersion, 11, 12)
+}
+
+func assertFrozenNMinusOneNotReadyForInterval(t *testing.T, probe string, schemaVersion, minimum, maximum int64) {
 	t.Helper()
 	command := exec.Command(probe, "--schema-version", strconv.FormatInt(schemaVersion, 10))
 	combined, err := command.CombinedOutput()
@@ -202,7 +240,7 @@ func assertFrozenNMinusOneNotReady(t *testing.T, probe string, schemaVersion int
 	if !ok || exitError.ExitCode() != 1 {
 		t.Fatalf("frozen N-1 rejection exit = %v, want 1", err)
 	}
-	want := fmt.Sprintf("not ready schema=%d interval=[11,12]", schemaVersion)
+	want := fmt.Sprintf("not ready schema=%d interval=[%d,%d]", schemaVersion, minimum, maximum)
 	if got := strings.TrimSpace(string(combined)); got != want {
 		t.Fatalf("frozen N-1 rejection = %q, want %q", got, want)
 	}
