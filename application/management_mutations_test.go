@@ -531,6 +531,10 @@ func (*managementMutationRepository) ListLocations(context.Context, port.StringK
 	return nil, nil
 }
 
+func (*managementMutationRepository) SearchResources(context.Context, port.SearchRequest) ([]port.SearchResult, error) {
+	return nil, nil
+}
+
 func (r *managementMutationRepository) GetMonitor(_ context.Context, id domain.MonitorID) (port.MonitorRecord, error) {
 	value, ok := r.monitors[id]
 	if !ok {

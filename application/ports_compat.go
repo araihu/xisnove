@@ -46,6 +46,9 @@ type IntKeysetRequest = port.IntKeysetRequest
 type TimeKeysetRequest = port.TimeKeysetRequest
 type IncidentListRequest = port.IncidentListRequest
 type IncidentResolutionFilter = port.IncidentResolutionFilter
+type SearchRequest = port.SearchRequest
+type SearchResourceType = port.SearchResourceType
+type SearchResult = port.SearchResult
 type AgentCredentialRecord = port.AgentCredentialRecord
 type CreateAgentCredentialGenerationCommand = port.CreateAgentCredentialGenerationCommand
 type CredentialGenerationRevokeOutcome = port.CredentialGenerationRevokeOutcome
@@ -101,6 +104,7 @@ const (
 	IncidentResolutionAll                     = port.IncidentResolutionAll
 	IncidentResolutionOpen                    = port.IncidentResolutionOpen
 	IncidentResolutionResolved                = port.IncidentResolutionResolved
+	SearchResourceMonitor                     = port.SearchResourceMonitor
 	CredentialGenerationRevoked               = port.CredentialGenerationRevoked
 	CredentialGenerationAlreadyRevoked        = port.CredentialGenerationAlreadyRevoked
 	CredentialGenerationNotFound              = port.CredentialGenerationNotFound

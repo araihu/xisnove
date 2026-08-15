@@ -50,6 +50,25 @@ type IncidentListRequest struct {
 	Resolution IncidentResolutionFilter
 }
 
+type SearchRequest struct {
+	Query string
+	Limit int
+}
+
+type SearchResourceType string
+
+const SearchResourceMonitor SearchResourceType = "monitor"
+
+// SearchResult is a transport-neutral ranked resource projection. Repository
+// order is authoritative; callers must not re-rank or broaden this bounded set.
+type SearchResult struct {
+	ResourceType SearchResourceType
+	ResourceID   string
+	Title        string
+	Description  string
+	Context      string
+}
+
 type AgentCredentialRecord struct {
 	AgentID             domain.AgentID
 	Generation          uint64
@@ -98,6 +117,7 @@ type ManagementCommandRepository interface {
 // application requests page-size+1 and alone constructs the public page and
 // opaque continuation cursor.
 type ManagementQueryRepository interface {
+	SearchResources(context.Context, SearchRequest) ([]SearchResult, error)
 	GetLocation(context.Context, domain.LocationID) (domain.Location, error)
 	ListLocations(context.Context, StringKeysetRequest) ([]domain.Location, error)
 	GetMonitor(context.Context, domain.MonitorID) (MonitorRecord, error)

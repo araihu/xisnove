@@ -69,6 +69,11 @@ func (s *Server) serveAdvertisedOperation(w http.ResponseWriter, r *http.Request
 		})
 	case "ListLocations":
 		writeJSON(w, http.StatusOK, pageEnvelope([]any{locationFixture()}, ""))
+	case "SearchResources":
+		writeJSON(w, http.StatusOK, map[string]any{"items": []any{map[string]any{
+			"resourceType": "monitor", "resourceId": "00000000-0000-4200-8000-000000000101",
+			"title": "homelab router", "description": "Public edge availability", "context": "HTTP monitor",
+		}}})
 	case "CreateLocation":
 		if s.replay(w, r) {
 			return
@@ -223,7 +228,7 @@ func advertisedScope(operationID string) string {
 		return "locations:write"
 	case "ListLocations", "GetLocation":
 		return "locations:read"
-	case "GetMonitorHealth":
+	case "SearchResources", "GetMonitorHealth":
 		return "monitors:read"
 	case "GetActiveMonitorIncident":
 		return "incidents:read"

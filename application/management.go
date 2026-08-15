@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/domain"
@@ -18,6 +20,11 @@ const (
 	agentsCursorEndpoint         = "/v1/agents"
 	incidentsCursorEndpoint      = "/v1/incidents"
 	incidentEventsCursorEndpoint = "/v1/incidents/{incidentId}/events"
+)
+
+const (
+	defaultSearchLimit = 8
+	maxSearchLimit     = 20
 )
 
 type ManagementServiceConfig struct {
@@ -40,6 +47,29 @@ func NewManagementService(config ManagementServiceConfig) *ManagementService {
 	return &ManagementService{
 		store: config.Store, cursors: config.Cursors, tokens: config.Tokens, newID: config.NewID,
 	}
+}
+
+func (s *ManagementService) SearchResources(ctx context.Context, query string, limit int) ([]port.SearchResult, error) {
+	query = strings.TrimSpace(query)
+	if length := utf8.RuneCountInString(query); length < 2 || length > 120 {
+		return nil, &ValidationError{Fields: map[string]string{"q": "must contain between 2 and 120 characters"}}
+	}
+	if limit == 0 {
+		limit = defaultSearchLimit
+	}
+	if limit < 1 || limit > maxSearchLimit {
+		return nil, &ValidationError{Fields: map[string]string{"limit": "must be between 1 and 20"}}
+	}
+	var results []port.SearchResult
+	err := s.view(ctx, func(ctx context.Context, repository port.ManagementQueryRepository) error {
+		var err error
+		results, err = repository.SearchResources(ctx, port.SearchRequest{Query: query, Limit: limit})
+		return err
+	})
+	if err != nil {
+		return nil, wrapManagementRead("search resources", err)
+	}
+	return append([]port.SearchResult(nil), results...), nil
 }
 
 func (s *ManagementService) GetLocation(ctx context.Context, id domain.LocationID) (domain.Location, error) {

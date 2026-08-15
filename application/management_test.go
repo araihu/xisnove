@@ -74,6 +74,36 @@ func TestListMonitorsUsesDisplayOrderAndIDCursor(t *testing.T) {
 	}
 }
 
+func TestSearchResourcesNormalizesAndBoundsQuery(t *testing.T) {
+	repository := &managementQueryRepository{searchResults: []port.SearchResult{{
+		ResourceType: port.SearchResourceMonitor, ResourceID: managementID1,
+		Title: "Kubernetes API", Description: "LAN control plane", Context: "TCP monitor",
+	}}}
+	service := newManagementService(t, repository)
+
+	results, err := service.SearchResources(context.Background(), "  kubernetes  ", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || repository.searchRequest.Query != "kubernetes" || repository.searchRequest.Limit != 8 {
+		t.Fatalf("results = %#v, request = %#v", results, repository.searchRequest)
+	}
+
+	for _, test := range []struct {
+		query string
+		limit int
+	}{
+		{query: "x", limit: 8},
+		{query: "valid", limit: 21},
+	} {
+		_, err := service.SearchResources(context.Background(), test.query, test.limit)
+		var validation *application.ValidationError
+		if !errors.As(err, &validation) {
+			t.Fatalf("SearchResources(%q, %d) error = %#v", test.query, test.limit, err)
+		}
+	}
+}
+
 func TestListIncidentsBindsResolutionFilterAndOrdersByTimeKey(t *testing.T) {
 	opened := time.Date(2026, 7, 26, 8, 9, 10, 11, time.UTC)
 	repository := &managementQueryRepository{incidents: []domain.Incident{
@@ -168,6 +198,13 @@ type managementQueryRepository struct {
 	agentRequest    port.StringKeysetRequest
 	incidentRequest port.IncidentListRequest
 	eventRequest    port.TimeKeysetRequest
+	searchResults   []port.SearchResult
+	searchRequest   port.SearchRequest
+}
+
+func (r *managementQueryRepository) SearchResources(_ context.Context, request port.SearchRequest) ([]port.SearchResult, error) {
+	r.searchRequest = request
+	return r.searchResults, nil
 }
 
 func (r *managementQueryRepository) GetLocation(_ context.Context, id domain.LocationID) (domain.Location, error) {

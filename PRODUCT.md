@@ -39,9 +39,9 @@ Operators use a server-rendered web BFF and a separate CLI. Both consume the pub
 
 ## Brand Commitments
 
-Use `X-9` as the visible working name. Technical identifiers may remain `xisnove` until a complete rename is deliberately approved. Product-name collision research is still required before treating X-9 as final.
+Use `X-9` as the working shorthand while technical identifiers remain `xisnove`. The application shell now carries the organization-approved Xisnove V10 identity; product-name collision research remains a separate naming decision and does not authorize a repository-wide rename.
 
-Until that research resolves, keep the visible wordmark as typographic `X-9` and do not create a repository-local alternative. The canonical Xisnove v3 favicon is consumed from pinned `github.com/araihu/assets`; the available full logo and marks remain deferred until the working-name decision.
+Do not create repository-local alternative marks. The shell consumes pinned copies of `logos/xisnove-logo.svg`, `logos/xisnove-mark*.svg`, and `logos/xisnove-favicon.svg` from `github.com/araihu/assets` commit `ab01f1a0f592e4f1398173df04e4f8fc013cb21a`; versioned same-origin routes preserve deterministic availability and rolling-deploy compatibility.
 
 The voice is concise, operational, and evidence-led. UI copy should describe infrastructure state and available action, not implementation details.
 
@@ -49,7 +49,7 @@ The voice is concise, operational, and evidence-led. UI copy should describe inf
 
 - A live homelab pilot currently reports three real monitors and a Kubernetes discovery catalog.
 - The repository contains the public API, generated SDK, server, Agent, relational storage, UI BFF, browser tests, deployment resources, and design state/action ledger.
-- No customer claims, commercial benchmarks, or testimonials exist and must not be fabricated. Canonical Xisnove v3 assets exist in `github.com/araihu/assets`; only the pinned favicon is approved for this surface while the visible working name remains `X-9`.
+- No customer claims, commercial benchmarks, or testimonials exist and must not be fabricated. Canonical Xisnove V10 assets come only from the pinned `github.com/araihu/assets` source; Arai Hû alone uses the cloud symbol and Xisnove retains its independent monitoring-signal mark.
 
 ## Product Principles
 

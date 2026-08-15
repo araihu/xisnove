@@ -116,6 +116,7 @@ type Querier interface {
 	ManagementRevokeAgent(ctx context.Context, arg ManagementRevokeAgentParams) (int64, error)
 	ManagementRevokeAgentCredential(ctx context.Context, arg ManagementRevokeAgentCredentialParams) (int64, error)
 	ManagementRevokeAllAgentCredentials(ctx context.Context, arg ManagementRevokeAllAgentCredentialsParams) error
+	ManagementSearchResources(ctx context.Context, arg ManagementSearchResourcesParams) ([]ManagementSearchResourcesRow, error)
 	ManagementUpdateAgent(ctx context.Context, arg ManagementUpdateAgentParams) (int64, error)
 	MarkAbsentDiscoveryCandidates(ctx context.Context, arg MarkAbsentDiscoveryCandidatesParams) (int64, error)
 	MarkEndedMaintenanceProcessed(ctx context.Context, arg MarkEndedMaintenanceProcessedParams) (int64, error)

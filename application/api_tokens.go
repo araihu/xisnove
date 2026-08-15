@@ -194,7 +194,7 @@ var operationScopes = map[string]Scope{
 	"getAPIToken": ScopeTokensRead, "updateAPIToken": ScopeTokensWrite, "revokeAPIToken": ScopeTokensWrite,
 	"createLocation": ScopeLocationsWrite, "listLocations": ScopeLocationsRead,
 	"getLocation": ScopeLocationsRead, "updateLocation": ScopeLocationsWrite, "disableLocation": ScopeLocationsWrite,
-	"createMonitor": ScopeMonitorsWrite, "listMonitors": ScopeMonitorsRead,
+	"createMonitor": ScopeMonitorsWrite, "listMonitors": ScopeMonitorsRead, "searchResources": ScopeMonitorsRead,
 	"getMonitor": ScopeMonitorsRead, "updateMonitor": ScopeMonitorsWrite, "disableMonitor": ScopeMonitorsWrite,
 	"createAgentEnrollmentToken": ScopeAgentsWrite, "listAgents": ScopeAgentsRead, "getAgent": ScopeAgentsRead,
 	"updateAgent": ScopeAgentsWrite, "revokeAgent": ScopeAgentsWrite, "rotateAgentCredential": ScopeAgentsWrite,

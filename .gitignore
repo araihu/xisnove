@@ -7,3 +7,4 @@
 .impeccable/questions/
 deploy/compose/secrets/
 deploy/compose/.bootstrap-state/
+site/public/

@@ -34,6 +34,7 @@ func TestPersistenceConformance(t *testing.T) {
 	}
 	conformance.Run(t, factory)
 	conformance.RunIdempotency(t, factory)
+	conformance.RunManagement(t, factory)
 }
 
 func managedTestDatabase(t *testing.T, ctx context.Context) (string, string) {

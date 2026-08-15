@@ -30,6 +30,33 @@ func (s *Server) ListLocations(ctx context.Context, request ListLocationsRequest
 	return ListLocations200JSONResponse{Items: items, Page: mapPageMetadata(page.NextCursor)}, nil
 }
 
+func (s *Server) SearchResources(ctx context.Context, request SearchResourcesRequestObject) (SearchResourcesResponseObject, error) {
+	limit := 0
+	if request.Params.Limit != nil {
+		limit = int(*request.Params.Limit)
+	}
+	results, err := s.management.SearchResources(ctx, request.Params.Q, limit)
+	if err != nil {
+		problem, status, mapped := problemFromError(err)
+		if mapped {
+			return SearchResourcesdefaultApplicationProblemPlusJSONResponse{Body: problem, StatusCode: status}, nil
+		}
+		return nil, err
+	}
+	items := make([]SearchResult, 0, len(results))
+	for _, result := range results {
+		id, err := uuid.Parse(result.ResourceID)
+		if err != nil {
+			return nil, fmt.Errorf("map search result id: %w", err)
+		}
+		items = append(items, SearchResult{
+			ResourceType: SearchResourceType(result.ResourceType), ResourceId: id,
+			Title: result.Title, Description: result.Description, Context: result.Context,
+		})
+	}
+	return SearchResources200JSONResponse{Items: items}, nil
+}
+
 func (s *Server) GetLocation(ctx context.Context, request GetLocationRequestObject) (GetLocationResponseObject, error) {
 	location, err := s.management.GetLocation(ctx, domain.LocationID(request.LocationId.String()))
 	if err != nil {

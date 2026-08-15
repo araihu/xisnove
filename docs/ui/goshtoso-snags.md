@@ -192,3 +192,30 @@ consumer that expects password semantics to remain safe without Alpine.
     keeps Escape, overlay, close button, URL, selected styling and browser
     history under one server-backed identity instead of hiding a still-selected
     resource only in Alpine state.
+25. **Search `ItemsURL` v0.0.13 is a lazy client index, not server-backed
+    typeahead.** Xisnove must keep authorization, ranking and result bounds in
+    the control plane, so it uses the public `SearchField` as the single
+    Ctrl/Cmd+K owner and an application-owned remote dialog adapter with
+    debounce, abort, stale-response rejection, loading, empty, error/retry and
+    active-option semantics. The upstream Goshtoso task implemented a generic
+    `RemoteSource` contract on branch `codex/server-backed-search` at
+    `24c23c340a04e0d8892bad9cf5e2ca94dd2dd262`; Xisnove can remove this adapter
+    after that work is reviewed, merged and released. Until then it remains on
+    the latest tagged v0.0.13 and does not depend on an unreleased commit.
+26. **Product identity remains application-owned and version-pinned.** The
+    Goshtoso shell correctly accepts consumer content rather than prescribing a
+    logo. Xisnove now renders the canonical independent V10 logo/marks from
+    `araihu/assets@ab01f1a0f592e4f1398173df04e4f8fc013cb21a`, serves each SVG on an
+    immutable same-origin route, and retains the two previous favicon routes
+    for cached documents. This required no Goshtoso source dive or CSS escape
+    hatch; responsive light/dark mark selection stays inside the application
+    brand slot.
+27. **`SearchField`'s global shortcut did not fire without a paired Goshtoso
+    modal.** Chromium delivered a real `Ctrl+K` event with `ctrlKey=true`, and
+    Alpine plus the component data were ready, but the field's
+    `x-on:keydown.window` handler did not dispatch `goshtoso-search-open` in the
+    split app-owned-modal composition. Xisnove disables `GlobalShortcut` and
+    installs exactly one application owner that dispatches the documented open
+    event for Ctrl/Cmd+K. Trigger clicks still use the public component. The
+    upstream `RemoteSource` integration should cover this split composition so
+    the application owner can be removed after release.

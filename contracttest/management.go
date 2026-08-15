@@ -119,6 +119,14 @@ func testManagementLifecycleAndKeysets(t *testing.T, store application.UnitOfWor
 		if err != nil || len(allMonitors) != 2 || allMonitors[0].Monitor.ID != monitorA.ID || allMonitors[1].Monitor.ID != monitorB.ID {
 			t.Fatalf("monitor list with multiple assignments = %#v, %v", allMonitors, err)
 		}
+		searchResults, err := repositories.Management.SearchResources(ctx, application.SearchRequest{Query: "alpha", Limit: 8})
+		if err != nil || len(searchResults) != 1 || searchResults[0].ResourceID != string(monitorA.ID) || searchResults[0].ResourceType != application.SearchResourceMonitor {
+			t.Fatalf("exact monitor search = %#v, %v", searchResults, err)
+		}
+		searchResults, err = repositories.Management.SearchResources(ctx, application.SearchRequest{Query: "%", Limit: 8})
+		if err != nil || len(searchResults) != 0 {
+			t.Fatalf("literal wildcard search = %#v, %v", searchResults, err)
+		}
 		monitors, err = repositories.Management.ListMonitors(ctx, application.IntKeysetRequest{Limit: 2, HasAfter: true, AfterSort: 7, AfterID: string(monitorA.ID)})
 		if err != nil || len(monitors) != 1 || monitors[0].Monitor.ID != monitorB.ID {
 			t.Fatalf("second monitor page = %#v, %v", monitors, err)
@@ -279,7 +287,7 @@ func managementLocation(id domain.LocationID, name string, at time.Time) domain.
 
 func managementMonitor(t *testing.T, id domain.MonitorID, name string, order int32, at time.Time) domain.Monitor {
 	t.Helper()
-	monitor, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{ID: id, Name: name, DisplayOrder: order, Interval: time.Minute, Timeout: 5 * time.Second, FailureThreshold: 2, RecoveryThreshold: 2, HTTP: domain.HTTPProbe{Method: "GET", URL: "https://example.com", ExpectedStatus: []domain.StatusRange{{Min: 200, Max: 299}}}, CreatedAt: at})
+	monitor, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{ID: id, Name: name, Description: name + " monitor", DisplayOrder: order, Interval: time.Minute, Timeout: 5 * time.Second, FailureThreshold: 2, RecoveryThreshold: 2, HTTP: domain.HTTPProbe{Method: "GET", URL: "https://example.com", ExpectedStatus: []domain.StatusRange{{Min: 200, Max: 299}}}, CreatedAt: at})
 	if err != nil {
 		t.Fatal(err)
 	}

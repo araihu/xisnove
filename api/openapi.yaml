@@ -11,6 +11,7 @@ security:
 tags:
   - name: auth
   - name: management
+  - name: search
   - name: agent
   - name: incidents
   - name: discovery
@@ -19,6 +20,31 @@ tags:
   - name: public-status
   - name: operator
 paths:
+  /v1/search:
+    get:
+      operationId: searchResources
+      summary: Search the bounded operational resource index
+      description: Returns server-ranked resources visible to the caller. The v1 index currently contains monitors and is designed to add further resource types without changing the response shape.
+      tags: [search]
+      security: [{adminBearer: []}, {apiTokenBearer: []}]
+      x-xisnove-scopes: [monitors:read]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Case-insensitive search text. Wildcard characters are matched literally.
+          schema: {type: string, minLength: 2, maxLength: 120}
+        - name: limit
+          in: query
+          description: Maximum ranked results to return.
+          schema: {type: integer, format: int32, minimum: 1, maximum: 20, default: 8}
+      responses:
+        '200':
+          description: Bounded, server-ranked search results
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SearchResultPage'}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/sessions:
     post:
       operationId: createSession
@@ -1267,6 +1293,28 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    SearchResourceType:
+      type: string
+      enum: [monitor]
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required: [resourceType, resourceId, title, description, context]
+      properties:
+        resourceType: {$ref: '#/components/schemas/SearchResourceType'}
+        resourceId: {type: string, format: uuid}
+        title: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2048}
+        context: {type: string, maxLength: 200}
+    SearchResultPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: {$ref: '#/components/schemas/SearchResult'}
     CreateSessionRequest:
       type: object
       additionalProperties: false

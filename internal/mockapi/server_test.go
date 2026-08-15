@@ -372,6 +372,9 @@ func TestEveryAdvertisedOperationReachesTheStrictMockDispatcher(t *testing.T) {
 				continue
 			}
 			path := replacePathParameters(path)
+			if operation.OperationID == "SearchResources" {
+				path += "?q=router"
+			}
 			if operation.OperationID == "PutOperatorAgentCredential" {
 				path = strings.Replace(path, "/credentials/1", "/credentials/2", 1)
 			}

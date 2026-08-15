@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	application "github.com/araihu/xisnove/application/port"
@@ -19,6 +20,26 @@ var (
 	_ application.ManagementQueryRepository   = (*managementRepository)(nil)
 	_ application.ManagementCommandRepository = (*managementRepository)(nil)
 )
+
+func (r *managementRepository) SearchResources(ctx context.Context, request application.SearchRequest) ([]application.SearchResult, error) {
+	records, err := r.queries.ManagementSearchResources(ctx, dbpostgres.ManagementSearchResourcesParams{
+		SearchQuery: request.Query, RowLimit: int32(request.Limit),
+	})
+	if err != nil {
+		return nil, repositoryError("management search resources", err)
+	}
+	results := make([]application.SearchResult, 0, len(records))
+	for _, record := range records {
+		results = append(results, application.SearchResult{
+			ResourceType: application.SearchResourceMonitor,
+			ResourceID:   record.ID,
+			Title:        record.Name,
+			Description:  record.Description,
+			Context:      strings.ToUpper(record.Kind) + " monitor",
+		})
+	}
+	return results, nil
+}
 
 func (r *managementRepository) GetLocation(ctx context.Context, id domain.LocationID) (domain.Location, error) {
 	record, err := r.queries.ManagementGetLocation(ctx, string(id))

@@ -89,18 +89,25 @@ func TestRepositoryErrorPreservesRetryableMarkerAndDriverCause(t *testing.T) {
 func TestRepositoryErrorMapsManagedLibSQLConstraint(t *testing.T) {
 	t.Parallel()
 
-	err := repositoryError(
-		"open incident",
-		errors.New(
-			"failed to execute SQL:\n"+
+	for name, cause := range map[string]error{
+		"unique": errors.New(
+			"failed to execute SQL:\n" +
 				"SQLite error: UNIQUE constraint failed: incidents.monitor_id",
 		),
-	)
-	if !errors.Is(err, application.ErrConflict) {
-		t.Fatalf("repositoryError() = %v, want ErrConflict", err)
-	}
-	if errors.Is(err, application.ErrRetryableTransaction) {
-		t.Fatalf("repositoryError() = %v, constraint unexpectedly retryable", err)
+		"foreign key": errors.New(
+			"failed to execute SQL:\n" +
+				"SQLite error: FOREIGN KEY constraint failed",
+		),
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := repositoryError("open incident", cause)
+			if !errors.Is(err, application.ErrConflict) {
+				t.Fatalf("repositoryError() = %v, want ErrConflict", err)
+			}
+			if errors.Is(err, application.ErrRetryableTransaction) {
+				t.Fatalf("repositoryError() = %v, constraint unexpectedly retryable", err)
+			}
+		})
 	}
 }
 

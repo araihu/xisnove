@@ -1392,7 +1392,8 @@ func repositoryError(operation string, err error) error {
 	// database/sql. Keep this fallback limited to libSQL's canonical SQLite
 	// constraint message instead of classifying arbitrary error strings.
 	if strings.Contains("\n"+err.Error(), "\nSQLite error: ") &&
-		strings.Contains(err.Error(), "constraint failed:") {
+		(strings.Contains(err.Error(), "constraint failed:") ||
+			strings.Contains(err.Error(), "SQLite error: FOREIGN KEY constraint failed")) {
 		return fmt.Errorf("%s: %w", operation, application.ErrConflict)
 	}
 	return fmt.Errorf("%s: %w", operation, err)

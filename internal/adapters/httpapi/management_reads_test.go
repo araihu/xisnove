@@ -46,6 +46,26 @@ func TestManagementReadHandlersMapPagesAndRejectCrossEndpointCursor(t *testing.T
 	}
 }
 
+func TestSearchResourcesMapsRankedResults(t *testing.T) {
+	repository := &httpManagementRepository{searchResults: []port.SearchResult{{
+		ResourceType: port.SearchResourceMonitor, ResourceID: managementReadID1,
+		Title: "Kubernetes API", Description: "LAN control plane", Context: "TCP monitor",
+	}}}
+	server := managementReadServer(t, repository)
+	limit := int32(8)
+	response, err := server.SearchResources(context.Background(), SearchResourcesRequestObject{Params: SearchResourcesParams{Q: "kubernetes", Limit: &limit}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, ok := response.(SearchResources200JSONResponse)
+	if !ok || len(page.Items) != 1 || page.Items[0].ResourceType != SearchResourceTypeMonitor || page.Items[0].ResourceId.String() != managementReadID1 {
+		t.Fatalf("search response = %#v", response)
+	}
+	if repository.searchRequest.Query != "kubernetes" || repository.searchRequest.Limit != 8 {
+		t.Fatalf("search request = %#v", repository.searchRequest)
+	}
+}
+
 func TestManagementReadHandlersMapAgentAndIncidentState(t *testing.T) {
 	now := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
 	recovered := now.Add(time.Minute)
@@ -115,9 +135,16 @@ func (s *httpManagementStore) Transact(ctx context.Context, fn func(context.Cont
 }
 
 type httpManagementRepository struct {
-	locations []domain.Location
-	agent     domain.Agent
-	incident  domain.Incident
+	locations     []domain.Location
+	agent         domain.Agent
+	incident      domain.Incident
+	searchResults []port.SearchResult
+	searchRequest port.SearchRequest
+}
+
+func (r *httpManagementRepository) SearchResources(_ context.Context, request port.SearchRequest) ([]port.SearchResult, error) {
+	r.searchRequest = request
+	return r.searchResults, nil
 }
 
 func (r *httpManagementRepository) GetLocation(context.Context, domain.LocationID) (domain.Location, error) {

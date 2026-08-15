@@ -12,10 +12,12 @@ Workspace. Information priority: degraded/unknown health, monitor identity,
 current health, configuration, then unavailable history. Navigation model:
 native links with HTMX fragments and canonical URLs. Consequential states:
 loading, empty, filtered-empty, partial/unknown, upstream failure, sign-in
-failure, signed-out recovery, and unknown route. Existing identity: typographic
-`X-9` working name with Goshtoso system/title stacks plus the canonical Xisnove
-v3 favicon from `araihu/assets`; the full wordmark remains deferred pending the
-working-name decision.
+failure, signed-out recovery, and unknown route. Existing identity: `X-9`
+remains the working product shorthand, while the shell uses the canonical
+Xisnove V10 logo, independent mark, reverse mark, and favicon from
+`araihu/assets@ab01f1a0f592e4f1398173df04e4f8fc013cb21a`. The assets are served
+from immutable same-origin routes; only the Arai Hû organization identity uses
+the cloud motif, while Xisnove keeps its independent product symbol.
 
 Density: compact for the inventory and standard for detail. Motion: restrained;
 only Goshtoso loading/drawer transitions explain state. Visual direction: one

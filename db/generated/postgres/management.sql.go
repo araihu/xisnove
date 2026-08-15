@@ -748,6 +748,67 @@ func (q *Queries) ManagementRevokeAllAgentCredentials(ctx context.Context, arg M
 	return err
 }
 
+const managementSearchResources = `-- name: ManagementSearchResources :many
+SELECT id, name, description, kind,
+  CASE
+    WHEN lower(name) = lower($1) OR lower(id::text) = lower($1) THEN 0
+    WHEN left(lower(name), length($1)) = lower($1) THEN 1
+    WHEN strpos(lower(name), lower($1)) > 0 THEN 2
+    WHEN strpos(lower(description), lower($1)) > 0 THEN 3
+    ELSE 4
+  END AS search_rank
+FROM monitors
+WHERE strpos(lower(name), lower($1)) > 0
+   OR strpos(lower(description), lower($1)) > 0
+   OR strpos(lower(id::text), lower($1)) > 0
+ORDER BY search_rank ASC,
+  display_order ASC,
+  id ASC
+LIMIT $2
+`
+
+type ManagementSearchResourcesParams struct {
+	SearchQuery string `json:"search_query"`
+	RowLimit    int32  `json:"row_limit"`
+}
+
+type ManagementSearchResourcesRow struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Kind        string `json:"kind"`
+	SearchRank  int32  `json:"search_rank"`
+}
+
+func (q *Queries) ManagementSearchResources(ctx context.Context, arg ManagementSearchResourcesParams) ([]ManagementSearchResourcesRow, error) {
+	rows, err := q.db.QueryContext(ctx, managementSearchResources, arg.SearchQuery, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ManagementSearchResourcesRow{}
+	for rows.Next() {
+		var i ManagementSearchResourcesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Kind,
+			&i.SearchRank,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const managementUpdateAgent = `-- name: ManagementUpdateAgent :execrows
 UPDATE agents
 SET location_id = $1, name = $2,

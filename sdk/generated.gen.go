@@ -580,6 +580,21 @@ func (e PublicIncidentSummaryState) Valid() bool {
 	}
 }
 
+// Defines values for SearchResourceType.
+const (
+	SearchResourceTypeMonitor SearchResourceType = "monitor"
+)
+
+// Valid indicates whether the value is a known member of the SearchResourceType enum.
+func (e SearchResourceType) Valid() bool {
+	switch e {
+	case SearchResourceTypeMonitor:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ShoutrrrChannelConfigurationInputKind.
 const (
 	ShoutrrrChannelConfigurationInputKindShoutrrr ShoutrrrChannelConfigurationInputKind = "shoutrrr"
@@ -1377,6 +1392,23 @@ type RevokeOperatorAgentCredentialRequest struct {
 	Owner ExternalOwner `json:"owner"`
 }
 
+// SearchResourceType defines model for SearchResourceType.
+type SearchResourceType string
+
+// SearchResult defines model for SearchResult.
+type SearchResult struct {
+	Context      string             `json:"context"`
+	Description  string             `json:"description"`
+	ResourceId   openapi_types.UUID `json:"resourceId"`
+	ResourceType SearchResourceType `json:"resourceType"`
+	Title        string             `json:"title"`
+}
+
+// SearchResultPage defines model for SearchResultPage.
+type SearchResultPage struct {
+	Items []SearchResult `json:"items"`
+}
+
 // Session defines model for Session.
 type Session struct {
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -1774,6 +1806,15 @@ type ApplyOperatorMonitorParams struct {
 type DeleteOperatorMonitorParams struct {
 	// IdempotencyKey Caller-generated key required for safe mutation retry.
 	IdempotencyKey RequiredIdempotencyKey `json:"Idempotency-Key"`
+}
+
+// SearchResourcesParams defines parameters for SearchResources.
+type SearchResourcesParams struct {
+	// Q Case-insensitive search text. Wildcard characters are matched literally.
+	Q string `form:"q" json:"q"`
+
+	// Limit Maximum ranked results to return.
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // CreateAgentEnrollmentTokenJSONRequestBody defines body for CreateAgentEnrollmentToken for application/json ContentType.
@@ -2624,6 +2665,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
 	DeleteOperatorMonitor(ctx context.Context, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchResources Search the bounded operational resource index
+	//
+	// Returns server-ranked resources visible to the caller. The v1 index currently contains monitors and is designed to add further resource types without changing the response shape.
+	//
+	// Corresponds with GET /v1/search (the `SearchResources` operationId).
+	SearchResources(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSessionWithBody performs a POST /v1/sessions (the `CreateSession` operationId) request,
 	// with any type of body and a specified content type.
@@ -3950,6 +3998,23 @@ func (c *Client) DeleteOperatorMonitorWithBody(ctx context.Context, params *Dele
 // Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
 func (c *Client) DeleteOperatorMonitor(ctx context.Context, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteOperatorMonitorRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SearchResources Search the bounded operational resource index
+//
+// Returns server-ranked resources visible to the caller. The v1 index currently contains monitors and is designed to add further resource types without changing the response shape.
+//
+// Corresponds with GET /v1/search (the `SearchResources` operationId).
+func (c *Client) SearchResources(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchResourcesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -7102,6 +7167,68 @@ func NewDeleteOperatorMonitorRequestWithBody(server string, params *DeleteOperat
 	return req, nil
 }
 
+// NewSearchResourcesRequest constructs an http.Request for the SearchResources method
+func NewSearchResourcesRequest(server string, params *SearchResourcesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateSessionRequest calls the generic CreateSession builder with application/json body
 func NewCreateSessionRequest(server string, body CreateSessionJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -7783,6 +7910,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/operator/monitors:delete (the `DeleteOperatorMonitor` operationId).
 	DeleteOperatorMonitorWithResponse(ctx context.Context, params *DeleteOperatorMonitorParams, body DeleteOperatorMonitorJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOperatorMonitorResponse, error)
+
+	// SearchResourcesWithResponse Search the bounded operational resource index
+	//
+	// Returns server-ranked resources visible to the caller. The v1 index currently contains monitors and is designed to add further resource types without changing the response shape.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/search (the `SearchResources` operationId).
+	SearchResourcesWithResponse(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*SearchResourcesResponse, error)
 
 	// CreateSessionWithBodyWithResponse performs a POST /v1/sessions (the `CreateSession` operationId) request,
 	// with any type of body and a specified content type.
@@ -10654,6 +10790,54 @@ func (r DeleteOperatorMonitorResponse) ContentType() string {
 	return ""
 }
 
+type SearchResourcesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SearchResultPage
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SearchResourcesResponse) GetJSON200() *SearchResultPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SearchResourcesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SearchResourcesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchResourcesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchResourcesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchResourcesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateSessionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11849,6 +12033,21 @@ func (c *ClientWithResponses) DeleteOperatorMonitorWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseDeleteOperatorMonitorResponse(rsp)
+}
+
+// SearchResourcesWithResponse Search the bounded operational resource index
+//
+// Returns server-ranked resources visible to the caller. The v1 index currently contains monitors and is designed to add further resource types without changing the response shape.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/search (the `SearchResources` operationId).
+func (c *ClientWithResponses) SearchResourcesWithResponse(ctx context.Context, params *SearchResourcesParams, reqEditors ...RequestEditorFn) (*SearchResourcesResponse, error) {
+	rsp, err := c.SearchResources(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchResourcesResponse(rsp)
 }
 
 // CreateSessionWithBodyWithResponse performs a POST /v1/sessions (the `CreateSession` operationId) request,
@@ -13879,6 +14078,39 @@ func ParseDeleteOperatorMonitorResponse(rsp *http.Response) (*DeleteOperatorMoni
 			return nil, err
 		}
 		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchResourcesResponse parses an HTTP response from a SearchResourcesWithResponse call
+func ParseSearchResourcesResponse(rsp *http.Response) (*SearchResourcesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchResourcesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SearchResultPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

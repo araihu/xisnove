@@ -1,6 +1,24 @@
 -- name: ManagementGetLocation :one
 SELECT id, name, enabled, created_at, updated_at FROM locations WHERE id = sqlc.arg(id);
 
+-- name: ManagementSearchResources :many
+SELECT id, name, description, kind,
+  CASE
+    WHEN lower(name) = lower(sqlc.arg(search_query)) OR lower(id::text) = lower(sqlc.arg(search_query)) THEN 0
+    WHEN left(lower(name), length(sqlc.arg(search_query))) = lower(sqlc.arg(search_query)) THEN 1
+    WHEN strpos(lower(name), lower(sqlc.arg(search_query))) > 0 THEN 2
+    WHEN strpos(lower(description), lower(sqlc.arg(search_query))) > 0 THEN 3
+    ELSE 4
+  END AS search_rank
+FROM monitors
+WHERE strpos(lower(name), lower(sqlc.arg(search_query))) > 0
+   OR strpos(lower(description), lower(sqlc.arg(search_query))) > 0
+   OR strpos(lower(id::text), lower(sqlc.arg(search_query))) > 0
+ORDER BY search_rank ASC,
+  display_order ASC,
+  id ASC
+LIMIT sqlc.arg(row_limit);
+
 -- name: ManagementListLocations :many
 SELECT id, name, enabled, created_at, updated_at
 FROM locations

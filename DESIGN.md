@@ -59,6 +59,8 @@ The first viewport answers three questions in order: what needs attention, what 
 
 The organization-owned Arai Hû theme is the default palette. It overrides Goshtoso semantic roles from a pinned stylesheet loaded after Goshtoso; X-9 does not modify the Goshtoso or Minimal base themes, and both remain selectable. Every theme supplies light and dark semantic counterparts.
 
+Identity assets are pinned from `araihu/assets@ab01f1a0f592e4f1398173df04e4f8fc013cb21a`. Desktop light mode uses the canonical Xisnove V10 logo; compact/mobile and dark compositions use the matching normal or reverse mark. Do not redraw, recolor, or substitute the Arai Hû cloud.
+
 **The Signal Rarity Rule.** Primary color identifies navigation, focus, selection, and the most important action. It does not wash large passive surfaces.
 
 **The Evidence Rule.** Success, warning, danger, pending, and unknown use their semantic text/background roles with an explicit word or symbol.
