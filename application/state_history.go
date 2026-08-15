@@ -1,6 +1,7 @@
 package application
 
 import (
+	"container/heap"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,9 @@ const (
 	DefaultStateTickHistoryWindow = 3 * time.Hour
 	DefaultStateTickHistoryLimit  = 4096
 	MaxStateTickHistoryLimit      = 10000
+	// Fetch the full public bound plus one row before causal ordering and
+	// truncation. Storage ordering cannot safely decide which equal-timestamp
+	// causal parents are needed for the newest public rows.
 	maxStateTickHistoryQueryLimit = MaxStateTickHistoryLimit + 1
 )
 
@@ -23,8 +27,8 @@ const (
 var ErrInvalidStateTickHistory = errors.New("invalid state tick history")
 
 // StateTickHistoryView is a bounded immutable history snapshot for one
-// monitor. Ticks are ordered by occurredAt, then causal parent/child relation,
-// then stable tick ID.
+// monitor. Ticks are chronological; equal-timestamp groups are topologically
+// ordered by causal parent/child relation with stable ID tie-breaking.
 type StateTickHistoryView struct {
 	MonitorID   domain.MonitorID
 	StartsAt    time.Time
@@ -105,14 +109,19 @@ func (s *StateTickHistoryService) GetMonitorStateHistory(
 		if repositories.StateTicks == nil {
 			return ErrInvalidStateTickHistory
 		}
+		// Fetch before truncation so a storage-level timestamp/ID order cannot
+		// omit a causal parent needed to order the newest public rows.
 		var err error
 		ticks, err = repositories.StateTicks.ListStateTicks(
-			ctx, monitorID, start, end, requestedLimit+1,
+			ctx, monitorID, start, end, maxStateTickHistoryQueryLimit,
 		)
 		return err
 	})
 	if err != nil {
 		return StateTickHistoryView{}, err
+	}
+	if len(ticks) > maxStateTickHistoryQueryLimit {
+		return StateTickHistoryView{}, ErrInvalidStateTickHistory
 	}
 
 	projected := make([]domain.StateTick, len(ticks))
@@ -128,7 +137,10 @@ func (s *StateTickHistoryService) GetMonitorStateHistory(
 		seenIDs[tick.ID] = struct{}{}
 		projected[index] = tick.Clone()
 	}
-	slices.SortStableFunc(projected, compareStateTicks)
+	projected, err = orderStateTicks(projected)
+	if err != nil {
+		return StateTickHistoryView{}, err
+	}
 	truncated := len(projected) > requestedLimit
 	if truncated {
 		projected = projected[len(projected)-requestedLimit:]
@@ -139,27 +151,100 @@ func (s *StateTickHistoryService) GetMonitorStateHistory(
 	}, nil
 }
 
-// compareStateTicks keeps causal lifecycle transitions ordered when storage
-// timestamps tie. A maintenance terminal tick points at its deterministic
-// activation tick through CausalTickID, so the start remains before the end
-// without imposing a global lifecycle rank on unrelated observations.
-func compareStateTicks(left, right domain.StateTick) int {
-	if order := left.OccurredAt.Compare(right.OccurredAt); order != 0 {
-		return order
+// orderStateTicks orders chronological groups and topologically resolves
+// causal edges inside each equal-timestamp group. Kahn's algorithm uses tick
+// IDs as the ready-queue tie-break, giving a strict deterministic order while
+// ensuring every causal parent precedes its child. A cycle is malformed
+// immutable history and is rejected rather than being silently reordered.
+func orderStateTicks(ticks []domain.StateTick) ([]domain.StateTick, error) {
+	slices.SortStableFunc(ticks, func(left, right domain.StateTick) int {
+		return left.OccurredAt.Compare(right.OccurredAt)
+	})
+	ordered := make([]domain.StateTick, 0, len(ticks))
+	for start := 0; start < len(ticks); {
+		end := start + 1
+		for end < len(ticks) && ticks[end].OccurredAt.Equal(ticks[start].OccurredAt) {
+			end++
+		}
+		group, err := orderEqualStateTickGroup(ticks[start:end])
+		if err != nil {
+			return nil, err
+		}
+		ordered = append(ordered, group...)
+		start = end
 	}
-	if left.CausalTickID != nil && *left.CausalTickID == right.ID {
-		return 1
+	return ordered, nil
+}
+
+func orderEqualStateTickGroup(group []domain.StateTick) ([]domain.StateTick, error) {
+	byID := make(map[string]int, len(group))
+	for index, tick := range group {
+		byID[tick.ID] = index
 	}
-	if right.CausalTickID != nil && *right.CausalTickID == left.ID {
-		return -1
+	children := make([][]int, len(group))
+	indegree := make([]int, len(group))
+	for childIndex, tick := range group {
+		if tick.CausalTickID == nil {
+			continue
+		}
+		parentIndex, exists := byID[*tick.CausalTickID]
+		if !exists {
+			// The causal parent may be outside the requested window or the
+			// bounded storage fetch. Chronological ordering still applies.
+			continue
+		}
+		children[parentIndex] = append(children[parentIndex], childIndex)
+		indegree[childIndex]++
 	}
-	if left.ID < right.ID {
-		return -1
+
+	ready := &stateTickReadyHeap{ticks: group}
+	for index, degree := range indegree {
+		if degree == 0 {
+			ready.indices = append(ready.indices, index)
+		}
 	}
-	if left.ID > right.ID {
-		return 1
+	heap.Init(ready)
+	ordered := make([]domain.StateTick, 0, len(group))
+	for ready.Len() > 0 {
+		index := heap.Pop(ready).(int)
+		ordered = append(ordered, group[index])
+		for _, childIndex := range children[index] {
+			indegree[childIndex]--
+			if indegree[childIndex] == 0 {
+				heap.Push(ready, childIndex)
+			}
+		}
 	}
-	return 0
+	if len(ordered) != len(group) {
+		return nil, ErrInvalidStateTickHistory
+	}
+	return ordered, nil
+}
+
+type stateTickReadyHeap struct {
+	ticks   []domain.StateTick
+	indices []int
+}
+
+func (h stateTickReadyHeap) Len() int { return len(h.indices) }
+
+func (h stateTickReadyHeap) Less(left, right int) bool {
+	return h.ticks[h.indices[left]].ID < h.ticks[h.indices[right]].ID
+}
+
+func (h stateTickReadyHeap) Swap(left, right int) {
+	h.indices[left], h.indices[right] = h.indices[right], h.indices[left]
+}
+
+func (h *stateTickReadyHeap) Push(value any) {
+	h.indices = append(h.indices, value.(int))
+}
+
+func (h *stateTickReadyHeap) Pop() any {
+	last := len(h.indices) - 1
+	value := h.indices[last]
+	h.indices = h.indices[:last]
+	return value
 }
 
 // NormalizeStateTickHistoryQueryLimit returns a bounded storage limit with

@@ -2,10 +2,12 @@ package postgres_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/araihu/xisnove/application"
 	"github.com/araihu/xisnove/domain"
 	"github.com/araihu/xisnove/internal/adapters/postgres"
 	"github.com/google/uuid"
@@ -78,4 +80,87 @@ func TestStateTickRepositoryRetainsNewestRowsWithSubMillisecondBoundaries(t *tes
 	if !ticks[0].OccurredAt.Equal(base.Add(time.Nanosecond)) || !ticks[1].OccurredAt.Equal(base.Add(2*time.Nanosecond)) {
 		t.Fatalf("timestamps = %s, %s, want sub-millisecond precision preserved", ticks[0].OccurredAt, ticks[1].OccurredAt)
 	}
+}
+
+func TestPostgresStateHistoryOrdersEqualTimestampCausalGroupBeforeLimit(t *testing.T) {
+	baseURL := os.Getenv("XISNOVE_TEST_POSTGRES_URL")
+	if baseURL == "" {
+		t.Skip("XISNOVE_TEST_POSTGRES_URL is not set")
+	}
+	databaseURL := newPostgresTestSchema(t, baseURL)
+	ctx := context.Background()
+	db, err := postgres.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := postgres.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	monitorID := uuid.MustParse("00000000-0000-4000-8000-000000000099")
+	store := postgres.NewStore(db)
+	monitor, err := domain.NewHTTPMonitor(domain.NewHTTPMonitorParams{
+		ID: domain.MonitorID(monitorID.String()), Name: "state history", Interval: time.Minute,
+		Timeout: 5 * time.Second, FailureThreshold: 1, RecoveryThreshold: 1,
+		HTTP: domain.HTTPProbe{URL: "https://example.test/health"}, CreatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Repositories().Monitors.Create(ctx, monitor); err != nil {
+		t.Fatal(err)
+	}
+	at := now.Add(-time.Minute)
+	parentID := "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	childID := "00000000-0000-4000-8000-000000000001"
+	grandchildID := "88888888-8888-4888-8888-888888888888"
+	parent := newPostgresHistoryTick(t, parentID, monitor.ID, at, nil)
+	child := newPostgresHistoryTick(t, childID, monitor.ID, at, &parent.ID)
+	grandchild := newPostgresHistoryTick(t, grandchildID, monitor.ID, at, &child.ID)
+	writer := store.Repositories().StateTickWriter
+	for _, tick := range []domain.StateTick{parent, child, grandchild} {
+		inserted, err := writer.AppendStateTick(ctx, tick)
+		if err != nil || !inserted {
+			t.Fatalf("append %q = %v, %v", tick.ID, inserted, err)
+		}
+	}
+
+	service := application.NewStateTickHistoryServiceWithClock(store, func() time.Time { return now })
+	for _, test := range []struct {
+		limit int
+		want  []string
+	}{
+		{limit: 1, want: []string{grandchildID}},
+		{limit: 2, want: []string{childID, grandchildID}},
+	} {
+		t.Run(fmt.Sprintf("limit-%d", test.limit), func(t *testing.T) {
+			view, err := service.GetMonitorStateHistory(ctx, monitor.ID, nil, nil, &test.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !view.Truncated || len(view.Ticks) != len(test.want) {
+				t.Fatalf("view = %#v", view)
+			}
+			for index, wantID := range test.want {
+				if view.Ticks[index].ID != wantID {
+					t.Fatalf("tick %d = %q, want %q; view = %#v", index, view.Ticks[index].ID, wantID, view.Ticks)
+				}
+			}
+		})
+	}
+}
+
+func newPostgresHistoryTick(t *testing.T, id string, monitorID domain.MonitorID, at time.Time, causalTickID *string) domain.StateTick {
+	t.Helper()
+	tick, err := domain.NewStateTick(domain.NewStateTickParams{
+		ID: id, MonitorID: monitorID, Lifecycle: domain.MonitorLifecycleActive,
+		Health: domain.HealthUnknown, ReasonCode: domain.StateTickReasonMaintenance,
+		ActionID: uuid.NewString(), Actor: domain.StateTickActor{Kind: domain.StateTickActorSystem},
+		OccurredAt: at, CausalTickID: causalTickID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tick
 }

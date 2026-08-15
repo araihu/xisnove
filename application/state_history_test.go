@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -36,8 +37,67 @@ func TestStateTickHistoryServiceBoundsAndOrdersTicks(t *testing.T) {
 	if view.Ticks[0].ID != "tick-2" || view.Ticks[1].ID != "tick-3" {
 		t.Fatalf("ticks = %#v, want newest deterministic order", view.Ticks)
 	}
-	if repository.limit != 3 {
-		t.Fatalf("repository limit = %d, want one extra row", repository.limit)
+	if repository.limit != maxStateTickHistoryQueryLimit {
+		t.Fatalf("repository limit = %d, want bounded causal fetch", repository.limit)
+	}
+}
+
+func TestStateTickHistoryServiceTopologicallyOrdersEqualTimestampCausalGroup(t *testing.T) {
+	now := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	at := now.Add(-time.Minute)
+	parent := newCausalHistoryTestTick(t, "z-parent", "monitor-1", at, nil)
+	unrelated := newCausalHistoryTestTick(t, "b-unrelated", "monitor-1", at, nil)
+	child := newCausalHistoryTestTick(t, "a-child", "monitor-1", at, &parent.ID)
+	grandchild := newCausalHistoryTestTick(t, "m-grandchild", "monitor-1", at, &child.ID)
+	repository := &stateTickHistoryRepository{ticks: []domain.StateTick{grandchild, parent, child, unrelated}}
+	store := &stateTickHistoryStore{repositories: Repositories{
+		Monitors:   &stateTickHistoryMonitorRepository{},
+		StateTicks: repository,
+	}}
+	service := NewStateTickHistoryServiceWithClock(store, func() time.Time { return now })
+
+	for _, test := range []struct {
+		limit int
+		want  []string
+	}{
+		{limit: 1, want: []string{"m-grandchild"}},
+		{limit: 2, want: []string{"a-child", "m-grandchild"}},
+		{limit: 4, want: []string{"b-unrelated", "z-parent", "a-child", "m-grandchild"}},
+	} {
+		t.Run(fmt.Sprintf("limit-%d", test.limit), func(t *testing.T) {
+			view, err := service.GetMonitorStateHistory(context.Background(), "monitor-1", nil, nil, &test.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (test.limit < 4) != view.Truncated || len(view.Ticks) != len(test.want) {
+				t.Fatalf("view = %#v, want truncated %v with %d ticks", view, test.limit < 4, len(test.want))
+			}
+			for index, wantID := range test.want {
+				if view.Ticks[index].ID != wantID {
+					t.Fatalf("tick %d = %q, want %q; full view = %#v", index, view.Ticks[index].ID, wantID, view.Ticks)
+				}
+			}
+			if repository.limit != maxStateTickHistoryQueryLimit {
+				t.Fatalf("repository limit = %d, want bounded causal fetch", repository.limit)
+			}
+		})
+	}
+}
+
+func TestStateTickHistoryServiceRejectsEqualTimestampCausalCycle(t *testing.T) {
+	now := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	at := now.Add(-time.Minute)
+	first := newCausalHistoryTestTick(t, "a-first", "monitor-1", at, nil)
+	second := newCausalHistoryTestTick(t, "b-second", "monitor-1", at, &first.ID)
+	first.CausalTickID = &second.ID
+	store := &stateTickHistoryStore{repositories: Repositories{
+		Monitors: &stateTickHistoryMonitorRepository{}, StateTicks: &stateTickHistoryRepository{
+			ticks: []domain.StateTick{first, second},
+		},
+	}}
+	service := NewStateTickHistoryServiceWithClock(store, func() time.Time { return now })
+	if _, err := service.GetMonitorStateHistory(context.Background(), "monitor-1", nil, nil, nil); !errors.Is(err, ErrInvalidStateTickHistory) {
+		t.Fatalf("error = %v, want ErrInvalidStateTickHistory", err)
 	}
 }
 
@@ -147,6 +207,20 @@ func newHistoryTestTick(t *testing.T, id string, monitorID domain.MonitorID, at 
 		ID: id, MonitorID: monitorID, Lifecycle: domain.MonitorLifecycleActive,
 		Health: health, ReasonCode: reason, ActionID: "action-" + id,
 		Actor: domain.StateTickActor{Kind: domain.StateTickActorSystem}, OccurredAt: at,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tick
+}
+
+func newCausalHistoryTestTick(t *testing.T, id string, monitorID domain.MonitorID, at time.Time, causalTickID *string) domain.StateTick {
+	t.Helper()
+	tick, err := domain.NewStateTick(domain.NewStateTickParams{
+		ID: id, MonitorID: monitorID, Lifecycle: domain.MonitorLifecycleActive,
+		Health: domain.HealthUnknown, ReasonCode: domain.StateTickReasonMaintenance,
+		ActionID: "action-" + id, Actor: domain.StateTickActor{Kind: domain.StateTickActorSystem},
+		OccurredAt: at, CausalTickID: causalTickID,
 	})
 	if err != nil {
 		t.Fatal(err)
