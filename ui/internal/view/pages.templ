@@ -139,6 +139,13 @@ templ AppStyles() {
 		.xis-detail-facts dt { color: var(--color-on-surface-muted); }
 		.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }
 		.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
+		.xis-availability { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }
+		.dark .xis-availability { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }
+		.xis-availability-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+		.xis-availability-heading h3 { margin: 0; }
+		.xis-availability-heading p { margin: .25rem 0 0; }
+		.xis-availability-chart { margin: .25rem 0 0; width: 100%; }
+		.xis-availability-chart figcaption { margin-top: .25rem; }
 		.xis-password { width: 100%; }
 		.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
@@ -446,9 +453,15 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 					<dt>Recover after</dt><dd>{ fmt.Sprintf("%d successes", monitor.RecoveryThreshold) }</dd>
 				</dl>
 			</section>
-			<section class="xis-detail-section" aria-labelledby="monitor-history-heading">
-				<h3 id="monitor-history-heading">Observation history</h3>
-				@alert.Alert(alert.Config{Title: "History unavailable in this view", Description: "History is not exposed by the current public API. Current health and configuration remain available without replacing the monitor list.", Tone: alert.ToneInfo, RootClass: "xis-state-info"})
+			<section class="xis-detail-section xis-availability" aria-labelledby="monitor-availability-heading">
+				<div class="xis-availability-heading">
+					<div>
+						<h3 id="monitor-availability-heading">Live availability</h3>
+						<p class="xis-meta">Probe state stream, last 24 samples.</p>
+					</div>
+					@healthBadge(health.State)
+				</div>
+				@monitorAvailabilityChart(monitor, health)
 			</section>
 		</div>
 		<aside class="xis-detail-rail" aria-label="Monitor metadata and actions">

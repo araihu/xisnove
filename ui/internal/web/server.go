@@ -19,18 +19,22 @@ import (
 
 	"github.com/a-h/templ"
 	shellassets "github.com/araihu/goshtoso-app-shells/consoleshell/assets"
+	chartassets "github.com/araihu/goshtoso-charts/assets"
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
+	"github.com/araihu/xisnove/ui/internal/availability"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/araihu/xisnove/ui/internal/security"
 	"github.com/araihu/xisnove/ui/internal/view"
+	"github.com/google/uuid"
 )
 
 const (
-	maxFormBytes      = 64 << 10
-	monitorPageSize   = int32(25)
-	maxSearchPageWalk = 4
+	maxFormBytes             = 64 << 10
+	monitorPageSize          = int32(25)
+	maxSearchPageWalk        = 4
+	availabilityPollInterval = 5 * time.Second
 )
 
 type AuthMode string
@@ -106,6 +110,7 @@ func New(cfg Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
 	mux.Handle("GET /assets/campaign/", seasonalassets.Handler())
+	mux.Handle("GET "+chartassets.Prefix, chartassets.Handler())
 	mux.Handle("GET /consoleshell/assets/", shellassets.Handler())
 	mux.Handle("GET /ui/seasonal/", seasonalassets.Handler())
 	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
@@ -116,6 +121,7 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("GET /ui/xisnove-bffc2ac.svg", servePreviousV3XisnoveFavicon)
 	mux.HandleFunc("GET /ui/xisnove-81300f5.svg", servePreviousXisnoveFavicon)
 	mux.HandleFunc("GET /ui/app.js", serveApplicationJS)
+	mux.HandleFunc("GET /monitors/{monitorID}/availability/events", s.monitorAvailabilityEvents)
 	mux.HandleFunc("/", s.route)
 
 	var handler http.Handler = mux
@@ -567,6 +573,70 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 			Detail: "The requested UI page does not exist.",
 			Code:   "not_found",
 		})
+	}
+}
+
+func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Request) {
+	credential, ok := s.authCredential(r)
+	if !ok {
+		w.Header().Set("X-Xisnove-App-Status", "401")
+		http.Error(w, "sign-in required", http.StatusUnauthorized)
+		return
+	}
+	monitorID, err := uuid.Parse(r.PathValue("monitorID"))
+	if err != nil {
+		http.Error(w, "invalid monitor id", http.StatusBadRequest)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming is unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	history := availability.NewHistory(availability.DefaultWindow)
+	send := func() bool {
+		pollCtx, cancel := context.WithTimeout(r.Context(), s.timeout)
+		health, healthErr := s.controlPlane.GetMonitorHealth(pollCtx, credential, monitorID)
+		cancel()
+		state := sdk.Unknown
+		if healthErr == nil {
+			state = health.State
+		} else if !errors.Is(healthErr, context.Canceled) && !errors.Is(healthErr, context.DeadlineExceeded) {
+			s.logger.WarnContext(r.Context(), "availability health poll failed", "monitor_id", monitorID.String(), "error", healthErr)
+		}
+		history.Add(state, time.Now().UTC())
+		payload, marshalErr := json.Marshal(history.Snapshot())
+		if marshalErr != nil {
+			s.logger.ErrorContext(r.Context(), "availability snapshot encode failed", "monitor_id", monitorID.String(), "error", marshalErr)
+			return false
+		}
+		if _, writeErr := fmt.Fprintf(w, "event: chart\ndata: %s\n\n", payload); writeErr != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
+	if !send() {
+		return
+	}
+	ticker := time.NewTicker(availabilityPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if !send() {
+				return
+			}
+		}
 	}
 }
 
@@ -1050,6 +1120,10 @@ func correlationID(ctx context.Context) string {
 
 func (s *server) requestTimeout(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/availability/events") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 		defer cancel()
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -1091,6 +1165,15 @@ func (w *statusRecorder) Write(body []byte) (int, error) {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(body)
+}
+
+func (w *statusRecorder) Flush() {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 func (s *server) securityHeaders(next http.Handler) http.Handler {

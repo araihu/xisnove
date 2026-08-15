@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/google/uuid"
@@ -233,8 +234,10 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 		`id="monitor-detail"`, `aria-labelledby="monitor-detail-heading"`,
 		`data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors?cursor=opaque%2Fpage&amp;q=dns&amp;selected=` + monitorID.String() + `"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `aria-selected="true"`,
 		`id="monitor-detail-heading" tabindex="-1" data-autofocus`, `id="monitor-detail-close"`, "Home DNS", "DEGRADED",
-		"Current health", "Configuration", "Observation history",
-		"History is not exposed by the current public API",
+		"Current health", "Configuration", "Live availability",
+		`data-goshtoso-charts-live-event="chart"`,
+		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events"`,
+		"Each bar is one probe sample",
 		"60 seconds", "2500 ms", "3 failures", "2 successes",
 		locationID.String(), "26 Jul 2026 12:30 UTC",
 		`href="/monitors?cursor=opaque%2Fpage&amp;q=dns"`, "Close detail",
@@ -250,6 +253,30 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	}
 	if strings.Count(body, "<h1") != 1 {
 		t.Errorf("selected monitor workspace changed page heading count: %s", body)
+	}
+}
+
+func TestMonitorAvailabilityChartUsesRequestNonceForInlineRuntime(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
+	data := MonitorList{
+		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Home DNS"}},
+		Health:   map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
+		Selected: monitorID.String(),
+	}
+	var rendered strings.Builder
+	ctx := templ.WithNonce(t.Context(), "chart-test-nonce")
+	if err := MonitorContent(data).Render(ctx, &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	if strings.Count(body, `nonce="chart-test-nonce"`) < 3 {
+		t.Fatalf("chart inline runtime scripts missing request nonce: %s", body)
+	}
+	if strings.Contains(body, "let goecharts_") || !strings.Contains(body, "var goecharts_") {
+		t.Fatal("chart renderer script is not safe for repeated HTMX swaps")
+	}
+	if strings.Contains(body, "<script>") {
+		t.Fatal("chart rendered an inline script without CSP nonce")
 	}
 }
 

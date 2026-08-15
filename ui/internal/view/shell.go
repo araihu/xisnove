@@ -8,6 +8,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso-app-shells/consoleshell"
+	"github.com/araihu/goshtoso-charts/components/dependencies"
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 )
@@ -18,9 +19,18 @@ func ConsolePage(title, csrfToken string, content templ.Component) templ.Compone
 		DocumentTitle: title + " · X-9",
 		Active:        "nav-monitors",
 		Content:       content,
-		Head:          AppStyles(),
+		Head:          consoleHead(),
 	}
 	return nonceConsole(consoleshell.Layout(consoleConfig(csrfToken), page))
+}
+
+func consoleHead() templ.Component {
+	return templ.ComponentFunc(func(ctx context.Context, writer io.Writer) error {
+		if err := dependencies.Dependencies().Render(ctx, writer); err != nil {
+			return err
+		}
+		return AppStyles().Render(ctx, writer)
+	})
 }
 
 func ConsoleFragment(title, csrfToken string, content templ.Component) templ.Component {
@@ -36,8 +46,8 @@ func ConsoleFragment(title, csrfToken string, content templ.Component) templ.Com
 func consoleConfig(csrfToken string) consoleshell.Config {
 	return consoleshell.Config{
 		Brand: consoleshell.Brand{
-			Name:     "X-9",
-			HomeURL:  "/monitors",
+			Name:    "X-9",
+			HomeURL: "/monitors",
 			ManagedLogo: &consoleshell.ManagedBrandAsset{
 				URL:    seasonalassets.LogoPath,
 				Alt:    "X-9",

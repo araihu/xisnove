@@ -388,8 +388,10 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		Handler:           runtimeHandler(application, &lifecycle),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      cfg.requestTimeout + 5*time.Second,
-		IdleTimeout:       60 * time.Second,
+		// Finite handlers carry requestTimeout; availability SSE owns its
+		// lifetime and must not be cut off by a connection write deadline.
+		WriteTimeout: 0,
+		IdleTimeout:  60 * time.Second,
 	}
 	listener, err := net.Listen("tcp", cfg.addr)
 	if err != nil {

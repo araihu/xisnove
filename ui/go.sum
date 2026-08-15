@@ -13,6 +13,8 @@ github.com/araihu/goshtoso v0.1.14 h1:u2xAwbnBqr4SVl1maz7jD372omPBd+3ux8/S0SbUmO
 github.com/araihu/goshtoso v0.1.14/go.mod h1:II6TL6BzW9OS2ux/7CkhcYEJcLdH97Kwkwe2qUOugNo=
 github.com/araihu/goshtoso-app-shells v0.1.4 h1:cTAxtm6oLsry8AAqFTgikWOuPrjA937mOqntIAjWjVk=
 github.com/araihu/goshtoso-app-shells v0.1.4/go.mod h1:P7CRRVDOMMbGs+clvddEmH+x2Jd35uk991WbU86nw84=
+github.com/araihu/goshtoso-charts v0.0.1 h1:PEAvPmfGaxOr7zSfR201nGXgrE69UGH8biko+gqpeZs=
+github.com/araihu/goshtoso-charts v0.0.1/go.mod h1:aTmjBKT/wAAsKRJt98nVxEKEFCN7XKKQbQTVVLkoeVk=
 github.com/araihu/xisnove v0.0.0-20260815003007-4a5bbf6e2100 h1:uvf5zYxaZsf/TvqRV7/E9yyfJ8hGH7Rd0WkK/9HzSW4=
 github.com/araihu/xisnove v0.0.0-20260815003007-4a5bbf6e2100/go.mod h1:7UzmdKrItZtm/8rGuJlu5s8BrxTaH8Whc2qBb/3kaLo=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
@@ -38,6 +40,8 @@ github.com/fatih/color v1.16.0 h1:zmkK9Ngbjj+K0yRhTVONQh1p/HknKYSlNT+vZCzyokM=
 github.com/fatih/color v1.16.0/go.mod h1:fL2Sau1YI5c0pdGEVCbKQbLXB6edEj1ZgiY4NijnWvE=
 github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=
 github.com/fsnotify/fsnotify v1.10.1/go.mod h1:TLheqan6HD6GBK6PrDWyDPBaEV8LspOxvPSjC+bVfgo=
+github.com/go-echarts/go-echarts/v2 v2.7.2 h1:lhypL1CekgqaLHM5V7fBPfaYGfimJ9dGylkk65aWlNI=
+github.com/go-echarts/go-echarts/v2 v2.7.2/go.mod h1:Z+spPygZRIEyqod69r0WMnkN5RV3MwhYDtw601w3G8w=
 github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 h1:KZaTBSyshWX3MP5jukJcNSuXDQTO+rNpt0J564dX/eg=
 github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68/go.mod h1:tphK2c80bpPhMOI4v6bIc2xWywPfbqi1Z06+RcrMkDg=
 github.com/gobwas/httphead v0.1.0 h1:exrUm0f4YX0L7EBwZHuCF4GDp8aJfVeBrlLQrs6NqWU=

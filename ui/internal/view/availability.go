@@ -1,0 +1,80 @@
+package view
+
+import (
+	"bytes"
+	"context"
+	"html"
+	"io"
+	"time"
+
+	"github.com/a-h/templ"
+	"github.com/araihu/goshtoso-charts/components/chartcontrol"
+	"github.com/araihu/goshtoso-charts/components/charttheme"
+	"github.com/araihu/goshtoso-charts/components/interactive"
+	"github.com/araihu/xisnove/sdk"
+	"github.com/araihu/xisnove/ui/internal/availability"
+)
+
+func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
+	observedAt := time.Now().UTC()
+	values := availability.StateSeries(health.State)
+
+	series := make([]interactive.BarSeries, 0, len(availability.SeriesNames()))
+	for index, name := range availability.SeriesNames() {
+		series = append(series, interactive.BarSeries{
+			Name: name,
+			Data: []interactive.BarData{{Value: values[index]}},
+			Options: interactive.SeriesOptions{
+				Stack:    "availability",
+				BarWidth: "70%",
+			},
+		})
+	}
+
+	chart := interactive.Bar(interactive.BarConfig{
+		Label:   "Live availability for " + monitor.Name,
+		Caption: "Each bar is one probe sample. Unknown means no confirmed observation.",
+		XAxis:   []string{observedAt.Format("15:04:05")},
+		Series:  series,
+		Width:   "100%",
+		Height:  "144px",
+		Options: interactive.ChartOptions{
+			Legend:    &interactive.LegendOptions{Show: interactive.Bool(true), Orient: "horizontal", Bottom: "0"},
+			Tooltip:   &interactive.TooltipOptions{Show: interactive.Bool(true), Trigger: "axis"},
+			XAxis:     &interactive.AxisOptions{Show: interactive.Bool(false)},
+			YAxis:     &interactive.AxisOptions{Show: interactive.Bool(false), Min: interactive.Float(0), Max: interactive.Float(1)},
+			Animation: interactive.Bool(false),
+			Controls:  chartcontrol.Options{Expand: interactive.Bool(false)},
+			Export:    &chartcontrol.ExportOptions{Disabled: true},
+		},
+		Style: charttheme.Style{Palette: charttheme.PaletteStatus, Class: "xis-availability-chart"},
+		Live: &interactive.LiveData{
+			URL:   "/monitors/" + monitor.Id.String() + "/availability/events",
+			Event: "chart",
+		},
+	})
+	return nonceChart(chart)
+}
+
+// nonceChart keeps chart-generated inline runtimes compatible with the UI CSP.
+// Chart dependencies already read the templ nonce; the interactive renderer
+// emits inline snippets, so attach the same request nonce before writing them.
+func nonceChart(component templ.Component) templ.Component {
+	return templ.ComponentFunc(func(ctx context.Context, writer io.Writer) error {
+		var body bytes.Buffer
+		if err := component.Render(ctx, &body); err != nil {
+			return err
+		}
+		nonce := templ.GetNonce(ctx)
+		bodyBytes := append([]byte(nil), body.Bytes()...)
+		// go-echarts emits top-level `let` declarations. HTMX history swaps can
+		// execute the same fragment again; `var` keeps those replays legal.
+		bodyBytes = bytes.ReplaceAll(bodyBytes, []byte("let goecharts_"), []byte("var goecharts_"))
+		bodyBytes = bytes.ReplaceAll(bodyBytes, []byte("let option_"), []byte("var option_"))
+		if nonce != "" {
+			bodyBytes = bytes.ReplaceAll(bodyBytes, []byte("<script"), []byte(`<script nonce="`+html.EscapeString(nonce)+`"`))
+		}
+		_, err := writer.Write(bodyBytes)
+		return err
+	})
+}

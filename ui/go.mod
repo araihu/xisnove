@@ -6,6 +6,7 @@ require (
 	github.com/a-h/templ v0.3.1020
 	github.com/araihu/goshtoso v0.1.14
 	github.com/araihu/goshtoso-app-shells v0.1.4
+	github.com/araihu/goshtoso-charts v0.0.1
 	github.com/araihu/xisnove v0.0.0-20260815003007-4a5bbf6e2100
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
@@ -23,6 +24,7 @@ require (
 	github.com/cli/browser v1.3.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
+	github.com/go-echarts/go-echarts/v2 v2.7.2 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect

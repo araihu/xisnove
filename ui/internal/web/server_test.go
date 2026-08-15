@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -8,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	chartassets "github.com/araihu/goshtoso-charts/assets"
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
@@ -60,11 +63,64 @@ func TestNoneAuthServesProtectedRoutesWithoutSession(t *testing.T) {
 	}
 }
 
+func TestMonitorAvailabilityEventsStreamsCompleteChartSnapshot(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000099")
+	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+	client.Health[monitorID] = sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up}
+	handler, _ := newTestHandlerWithModes(t, client, 10*time.Millisecond, []AuthMode{AuthModeNone})
+	testServer := httptest.NewServer(handler)
+	defer testServer.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := testServer.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("SSE status = %d: %s", response.StatusCode, body)
+	}
+	if got := response.Header.Get("Content-Type"); got != "text/event-stream; charset=utf-8" {
+		t.Fatalf("SSE Content-Type = %q", got)
+	}
+	reader := bufio.NewReader(response.Body)
+	if line, err := reader.ReadString('\n'); err != nil || line != "event: chart\n" {
+		t.Fatalf("SSE event line = %q, err=%v", line, err)
+	}
+	dataLine, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("SSE data line: %v", err)
+	}
+	var snapshot struct {
+		Categories []string `json:"categories"`
+		Series     []struct {
+			Name   string    `json:"name"`
+			Values []float64 `json:"values"`
+		} `json:"series"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(dataLine, "data: "))), &snapshot); err != nil {
+		t.Fatalf("decode SSE snapshot: %v; line=%q", err, dataLine)
+	}
+	if len(snapshot.Categories) != 1 || len(snapshot.Series) != 4 {
+		t.Fatalf("SSE snapshot shape = %#v", snapshot)
+	}
+	if snapshot.Series[0].Name != "Healthy" || len(snapshot.Series[0].Values) != 1 || snapshot.Series[0].Values[0] != 1 {
+		t.Fatalf("SSE healthy series = %#v", snapshot.Series[0])
+	}
+	cancel()
+}
+
 var csrfValuePattern = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
 func TestHandlerMountsEveryGoshtosoAndSeasonalRuntimeAssetDirectly(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	paths := []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", "/consoleshell/assets/shell.css", "/consoleshell/assets/shell.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL}
+	paths := []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", "/consoleshell/assets/shell.css", "/consoleshell/assets/shell.js", chartassets.RuntimeURL, assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL}
 	for _, descriptor := range seasonalassets.Descriptors() {
 		paths = append(paths, descriptor.Path)
 	}
