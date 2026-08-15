@@ -34,6 +34,12 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
 	unknownID := uuid.MustParse("10000000-0000-4000-8000-000000000002")
 	locationID := uuid.MustParse("20000000-0000-4000-8000-000000000001")
+	actionID := uuid.MustParse("50000000-0000-4000-8000-000000000001")
+	actorID := uuid.MustParse("60000000-0000-4000-8000-000000000001")
+	userActionID := uuid.MustParse("70000000-0000-4000-8000-000000000001")
+	observationID := uuid.MustParse("80000000-0000-4000-8000-000000000001")
+	causalTickID := uuid.MustParse("90000000-0000-4000-8000-000000000001")
+	causalDependencyID := uuid.MustParse("a0000000-0000-4000-8000-000000000001")
 	observedAt := browserFixtureObservedAt()
 	homeDNS := sdk.Monitor{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", Kind: sdk.MonitorKindDns, Enabled: true, Public: true, LocationId: locationID, RequiredLocation: true, IntervalSeconds: 60, TimeoutMillis: 2500, FailureThreshold: 3, RecoveryThreshold: 2, UpdatedAt: observedAt}
 	vpsEdge := sdk.Monitor{Id: unknownID, Name: "VPS edge", Description: "External ingress", Kind: sdk.MonitorKindHttp, Enabled: true, LocationId: locationID, IntervalSeconds: 30, TimeoutMillis: 1500, FailureThreshold: 2, RecoveryThreshold: 2, UpdatedAt: observedAt}
@@ -156,8 +162,8 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(sdk.MonitorStateHistory{
 				MonitorId: routeMonitorID, StartsAt: observedAt.Add(-3 * time.Hour), EndsAt: observedAt,
 				GeneratedAt: observedAt, Ticks: []sdk.MonitorStateTick{
-					{Id: uuid.MustParse("40000000-0000-4000-8000-000000000001"), MonitorId: routeMonitorID, Lifecycle: sdk.Active, Health: sdk.Up, ReasonCode: sdk.StateTickReasonCodeProbeSuccess, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem}, OccurredAt: observedAt.Add(-2 * time.Hour)},
-					{Id: uuid.MustParse("40000000-0000-4000-8000-000000000002"), MonitorId: routeMonitorID, Lifecycle: sdk.Active, Health: sdk.Degraded, ReasonCode: sdk.StateTickReasonCodeProbeFailure, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindAgent}, OccurredAt: observedAt.Add(-time.Hour)},
+					{Id: uuid.MustParse("40000000-0000-4000-8000-000000000001"), MonitorId: routeMonitorID, Lifecycle: sdk.Active, Health: sdk.Up, ReasonCode: sdk.StateTickReasonCodeProbeSuccess, ActionId: actionID, Actor: sdk.StateTickActor{Id: &actorID, Kind: sdk.StateTickActorKindSystem}, UserActionId: &userActionID, ObservationId: &observationID, CausalTickId: &causalTickID, CausalDependencyId: &causalDependencyID, OccurredAt: observedAt.Add(-2 * time.Hour)},
+					{Id: uuid.MustParse("40000000-0000-4000-8000-000000000002"), MonitorId: routeMonitorID, Lifecycle: sdk.Active, Health: sdk.Degraded, ReasonCode: sdk.StateTickReasonCodeProbeFailure, ActionId: actionID, Actor: sdk.StateTickActor{Id: &actorID, Kind: sdk.StateTickActorKindAgent}, UserActionId: &userActionID, ObservationId: &observationID, CausalTickId: &causalTickID, CausalDependencyId: &causalDependencyID, OccurredAt: observedAt.Add(-time.Hour)},
 				},
 			})
 		default:
@@ -322,6 +328,23 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		chromedp.Evaluate(`(()=>{const owner=document.querySelector('#monitor-detail'),list=owner?.querySelector('[data-state-ticks-list]'),status=owner?.querySelector('[data-state-history-live-status]');return {connected:owner?.dataset.stateTicksConnected === 'true',count:list?.children.length||0,status:status?.textContent||''}})()`, &stateTicksReady),
 	); err != nil || !stateTicksReady.Connected || stateTicksReady.Count == 0 || stateTicksReady.Status != "State history updated" {
 		t.Fatalf("state-ticks SSE consumer did not update drawer: state=%#v err=%v", stateTicksReady, err)
+	}
+	var stateTickProvenance struct {
+		ActionID            string `json:"actionId"`
+		ActorID             string `json:"actorId"`
+		ActorKind           string `json:"actorKind"`
+		UserActionID        string `json:"userActionId"`
+		ObservationID       string `json:"observationId"`
+		CausalTickID        string `json:"causalTickId"`
+		CausalDependencyID  string `json:"causalDependencyId"`
+		VisibleTextContains bool   `json:"visibleTextContains"`
+	}
+	provenanceScript := fmt.Sprintf(`(()=>{const item=document.querySelector('[data-state-ticks-list] [data-state-tick]');const text=item?.textContent||'';return {actionId:item?.dataset.stateActionId||'',actorId:item?.dataset.stateActorId||'',actorKind:item?.dataset.stateActorKind||'',userActionId:item?.dataset.stateUserActionId||'',observationId:item?.dataset.stateObservationId||'',causalTickId:item?.dataset.stateCausalTickId||'',causalDependencyId:item?.dataset.stateCausalDependencyId||'',visibleTextContains:[%q,%q,%q,%q,%q,%q].some(id=>text.includes(id))}})()`, actionID.String(), actorID.String(), userActionID.String(), observationID.String(), causalTickID.String(), causalDependencyID.String())
+	if err := chromedp.Run(ctx, chromedp.Evaluate(provenanceScript, &stateTickProvenance)); err != nil {
+		t.Fatalf("state-ticks provenance DOM: %v", err)
+	}
+	if stateTickProvenance.ActionID != actionID.String() || stateTickProvenance.ActorID != actorID.String() || stateTickProvenance.ActorKind != string(sdk.StateTickActorKindSystem) || stateTickProvenance.UserActionID != userActionID.String() || stateTickProvenance.ObservationID != observationID.String() || stateTickProvenance.CausalTickID != causalTickID.String() || stateTickProvenance.CausalDependencyID != causalDependencyID.String() || stateTickProvenance.VisibleTextContains {
+		t.Fatalf("state-ticks provenance was not preserved safely: %#v", stateTickProvenance)
 	}
 	assertSelectedMonitorIdentity(t, ctx, monitorID.String())
 	assertAccessibleSurface(t, ctx, "#monitor-content")

@@ -137,6 +137,17 @@ func stateTickHealth(state sdk.HealthState) sdk.HealthState {
 	return healthStateValue(state)
 }
 
+func stateTickID(id sdk.MonitorID) string {
+	return id.String()
+}
+
+func stateTickOptionalID(id *sdk.MonitorID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
+}
+
 func stateTickProvenance(tick sdk.MonitorStateTick) string {
 	actor := strings.ToLower(strings.TrimSpace(string(tick.Actor.Kind)))
 	if actor == "" {

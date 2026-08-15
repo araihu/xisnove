@@ -515,17 +515,18 @@ templ MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) 
 			<span class="xis-meta" aria-live="polite" data-state-history-live-status>Waiting for live state updates.</span>
 		</div>
 		if historyError != "" {
-			<div class="xis-state-history-error xis-state-warning" data-state-history-status="error" role="alert">
+			<div class="xis-state-history-error xis-state-warning" data-state-history-error data-state-history-status="error" role="alert">
 				<strong>State history unavailable</strong>
 				<span>{ historyError }</span>
 			</div>
+			<ol class="xis-state-ticks" data-state-ticks-list hidden aria-live="polite"></ol>
 		} else if len(history.Ticks) == 0 {
 			<div class="xis-state-history-gap" data-state-history-gap role="status">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div>
 			<ol class="xis-state-ticks" data-state-ticks-list hidden aria-live="polite"></ol>
 		} else {
 			<ol class="xis-state-ticks" data-state-ticks-list aria-live="polite">
 				for _, tick := range history.Ticks {
-					<li class="xis-state-tick" data-state-health={ string(stateTickHealth(tick.Health)) }>
+					<li class="xis-state-tick" data-state-tick="true" data-state-health={ string(stateTickHealth(tick.Health)) } data-state-action-id={ stateTickID(tick.ActionId) } data-state-actor-id={ stateTickOptionalID(tick.Actor.Id) } data-state-actor-kind={ string(tick.Actor.Kind) } data-state-user-action-id={ stateTickOptionalID(tick.UserActionId) } data-state-observation-id={ stateTickOptionalID(tick.ObservationId) } data-state-causal-tick-id={ stateTickOptionalID(tick.CausalTickId) } data-state-causal-dependency-id={ stateTickOptionalID(tick.CausalDependencyId) }>
 						<div class="xis-state-tick-main">
 							<div class="xis-state-tick-summary">
 								@healthBadge(tick.Health)
@@ -553,6 +554,8 @@ templ StateTicksConsumer() {
 			const source = new EventSource(streamURL);
 			const list = owner.querySelector('[data-state-ticks-list]');
 			const gap = owner.querySelector('[data-state-history-gap]');
+			const error = owner.querySelector('[data-state-history-error]');
+			const history = owner.querySelector('[data-state-history-window]');
 			const status = owner.querySelector('[data-state-history-live-status]');
 			const asText = value => value == null ? '' : String(value);
 			const label = value => asText(value).replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase()) || 'Unknown';
@@ -573,7 +576,15 @@ templ StateTicksConsumer() {
 				for (const tick of payload.ticks) {
 					const item = document.createElement('li');
 					item.className = 'xis-state-tick';
+					item.dataset.stateTick = 'true';
 					item.dataset.stateHealth = asText(tick.health).toLowerCase() || 'unknown';
+					item.dataset.stateActionId = asText(tick.actionId);
+					item.dataset.stateActorId = asText(tick.actor?.id);
+					item.dataset.stateActorKind = asText(tick.actor?.kind);
+					item.dataset.stateUserActionId = asText(tick.userActionId);
+					item.dataset.stateObservationId = asText(tick.observationId);
+					item.dataset.stateCausalTickId = asText(tick.causalTickId);
+					item.dataset.stateCausalDependencyId = asText(tick.causalDependencyId);
 					const main = document.createElement('div');
 					main.className = 'xis-state-tick-main';
 					const summary = document.createElement('div');
@@ -604,6 +615,8 @@ templ StateTicksConsumer() {
 				}
 				list.hidden = payload.ticks.length === 0;
 				if (gap) gap.hidden = payload.ticks.length > 0;
+				if (error) error.hidden = true;
+				if (history) history.dataset.stateHistoryStatus = payload.ticks.length === 0 ? 'empty' : 'ready';
 				owner.dataset.stateHistoryStatus = payload.ticks.length === 0 ? 'empty' : 'ready';
 				if (status) status.textContent = 'State history updated';
 				owner.dispatchEvent(new CustomEvent('xisnove:state-ticks', {bubbles: true, detail: payload}));
@@ -611,7 +624,7 @@ templ StateTicksConsumer() {
 			source.addEventListener('state-ticks', event => {
 				try { render(JSON.parse(event.data)); } catch (_) { if (status) status.textContent = 'State history unavailable'; }
 			});
-			source.addEventListener('auth-error', () => { if (status) status.textContent = 'State history unavailable'; });
+			source.addEventListener('auth-error', () => { source.close(); window.location.assign('/login'); });
 			owner.dataset.stateTicksConnected = 'true';
 			const cleanup = new MutationObserver(() => {
 				if (!document.contains(owner)) { source.close(); cleanup.disconnect(); }

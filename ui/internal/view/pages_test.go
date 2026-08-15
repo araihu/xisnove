@@ -452,7 +452,11 @@ func TestMonitorContentNamesUnavailableSelectionWithoutReplacingTheList(t *testi
 func TestMonitorContentRendersBoundedStateTickHistoryAndProvenance(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000011")
 	locationID := uuid.MustParse("20000000-0000-4000-8000-000000000011")
+	actionID := uuid.MustParse("50000000-0000-4000-8000-000000000011")
+	actorID := uuid.MustParse("60000000-0000-4000-8000-000000000011")
 	userActionID := uuid.MustParse("30000000-0000-4000-8000-000000000011")
+	observationID := uuid.MustParse("70000000-0000-4000-8000-000000000011")
+	causalTickID := uuid.MustParse("80000000-0000-4000-8000-000000000011")
 	causalDependencyID := uuid.MustParse("40000000-0000-4000-8000-000000000011")
 	base := time.Date(2026, time.August, 15, 9, 0, 0, 0, time.UTC)
 	history := sdk.MonitorStateHistory{
@@ -462,7 +466,7 @@ func TestMonitorContentRendersBoundedStateTickHistoryAndProvenance(t *testing.T)
 		Ticks: []sdk.MonitorStateTick{
 			{MonitorId: monitorID, LocationId: &locationID, Lifecycle: sdk.Active, Health: sdk.Up, ReasonCode: sdk.StateTickReasonCodeProbeSuccess, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem}, OccurredAt: base.Add(15 * time.Minute)},
 			{MonitorId: monitorID, LocationId: &locationID, Lifecycle: sdk.Active, Health: sdk.Degraded, ReasonCode: sdk.StateTickReasonCodeProbeFailure, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindAgent}, OccurredAt: base.Add(75 * time.Minute)},
-			{MonitorId: monitorID, Lifecycle: sdk.Paused, Health: sdk.Unknown, ReasonCode: sdk.StateTickReasonCodeDependencyPaused, ActionId: uuid.MustParse("50000000-0000-4000-8000-000000000011"), UserActionId: &userActionID, CausalDependencyId: &causalDependencyID, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindUser}, OccurredAt: base.Add(150 * time.Minute)},
+			{MonitorId: monitorID, Lifecycle: sdk.Paused, Health: sdk.Unknown, ReasonCode: sdk.StateTickReasonCodeDependencyPaused, ActionId: actionID, UserActionId: &userActionID, ObservationId: &observationID, CausalTickId: &causalTickID, CausalDependencyId: &causalDependencyID, Actor: sdk.StateTickActor{Id: &actorID, Kind: sdk.StateTickActorKindUser}, OccurredAt: base.Add(150 * time.Minute)},
 		},
 	}
 	data := MonitorList{
@@ -483,6 +487,8 @@ func TestMonitorContentRendersBoundedStateTickHistoryAndProvenance(t *testing.T)
 		"system", "agent", "user", "User action", "Causal dependency",
 		`data-state-history-window="3h"`, `data-state-health="unknown"`, `data-state-health="degraded"`,
 		"xis-state-unknown", "xis-state-warning",
+		`data-state-tick="true"`, `data-state-action-id="` + actionID.String() + `"`, `data-state-actor-id="` + actorID.String() + `"`, `data-state-actor-kind="user"`,
+		`data-state-user-action-id="` + userActionID.String() + `"`, `data-state-observation-id="` + observationID.String() + `"`, `data-state-causal-tick-id="` + causalTickID.String() + `"`, `data-state-causal-dependency-id="` + causalDependencyID.String() + `"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("state history drawer missing %q", want)
@@ -558,6 +564,11 @@ func TestMonitorContentRendersStateHistoryErrorInsteadOfAnEmptyGap(t *testing.T)
 			t.Errorf("state history error missing %q", want)
 		}
 	}
+	for _, want := range []string{`data-state-history-error`, `data-state-ticks-list`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("state history error cannot be replaced by SSE: missing %q", want)
+		}
+	}
 	if strings.Contains(body, "No state ticks recorded") {
 		t.Fatal("state history error was rendered as an empty history gap")
 	}
@@ -624,6 +635,8 @@ func TestMonitorDetailInstallsStateTickSSEConsumer(t *testing.T) {
 		`data-state-ticks-consumer="true"`, `addEventListener('state-ticks'`, `new EventSource(`,
 		`data-state-ticks-list`, `xisnove:state-ticks`, `State history updated`,
 		`const monitorID = owner?.dataset.monitorId`, `encodeURIComponent(monitorID) + '/availability/events'`,
+		`item.dataset.stateActionId`, `item.dataset.stateActorId`, `item.dataset.stateActorKind`, `item.dataset.stateUserActionId`, `item.dataset.stateObservationId`, `item.dataset.stateCausalTickId`, `item.dataset.stateCausalDependencyId`,
+		`data-state-history-error`, `if (error) error.hidden = true`, `source.close(); window.location.assign('/login')`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("state tick SSE consumer missing %q", want)
