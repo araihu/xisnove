@@ -629,6 +629,15 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 			t.Errorf("application search shortcut missing %q", want)
 		}
 	}
+	for _, want := range []string{
+		`document.addEventListener("drawer:close-request", event => {`,
+		`if (event.detail?.id !== "monitor-detail-drawer" || event.defaultPrevented) return;`,
+		`pendingDrawerReturnFocus = owner.dataset.monitorId;`,
+	} {
+		if !strings.Contains(recorder.Body.String(), want) {
+			t.Errorf("drawer close focus listener missing %q", want)
+		}
+	}
 	for _, want := range []string{"script-src 'nonce-", "'strict-dynamic'", "'unsafe-eval'", "https://unpkg.com", "'self'", "connect-src 'self'"} {
 		if got := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, want) {
 			t.Errorf("Content-Security-Policy = %q, missing %q", got, want)

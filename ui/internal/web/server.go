@@ -502,6 +502,12 @@ const applicationJS = `(() => {
 	if (close?.dataset.monitorId) pendingDrawerReturnFocus = close.dataset.monitorId;
   }, true);
 
+  document.addEventListener("drawer:close-request", event => {
+	if (event.detail?.id !== "monitor-detail-drawer" || event.defaultPrevented) return;
+	const owner = document.querySelector(".xis-monitor-drawer[data-monitor-id]");
+	if (owner?.dataset.monitorId) pendingDrawerReturnFocus = owner.dataset.monitorId;
+  }, true);
+
   document.addEventListener("htmx:beforeRequest", event => {
     invalidateAuthoritativeRefresh();
     rememberFocus(event);
