@@ -3,30 +3,80 @@ package view
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"html"
 	"io"
+	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso-app-shells/consoleshell"
-	"github.com/araihu/goshtoso-charts/components/dependencies"
+	"github.com/araihu/goshtoso/components/head"
 	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 )
 
 func ConsolePage(title, csrfToken string, content templ.Component) templ.Component {
+	metadata := documentMetadata(title, consoleRoute(title), consoleDescription(title))
 	page := consoleshell.Page{
 		Title:         title,
-		DocumentTitle: title + " · X-9",
+		DocumentTitle: metadata.Title,
+		Description:   metadata.Description,
+		CanonicalURL:  metadata.CanonicalURL,
 		Active:        "nav-monitors",
 		Content:       content,
-		Head:          consoleHead(),
+		Head:          consoleHead(metadata),
 	}
 	return nonceConsole(consoleshell.Layout(consoleConfig(csrfToken), page))
 }
 
-func consoleHead() templ.Component {
+func consoleSocialMetadata(metadata head.MetadataConfig) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, writer io.Writer) error {
-		if err := dependencies.Dependencies().Render(ctx, writer); err != nil {
+		// consoleshell owns title, description, and canonical tags. Emit the
+		// remaining Goshtoso metadata here so each initial document has one copy.
+		values := []string{
+			`<meta property="og:url" content="` + html.EscapeString(metadata.CanonicalURL) + `">`,
+			`<meta property="og:type" content="` + html.EscapeString(string(metadata.OpenGraphType)) + `">`,
+			`<meta property="og:title" content="` + html.EscapeString(metadata.Title) + `">`,
+			`<meta property="og:description" content="` + html.EscapeString(metadata.Description) + `">`,
+			`<meta property="og:site_name" content="` + html.EscapeString(metadata.SiteName) + `">`,
+			`<meta property="og:locale" content="` + html.EscapeString(metadata.Locale) + `">`,
+			`<meta property="og:image" content="` + html.EscapeString(metadata.Image.URL) + `">`,
+			`<meta property="og:image:type" content="` + html.EscapeString(metadata.Image.MIMEType) + `">`,
+			fmt.Sprintf(`<meta property="og:image:width" content="%d">`, metadata.Image.Width),
+			fmt.Sprintf(`<meta property="og:image:height" content="%d">`, metadata.Image.Height),
+			`<meta property="og:image:alt" content="` + html.EscapeString(metadata.Image.Alt) + `">`,
+			`<meta name="twitter:card" content="` + html.EscapeString(string(metadata.TwitterCard)) + `">`,
+			`<meta name="twitter:title" content="` + html.EscapeString(metadata.Title) + `">`,
+			`<meta name="twitter:description" content="` + html.EscapeString(metadata.Description) + `">`,
+			`<meta name="twitter:image" content="` + html.EscapeString(metadata.Image.URL) + `">`,
+			`<meta name="twitter:image:alt" content="` + html.EscapeString(metadata.Image.Alt) + `">`,
+		}
+		for _, value := range values {
+			if _, err := io.WriteString(writer, value); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func consoleRoute(title string) string {
+	if strings.EqualFold(strings.TrimSpace(title), "monitors") {
+		return "/monitors"
+	}
+	return "/problem"
+}
+
+func consoleDescription(title string) string {
+	if strings.EqualFold(strings.TrimSpace(title), "monitors") {
+		return "Inspect Xisnove monitor health, lifecycle, provenance, and bounded state history."
+	}
+	return "Xisnove operator workspace."
+}
+
+func consoleHead(metadata head.MetadataConfig) templ.Component {
+	return templ.ComponentFunc(func(ctx context.Context, writer io.Writer) error {
+		if err := consoleSocialMetadata(metadata).Render(ctx, writer); err != nil {
 			return err
 		}
 		return AppStyles().Render(ctx, writer)

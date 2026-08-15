@@ -24,12 +24,14 @@ import (
 	"github.com/araihu/goshtoso/components/table"
 	"github.com/araihu/goshtoso/components/textinput"
 	"github.com/araihu/xisnove/sdk"
+	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 )
 
 type MonitorList struct {
 	Monitors []sdk.Monitor
 	Health map[string]sdk.MonitorHealth
 	StateHistory map[string]sdk.MonitorStateHistory
+	StateHistoryErrors map[string]string
 	Cursor string
 	NextCursor string
 	Query string
@@ -53,12 +55,16 @@ type GlobalSearchData struct {
 }
 
 templ Document(title string, content templ.Component) {
+	@DocumentRoute(documentMetadata(title, "/", "Xisnove cloud-native monitoring with immutable health history and operator-friendly incident context."), content)
+}
+
+templ DocumentRoute(metadata head.MetadataConfig, content templ.Component) {
 	<!doctype html>
 	<html lang="en" data-theme="araihu" x-data="{ theme: localStorage.getItem('xisnove-theme') || 'araihu', dark: localStorage.getItem('xisnove-mode') === 'dark' }" x-init="$el.dataset.theme = theme; localStorage.setItem('xisnove-theme', theme); $el.classList.toggle('dark', dark)">
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ title } · X-9</title>
+			@head.Metadata(metadata)
 			<link rel="icon" type="image/svg+xml" href="/ui/xisnove-ab01f1a.svg"/>
 			@head.Dependencies()
 			<link rel="stylesheet" href="/ui/araihu-v0.2.1.css"/>
@@ -130,12 +136,7 @@ templ AppStyles() {
 		.xis-monitor-drawer-panel { top: 4rem !important; }
 		.xis-monitor-drawer > div > div:first-child { z-index: 55 !important; }
 		.xis-monitor-drawer-panel { z-index: 60 !important; }
-		.xis-monitor-drawer-panel #monitor-detail-drawerTitle { display: flex; align-items: center; gap: .625rem; min-width: 0; overflow: visible; white-space: normal; }
-		.xis-monitor-drawer[data-monitor-state] #monitor-detail-drawerTitle::after { display: inline-flex; flex: 0 0 auto; align-items: center; border: 1px solid var(--color-outline-strong); border-radius: 9999px; padding: .2rem .55rem; color: var(--color-on-surface-muted); background: var(--color-surface); font-size: .7rem; line-height: 1; letter-spacing: .04em; }
-		.xis-monitor-drawer[data-monitor-state="UP"] #monitor-detail-drawerTitle::after { content: "UP"; border-color: var(--color-success); color: var(--color-on-success); background: var(--color-success); }
-		.xis-monitor-drawer[data-monitor-state="DEGRADED"] #monitor-detail-drawerTitle::after { content: "DEGRADED"; border-color: var(--color-warning); color: var(--color-on-warning); background: var(--color-warning); }
-		.xis-monitor-drawer[data-monitor-state="DOWN"] #monitor-detail-drawerTitle::after { content: "DOWN"; border-color: var(--color-danger); color: var(--color-on-danger); background: var(--color-danger); }
-		.xis-monitor-drawer[data-monitor-state="PENDING"] #monitor-detail-drawerTitle::after, .xis-monitor-drawer[data-monitor-state="UNKNOWN"] #monitor-detail-drawerTitle::after { content: "UNKNOWN"; }
+		.xis-monitor-drawer-panel #monitor-detail-drawerTitle { display: block; min-width: 0; overflow: visible; white-space: normal; }
 		.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
 		.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
 		.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
@@ -281,7 +282,7 @@ templ DarkModeToggle() {
 	</button>
 }
 
-templ LoginPage(csrfToken, errorMessage string) { @Document("Sign in", LoginContent(csrfToken, errorMessage)) }
+templ LoginPage(csrfToken, errorMessage string) { @DocumentRoute(documentMetadata("Sign in", "/login", "Sign in to Xisnove to inspect monitor health, lifecycle, and immutable state history."), LoginContent(csrfToken, errorMessage)) }
 
 templ LoginContent(csrfToken, errorMessage string) {
 	<main id="login-content" aria-labelledby="login-heading" class="xis-content">
@@ -440,6 +441,7 @@ templ MonitorContent(data MonitorList) {
 }
 
 templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	{{ history := stateHistoryFor(data, monitor) }}
 		<div
 			class="xis-monitor-drawer"
 			data-monitor-id={ monitor.Id.String() }
@@ -449,7 +451,7 @@ templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Moni
 		x-init="const close = $el.querySelector('aside[aria-labelledby=monitor-detail-drawerTitle] header button[aria-label=Close]'); if (close) { close.dataset.monitorDrawerClose = 'true'; close.dataset.monitorId = $el.dataset.monitorId }"
 		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer' && !$event.defaultPrevented) { const closeURL = $el.dataset.monitorDrawerCloseUrl; if (closeURL && window.htmx) { window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', pushURL: true}) } }"
 	>
-			@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: monitorDetailTitle(monitor), Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
+			@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: monitorDetailTitle(monitor, health, history), Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
 			@MonitorDetail(data, monitor, health)
 		}
 	</div>
@@ -457,7 +459,7 @@ templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Moni
 
 templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
 	{{ history := stateHistoryFor(data, monitor) }}
-	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-drawerTitle" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(healthStateValue(health.State)) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) }>
+	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-drawerTitle" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(healthStateValue(health.State)) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) } data-state-ticks-owner="true">
 		<div class="xis-detail-main">
 			<section class="xis-detail-section" aria-labelledby="monitor-detail-heading">
 				<h3 id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus>Current health</h3>
@@ -469,7 +471,7 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 					<dt>Locations observed</dt><dd>{ fmt.Sprintf("%d", len(health.Locations)) }</dd>
 				</dl>
 			</section>
-			@MonitorStateHistory(history)
+			@MonitorStateHistory(history, stateHistoryErrorFor(data, monitor))
 			<section class="xis-detail-section" aria-labelledby="monitor-configuration-heading">
 				<h3 id="monitor-configuration-heading">Configuration</h3>
 				<dl class="xis-detail-facts">
@@ -488,6 +490,7 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 					</div>
 				</div>
 				@monitorAvailabilityChart(monitor, health)
+				@StateTicksConsumer()
 			</section>
 		</div>
 		<aside class="xis-detail-rail" aria-label="Monitor metadata and actions">
@@ -502,18 +505,25 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 	</section>
 }
 
-templ MonitorStateHistory(history sdk.MonitorStateHistory) {
-	<section class="xis-detail-section xis-state-history" aria-labelledby="monitor-state-history-heading" data-state-history-window="3h">
+templ MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) {
+	<section class="xis-detail-section xis-state-history" aria-labelledby="monitor-state-history-heading" data-state-history-window="3h" data-state-history-status={ stateHistoryStatus(history, historyError) }>
 		<div class="xis-state-history-heading">
 			<div>
 				<h3 id="monitor-state-history-heading">State history</h3>
 				<p class="xis-meta">Immutable lifecycle and health evaluations from the last 3 hours.</p>
 			</div>
+			<span class="xis-meta" aria-live="polite" data-state-history-live-status>Waiting for live state updates.</span>
 		</div>
-		if len(history.Ticks) == 0 {
-			<div class="xis-state-history-gap" role="status">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div>
+		if historyError != "" {
+			<div class="xis-state-history-error xis-state-warning" data-state-history-status="error" role="alert">
+				<strong>State history unavailable</strong>
+				<span>{ historyError }</span>
+			</div>
+		} else if len(history.Ticks) == 0 {
+			<div class="xis-state-history-gap" data-state-history-gap role="status">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div>
+			<ol class="xis-state-ticks" data-state-ticks-list hidden aria-live="polite"></ol>
 		} else {
-			<ol class="xis-state-ticks">
+			<ol class="xis-state-ticks" data-state-ticks-list aria-live="polite">
 				for _, tick := range history.Ticks {
 					<li class="xis-state-tick" data-state-health={ string(stateTickHealth(tick.Health)) }>
 						<div class="xis-state-tick-main">
@@ -532,14 +542,91 @@ templ MonitorStateHistory(history sdk.MonitorStateHistory) {
 	</section>
 }
 
+templ StateTicksConsumer() {
+	<script data-state-ticks-consumer="true" nonce={ templ.GetNonce(ctx) }>
+		(() => {
+			const owner = document.querySelector('[data-state-ticks-owner="true"]');
+			const figure = owner?.querySelector('[data-goshtoso-charts-live-url]');
+			if (!owner || !figure || !window.EventSource || owner.dataset.stateTicksConnected === 'true') return;
+			const source = new EventSource(figure.getAttribute('data-goshtoso-charts-live-url'));
+			const list = owner.querySelector('[data-state-ticks-list]');
+			const gap = owner.querySelector('[data-state-history-gap]');
+			const status = owner.querySelector('[data-state-history-live-status]');
+			const asText = value => value == null ? '' : String(value);
+			const label = value => asText(value).replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase()) || 'Unknown';
+			const healthClass = value => {
+				const state = asText(value).toLowerCase();
+				if (state === 'degraded') return 'xis-state-warning';
+				if (state === 'up') return 'xis-state-success';
+				if (state === 'down') return 'xis-state-danger';
+				return 'xis-state-unknown';
+			};
+			const formatTime = value => {
+				const date = new Date(value);
+				return Number.isNaN(date.getTime()) ? 'time unavailable' : date.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'}) + ' UTC';
+			};
+			const render = payload => {
+				if (!payload || !Array.isArray(payload.ticks) || !list) return;
+				list.replaceChildren();
+				for (const tick of payload.ticks) {
+					const item = document.createElement('li');
+					item.className = 'xis-state-tick';
+					item.dataset.stateHealth = asText(tick.health).toLowerCase() || 'unknown';
+					const main = document.createElement('div');
+					main.className = 'xis-state-tick-main';
+					const summary = document.createElement('div');
+					summary.className = 'xis-state-tick-summary';
+					const health = document.createElement('span');
+					health.className = 'xis-status-badge ' + healthClass(tick.health);
+					health.textContent = label(tick.health).toUpperCase();
+					const lifecycle = document.createElement('span');
+					lifecycle.textContent = label(tick.lifecycle);
+					summary.append(health, lifecycle);
+					const reason = document.createElement('p');
+					reason.className = 'xis-state-tick-reason';
+					const reasonLabel = document.createElement('strong');
+					reasonLabel.textContent = 'Reason';
+					reason.append(reasonLabel, document.createTextNode(' ' + label(tick.reasonCode)));
+					const provenance = document.createElement('p');
+					provenance.className = 'xis-state-tick-provenance';
+					const provenanceLabel = document.createElement('strong');
+					provenanceLabel.textContent = 'Provenance';
+					provenance.append(provenanceLabel, document.createTextNode(' Actor: ' + label(tick.actor?.kind).toLowerCase()));
+					main.append(summary, reason, provenance);
+					const occurred = document.createElement('time');
+					occurred.className = 'xis-state-tick-time';
+					occurred.dateTime = asText(tick.occurredAt);
+					occurred.textContent = formatTime(tick.occurredAt);
+					item.append(main, occurred);
+					list.append(item);
+				}
+				list.hidden = payload.ticks.length === 0;
+				if (gap) gap.hidden = payload.ticks.length > 0;
+				owner.dataset.stateHistoryStatus = payload.ticks.length === 0 ? 'empty' : 'ready';
+				if (status) status.textContent = 'State history updated';
+				owner.dispatchEvent(new CustomEvent('xisnove:state-ticks', {bubbles: true, detail: payload}));
+			};
+			source.addEventListener('state-ticks', event => {
+				try { render(JSON.parse(event.data)); } catch (_) { if (status) status.textContent = 'State history unavailable'; }
+			});
+			source.addEventListener('auth-error', () => { if (status) status.textContent = 'State history unavailable'; });
+			owner.dataset.stateTicksConnected = 'true';
+			const cleanup = new MutationObserver(() => {
+				if (!document.contains(owner)) { source.close(); cleanup.disconnect(); }
+			});
+			cleanup.observe(document.body, {childList: true, subtree: true});
+		})();
+	</script>
+}
+
 templ ClearSearch() { @link.Link("/monitors", link.WithAppearance(link.AppearanceButton), link.WithRootClass("xis-primary-action"), link.WithAttrs(templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-swap": "outerHTML", "hx-push-url": "true"})) { Clear search } }
 
 templ NextPage(data MonitorList) {
 	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.NextCursor, data.Selected) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#monitor-loading">Next page</a>
 }
 
-templ StatusPage(data sdk.PublicStatusPage) { @Document("Public status", PublicStatusShell(data)) }
-templ StatusErrorPage(problem Problem) { @Document("Public status", PublicStatusErrorShell(problem)) }
+templ StatusPage(data sdk.PublicStatusPage) { @DocumentRoute(documentMetadata("Public status", "/status", "Live public health for Xisnove monitors, with clear unknown and degraded states."), PublicStatusShell(data)) }
+templ StatusErrorPage(problem Problem) { @DocumentRoute(documentMetadata("Public status", "/status", "Live public health for Xisnove monitors, with clear unknown and degraded states."), PublicStatusErrorShell(problem)) }
 
 templ PublicStatusErrorShell(problem Problem) {
 	@navbar.Navbar(navbar.Config{Brand: Brand(), BrandHref: "/status", NavClass: "xis-public-nav", Links: []navbar.NavLink{{Label: "Public status", Href: "/status", Active: true}, {Label: "Administrator", Href: "/login"}}})
@@ -587,7 +674,7 @@ templ PublicStatusError(problem Problem) {
 	</main>
 }
 
-templ ProblemPage(problem Problem) { @Document(problem.Title, ProblemContent(problem)) }
+templ ProblemPage(problem Problem) { @DocumentRoute(documentMetadata(problem.Title, "/problem", "Xisnove could not complete this request. Retry or return to the monitoring workspace."), ProblemContent(problem)) }
 templ ShellProblemPage(csrfToken string, problem Problem) { @ShellPage(problem.Title, csrfToken, ShellProblemContent(problem)) }
 templ ShellProblemContent(problem Problem) {
 	<section id="problem-content" class="xis-content xis-stack" aria-labelledby="problem-heading">
@@ -648,8 +735,8 @@ func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {
 	return sdk.Monitor{}, sdk.MonitorHealth{}, false
 }
 
-func monitorDetailTitle(monitor sdk.Monitor) string {
-	return monitor.Name
+func monitorDetailTitle(monitor sdk.Monitor, health sdk.MonitorHealth, history sdk.MonitorStateHistory) string {
+	return fmt.Sprintf("%s · %s · %s", monitor.Name, lifecycleLabel(monitorLifecycle(monitor, history)), healthStateLabel(health.State))
 }
 
 func monitorDetailState(health sdk.MonitorHealth) string {
@@ -682,3 +769,22 @@ func publicStatusTitle(state sdk.HealthState) string {
 }
 
 func formattedTime(value time.Time) string { if value.IsZero() { return "time unavailable" }; return value.UTC().Format("2 Jan 2006 15:04 UTC") }
+
+func documentMetadata(title, route, description string) head.MetadataConfig {
+	return head.MetadataConfig{
+		Title: title + " · X-9",
+		Description: description,
+		CanonicalURL: "https://x9.araihu.com" + route,
+		OpenGraphType: head.OpenGraphTypeWebsite,
+		SiteName: "Xisnove",
+		Locale: "en_US",
+		Image: head.SocialImage{
+			URL: "https://x9.araihu.com" + seasonalassets.SocialPreviewPath,
+			MIMEType: "image/png",
+			Width: 1280,
+			Height: 640,
+			Alt: "X-9 monitoring by Xisnove",
+		},
+		TwitterCard: head.TwitterCardSummaryLargeImage,
+	}
+}

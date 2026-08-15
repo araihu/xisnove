@@ -25,6 +25,20 @@ func stateHistoryFor(data MonitorList, monitor sdk.Monitor) sdk.MonitorStateHist
 	return boundedStateHistory(history)
 }
 
+func stateHistoryErrorFor(data MonitorList, monitor sdk.Monitor) string {
+	return strings.TrimSpace(data.StateHistoryErrors[monitor.Id.String()])
+}
+
+func stateHistoryStatus(history sdk.MonitorStateHistory, historyError string) string {
+	if strings.TrimSpace(historyError) != "" {
+		return "error"
+	}
+	if len(history.Ticks) == 0 {
+		return "empty"
+	}
+	return "ready"
+}
+
 func boundedStateHistory(history sdk.MonitorStateHistory) sdk.MonitorStateHistory {
 	if len(history.Ticks) == 0 {
 		return history

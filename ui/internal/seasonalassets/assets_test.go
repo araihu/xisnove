@@ -1,10 +1,12 @@
 package seasonalassets
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -33,11 +35,12 @@ func TestFrozenRuntimeMatchesAssetsV011(t *testing.T) {
 
 func TestDescriptorsMatchFrozenReleaseInventory(t *testing.T) {
 	want := map[string]string{
-		RuntimePath:     RuntimeSHA256,
-		LogoPath:        "ae4da6e933399b7a6042aab91a1ceca9e7132c744a8717258815cd435282a2fb",
-		MarkPath:        "98ac8f9069dddf94f06752fa2518d8987e45a747d2bc0c8a142d3a4f4fe52523",
-		ReverseMarkPath: "f3e0c0061ef495d62eaa7312cf85fdb4b4579f39094489ab7b806296a2cecda2",
-		FaviconPath:     "98ac8f9069dddf94f06752fa2518d8987e45a747d2bc0c8a142d3a4f4fe52523",
+		RuntimePath:       RuntimeSHA256,
+		LogoPath:          "ae4da6e933399b7a6042aab91a1ceca9e7132c744a8717258815cd435282a2fb",
+		SocialPreviewPath: SocialPreviewSHA256,
+		MarkPath:          "98ac8f9069dddf94f06752fa2518d8987e45a747d2bc0c8a142d3a4f4fe52523",
+		ReverseMarkPath:   "f3e0c0061ef495d62eaa7312cf85fdb4b4579f39094489ab7b806296a2cecda2",
+		FaviconPath:       "98ac8f9069dddf94f06752fa2518d8987e45a747d2bc0c8a142d3a4f4fe52523",
 	}
 
 	descriptors := Descriptors()
@@ -57,6 +60,28 @@ func TestDescriptorsMatchFrozenReleaseInventory(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing descriptors: %v", want)
+	}
+}
+
+func TestSocialPreviewIsVersionedLandscapeAsset(t *testing.T) {
+	if len(socialPreview) > 1<<20 {
+		t.Fatalf("social preview size = %d bytes, want <= 1 MiB", len(socialPreview))
+	}
+
+	response := httptest.NewRecorder()
+	Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://x9.araihu.com"+SocialPreviewPath, nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("social preview status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if got, want := response.Header().Get("Content-Type"), "image/png"; got != want {
+		t.Fatalf("social preview Content-Type = %q, want %q", got, want)
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(response.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("decode social preview dimensions: %v", err)
+	}
+	if config.Width != 1280 || config.Height != 640 {
+		t.Fatalf("social preview dimensions = %dx%d, want 1280x640", config.Width, config.Height)
 	}
 }
 

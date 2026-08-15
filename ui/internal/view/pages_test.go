@@ -50,6 +50,74 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 
 }
 
+func TestDocumentEmitsRouteSpecificSocialMetadataOnce(t *testing.T) {
+	var rendered strings.Builder
+	if err := LoginPage("csrf-token", "").Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render login document: %v", err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`<title>Sign in · X-9</title>`,
+		`<meta name="description" content="Sign in to Xisnove to inspect monitor health, lifecycle, and immutable state history.">`,
+		`<link rel="canonical" href="https://x9.araihu.com/login">`,
+		`<meta property="og:url" content="https://x9.araihu.com/login">`,
+		`<meta property="og:type" content="website">`,
+		`<meta property="og:title" content="Sign in · X-9">`,
+		`<meta property="og:description" content="Sign in to Xisnove to inspect monitor health, lifecycle, and immutable state history.">`,
+		`<meta property="og:site_name" content="Xisnove">`,
+		`<meta property="og:locale" content="en_US">`,
+		`<meta property="og:image" content="https://x9.araihu.com/ui/seasonal/v0.1.1/x9-social-preview.png">`,
+		`<meta property="og:image:type" content="image/png">`,
+		`<meta property="og:image:width" content="1280">`,
+		`<meta property="og:image:height" content="640">`,
+		`<meta property="og:image:alt" content="X-9 monitoring by Xisnove">`,
+		`<meta name="twitter:card" content="summary_large_image">`,
+		`<meta name="twitter:title" content="Sign in · X-9">`,
+		`<meta name="twitter:description" content="Sign in to Xisnove to inspect monitor health, lifecycle, and immutable state history.">`,
+		`<meta name="twitter:image" content="https://x9.araihu.com/ui/seasonal/v0.1.1/x9-social-preview.png">`,
+		`<meta name="twitter:image:alt" content="X-9 monitoring by Xisnove">`,
+	} {
+		if strings.Count(body, want) != 1 {
+			t.Errorf("initial document metadata count for %q = %d", want, strings.Count(body, want))
+		}
+	}
+	if strings.Contains(body, "localhost") || strings.Contains(body, "example.test") {
+		t.Fatal("initial document metadata contains a non-production host")
+	}
+}
+
+func TestConsolePageEmitsSocialMetadataWithoutHeadTagDuplication(t *testing.T) {
+	var rendered strings.Builder
+	if err := ConsolePage("Monitors", "csrf-token", MonitorContent(MonitorList{})).Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render console document: %v", err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`<title>Monitors · X-9</title>`,
+		`<meta name="description" content="Inspect Xisnove monitor health, lifecycle, provenance, and bounded state history.">`,
+		`<link rel="canonical" href="https://x9.araihu.com/monitors">`,
+		`<meta property="og:url" content="https://x9.araihu.com/monitors">`,
+		`<meta property="og:type" content="website">`,
+		`<meta property="og:title" content="Monitors · X-9">`,
+		`<meta property="og:description" content="Inspect Xisnove monitor health, lifecycle, provenance, and bounded state history.">`,
+		`<meta property="og:site_name" content="Xisnove">`,
+		`<meta property="og:image" content="https://x9.araihu.com/ui/seasonal/v0.1.1/x9-social-preview.png">`,
+		`<meta property="og:image:type" content="image/png">`,
+		`<meta property="og:image:width" content="1280">`,
+		`<meta property="og:image:height" content="640">`,
+		`<meta property="og:image:alt" content="X-9 monitoring by Xisnove">`,
+		`<meta name="twitter:card" content="summary_large_image">`,
+		`<meta name="twitter:title" content="Monitors · X-9">`,
+		`<meta name="twitter:description" content="Inspect Xisnove monitor health, lifecycle, provenance, and bounded state history.">`,
+		`<meta name="twitter:image" content="https://x9.araihu.com/ui/seasonal/v0.1.1/x9-social-preview.png">`,
+		`<meta name="twitter:image:alt" content="X-9 monitoring by Xisnove">`,
+	} {
+		if strings.Count(body, want) != 1 {
+			t.Errorf("console document metadata count for %q = %d", want, strings.Count(body, want))
+		}
+	}
+}
+
 func TestHeaderControlsKeepSearchShortcutAndCircleAccountTrigger(t *testing.T) {
 	var rendered strings.Builder
 	if err := Document("Header contract", Brand()).Render(t.Context(), &rendered); err != nil {
@@ -430,5 +498,99 @@ func TestMonitorContentTrimsStateTicksToLatestThreeHours(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("bounded state history missing %q", want)
 		}
+	}
+}
+
+func TestMonitorContentRendersStateHistoryErrorInsteadOfAnEmptyGap(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000013")
+	data := MonitorList{
+		Monitors:           []sdk.Monitor{{Id: monitorID, Name: "Unavailable history", Enabled: true}},
+		Health:             map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Unknown}},
+		StateHistoryErrors: map[string]string{monitorID.String(): "Control-plane history is temporarily unavailable."},
+		Selected:           monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	for _, want := range []string{"State history unavailable", "Control-plane history is temporarily unavailable.", `data-state-history-status="error"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("state history error missing %q", want)
+		}
+	}
+	if strings.Contains(body, "No state ticks recorded") {
+		t.Fatal("state history error was rendered as an empty history gap")
+	}
+}
+
+func TestMonitorDrawerTitleNamesMonitorLifecycleAndHealthAccessibly(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000014")
+	base := time.Date(2026, time.August, 15, 11, 0, 0, 0, time.UTC)
+	data := MonitorList{
+		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Paused monitor", Enabled: true}},
+		Health:   map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Unknown}},
+		StateHistory: map[string]sdk.MonitorStateHistory{monitorID.String(): {
+			MonitorId: monitorID,
+			StartsAt:  base.Add(-3 * time.Hour),
+			EndsAt:    base,
+			Ticks: []sdk.MonitorStateTick{{
+				MonitorId: monitorID, Lifecycle: sdk.Paused, Health: sdk.Unknown,
+				ReasonCode: sdk.StateTickReasonCodePausedByUser,
+				Actor:      sdk.StateTickActor{Kind: sdk.StateTickActorKindUser}, OccurredAt: base.Add(-time.Minute),
+			}},
+		}},
+		Selected: monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	titleStart := strings.Index(body, `id="monitor-detail-drawerTitle"`)
+	if titleStart < 0 {
+		t.Fatalf("drawer title missing: %s", body)
+	}
+	titleEnd := strings.Index(body[titleStart:], "</")
+	if titleEnd < 0 {
+		t.Fatalf("drawer title is not closed: %s", body)
+	}
+	title := body[titleStart : titleStart+titleEnd]
+	for _, want := range []string{"Paused monitor", "Paused", "UNKNOWN"} {
+		if !strings.Contains(title, want) {
+			t.Errorf("accessible drawer title missing %q: %s", want, title)
+		}
+	}
+	if strings.Contains(title, "::after") {
+		t.Fatal("drawer title relies on a CSS pseudo-element for status")
+	}
+}
+
+func TestMonitorDetailInstallsStateTickSSEConsumer(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000015")
+	data := MonitorList{
+		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Live monitor", Enabled: true}},
+		Health:   map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
+		Selected: monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	ctx := templ.WithNonce(t.Context(), "state-tick-consumer-nonce")
+	if err := MonitorContent(data).Render(ctx, &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`data-state-ticks-consumer="true"`, `addEventListener('state-ticks'`, `new EventSource(`,
+		`data-state-ticks-list`, `xisnove:state-ticks`, `State history updated`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("state tick SSE consumer missing %q", want)
+		}
+	}
+	if !strings.Contains(body, `nonce="state-tick-consumer-nonce"`) {
+		t.Fatal("state tick SSE consumer did not receive request nonce")
 	}
 }

@@ -134,6 +134,32 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors/"+unknownID.String()+"/health":
 			requireBearer(t, r)
 			_ = json.NewEncoder(w).Encode(sdk.MonitorHealth{MonitorId: unknownID, State: sdk.Unknown, LastTransitionAt: time.Now()})
+		case r.Method == http.MethodGet && (r.URL.Path == "/v1/monitors/"+monitorID.String()+"/availability/history" || r.URL.Path == "/v1/monitors/"+unknownID.String()+"/availability/history"):
+			requireBearer(t, r)
+			routeMonitorID := monitorID
+			if strings.Contains(r.URL.Path, unknownID.String()) {
+				routeMonitorID = unknownID
+			}
+			_ = json.NewEncoder(w).Encode(sdk.MonitorAvailabilityHistory{
+				MonitorId: routeMonitorID, StartsAt: observedAt.Add(-3 * time.Hour), EndsAt: observedAt,
+				GeneratedAt: observedAt, Samples: []sdk.MonitorAvailabilitySample{{
+					Id: uuid.MustParse("30000000-0000-4000-8000-000000000001"), LocationId: locationID,
+					ObservedAt: observedAt.Add(-time.Minute), Outcome: sdk.MonitorAvailabilitySampleOutcomePassed,
+				}},
+			})
+		case r.Method == http.MethodGet && (r.URL.Path == "/v1/monitors/"+monitorID.String()+"/state-ticks" || r.URL.Path == "/v1/monitors/"+unknownID.String()+"/state-ticks"):
+			requireBearer(t, r)
+			routeMonitorID := monitorID
+			if strings.Contains(r.URL.Path, unknownID.String()) {
+				routeMonitorID = unknownID
+			}
+			_ = json.NewEncoder(w).Encode(sdk.MonitorStateHistory{
+				MonitorId: routeMonitorID, StartsAt: observedAt.Add(-3 * time.Hour), EndsAt: observedAt,
+				GeneratedAt: observedAt, Ticks: []sdk.MonitorStateTick{
+					{Id: uuid.MustParse("40000000-0000-4000-8000-000000000001"), MonitorId: routeMonitorID, Lifecycle: sdk.Active, Health: sdk.Up, ReasonCode: sdk.StateTickReasonCodeProbeSuccess, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem}, OccurredAt: observedAt.Add(-2 * time.Hour)},
+					{Id: uuid.MustParse("40000000-0000-4000-8000-000000000002"), MonitorId: routeMonitorID, Lifecycle: sdk.Active, Health: sdk.Degraded, ReasonCode: sdk.StateTickReasonCodeProbeFailure, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindAgent}, OccurredAt: observedAt.Add(-time.Hour)},
+				},
+			})
 		default:
 			http.NotFound(w, r)
 		}
@@ -286,6 +312,17 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const owner=document.querySelector('.xis-monitor-drawer'),root=owner?.firstElementChild,panel=owner?.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');return {visible:!!panel&&panel.getClientRects().length>0,alpine:!!window.Alpine,open:root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen===true,display:panel?getComputedStyle(panel).display:''}})()`, &drawerReady)); err != nil || !drawerReady.Visible || !drawerReady.Alpine || !drawerReady.Open {
 		t.Fatalf("direct monitor drawer did not initialize: state=%#v err=%v", drawerReady, err)
 	}
+	var stateTicksReady struct {
+		Connected bool   `json:"connected"`
+		Count     int    `json:"count"`
+		Status    string `json:"status"`
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Poll(`(()=>{const owner=document.querySelector('#monitor-detail[data-state-ticks-owner="true"]'),list=owner?.querySelector('[data-state-ticks-list]'),status=owner?.querySelector('[data-state-history-live-status]');return owner?.dataset.stateTicksConnected === 'true' && !!list && list.children.length > 0 && status?.textContent.includes('State history updated')})()`, nil, chromedp.WithPollingTimeout(5*time.Second)),
+		chromedp.Evaluate(`(()=>{const owner=document.querySelector('#monitor-detail'),list=owner?.querySelector('[data-state-ticks-list]'),status=owner?.querySelector('[data-state-history-live-status]');return {connected:owner?.dataset.stateTicksConnected === 'true',count:list?.children.length||0,status:status?.textContent||''}})()`, &stateTicksReady),
+	); err != nil || !stateTicksReady.Connected || stateTicksReady.Count == 0 || stateTicksReady.Status != "State history updated" {
+		t.Fatalf("state-ticks SSE consumer did not update drawer: state=%#v err=%v", stateTicksReady, err)
+	}
 	assertSelectedMonitorIdentity(t, ctx, monitorID.String())
 	assertAccessibleSurface(t, ctx, "#monitor-content")
 	assertDetailGeometry(t, ctx)
@@ -408,6 +445,11 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			t.Errorf("API calls %#v missing %q", calls, want)
 		}
 	}
+	for _, want := range []string{"GET /v1/monitors/" + monitorID.String() + "/availability/history?", "GET /v1/monitors/" + monitorID.String() + "/state-ticks?"} {
+		if !containsCallPrefix(calls, want) {
+			t.Errorf("API calls %#v missing prefix %q", calls, want)
+		}
+	}
 	expectedArtifacts := 216
 	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
 		expectedArtifacts = 17
@@ -447,6 +489,14 @@ func (timeoutControlPlane) ListMonitors(context.Context, string, string, int32) 
 }
 func (timeoutControlPlane) GetMonitorHealth(context.Context, string, openapi_types.UUID) (sdk.MonitorHealth, error) {
 	return sdk.MonitorHealth{}, nil
+}
+func (timeoutControlPlane) GetMonitorAvailabilityHistory(ctx context.Context, _ string, _ openapi_types.UUID, _ time.Time, _ time.Time, _ int32) (sdk.MonitorAvailabilityHistory, error) {
+	<-ctx.Done()
+	return sdk.MonitorAvailabilityHistory{}, ctx.Err()
+}
+func (timeoutControlPlane) GetMonitorStateHistory(ctx context.Context, _ string, _ openapi_types.UUID, _ time.Time, _ time.Time, _ int32) (sdk.MonitorStateHistory, error) {
+	<-ctx.Done()
+	return sdk.MonitorStateHistory{}, ctx.Err()
 }
 
 func loginStateHTML(t *testing.T, handler http.Handler, password string) string {
@@ -1205,6 +1255,15 @@ func requireBearer(t *testing.T, request *http.Request) {
 func containsCall(calls []string, want string) bool {
 	for _, call := range calls {
 		if call == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsCallPrefix(calls []string, want string) bool {
+	for _, call := range calls {
+		if strings.HasPrefix(call, want) {
 			return true
 		}
 	}

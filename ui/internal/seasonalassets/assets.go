@@ -20,10 +20,12 @@ const (
 	RuntimeIntegrity  = "sha384-oPH7l1vK9vKP1Dn+18sO3yEXlz4ts6KzPEQl0SW4Y/+im05gOaamNNaQAf6bGH/n"
 	ChannelURL        = "https://araihu.com/assets/releases/current"
 
-	LogoPath        = "/ui/seasonal/v0.1.1/x9-logo.svg"
-	MarkPath        = "/ui/seasonal/v0.1.1/x9-mark.svg"
-	ReverseMarkPath = "/ui/seasonal/v0.1.1/x9-mark-reverse.svg"
-	FaviconPath     = "/ui/seasonal/v0.1.1/x9-favicon.svg"
+	LogoPath            = "/ui/seasonal/v0.1.1/x9-logo.svg"
+	SocialPreviewPath   = "/ui/seasonal/v0.1.1/x9-social-preview.png"
+	MarkPath            = "/ui/seasonal/v0.1.1/x9-mark.svg"
+	ReverseMarkPath     = "/ui/seasonal/v0.1.1/x9-mark-reverse.svg"
+	FaviconPath         = "/ui/seasonal/v0.1.1/x9-favicon.svg"
+	SocialPreviewSHA256 = "5bd39703586cf1e59591c3d9c88ece4430a95fa074f13b217adb29d825ed3353"
 
 	runtimeCache   = "public, max-age=300"
 	immutableCache = "public, max-age=31536000, immutable"
@@ -34,6 +36,9 @@ var runtime []byte
 
 //go:embed static/x9-logo.svg
 var logo []byte
+
+//go:embed static/x9-social-preview.png
+var socialPreview []byte
 
 //go:embed static/x9-mark.svg
 var mark []byte
@@ -79,6 +84,16 @@ var staged = []stagedAsset{
 			CacheControl: immutableCache,
 		},
 		body: logo,
+	},
+	{
+		descriptor: Descriptor{
+			Path:         SocialPreviewPath,
+			SourcePath:   "brand/x9/social-preview/monitoring-landscape.png",
+			SHA256:       SocialPreviewSHA256,
+			ContentType:  "image/png",
+			CacheControl: immutableCache,
+		},
+		body: socialPreview,
 	},
 	{
 		descriptor: Descriptor{
