@@ -70,6 +70,22 @@ func TestHeaderControlsKeepSearchShortcutAndCircleAccountTrigger(t *testing.T) {
 	}
 }
 
+func TestAvailabilityChartUsesNeutralUnknownSeries(t *testing.T) {
+	var rendered strings.Builder
+	if err := AppStyles().Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render app styles: %v", err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted); }`,
+		`.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted); }`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("availability chart style missing %q", want)
+		}
+	}
+}
+
 func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 	var rendered strings.Builder
 	if err := ConsolePage("Monitors", "csrf-token", MonitorContent(MonitorList{})).Render(t.Context(), &rendered); err != nil {
