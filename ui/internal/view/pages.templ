@@ -180,8 +180,8 @@ templ AppStyles() {
 		.dark .xis-console-sidebar-header { border-color: var(--color-outline-dark); }
 		.xis-console-sidebar-header .console-shell__status-link { min-height: 2.75rem; }
 		.xis-account-menu { flex: 0 0 auto; }
-		.xis-account-menu > div > button[aria-haspopup="true"] { border-color: var(--color-on-surface-strong); background: var(--color-surface); }
-		.dark .xis-account-menu > div > button[aria-haspopup="true"] { border-color: var(--color-on-surface-dark-strong); background: var(--color-surface-dark); }
+		.xis-account-menu > div > button[aria-haspopup="true"], .dark .xis-account-menu > div > button[aria-haspopup="true"] { min-width: 2.75rem; min-height: 2.75rem; padding: 0; border: 0; border-radius: 9999px; background: transparent; box-shadow: none; }
+		.xis-account-menu > div > button[aria-haspopup="true"]:hover, .dark .xis-account-menu > div > button[aria-haspopup="true"]:hover { background: transparent; opacity: 1; }
 		.xis-account-avatar { border-color: var(--color-on-surface-strong); background: var(--color-surface); color: var(--color-on-surface-strong); }
 		.dark .xis-account-avatar { border-color: var(--color-on-surface-dark-strong); background: var(--color-surface-dark); color: var(--color-on-surface-dark-strong); }
 		.xis-account-menu [role="menu"] { z-index: 70; }
@@ -218,7 +218,7 @@ templ AppStyles() {
 			.xis-global-search-trigger { flex: 1 1 auto; min-width: 0; }
 			.xis-global-search-trigger button.xis-search-trigger-button { min-height: 2.75rem; padding: .5rem .625rem; gap: .35rem; }
 			.xis-global-search-trigger button.xis-search-trigger-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-			.xis-global-search-trigger kbd { display: none; }
+			.xis-global-search-trigger kbd { padding: .2rem .35rem; font-size: .7rem; }
 			.xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; }
 			.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; }
 			.xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; }

@@ -49,6 +49,26 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 
 }
 
+func TestHeaderControlsKeepSearchShortcutAndCircleAccountTrigger(t *testing.T) {
+	var rendered strings.Builder
+	if err := Document("Header contract", Brand()).Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render document: %v", err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`.xis-global-search-trigger kbd {`,
+		`.xis-account-menu > div > button[aria-haspopup="true"]`,
+		`border-radius: 9999px;`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("header stylesheet missing %q", want)
+		}
+	}
+	if strings.Contains(body, `.xis-global-search-trigger kbd { display: none; }`) {
+		t.Fatal("mobile header hides the search shortcut")
+	}
+}
+
 func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 	var rendered strings.Builder
 	if err := ConsolePage("Monitors", "csrf-token", MonitorContent(MonitorList{})).Render(t.Context(), &rendered); err != nil {
