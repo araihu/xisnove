@@ -206,6 +206,42 @@ func TestMonitorAvailabilityEventsSignalsStateHistoryAuthFailureWithoutCredentia
 	}
 }
 
+func TestMonitorAvailabilityEventsClearsSessionOnStateHistoryAuthFailure(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-0000-0000-000000000096")
+	client := controlplane.NewFake(testUsername, testPassword, testCredential)
+	client.StateHistoryErrors[monitorID] = controlplane.ErrUnauthorized
+	handler, _ := newTestHandler(t, client, time.Second)
+	sessionCookie := loginSession(t, handler)
+	testServer := httptest.NewServer(handler)
+	defer testServer.Close()
+
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.AddCookie(sessionCookie)
+	response, err := testServer.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	reader := bufio.NewReader(response.Body)
+	if event, err := readSSEEvent(reader); err != nil || event.Name != "chart" {
+		t.Fatalf("first SSE event = %#v, err=%v", event, err)
+	}
+	event, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("auth SSE event: %v", err)
+	}
+	if event.Name != "auth-error" {
+		t.Fatalf("auth SSE event = %#v", event)
+	}
+	cleared := cookieNamed(t, response.Cookies(), "__Host-xisnove-session")
+	if cleared.MaxAge >= 0 || cleared.Expires.IsZero() {
+		t.Fatalf("auth SSE did not expire session cookie: %#v", cleared)
+	}
+}
+
 func TestSelectedMonitorStateHistoryPreservesSafeErrorByMonitor(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-0000-0000-000000000098")
 	monitor := sdk.Monitor{Id: monitorID, Name: "Home DNS"}

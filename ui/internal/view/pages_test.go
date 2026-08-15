@@ -564,13 +564,40 @@ func TestMonitorContentRendersStateHistoryErrorInsteadOfAnEmptyGap(t *testing.T)
 			t.Errorf("state history error missing %q", want)
 		}
 	}
-	for _, want := range []string{`data-state-history-error`, `data-state-ticks-list`} {
+	for _, want := range []string{`data-state-history-error`, `data-state-ticks-list`, `data-state-history-gap hidden`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("state history error cannot be replaced by SSE: missing %q", want)
 		}
 	}
-	if strings.Contains(body, "No state ticks recorded") {
-		t.Fatal("state history error was rendered as an empty history gap")
+}
+
+func TestMonitorContentRendersGapForStateHistoryThatCanBecomeEmpty(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000016")
+	history := sdk.MonitorStateHistory{
+		MonitorId: monitorID,
+		StartsAt:  time.Date(2026, time.August, 15, 9, 0, 0, 0, time.UTC),
+		EndsAt:    time.Date(2026, time.August, 15, 12, 0, 0, 0, time.UTC),
+		Ticks: []sdk.MonitorStateTick{{
+			MonitorId: monitorID, Lifecycle: sdk.Active, Health: sdk.Up,
+			ReasonCode: sdk.StateTickReasonCodeProbeSuccess,
+			Actor:      sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem},
+			OccurredAt: time.Date(2026, time.August, 15, 11, 0, 0, 0, time.UTC),
+		}},
+	}
+	data := MonitorList{
+		Monitors:     []sdk.Monitor{{Id: monitorID, Name: "Recovering history", Enabled: true}},
+		Health:       map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
+		StateHistory: map[string]sdk.MonitorStateHistory{monitorID.String(): history},
+		Selected:     monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	if !strings.Contains(body, `data-state-history-gap hidden`) {
+		t.Fatalf("state history with records has no hidden empty gap: %s", body)
 	}
 }
 
@@ -637,6 +664,8 @@ func TestMonitorDetailInstallsStateTickSSEConsumer(t *testing.T) {
 		`const monitorID = owner?.dataset.monitorId`, `encodeURIComponent(monitorID) + '/availability/events'`,
 		`item.dataset.stateActionId`, `item.dataset.stateActorId`, `item.dataset.stateActorKind`, `item.dataset.stateUserActionId`, `item.dataset.stateObservationId`, `item.dataset.stateCausalTickId`, `item.dataset.stateCausalDependencyId`,
 		`data-state-history-error`, `if (error) error.hidden = true`, `source.close(); window.location.assign('/login')`,
+		`const hasID`, `if (hasID(tick.actionId))`, `if (hasID(tick.actor?.id))`, `if (hasID(tick.userActionId))`, `if (hasID(tick.observationId))`, `if (hasID(tick.causalTickId))`, `if (hasID(tick.causalDependencyId))`,
+		`const provenanceParts`, `Action recorded`, `Actor identity recorded`, `User action linked`, `Observation linked`, `Causal state tick linked`, `Causal dependency linked`, `provenanceParts.join(' · ')`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("state tick SSE consumer missing %q", want)

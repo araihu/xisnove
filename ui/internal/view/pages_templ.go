@@ -1562,7 +1562,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</span></div><ol class=\"xis-state-ticks\" data-state-ticks-list hidden aria-live=\"polite\"></ol>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</span></div><div class=\"xis-state-history-gap\" data-state-history-gap hidden role=\"status\">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div><ol class=\"xis-state-ticks\" data-state-ticks-list hidden aria-live=\"polite\"></ol>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1572,7 +1572,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "<ol class=\"xis-state-ticks\" data-state-ticks-list aria-live=\"polite\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "<div class=\"xis-state-history-gap\" data-state-history-gap hidden role=\"status\">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div><ol class=\"xis-state-ticks\" data-state-ticks-list aria-live=\"polite\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1584,7 +1584,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var64 string
 				templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(stateTickHealth(tick.Health)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 111}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 111}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 				if templ_7745c5c3_Err != nil {
@@ -1597,7 +1597,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var65 string
 				templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickID(tick.ActionId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 163}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 163}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var65)
 				if templ_7745c5c3_Err != nil {
@@ -1610,7 +1610,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var66 string
 				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.Actor.Id))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 222}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 222}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 				if templ_7745c5c3_Err != nil {
@@ -1623,7 +1623,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var67 string
 				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(tick.Actor.Kind))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 272}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 272}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 				if templ_7745c5c3_Err != nil {
@@ -1636,7 +1636,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var68 string
 				templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.UserActionId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 341}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 341}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 				if templ_7745c5c3_Err != nil {
@@ -1649,7 +1649,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var69 string
 				templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.ObservationId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 411}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 411}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 				if templ_7745c5c3_Err != nil {
@@ -1662,7 +1662,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var70 string
 				templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.CausalTickId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 480}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 480}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 				if templ_7745c5c3_Err != nil {
@@ -1675,7 +1675,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var71 string
 				templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.CausalDependencyId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 529, Col: 561}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 531, Col: 561}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 				if templ_7745c5c3_Err != nil {
@@ -1696,7 +1696,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var72 string
 				templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(lifecycleLabel(tick.Lifecycle))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 533, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 535, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 				if templ_7745c5c3_Err != nil {
@@ -1709,7 +1709,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var73 string
 				templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(string(tick.ReasonCode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 535, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 537, Col: 95}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 				if templ_7745c5c3_Err != nil {
@@ -1722,7 +1722,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var74 string
 				templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(stateTickProvenance(tick))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 536, Col: 105}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 538, Col: 105}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 				if templ_7745c5c3_Err != nil {
@@ -1735,7 +1735,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var75 string
 				templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.ResolveAttributeValue(tick.OccurredAt.UTC().Format(time.RFC3339))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 538, Col: 93}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 540, Col: 93}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var75)
 				if templ_7745c5c3_Err != nil {
@@ -1748,7 +1748,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var76 string
 				templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(stateTickTime(tick))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 538, Col: 117}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 540, Col: 117}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 				if templ_7745c5c3_Err != nil {
@@ -1800,13 +1800,13 @@ func StateTicksConsumer() templ.Component {
 		var templ_7745c5c3_Var78 string
 		templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 547, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 549, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "\">\n\t\t(() => {\n\t\t\tconst owner = document.querySelector('[data-state-ticks-owner=\"true\"]');\n\t\t\tconst monitorID = owner?.dataset.monitorId;\n\t\t\tconst figure = owner?.querySelector('[data-goshtoso-charts-live-url]');\n\t\t\tconst streamURL = figure?.getAttribute('data-goshtoso-charts-live-url') || (monitorID ? '/monitors/' + encodeURIComponent(monitorID) + '/availability/events' : '');\n\t\t\tif (!owner || !window.EventSource || !monitorID || !streamURL || owner.dataset.stateTicksConnected === 'true') return;\n\t\t\tconst source = new EventSource(streamURL);\n\t\t\tconst list = owner.querySelector('[data-state-ticks-list]');\n\t\t\tconst gap = owner.querySelector('[data-state-history-gap]');\n\t\t\tconst error = owner.querySelector('[data-state-history-error]');\n\t\t\tconst history = owner.querySelector('[data-state-history-window]');\n\t\t\tconst status = owner.querySelector('[data-state-history-live-status]');\n\t\t\tconst asText = value => value == null ? '' : String(value);\n\t\t\tconst label = value => asText(value).replaceAll('_', ' ').replace(/\\b\\w/g, character => character.toUpperCase()) || 'Unknown';\n\t\t\tconst healthClass = value => {\n\t\t\t\tconst state = asText(value).toLowerCase();\n\t\t\t\tif (state === 'degraded') return 'xis-state-warning';\n\t\t\t\tif (state === 'up') return 'xis-state-success';\n\t\t\t\tif (state === 'down') return 'xis-state-danger';\n\t\t\t\treturn 'xis-state-unknown';\n\t\t\t};\n\t\t\tconst formatTime = value => {\n\t\t\t\tconst date = new Date(value);\n\t\t\t\treturn Number.isNaN(date.getTime()) ? 'time unavailable' : date.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'}) + ' UTC';\n\t\t\t};\n\t\t\tconst render = payload => {\n\t\t\t\tif (!payload || !Array.isArray(payload.ticks) || !list) return;\n\t\t\t\tlist.replaceChildren();\n\t\t\t\tfor (const tick of payload.ticks) {\n\t\t\t\t\tconst item = document.createElement('li');\n\t\t\t\t\titem.className = 'xis-state-tick';\n\t\t\t\t\titem.dataset.stateTick = 'true';\n\t\t\t\t\titem.dataset.stateHealth = asText(tick.health).toLowerCase() || 'unknown';\n\t\t\t\t\titem.dataset.stateActionId = asText(tick.actionId);\n\t\t\t\t\titem.dataset.stateActorId = asText(tick.actor?.id);\n\t\t\t\t\titem.dataset.stateActorKind = asText(tick.actor?.kind);\n\t\t\t\t\titem.dataset.stateUserActionId = asText(tick.userActionId);\n\t\t\t\t\titem.dataset.stateObservationId = asText(tick.observationId);\n\t\t\t\t\titem.dataset.stateCausalTickId = asText(tick.causalTickId);\n\t\t\t\t\titem.dataset.stateCausalDependencyId = asText(tick.causalDependencyId);\n\t\t\t\t\tconst main = document.createElement('div');\n\t\t\t\t\tmain.className = 'xis-state-tick-main';\n\t\t\t\t\tconst summary = document.createElement('div');\n\t\t\t\t\tsummary.className = 'xis-state-tick-summary';\n\t\t\t\t\tconst health = document.createElement('span');\n\t\t\t\t\thealth.className = 'xis-status-badge ' + healthClass(tick.health);\n\t\t\t\t\thealth.textContent = label(tick.health).toUpperCase();\n\t\t\t\t\tconst lifecycle = document.createElement('span');\n\t\t\t\t\tlifecycle.textContent = label(tick.lifecycle);\n\t\t\t\t\tsummary.append(health, lifecycle);\n\t\t\t\t\tconst reason = document.createElement('p');\n\t\t\t\t\treason.className = 'xis-state-tick-reason';\n\t\t\t\t\tconst reasonLabel = document.createElement('strong');\n\t\t\t\t\treasonLabel.textContent = 'Reason';\n\t\t\t\t\treason.append(reasonLabel, document.createTextNode(' ' + label(tick.reasonCode)));\n\t\t\t\t\tconst provenance = document.createElement('p');\n\t\t\t\t\tprovenance.className = 'xis-state-tick-provenance';\n\t\t\t\t\tconst provenanceLabel = document.createElement('strong');\n\t\t\t\t\tprovenanceLabel.textContent = 'Provenance';\n\t\t\t\t\tprovenance.append(provenanceLabel, document.createTextNode(' Actor: ' + label(tick.actor?.kind).toLowerCase()));\n\t\t\t\t\tmain.append(summary, reason, provenance);\n\t\t\t\t\tconst occurred = document.createElement('time');\n\t\t\t\t\toccurred.className = 'xis-state-tick-time';\n\t\t\t\t\toccurred.dateTime = asText(tick.occurredAt);\n\t\t\t\t\toccurred.textContent = formatTime(tick.occurredAt);\n\t\t\t\t\titem.append(main, occurred);\n\t\t\t\t\tlist.append(item);\n\t\t\t\t}\n\t\t\t\tlist.hidden = payload.ticks.length === 0;\n\t\t\t\tif (gap) gap.hidden = payload.ticks.length > 0;\n\t\t\t\tif (error) error.hidden = true;\n\t\t\t\tif (history) history.dataset.stateHistoryStatus = payload.ticks.length === 0 ? 'empty' : 'ready';\n\t\t\t\towner.dataset.stateHistoryStatus = payload.ticks.length === 0 ? 'empty' : 'ready';\n\t\t\t\tif (status) status.textContent = 'State history updated';\n\t\t\t\towner.dispatchEvent(new CustomEvent('xisnove:state-ticks', {bubbles: true, detail: payload}));\n\t\t\t};\n\t\t\tsource.addEventListener('state-ticks', event => {\n\t\t\t\ttry { render(JSON.parse(event.data)); } catch (_) { if (status) status.textContent = 'State history unavailable'; }\n\t\t\t});\n\t\t\tsource.addEventListener('auth-error', () => { source.close(); window.location.assign('/login'); });\n\t\t\towner.dataset.stateTicksConnected = 'true';\n\t\t\tconst cleanup = new MutationObserver(() => {\n\t\t\t\tif (!document.contains(owner)) { source.close(); cleanup.disconnect(); }\n\t\t\t});\n\t\t\tcleanup.observe(document.body, {childList: true, subtree: true});\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "\">\n\t\t(() => {\n\t\t\tconst owner = document.querySelector('[data-state-ticks-owner=\"true\"]');\n\t\t\tconst monitorID = owner?.dataset.monitorId;\n\t\t\tconst figure = owner?.querySelector('[data-goshtoso-charts-live-url]');\n\t\t\tconst streamURL = figure?.getAttribute('data-goshtoso-charts-live-url') || (monitorID ? '/monitors/' + encodeURIComponent(monitorID) + '/availability/events' : '');\n\t\t\tif (!owner || !window.EventSource || !monitorID || !streamURL || owner.dataset.stateTicksConnected === 'true') return;\n\t\t\tconst source = new EventSource(streamURL);\n\t\t\tconst list = owner.querySelector('[data-state-ticks-list]');\n\t\t\tconst gap = owner.querySelector('[data-state-history-gap]');\n\t\t\tconst error = owner.querySelector('[data-state-history-error]');\n\t\t\tconst history = owner.querySelector('[data-state-history-window]');\n\t\t\tconst status = owner.querySelector('[data-state-history-live-status]');\n\t\t\tconst asText = value => value == null ? '' : String(value);\n\t\t\tconst hasID = value => {\n\t\t\t\tconst id = asText(value).trim().toLowerCase();\n\t\t\t\treturn id !== '' && id !== '00000000-0000-0000-0000-000000000000';\n\t\t\t};\n\t\t\tconst label = value => asText(value).replaceAll('_', ' ').replace(/\\b\\w/g, character => character.toUpperCase()) || 'Unknown';\n\t\t\tconst healthClass = value => {\n\t\t\t\tconst state = asText(value).toLowerCase();\n\t\t\t\tif (state === 'degraded') return 'xis-state-warning';\n\t\t\t\tif (state === 'up') return 'xis-state-success';\n\t\t\t\tif (state === 'down') return 'xis-state-danger';\n\t\t\t\treturn 'xis-state-unknown';\n\t\t\t};\n\t\t\tconst formatTime = value => {\n\t\t\t\tconst date = new Date(value);\n\t\t\t\treturn Number.isNaN(date.getTime()) ? 'time unavailable' : date.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'}) + ' UTC';\n\t\t\t};\n\t\t\tconst render = payload => {\n\t\t\t\tif (!payload || !Array.isArray(payload.ticks) || !list) return;\n\t\t\t\tlist.replaceChildren();\n\t\t\t\tfor (const tick of payload.ticks) {\n\t\t\t\t\tconst item = document.createElement('li');\n\t\t\t\t\titem.className = 'xis-state-tick';\n\t\t\t\t\titem.dataset.stateTick = 'true';\n\t\t\t\t\titem.dataset.stateHealth = asText(tick.health).toLowerCase() || 'unknown';\n\t\t\t\t\titem.dataset.stateActionId = asText(tick.actionId);\n\t\t\t\t\titem.dataset.stateActorId = asText(tick.actor?.id);\n\t\t\t\t\titem.dataset.stateActorKind = asText(tick.actor?.kind);\n\t\t\t\t\titem.dataset.stateUserActionId = asText(tick.userActionId);\n\t\t\t\t\titem.dataset.stateObservationId = asText(tick.observationId);\n\t\t\t\t\titem.dataset.stateCausalTickId = asText(tick.causalTickId);\n\t\t\t\t\titem.dataset.stateCausalDependencyId = asText(tick.causalDependencyId);\n\t\t\t\t\tconst main = document.createElement('div');\n\t\t\t\t\tmain.className = 'xis-state-tick-main';\n\t\t\t\t\tconst summary = document.createElement('div');\n\t\t\t\t\tsummary.className = 'xis-state-tick-summary';\n\t\t\t\t\tconst health = document.createElement('span');\n\t\t\t\t\thealth.className = 'xis-status-badge ' + healthClass(tick.health);\n\t\t\t\t\thealth.textContent = label(tick.health).toUpperCase();\n\t\t\t\t\tconst lifecycle = document.createElement('span');\n\t\t\t\t\tlifecycle.textContent = label(tick.lifecycle);\n\t\t\t\t\tsummary.append(health, lifecycle);\n\t\t\t\t\tconst reason = document.createElement('p');\n\t\t\t\t\treason.className = 'xis-state-tick-reason';\n\t\t\t\t\tconst reasonLabel = document.createElement('strong');\n\t\t\t\t\treasonLabel.textContent = 'Reason';\n\t\t\t\t\treason.append(reasonLabel, document.createTextNode(' ' + label(tick.reasonCode)));\n\t\t\t\t\tconst provenance = document.createElement('p');\n\t\t\t\t\tprovenance.className = 'xis-state-tick-provenance';\n\t\t\t\t\tconst provenanceLabel = document.createElement('strong');\n\t\t\t\t\tprovenanceLabel.textContent = 'Provenance';\n\t\t\t\t\tconst provenanceParts = ['Actor: ' + label(tick.actor?.kind).toLowerCase()];\n\t\t\t\t\tif (hasID(tick.actionId)) provenanceParts.push('Action recorded');\n\t\t\t\t\tif (hasID(tick.actor?.id)) provenanceParts.push('Actor identity recorded');\n\t\t\t\t\tif (hasID(tick.userActionId)) provenanceParts.push('User action linked');\n\t\t\t\t\tif (hasID(tick.observationId)) provenanceParts.push('Observation linked');\n\t\t\t\t\tif (hasID(tick.causalTickId)) provenanceParts.push('Causal state tick linked');\n\t\t\t\t\tif (hasID(tick.causalDependencyId)) provenanceParts.push('Causal dependency linked');\n\t\t\t\t\tprovenance.append(provenanceLabel, document.createTextNode(' ' + provenanceParts.join(' · ')));\n\t\t\t\t\tmain.append(summary, reason, provenance);\n\t\t\t\t\tconst occurred = document.createElement('time');\n\t\t\t\t\toccurred.className = 'xis-state-tick-time';\n\t\t\t\t\toccurred.dateTime = asText(tick.occurredAt);\n\t\t\t\t\toccurred.textContent = formatTime(tick.occurredAt);\n\t\t\t\t\titem.append(main, occurred);\n\t\t\t\t\tlist.append(item);\n\t\t\t\t}\n\t\t\t\tlist.hidden = payload.ticks.length === 0;\n\t\t\t\tif (gap) gap.hidden = payload.ticks.length > 0;\n\t\t\t\tif (error) error.hidden = true;\n\t\t\t\tif (history) history.dataset.stateHistoryStatus = payload.ticks.length === 0 ? 'empty' : 'ready';\n\t\t\t\towner.dataset.stateHistoryStatus = payload.ticks.length === 0 ? 'empty' : 'ready';\n\t\t\t\tif (status) status.textContent = 'State history updated';\n\t\t\t\towner.dispatchEvent(new CustomEvent('xisnove:state-ticks', {bubbles: true, detail: payload}));\n\t\t\t};\n\t\t\tsource.addEventListener('state-ticks', event => {\n\t\t\t\ttry { render(JSON.parse(event.data)); } catch (_) { if (status) status.textContent = 'State history unavailable'; }\n\t\t\t});\n\t\t\tsource.addEventListener('auth-error', () => { source.close(); window.location.assign('/login'); });\n\t\t\towner.dataset.stateTicksConnected = 'true';\n\t\t\tconst cleanup = new MutationObserver(() => {\n\t\t\t\tif (!document.contains(owner)) { source.close(); cleanup.disconnect(); }\n\t\t\t});\n\t\t\tcleanup.observe(document.body, {childList: true, subtree: true});\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1889,7 +1889,7 @@ func NextPage(data MonitorList) templ.Component {
 		var templ_7745c5c3_Var82 templ.SafeURL
 		templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 640, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 653, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 		if templ_7745c5c3_Err != nil {
@@ -1902,7 +1902,7 @@ func NextPage(data MonitorList) templ.Component {
 		var templ_7745c5c3_Var83 string
 		templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitorURL(data.Query, data.NextCursor, data.Selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 640, Col: 170}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 653, Col: 170}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var83)
 		if templ_7745c5c3_Err != nil {
@@ -2103,7 +2103,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				var templ_7745c5c3_Var89 string
 				templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.ResolveAttributeValue("monitor-" + monitor.Id.String())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 670, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 683, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var89)
 				if templ_7745c5c3_Err != nil {
@@ -2116,7 +2116,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				var templ_7745c5c3_Var90 string
 				templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinStringErrs(monitor.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 671, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 684, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
 				if templ_7745c5c3_Err != nil {
@@ -2129,7 +2129,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				var templ_7745c5c3_Var91 string
 				templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(monitor.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 671, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 684, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 				if templ_7745c5c3_Err != nil {
@@ -2306,7 +2306,7 @@ func ShellProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var96 string
 		templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinStringErrs(problem.Code)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 698, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 711, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
 		if templ_7745c5c3_Err != nil {
@@ -2319,7 +2319,7 @@ func ShellProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var97 string
 		templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinStringErrs(problem.CorrelationID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 698, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 711, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
 		if templ_7745c5c3_Err != nil {
@@ -2369,7 +2369,7 @@ func ProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var99 string
 		templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(problem.Code)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 705, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 718, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 		if templ_7745c5c3_Err != nil {
@@ -2382,7 +2382,7 @@ func ProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var100 string
 		templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinStringErrs(problem.CorrelationID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 705, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 718, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 		if templ_7745c5c3_Err != nil {

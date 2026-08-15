@@ -337,13 +337,14 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		ObservationID       string `json:"observationId"`
 		CausalTickID        string `json:"causalTickId"`
 		CausalDependencyID  string `json:"causalDependencyId"`
+		VisibleIndicators   bool   `json:"visibleIndicators"`
 		VisibleTextContains bool   `json:"visibleTextContains"`
 	}
-	provenanceScript := fmt.Sprintf(`(()=>{const item=document.querySelector('[data-state-ticks-list] [data-state-tick]');const text=item?.textContent||'';return {actionId:item?.dataset.stateActionId||'',actorId:item?.dataset.stateActorId||'',actorKind:item?.dataset.stateActorKind||'',userActionId:item?.dataset.stateUserActionId||'',observationId:item?.dataset.stateObservationId||'',causalTickId:item?.dataset.stateCausalTickId||'',causalDependencyId:item?.dataset.stateCausalDependencyId||'',visibleTextContains:[%q,%q,%q,%q,%q,%q].some(id=>text.includes(id))}})()`, actionID.String(), actorID.String(), userActionID.String(), observationID.String(), causalTickID.String(), causalDependencyID.String())
+	provenanceScript := fmt.Sprintf(`(()=>{const item=document.querySelector('[data-state-ticks-list] [data-state-tick]');const text=item?.textContent||'';return {actionId:item?.dataset.stateActionId||'',actorId:item?.dataset.stateActorId||'',actorKind:item?.dataset.stateActorKind||'',userActionId:item?.dataset.stateUserActionId||'',observationId:item?.dataset.stateObservationId||'',causalTickId:item?.dataset.stateCausalTickId||'',causalDependencyId:item?.dataset.stateCausalDependencyId||'',visibleIndicators:['Action recorded','Actor identity recorded','User action linked','Observation linked','Causal state tick linked','Causal dependency linked'].every(indicator=>text.includes(indicator)),visibleTextContains:[%q,%q,%q,%q,%q,%q].some(id=>text.includes(id))}})()`, actionID.String(), actorID.String(), userActionID.String(), observationID.String(), causalTickID.String(), causalDependencyID.String())
 	if err := chromedp.Run(ctx, chromedp.Evaluate(provenanceScript, &stateTickProvenance)); err != nil {
 		t.Fatalf("state-ticks provenance DOM: %v", err)
 	}
-	if stateTickProvenance.ActionID != actionID.String() || stateTickProvenance.ActorID != actorID.String() || stateTickProvenance.ActorKind != string(sdk.StateTickActorKindSystem) || stateTickProvenance.UserActionID != userActionID.String() || stateTickProvenance.ObservationID != observationID.String() || stateTickProvenance.CausalTickID != causalTickID.String() || stateTickProvenance.CausalDependencyID != causalDependencyID.String() || stateTickProvenance.VisibleTextContains {
+	if stateTickProvenance.ActionID != actionID.String() || stateTickProvenance.ActorID != actorID.String() || stateTickProvenance.ActorKind != string(sdk.StateTickActorKindSystem) || stateTickProvenance.UserActionID != userActionID.String() || stateTickProvenance.ObservationID != observationID.String() || stateTickProvenance.CausalTickID != causalTickID.String() || stateTickProvenance.CausalDependencyID != causalDependencyID.String() || !stateTickProvenance.VisibleIndicators || stateTickProvenance.VisibleTextContains {
 		t.Fatalf("state-ticks provenance was not preserved safely: %#v", stateTickProvenance)
 	}
 	assertSelectedMonitorIdentity(t, ctx, monitorID.String())

@@ -519,11 +519,13 @@ templ MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) 
 				<strong>State history unavailable</strong>
 				<span>{ historyError }</span>
 			</div>
+			<div class="xis-state-history-gap" data-state-history-gap hidden role="status">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div>
 			<ol class="xis-state-ticks" data-state-ticks-list hidden aria-live="polite"></ol>
 		} else if len(history.Ticks) == 0 {
 			<div class="xis-state-history-gap" data-state-history-gap role="status">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div>
 			<ol class="xis-state-ticks" data-state-ticks-list hidden aria-live="polite"></ol>
 		} else {
+			<div class="xis-state-history-gap" data-state-history-gap hidden role="status">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div>
 			<ol class="xis-state-ticks" data-state-ticks-list aria-live="polite">
 				for _, tick := range history.Ticks {
 					<li class="xis-state-tick" data-state-tick="true" data-state-health={ string(stateTickHealth(tick.Health)) } data-state-action-id={ stateTickID(tick.ActionId) } data-state-actor-id={ stateTickOptionalID(tick.Actor.Id) } data-state-actor-kind={ string(tick.Actor.Kind) } data-state-user-action-id={ stateTickOptionalID(tick.UserActionId) } data-state-observation-id={ stateTickOptionalID(tick.ObservationId) } data-state-causal-tick-id={ stateTickOptionalID(tick.CausalTickId) } data-state-causal-dependency-id={ stateTickOptionalID(tick.CausalDependencyId) }>
@@ -558,6 +560,10 @@ templ StateTicksConsumer() {
 			const history = owner.querySelector('[data-state-history-window]');
 			const status = owner.querySelector('[data-state-history-live-status]');
 			const asText = value => value == null ? '' : String(value);
+			const hasID = value => {
+				const id = asText(value).trim().toLowerCase();
+				return id !== '' && id !== '00000000-0000-0000-0000-000000000000';
+			};
 			const label = value => asText(value).replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase()) || 'Unknown';
 			const healthClass = value => {
 				const state = asText(value).toLowerCase();
@@ -604,7 +610,14 @@ templ StateTicksConsumer() {
 					provenance.className = 'xis-state-tick-provenance';
 					const provenanceLabel = document.createElement('strong');
 					provenanceLabel.textContent = 'Provenance';
-					provenance.append(provenanceLabel, document.createTextNode(' Actor: ' + label(tick.actor?.kind).toLowerCase()));
+					const provenanceParts = ['Actor: ' + label(tick.actor?.kind).toLowerCase()];
+					if (hasID(tick.actionId)) provenanceParts.push('Action recorded');
+					if (hasID(tick.actor?.id)) provenanceParts.push('Actor identity recorded');
+					if (hasID(tick.userActionId)) provenanceParts.push('User action linked');
+					if (hasID(tick.observationId)) provenanceParts.push('Observation linked');
+					if (hasID(tick.causalTickId)) provenanceParts.push('Causal state tick linked');
+					if (hasID(tick.causalDependencyId)) provenanceParts.push('Causal dependency linked');
+					provenance.append(provenanceLabel, document.createTextNode(' ' + provenanceParts.join(' · ')));
 					main.append(summary, reason, provenance);
 					const occurred = document.createElement('time');
 					occurred.className = 'xis-state-tick-time';

@@ -656,6 +656,12 @@ func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Reques
 			history.Add(state, windowEnd)
 		}
 		cancel()
+		authFailure := errors.Is(historyErr, controlplane.ErrUnauthorized) || errors.Is(stateHistoryErr, controlplane.ErrUnauthorized)
+		if authFailure && !s.noneAuth {
+			// Clear the browser session before writing any SSE bytes; headers are
+			// committed by the first chart event and cannot expire the cookie later.
+			s.cookies.ClearSession(w)
+		}
 		if historyErr != nil && !errors.Is(historyErr, context.Canceled) && !errors.Is(historyErr, context.DeadlineExceeded) {
 			s.logger.WarnContext(r.Context(), "availability history fetch failed", "monitor_id", monitorID.String(), "error", historyErr)
 		}
@@ -667,7 +673,7 @@ func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Reques
 		if _, writeErr := fmt.Fprintf(w, "event: chart\ndata: %s\n\n", payload); writeErr != nil {
 			return false
 		}
-		if errors.Is(historyErr, controlplane.ErrUnauthorized) || errors.Is(stateHistoryErr, controlplane.ErrUnauthorized) {
+		if authFailure {
 			if _, writeErr := io.WriteString(w, "event: auth-error\ndata: {\"status\":401,\"code\":\"unauthorized\"}\n\n"); writeErr != nil {
 				return false
 			}
