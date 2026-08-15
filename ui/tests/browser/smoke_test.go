@@ -34,7 +34,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
 	unknownID := uuid.MustParse("10000000-0000-4000-8000-000000000002")
 	locationID := uuid.MustParse("20000000-0000-4000-8000-000000000001")
-	observedAt := time.Date(2026, time.July, 26, 12, 30, 0, 0, time.UTC)
+	observedAt := browserFixtureObservedAt()
 	homeDNS := sdk.Monitor{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", Kind: sdk.MonitorKindDns, Enabled: true, Public: true, LocationId: locationID, RequiredLocation: true, IntervalSeconds: 60, TimeoutMillis: 2500, FailureThreshold: 3, RecoveryThreshold: 2, UpdatedAt: observedAt}
 	vpsEdge := sdk.Monitor{Id: unknownID, Name: "VPS edge", Description: "External ingress", Kind: sdk.MonitorKindHttp, Enabled: true, LocationId: locationID, IntervalSeconds: 30, TimeoutMillis: 1500, FailureThreshold: 2, RecoveryThreshold: 2, UpdatedAt: observedAt}
 	var scenario atomic.Value
@@ -458,6 +458,20 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	assertPNGArtifacts(t, screenshotDir, expectedArtifacts)
 	t.Logf("browser matrix and integrated SDK routes passed; screenshots: %s", screenshotDir)
+}
+
+// browserFixtureObservedAt keeps fixture observations aligned with the BFF's
+// rolling three-hour history window.
+func browserFixtureObservedAt() time.Time {
+	return time.Now().UTC().Truncate(time.Second)
+}
+
+func TestBrowserFixtureStateHistoryFitsRollingWindow(t *testing.T) {
+	now := time.Now().UTC()
+	observedAt := browserFixtureObservedAt()
+	if observedAt.Before(now.Add(-3*time.Hour)) || observedAt.After(now) {
+		t.Fatalf("browser fixture observedAt=%s is outside the live BFF window ending %s", observedAt, now)
+	}
 }
 
 func TestControlledInvalidLoginHTML(t *testing.T) {
