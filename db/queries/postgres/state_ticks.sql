@@ -13,7 +13,8 @@ INSERT INTO state_ticks (
   occurred_at,
   observation_id,
   causal_tick_id,
-  causal_dependency_id
+  causal_dependency_id,
+  occurred_at_unix_nanos
 ) VALUES (
   sqlc.arg(id),
   sqlc.arg(monitor_id),
@@ -28,7 +29,8 @@ INSERT INTO state_ticks (
   sqlc.arg(occurred_at),
   sqlc.narg(observation_id),
   sqlc.narg(causal_tick_id),
-  sqlc.narg(causal_dependency_id)
+  sqlc.narg(causal_dependency_id),
+  sqlc.arg(occurred_at_unix_nanos)
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -47,10 +49,11 @@ SELECT
   occurred_at,
   observation_id,
   causal_tick_id,
-  causal_dependency_id
+  causal_dependency_id,
+  occurred_at_unix_nanos
 FROM state_ticks
 WHERE monitor_id = sqlc.arg(monitor_id)
-  AND occurred_at >= sqlc.arg(starts_at)
-  AND occurred_at < sqlc.arg(ends_at)
-ORDER BY occurred_at DESC, id DESC
+  AND occurred_at_unix_nanos >= sqlc.arg(starts_at)
+  AND occurred_at_unix_nanos < sqlc.arg(ends_at)
+ORDER BY occurred_at_unix_nanos DESC, id DESC
 LIMIT sqlc.arg(row_limit);

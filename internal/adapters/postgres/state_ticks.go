@@ -25,21 +25,26 @@ func (r *stateTickRepository) AppendStateTick(ctx context.Context, tick domain.S
 	if err := tick.Validate(); err != nil {
 		return false, fmt.Errorf("append state tick: %w", err)
 	}
+	occurredAtUnixNanos, err := stateTickUnixNanos(tick.OccurredAt)
+	if err != nil {
+		return false, fmt.Errorf("append state tick: %w", err)
+	}
 	count, err := r.queries.AppendStateTick(ctx, dbpostgres.AppendStateTickParams{
-		ID:                 tick.ID,
-		MonitorID:          string(tick.MonitorID),
-		LocationID:         nullableStateTickLocationID(tick.LocationID),
-		Lifecycle:          string(tick.Lifecycle),
-		Health:             string(tick.Health),
-		ReasonCode:         string(tick.ReasonCode),
-		ActionID:           tick.ActionID,
-		UserActionID:       nullableStateTickPointer(tick.UserActionID),
-		ActorKind:          string(tick.Actor.Kind),
-		ActorID:            nullableStateTickID(tick.Actor.ID),
-		OccurredAt:         formatTime(tick.OccurredAt),
-		ObservationID:      nullableStateTickPointer(tick.ObservationID),
-		CausalTickID:       nullableStateTickPointer(tick.CausalTickID),
-		CausalDependencyID: nullableStateTickPointer(tick.CausalDependencyID),
+		ID:                  tick.ID,
+		MonitorID:           string(tick.MonitorID),
+		LocationID:          nullableStateTickLocationID(tick.LocationID),
+		Lifecycle:           string(tick.Lifecycle),
+		Health:              string(tick.Health),
+		ReasonCode:          string(tick.ReasonCode),
+		ActionID:            tick.ActionID,
+		UserActionID:        nullableStateTickPointer(tick.UserActionID),
+		ActorKind:           string(tick.Actor.Kind),
+		ActorID:             nullableStateTickID(tick.Actor.ID),
+		OccurredAt:          formatTime(tick.OccurredAt),
+		OccurredAtUnixNanos: occurredAtUnixNanos,
+		ObservationID:       nullableStateTickPointer(tick.ObservationID),
+		CausalTickID:        nullableStateTickPointer(tick.CausalTickID),
+		CausalDependencyID:  nullableStateTickPointer(tick.CausalDependencyID),
 	})
 	if err != nil {
 		return false, repositoryError("append state tick", err)
@@ -59,10 +64,18 @@ func (r *stateTickRepository) ListStateTicks(
 	if end.Before(start) {
 		return nil, errors.New("list state ticks: end precedes start")
 	}
+	startsAtUnixNanos, err := stateTickUnixNanos(start)
+	if err != nil {
+		return nil, fmt.Errorf("list state ticks: %w", err)
+	}
+	endsAtUnixNanos, err := stateTickUnixNanos(end)
+	if err != nil {
+		return nil, fmt.Errorf("list state ticks: %w", err)
+	}
 	records, err := r.queries.ListStateTicks(ctx, dbpostgres.ListStateTicksParams{
 		MonitorID: string(monitorID),
-		StartsAt:  start,
-		EndsAt:    end,
+		StartsAt:  startsAtUnixNanos,
+		EndsAt:    endsAtUnixNanos,
 		RowLimit:  int32(normalizeStateTickHistoryLimit(limit)),
 	})
 	if err != nil {
@@ -73,10 +86,7 @@ func (r *stateTickRepository) ListStateTicks(
 	// history. Expose the repository contract chronologically.
 	for index := len(records) - 1; index >= 0; index-- {
 		record := records[index]
-		occurredAt, err := parseTime(record.OccurredAt)
-		if err != nil {
-			return nil, fmt.Errorf("map state tick timestamp: %w", err)
-		}
+		occurredAt := stateTickTimeFromUnixNanos(record.OccurredAtUnixNanos)
 		if record.MonitorID != string(monitorID) || occurredAt.Before(start) || !occurredAt.Before(end) {
 			return nil, errors.New("list state ticks: query returned a row outside the requested scope")
 		}
@@ -87,6 +97,25 @@ func (r *stateTickRepository) ListStateTicks(
 		ticks = append(ticks, tick)
 	}
 	return ticks, nil
+}
+
+func stateTickUnixNanos(value time.Time) (int64, error) {
+	const (
+		maxUnixSeconds        int64 = 9223372036
+		maxUnixNanosRemainder int64 = 854775807
+	)
+	value = value.UTC()
+	seconds := value.Unix()
+	nanos := int64(value.Nanosecond())
+	if seconds < -maxUnixSeconds || seconds > maxUnixSeconds ||
+		(seconds == maxUnixSeconds && nanos > maxUnixNanosRemainder) {
+		return 0, errors.New("timestamp is outside the PostgreSQL nanosecond range")
+	}
+	return seconds*1_000_000_000 + nanos, nil
+}
+
+func stateTickTimeFromUnixNanos(value int64) time.Time {
+	return time.Unix(0, value).UTC()
 }
 
 func mapPostgresStateTick(record dbpostgres.StateTick, occurredAt time.Time) (domain.StateTick, error) {

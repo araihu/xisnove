@@ -28,7 +28,7 @@ func TestStateTickRepositoryRetainsNewestRowsWithSubMillisecondBoundaries(t *tes
 	}
 
 	monitorID := uuid.New()
-	createdAt := time.Date(2026, 8, 15, 12, 0, 0, 123456000, time.UTC)
+	createdAt := time.Date(2026, 8, 15, 12, 0, 0, 123456789, time.UTC)
 	if _, err := db.ExecContext(ctx, `
 		INSERT INTO monitors (
 			id, name, kind, interval_ms, timeout_ms, failure_threshold,
@@ -62,20 +62,20 @@ func TestStateTickRepositoryRetainsNewestRowsWithSubMillisecondBoundaries(t *tes
 	startID := uuid.New()
 	insert(startID, base)
 	middleID := uuid.New()
-	insert(middleID, base.Add(time.Microsecond))
+	insert(middleID, base.Add(time.Nanosecond))
 	latestID := uuid.New()
-	insert(latestID, base.Add(2*time.Microsecond))
-	insert(uuid.New(), base.Add(3*time.Microsecond))
+	insert(latestID, base.Add(2*time.Nanosecond))
+	insert(uuid.New(), base.Add(3*time.Nanosecond))
 
 	repository := postgres.NewStore(db).Repositories().StateTicks
-	ticks, err := repository.ListStateTicks(ctx, domain.MonitorID(monitorID.String()), base, base.Add(3*time.Microsecond), 2)
+	ticks, err := repository.ListStateTicks(ctx, domain.MonitorID(monitorID.String()), base, base.Add(3*time.Nanosecond), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(ticks) != 2 || ticks[0].ID != middleID.String() || ticks[1].ID != latestID.String() {
 		t.Fatalf("ticks = %#v, want newest two in chronological order", ticks)
 	}
-	if !ticks[0].OccurredAt.Equal(base.Add(time.Microsecond)) || !ticks[1].OccurredAt.Equal(base.Add(2*time.Microsecond)) {
+	if !ticks[0].OccurredAt.Equal(base.Add(time.Nanosecond)) || !ticks[1].OccurredAt.Equal(base.Add(2*time.Nanosecond)) {
 		t.Fatalf("timestamps = %s, %s, want sub-millisecond precision preserved", ticks[0].OccurredAt, ticks[1].OccurredAt)
 	}
 }

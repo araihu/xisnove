@@ -26,7 +26,8 @@ INSERT INTO state_ticks (
   occurred_at,
   observation_id,
   causal_tick_id,
-  causal_dependency_id
+  causal_dependency_id,
+  occurred_at_unix_nanos
 ) VALUES (
   $1,
   $2,
@@ -41,26 +42,28 @@ INSERT INTO state_ticks (
   $11,
   $12,
   $13,
-  $14
+  $14,
+  $15
 )
 ON CONFLICT (id) DO NOTHING
 `
 
 type AppendStateTickParams struct {
-	ID                 string         `json:"id"`
-	MonitorID          string         `json:"monitor_id"`
-	LocationID         sql.NullString `json:"location_id"`
-	Lifecycle          string         `json:"lifecycle"`
-	Health             string         `json:"health"`
-	ReasonCode         string         `json:"reason_code"`
-	ActionID           string         `json:"action_id"`
-	UserActionID       sql.NullString `json:"user_action_id"`
-	ActorKind          string         `json:"actor_kind"`
-	ActorID            sql.NullString `json:"actor_id"`
-	OccurredAt         time.Time      `json:"occurred_at"`
-	ObservationID      sql.NullString `json:"observation_id"`
-	CausalTickID       sql.NullString `json:"causal_tick_id"`
-	CausalDependencyID sql.NullString `json:"causal_dependency_id"`
+	ID                  string         `json:"id"`
+	MonitorID           string         `json:"monitor_id"`
+	LocationID          sql.NullString `json:"location_id"`
+	Lifecycle           string         `json:"lifecycle"`
+	Health              string         `json:"health"`
+	ReasonCode          string         `json:"reason_code"`
+	ActionID            string         `json:"action_id"`
+	UserActionID        sql.NullString `json:"user_action_id"`
+	ActorKind           string         `json:"actor_kind"`
+	ActorID             sql.NullString `json:"actor_id"`
+	OccurredAt          time.Time      `json:"occurred_at"`
+	ObservationID       sql.NullString `json:"observation_id"`
+	CausalTickID        sql.NullString `json:"causal_tick_id"`
+	CausalDependencyID  sql.NullString `json:"causal_dependency_id"`
+	OccurredAtUnixNanos int64          `json:"occurred_at_unix_nanos"`
 }
 
 func (q *Queries) AppendStateTick(ctx context.Context, arg AppendStateTickParams) (int64, error) {
@@ -79,6 +82,7 @@ func (q *Queries) AppendStateTick(ctx context.Context, arg AppendStateTickParams
 		arg.ObservationID,
 		arg.CausalTickID,
 		arg.CausalDependencyID,
+		arg.OccurredAtUnixNanos,
 	)
 	if err != nil {
 		return 0, err
@@ -101,20 +105,21 @@ SELECT
   occurred_at,
   observation_id,
   causal_tick_id,
-  causal_dependency_id
+  causal_dependency_id,
+  occurred_at_unix_nanos
 FROM state_ticks
 WHERE monitor_id = $1
-  AND occurred_at >= $2
-  AND occurred_at < $3
-ORDER BY occurred_at DESC, id DESC
+  AND occurred_at_unix_nanos >= $2
+  AND occurred_at_unix_nanos < $3
+ORDER BY occurred_at_unix_nanos DESC, id DESC
 LIMIT $4
 `
 
 type ListStateTicksParams struct {
-	MonitorID string    `json:"monitor_id"`
-	StartsAt  time.Time `json:"starts_at"`
-	EndsAt    time.Time `json:"ends_at"`
-	RowLimit  int32     `json:"row_limit"`
+	MonitorID string `json:"monitor_id"`
+	StartsAt  int64  `json:"starts_at"`
+	EndsAt    int64  `json:"ends_at"`
+	RowLimit  int32  `json:"row_limit"`
 }
 
 func (q *Queries) ListStateTicks(ctx context.Context, arg ListStateTicksParams) ([]StateTick, error) {
@@ -146,6 +151,7 @@ func (q *Queries) ListStateTicks(ctx context.Context, arg ListStateTicksParams) 
 			&i.ObservationID,
 			&i.CausalTickID,
 			&i.CausalDependencyID,
+			&i.OccurredAtUnixNanos,
 		); err != nil {
 			return nil, err
 		}

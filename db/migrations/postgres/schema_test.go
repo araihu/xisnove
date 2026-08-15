@@ -11,7 +11,7 @@ import (
 func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 12 {
+	if migrations.LatestVersion != 13 {
 		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
 	}
 	var schema strings.Builder
@@ -85,6 +85,28 @@ func TestStateTickSchemaIsImmutableAndBoundedByMonitorTime(t *testing.T) {
 	} {
 		if !strings.Contains(schema, expected) {
 			t.Fatalf("state tick schema is missing %q", expected)
+		}
+	}
+}
+
+func TestStateTickTimestampPrecisionMigrationPreservesLegacyReads(t *testing.T) {
+	t.Parallel()
+
+	content, err := migrations.Files.ReadFile("00013_state_tick_timestamp_precision.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(content)
+	for _, expected := range []string{
+		"ADD COLUMN occurred_at_unix_nanos BIGINT",
+		"TIMESTAMPTZ",
+		"round(EXTRACT(EPOCH FROM occurred_at) * 1000000)::BIGINT * 1000",
+		"state_ticks_monitor_occurred_at_unix_nanos",
+		"state_ticks_occurred_at_unix_nanos",
+		"state_ticks_fill_occurred_at_unix_nanos",
+	} {
+		if !strings.Contains(schema, expected) {
+			t.Fatalf("timestamp precision migration is missing %q", expected)
 		}
 	}
 }

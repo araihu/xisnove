@@ -52,6 +52,12 @@ XISNOVE_TEST_POSTGRES_URL='postgres://postgres:password@127.0.0.1:5432/xisnove?s
   go test -race ./integration -run TestStorageMatrix -count=10
 ```
 
+The PostgreSQL state-tick adapter test also requires this override to verify
+the schema-13 nanosecond column, compatibility trigger, and exact
+`[start,end)` query against a real PostgreSQL server. The no-server test run
+only proves the integer timestamp conversion and newest-row ordering in the
+adapter; it does not replace the migration/integration gate.
+
 When Colima's active Docker context is not discovered automatically, follow
 the Testcontainers Colima setup and export its socket for the test process:
 
