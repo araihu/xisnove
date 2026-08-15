@@ -66,7 +66,11 @@ func TestNoneAuthServesProtectedRoutesWithoutSession(t *testing.T) {
 func TestMonitorAvailabilityEventsStreamsCompleteChartSnapshot(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000099")
 	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
-	client.Health[monitorID] = sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up}
+	client.Health[monitorID] = sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Down}
+	client.History[monitorID] = sdk.MonitorAvailabilityHistory{MonitorId: monitorID, Samples: []sdk.MonitorAvailabilitySample{
+		{Id: uuid.New(), LocationId: uuid.New(), ObservedAt: time.Date(2026, time.August, 15, 11, 0, 0, 0, time.UTC), Outcome: sdk.MonitorAvailabilitySampleOutcomePassed},
+		{Id: uuid.New(), LocationId: uuid.New(), ObservedAt: time.Date(2026, time.August, 15, 11, 1, 0, 0, time.UTC), Outcome: sdk.MonitorAvailabilitySampleOutcomeFailed},
+	}}
 	handler, _ := newTestHandlerWithModes(t, client, 10*time.Millisecond, []AuthMode{AuthModeNone})
 	testServer := httptest.NewServer(handler)
 	defer testServer.Close()
@@ -107,11 +111,14 @@ func TestMonitorAvailabilityEventsStreamsCompleteChartSnapshot(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(dataLine, "data: "))), &snapshot); err != nil {
 		t.Fatalf("decode SSE snapshot: %v; line=%q", err, dataLine)
 	}
-	if len(snapshot.Categories) != 1 || len(snapshot.Series) != 4 {
+	if len(snapshot.Categories) != 2 || len(snapshot.Series) != 4 {
 		t.Fatalf("SSE snapshot shape = %#v", snapshot)
 	}
-	if snapshot.Series[0].Name != "Healthy" || len(snapshot.Series[0].Values) != 1 || snapshot.Series[0].Values[0] != 1 {
+	if snapshot.Series[0].Name != "Healthy" || len(snapshot.Series[0].Values) != 2 || snapshot.Series[0].Values[0] != 1 || snapshot.Series[0].Values[1] != 0 {
 		t.Fatalf("SSE healthy series = %#v", snapshot.Series[0])
+	}
+	if snapshot.Series[2].Name != "Down" || snapshot.Series[2].Values[0] != 0 || snapshot.Series[2].Values[1] != 1 {
+		t.Fatalf("SSE down series = %#v", snapshot.Series[2])
 	}
 	cancel()
 }
