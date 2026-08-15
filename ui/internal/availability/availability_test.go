@@ -49,3 +49,24 @@ func TestHistoryReplacesOldestSamplesAtBound(t *testing.T) {
 		t.Fatalf("series = %#v", snapshot.Series)
 	}
 }
+
+func TestHistoryUnknownWindowKeepsCurrentStateAtRightEdge(t *testing.T) {
+	history := NewHistory(int(HistoryLookback/HistoryStep) + 1)
+	end := time.Date(2026, time.August, 15, 11, 3, 42, 0, time.UTC)
+	history.AddUnknownWindow(end.Add(-HistoryLookback), end)
+	history.Add(sdk.Up, end)
+
+	snapshot := history.Snapshot()
+	wantPoints := int(HistoryLookback/HistoryStep) + 1
+	if len(snapshot.Categories) != wantPoints {
+		t.Fatalf("fallback history points = %d, want %d", len(snapshot.Categories), wantPoints)
+	}
+	if snapshot.Series[0].Values[wantPoints-1] != 1 || snapshot.Series[3].Values[wantPoints-1] != 0 {
+		t.Fatalf("current state was not placed at right edge: %#v", snapshot.Series)
+	}
+	for index := 0; index < wantPoints-1; index++ {
+		if snapshot.Series[3].Values[index] != 1 {
+			t.Fatalf("unknown fallback point %d = %#v", index, snapshot.Series[3].Values)
+		}
+	}
+}

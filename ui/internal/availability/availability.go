@@ -16,6 +16,7 @@ const (
 	DefaultWindow   = 24
 	HistoryWindow   = 4096
 	HistoryLookback = 3 * time.Hour
+	HistoryStep     = 5 * time.Minute
 )
 
 var seriesNames = []string{Healthy, Degraded, Down, Unknown}
@@ -87,6 +88,23 @@ func (h *History) AddOutcome(outcome sdk.MonitorAvailabilitySampleOutcome, obser
 		state = sdk.Up
 	}
 	h.Add(state, observedAt)
+}
+
+// AddUnknownWindow creates a compact right-aligned fallback window. Missing
+// observations stay explicit as Unknown; callers can append the current state
+// at end afterwards so the latest point remains on the right edge.
+func (h *History) AddUnknownWindow(start, end time.Time) {
+	if h == nil {
+		return
+	}
+	start = start.UTC().Truncate(HistoryStep)
+	end = end.UTC().Truncate(HistoryStep)
+	if !end.After(start) {
+		return
+	}
+	for observedAt := start; observedAt.Before(end); observedAt = observedAt.Add(HistoryStep) {
+		h.Add(sdk.Unknown, observedAt)
+	}
 }
 
 // Snapshot returns a complete renderer-neutral payload for goshtoso-charts.

@@ -633,6 +633,7 @@ func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Reques
 			} else if historyErr == nil || (!errors.Is(healthErr, context.Canceled) && !errors.Is(healthErr, context.DeadlineExceeded)) {
 				s.logger.WarnContext(r.Context(), "availability health poll failed", "monitor_id", monitorID.String(), "error", healthErr)
 			}
+			history.AddUnknownWindow(windowEnd.Add(-availability.HistoryLookback), windowEnd)
 			history.Add(state, windowEnd)
 		}
 		cancel()
