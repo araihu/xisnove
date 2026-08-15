@@ -430,7 +430,6 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 				<div>
 					<p class="xis-meta">Selected monitor</p>
 					<h3 id="monitor-detail-heading" tabindex="-1" data-autofocus>{ monitor.Name }</h3>
-					<p class="xis-meta"><code>{ monitor.Id.String() }</code></p>
 				</div>
 				@healthBadge(health.State)
 			</div>
@@ -469,7 +468,6 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 			<dl class="xis-detail-facts">
 				<dt>Enabled</dt><dd>{ enabledLabel(monitor.Enabled) }</dd>
 				<dt>Public</dt><dd>{ enabledLabel(monitor.Public) }</dd>
-				<dt>Location</dt><dd><code>{ monitor.LocationId.String() }</code></dd>
 				<dt>Required</dt><dd>{ enabledLabel(monitor.RequiredLocation) }</dd>
 				<dt>Updated</dt><dd>{ formattedTime(monitor.UpdatedAt) }</dd>
 			</dl>

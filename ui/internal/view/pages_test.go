@@ -239,7 +239,7 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events"`,
 		"Each bar is one probe sample",
 		"60 seconds", "2500 ms", "3 failures", "2 successes",
-		locationID.String(), "26 Jul 2026 12:30 UTC",
+		"26 Jul 2026 12:30 UTC",
 		`href="/monitors?cursor=opaque%2Fpage&amp;q=dns"`, "Close detail",
 	} {
 		if !strings.Contains(body, want) {
@@ -249,6 +249,14 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	for _, absent := range []string{`aria-label="Select monitor `, `>Select</a>`} {
 		if strings.Contains(body, absent) {
 			t.Errorf("selected monitor workspace retained removed row action/detail %q", absent)
+		}
+	}
+	for _, absent := range []string{
+		`<p class="xis-meta"><code>` + monitorID.String() + `</code></p>`,
+		`<dt>Location</dt><dd><code>` + locationID.String() + `</code></dd>`,
+	} {
+		if strings.Contains(body, absent) {
+			t.Errorf("selected monitor workspace retained technical identifier %q", absent)
 		}
 	}
 	if strings.Count(body, "<h1") != 1 {
