@@ -831,26 +831,27 @@ func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 		s.redirectLogin(w, r)
 		return
 	}
-	stateHistory, stateHistoryUnauthorized := s.selectedMonitorStateHistory(r.Context(), credential, page.Items, r.URL.Query().Get("selected"))
+	stateHistory, stateHistoryErrors, stateHistoryUnauthorized := s.selectedMonitorStateHistory(r.Context(), credential, page.Items, r.URL.Query().Get("selected"))
 	if stateHistoryUnauthorized {
 		s.cookies.ClearSession(w)
 		s.redirectLogin(w, r)
 		return
 	}
 	csrfToken := s.cookies.SessionCSRF(credential)
-	data := view.MonitorList{Monitors: page.Items, Health: health, StateHistory: stateHistory, Cursor: currentCursor, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures, SearchPages: searchedPages}
+	data := view.MonitorList{Monitors: page.Items, Health: health, StateHistory: stateHistory, StateHistoryErrors: stateHistoryErrors, Cursor: currentCursor, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures, SearchPages: searchedPages}
 	s.renderAdaptive(w, r, http.StatusOK, view.MonitorPage(csrfToken, data), view.ConsoleFragment("Monitors", csrfToken, view.MonitorContent(data)))
 }
 
 // selectedMonitorStateHistory fetches history only for the selected monitor;
 // the list remains a bounded inventory read and does not fan out one history
 // request per row. Non-auth upstream failures leave the monitor list usable
-// and are represented as an empty history by the view.
-func (s *server) selectedMonitorStateHistory(ctx context.Context, credential string, monitors []sdk.Monitor, selected string) (map[string]sdk.MonitorStateHistory, bool) {
+// and are preserved as safe per-monitor messages instead of an empty history.
+func (s *server) selectedMonitorStateHistory(ctx context.Context, credential string, monitors []sdk.Monitor, selected string) (map[string]sdk.MonitorStateHistory, map[string]string, bool) {
 	history := make(map[string]sdk.MonitorStateHistory)
+	historyErrors := make(map[string]string)
 	selectedID, err := uuid.Parse(strings.TrimSpace(selected))
 	if err != nil {
-		return history, false
+		return history, historyErrors, false
 	}
 	var monitor sdk.Monitor
 	found := false
@@ -862,21 +863,33 @@ func (s *server) selectedMonitorStateHistory(ctx context.Context, credential str
 		}
 	}
 	if !found {
-		return history, false
+		return history, historyErrors, false
 	}
 	startsAt, endsAt := controlplane.StateHistoryWindow(time.Now().UTC())
 	value, err := s.controlPlane.GetMonitorStateHistory(ctx, credential, monitor.Id, startsAt, endsAt, stateHistoryLimit)
 	if err != nil {
 		if errors.Is(err, controlplane.ErrUnauthorized) || isAPIStatus(err, http.StatusUnauthorized) {
-			return history, true
+			return history, historyErrors, true
 		}
+		historyErrors[monitor.Id.String()] = safeStateHistoryError(err)
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			s.logger.WarnContext(ctx, "state history fetch failed", "monitor_id", monitor.Id.String(), "error", err)
 		}
-		return history, false
+		return history, historyErrors, false
 	}
 	history[monitor.Id.String()] = controlplane.BoundStateHistory(value, monitor.Id, startsAt, endsAt, stateHistoryLimit)
-	return history, false
+	return history, historyErrors, false
+}
+
+func safeStateHistoryError(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "State history request timed out."
+	}
+	var apiErr *sdk.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode >= http.StatusBadRequest && apiErr.StatusCode <= 599 {
+		return fmt.Sprintf("State history unavailable (HTTP %d).", apiErr.StatusCode)
+	}
+	return "State history unavailable."
 }
 
 // listMonitorMatches walks a bounded number of control-plane pages without

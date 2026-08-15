@@ -206,6 +206,41 @@ func TestMonitorAvailabilityEventsSignalsStateHistoryAuthFailureWithoutCredentia
 	}
 }
 
+func TestSelectedMonitorStateHistoryPreservesSafeErrorByMonitor(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-0000-0000-000000000098")
+	monitor := sdk.Monitor{Id: monitorID, Name: "Home DNS"}
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "forbidden", err: &sdk.APIError{StatusCode: http.StatusForbidden}, want: "State history unavailable (HTTP 403)."},
+		{name: "not found", err: &sdk.APIError{StatusCode: http.StatusNotFound}, want: "State history unavailable (HTTP 404)."},
+		{name: "upstream", err: &sdk.APIError{StatusCode: http.StatusBadGateway}, want: "State history unavailable (HTTP 502)."},
+		{name: "timeout", err: context.DeadlineExceeded, want: "State history request timed out."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+			client.StateHistoryErrors[monitorID] = tc.err
+			s := &server{controlPlane: client, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+
+			history, historyErrors, unauthorized := s.selectedMonitorStateHistory(
+				context.Background(), DevelopmentNoneCredential, []sdk.Monitor{monitor}, monitorID.String(),
+			)
+			if unauthorized {
+				t.Fatal("state history error marked unauthorized")
+			}
+			if len(history) != 0 {
+				t.Fatalf("history = %#v, want no history on error", history)
+			}
+			if got := historyErrors[monitorID.String()]; got != tc.want {
+				t.Fatalf("history error = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 type sseEvent struct {
 	Name string
 	Data string
