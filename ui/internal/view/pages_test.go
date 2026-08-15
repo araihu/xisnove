@@ -364,6 +364,27 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	}
 }
 
+func TestMonitorDrawerCloseUsesHTMXPushOption(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000016")
+	data := MonitorList{
+		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Live monitor", Enabled: true}},
+		Health:   map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
+		Selected: monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	if !strings.Contains(body, `window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', push: true})`) {
+		t.Fatalf("drawer close does not request an HTMX URL push: %s", body)
+	}
+	if strings.Contains(body, "pushURL") {
+		t.Fatal("drawer close uses the unsupported htmx.ajax pushURL option")
+	}
+}
+
 func TestMonitorAvailabilityChartUsesRequestNonceForInlineRuntime(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
 	data := MonitorList{

@@ -449,7 +449,7 @@ templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Moni
 			data-monitor-drawer-close-url={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) }
 		x-data="{}"
 		x-init="const close = $el.querySelector('aside[aria-labelledby=monitor-detail-drawerTitle] header button[aria-label=Close]'); if (close) { close.dataset.monitorDrawerClose = 'true'; close.dataset.monitorId = $el.dataset.monitorId }"
-		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer' && !$event.defaultPrevented) { const closeURL = $el.dataset.monitorDrawerCloseUrl; if (closeURL && window.htmx) { window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', pushURL: true}) } }"
+		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer' && !$event.defaultPrevented) { const closeURL = $el.dataset.monitorDrawerCloseUrl; if (closeURL && window.htmx) { window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', push: true}) } }"
 	>
 			@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: monitorDetailTitle(monitor, health, history), Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
 			@MonitorDetail(data, monitor, health)
