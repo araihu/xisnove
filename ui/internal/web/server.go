@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -946,12 +947,12 @@ func (s *server) createLocation(w http.ResponseWriter, r *http.Request, credenti
 		s.writeProblem(w, r, csrfProblem())
 		return
 	}
-	name := strings.TrimSpace(r.PostForm.Get("name"))
-	if name == "" {
+	input, err := parseLocationInput(r.PostForm, true)
+	if err != nil {
 		s.writeProblem(w, r, invalidRequestProblem())
 		return
 	}
-	if _, err := client.CreateLocation(r.Context(), credential, name); err != nil {
+	if _, err := client.CreateLocation(r.Context(), credential, input); err != nil {
 		s.locationMutationFailure(w, r, err)
 		return
 	}
@@ -967,17 +968,66 @@ func (s *server) updateLocation(w http.ResponseWriter, r *http.Request, credenti
 		s.writeProblem(w, r, csrfProblem())
 		return
 	}
-	name := strings.TrimSpace(r.PostForm.Get("name"))
-	if name == "" {
+	input, err := parseLocationInput(r.PostForm, false)
+	if err != nil {
 		s.writeProblem(w, r, invalidRequestProblem())
 		return
 	}
-	enabled := r.PostForm.Get("enabled") == "true"
-	if _, err := client.UpdateLocation(r.Context(), credential, locationID, name, enabled); err != nil {
+	if _, err := client.UpdateLocation(r.Context(), credential, locationID, input); err != nil {
 		s.locationMutationFailure(w, r, err)
 		return
 	}
 	s.redirectLocations(w, r)
+}
+
+func parseLocationInput(form url.Values, create bool) (controlplane.LocationInput, error) {
+	name := strings.TrimSpace(form.Get("name"))
+	address := strings.TrimSpace(form.Get("address"))
+	protocol := strings.TrimSpace(form.Get("protocol"))
+	if name == "" {
+		return controlplane.LocationInput{}, errors.New("location name is required")
+	}
+	if !create && protocol == "" {
+		return controlplane.LocationInput{}, errors.New("location protocol is required")
+	}
+	policy := &sdk.LocationPolicyInput{}
+	hasPolicy := false
+	parse := func(key string, target **int32) error {
+		value := strings.TrimSpace(form.Get(key))
+		if value == "" {
+			return nil
+		}
+		parsed, err := strconv.ParseInt(value, 10, 32)
+		if err != nil || parsed <= 0 {
+			return errors.New("invalid location policy")
+		}
+		converted := int32(parsed)
+		*target = &converted
+		hasPolicy = true
+		return nil
+	}
+	if err := parse("intervalSeconds", &policy.IntervalSeconds); err != nil {
+		return controlplane.LocationInput{}, err
+	}
+	if err := parse("timeoutMillis", &policy.TimeoutMillis); err != nil {
+		return controlplane.LocationInput{}, err
+	}
+	if err := parse("failureThreshold", &policy.FailureThreshold); err != nil {
+		return controlplane.LocationInput{}, err
+	}
+	if err := parse("recoveryThreshold", &policy.RecoveryThreshold); err != nil {
+		return controlplane.LocationInput{}, err
+	}
+	return controlplane.LocationInput{
+		Name: name, Address: address, Protocol: protocol,
+		Policy: func() *sdk.LocationPolicyInput {
+			if hasPolicy {
+				return policy
+			}
+			return nil
+		}(),
+		Enabled: form.Get("enabled") == "true",
+	}, nil
 }
 
 func (s *server) disableLocation(w http.ResponseWriter, r *http.Request, credential string, client controlplane.LocationClient, locationID uuid.UUID) {

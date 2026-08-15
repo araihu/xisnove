@@ -98,9 +98,17 @@ type Client interface {
 // deployments continue to satisfy the control-plane contract.
 type LocationClient interface {
 	ListLocations(ctx context.Context, opaqueCredential, cursor string, limit int32) (sdk.Page[sdk.Location], error)
-	CreateLocation(ctx context.Context, opaqueCredential, name string) (sdk.Location, error)
-	UpdateLocation(ctx context.Context, opaqueCredential string, locationID openapi_types.UUID, name string, enabled bool) (sdk.Location, error)
+	CreateLocation(ctx context.Context, opaqueCredential string, input LocationInput) (sdk.Location, error)
+	UpdateLocation(ctx context.Context, opaqueCredential string, locationID openapi_types.UUID, input LocationInput) (sdk.Location, error)
 	DisableLocation(ctx context.Context, opaqueCredential string, locationID openapi_types.UUID) error
+}
+
+type LocationInput struct {
+	Name     string
+	Address  string
+	Protocol string
+	Policy   *sdk.LocationPolicyInput
+	Enabled  bool
 }
 
 // SDKClient uses only the public generated client and its SDK helpers.
@@ -185,9 +193,17 @@ func (c *SDKClient) ListLocations(ctx context.Context, credential, cursor string
 	return c.client.LocationsPageFetcher(params, sdk.WithBearerToken(credential))(ctx, cursor)
 }
 
-func (c *SDKClient) CreateLocation(ctx context.Context, credential, name string) (sdk.Location, error) {
+func (c *SDKClient) CreateLocation(ctx context.Context, credential string, input LocationInput) (sdk.Location, error) {
 	key := sdk.IdempotencyKey(uuid.NewString())
-	response, err := c.client.CreateLocationWithResponse(ctx, &sdk.CreateLocationParams{IdempotencyKey: &key}, sdk.CreateLocationRequest{Name: name}, sdk.WithBearerToken(credential))
+	request := sdk.CreateLocationRequest{Name: input.Name, Policy: input.Policy}
+	if input.Address != "" {
+		request.Address = &input.Address
+	}
+	if input.Protocol != "" {
+		protocol := sdk.CreateLocationRequestProtocol(input.Protocol)
+		request.Protocol = &protocol
+	}
+	response, err := c.client.CreateLocationWithResponse(ctx, &sdk.CreateLocationParams{IdempotencyKey: &key}, request, sdk.WithBearerToken(credential))
 	if err != nil {
 		return sdk.Location{}, err
 	}
@@ -200,9 +216,11 @@ func (c *SDKClient) CreateLocation(ctx context.Context, credential, name string)
 	return sdk.Location{}, responseError(response.HTTPResponse, response.Body, "create location")
 }
 
-func (c *SDKClient) UpdateLocation(ctx context.Context, credential string, locationID openapi_types.UUID, name string, enabled bool) (sdk.Location, error) {
+func (c *SDKClient) UpdateLocation(ctx context.Context, credential string, locationID openapi_types.UUID, input LocationInput) (sdk.Location, error) {
 	key := sdk.IdempotencyKey(uuid.NewString())
-	response, err := c.client.UpdateLocationWithResponse(ctx, locationID, &sdk.UpdateLocationParams{IdempotencyKey: &key}, sdk.UpdateLocationRequest{Name: &name, Enabled: &enabled}, sdk.WithBearerToken(credential))
+	name, address, protocol, enabled := input.Name, input.Address, sdk.UpdateLocationRequestProtocol(input.Protocol), input.Enabled
+	request := sdk.UpdateLocationRequest{Name: &name, Address: &address, Protocol: &protocol, Policy: input.Policy, Enabled: &enabled}
+	response, err := c.client.UpdateLocationWithResponse(ctx, locationID, &sdk.UpdateLocationParams{IdempotencyKey: &key}, request, sdk.WithBearerToken(credential))
 	if err != nil {
 		return sdk.Location{}, err
 	}
@@ -434,7 +452,7 @@ func (f *Fake) ListLocations(ctx context.Context, credential, cursor string, lim
 	return sdk.Page[sdk.Location]{Items: append([]sdk.Location(nil), f.Locations[start:end]...), NextCursor: next}, nil
 }
 
-func (f *Fake) CreateLocation(ctx context.Context, credential, name string) (sdk.Location, error) {
+func (f *Fake) CreateLocation(ctx context.Context, credential string, input LocationInput) (sdk.Location, error) {
 	if err := ctx.Err(); err != nil {
 		return sdk.Location{}, err
 	}
@@ -448,12 +466,31 @@ func (f *Fake) CreateLocation(ctx context.Context, credential, name string) (sdk
 	}
 	now := time.Now().UTC()
 	enabled := true
-	location := sdk.Location{Id: uuid.New(), Name: strings.TrimSpace(name), Enabled: &enabled, CreatedAt: now, UpdatedAt: &now}
+	protocol := sdk.LocationProtocol(input.Protocol)
+	if protocol == "" {
+		protocol = sdk.LocationProtocol("http")
+	}
+	policy := sdk.LocationPolicy{IntervalSeconds: 60, TimeoutMillis: 5000, FailureThreshold: 3, RecoveryThreshold: 2}
+	if input.Policy != nil {
+		if input.Policy.IntervalSeconds != nil {
+			policy.IntervalSeconds = *input.Policy.IntervalSeconds
+		}
+		if input.Policy.TimeoutMillis != nil {
+			policy.TimeoutMillis = *input.Policy.TimeoutMillis
+		}
+		if input.Policy.FailureThreshold != nil {
+			policy.FailureThreshold = *input.Policy.FailureThreshold
+		}
+		if input.Policy.RecoveryThreshold != nil {
+			policy.RecoveryThreshold = *input.Policy.RecoveryThreshold
+		}
+	}
+	location := sdk.Location{Id: uuid.New(), Name: strings.TrimSpace(input.Name), Address: input.Address, Protocol: protocol, Policy: policy, Enabled: &enabled, CreatedAt: now, UpdatedAt: &now}
 	f.Locations = append(f.Locations, location)
 	return location, nil
 }
 
-func (f *Fake) UpdateLocation(ctx context.Context, credential string, locationID openapi_types.UUID, name string, enabled bool) (sdk.Location, error) {
+func (f *Fake) UpdateLocation(ctx context.Context, credential string, locationID openapi_types.UUID, input LocationInput) (sdk.Location, error) {
 	if err := ctx.Err(); err != nil {
 		return sdk.Location{}, err
 	}
@@ -469,8 +506,27 @@ func (f *Fake) UpdateLocation(ctx context.Context, credential string, locationID
 		if f.Locations[index].Id != locationID {
 			continue
 		}
-		f.Locations[index].Name = strings.TrimSpace(name)
-		f.Locations[index].Enabled = boolPointer(enabled)
+		f.Locations[index].Name = strings.TrimSpace(input.Name)
+		f.Locations[index].Address = strings.TrimSpace(input.Address)
+		f.Locations[index].Protocol = sdk.LocationProtocol(input.Protocol)
+		if f.Locations[index].Protocol == "" {
+			f.Locations[index].Protocol = sdk.LocationProtocol("http")
+		}
+		f.Locations[index].Enabled = boolPointer(input.Enabled)
+		if input.Policy != nil {
+			if input.Policy.IntervalSeconds != nil {
+				f.Locations[index].Policy.IntervalSeconds = *input.Policy.IntervalSeconds
+			}
+			if input.Policy.TimeoutMillis != nil {
+				f.Locations[index].Policy.TimeoutMillis = *input.Policy.TimeoutMillis
+			}
+			if input.Policy.FailureThreshold != nil {
+				f.Locations[index].Policy.FailureThreshold = *input.Policy.FailureThreshold
+			}
+			if input.Policy.RecoveryThreshold != nil {
+				f.Locations[index].Policy.RecoveryThreshold = *input.Policy.RecoveryThreshold
+			}
+		}
 		now := time.Now().UTC()
 		f.Locations[index].UpdatedAt = &now
 		return f.Locations[index], nil

@@ -145,6 +145,7 @@ templ AppStyles() {
 		.dark .xis-location-panel { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }
 		.xis-location-panel h2, .xis-location-panel h3 { margin: 0; }
 		.xis-location-form { display: grid; gap: .75rem; }
+		.xis-location-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
 		.xis-location-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
 		.xis-location-actions form { display: inline-flex; }
 		.xis-location-danger-action { color: var(--color-danger-text); }
@@ -264,6 +265,7 @@ templ AppStyles() {
 		.dark .xis-global-search-footer { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); }
 		@media (min-width: 720px) { .console-shell-root .console-shell__menu { display: none; } }
 		@media (max-width: 719px) {
+			.xis-location-policy-grid { grid-template-columns: 1fr; }
 			.xis-content { padding: 1.25rem .75rem 3rem; }
 			.console-shell__header-inner { gap: .5rem; padding-inline: .75rem; }
 			.console-shell__brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -440,6 +442,30 @@ templ LocationContent(csrfToken string, data LocationList) {
 					<label class="xis-field" for="location-create-name">Name
 						<input id="location-create-name" name="name" type="text" class="xis-input" maxlength="120" required autocomplete="off"/>
 					</label>
+					<label class="xis-field" for="location-create-address">Network address
+						<input id="location-create-address" name="address" type="text" class="xis-input" maxlength="253" placeholder="192.0.2.10 or 2001:db8::10" autocomplete="off"/>
+					</label>
+					<label class="xis-field" for="location-create-protocol">Default protocol
+						<select id="location-create-protocol" name="protocol" class="xis-input" required>
+							<option value="http" selected>HTTP</option>
+							<option value="tcp">TCP</option>
+							<option value="dns">DNS</option>
+						</select>
+					</label>
+					<div class="xis-location-policy-grid">
+						<label class="xis-field" for="location-create-interval">Interval (seconds)
+							<input id="location-create-interval" name="intervalSeconds" type="number" class="xis-input" min="5" max="86400" value="60" required/>
+						</label>
+						<label class="xis-field" for="location-create-timeout">Timeout (milliseconds)
+							<input id="location-create-timeout" name="timeoutMillis" type="number" class="xis-input" min="100" max="120000" value="5000" required/>
+						</label>
+						<label class="xis-field" for="location-create-failures">Open after failures
+							<input id="location-create-failures" name="failureThreshold" type="number" class="xis-input" min="1" max="100" value="3" required/>
+						</label>
+						<label class="xis-field" for="location-create-recovery">Recover after successes
+							<input id="location-create-recovery" name="recoveryThreshold" type="number" class="xis-input" min="1" max="100" value="2" required/>
+						</label>
+					</div>
 					@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithRootClass("xis-primary-action")) { Create location }
 				</form>
 			</section>
@@ -470,6 +496,30 @@ templ LocationEditor(csrfToken string, location sdk.Location) {
 			<label class="xis-field" for="location-edit-name">Name
 				<input id="location-edit-name" name="name" type="text" class="xis-input" maxlength="120" required value={ location.Name } autocomplete="off"/>
 			</label>
+			<label class="xis-field" for="location-edit-address">Network address
+				<input id="location-edit-address" name="address" type="text" class="xis-input" maxlength="253" value={ location.Address } autocomplete="off"/>
+			</label>
+			<label class="xis-field" for="location-edit-protocol">Default protocol
+				<select id="location-edit-protocol" name="protocol" class="xis-input">
+					<option value="http" selected?={ location.Protocol == "http" }>HTTP</option>
+					<option value="tcp" selected?={ location.Protocol == "tcp" }>TCP</option>
+					<option value="dns" selected?={ location.Protocol == "dns" }>DNS</option>
+				</select>
+			</label>
+			<div class="xis-location-policy-grid">
+				<label class="xis-field" for="location-edit-interval">Interval (seconds)
+					<input id="location-edit-interval" name="intervalSeconds" type="number" class="xis-input" min="5" max="86400" value={ fmt.Sprintf("%d", location.Policy.IntervalSeconds) } required/>
+				</label>
+				<label class="xis-field" for="location-edit-timeout">Timeout (milliseconds)
+					<input id="location-edit-timeout" name="timeoutMillis" type="number" class="xis-input" min="100" max="120000" value={ fmt.Sprintf("%d", location.Policy.TimeoutMillis) } required/>
+				</label>
+				<label class="xis-field" for="location-edit-failures">Open after failures
+					<input id="location-edit-failures" name="failureThreshold" type="number" class="xis-input" min="1" max="100" value={ fmt.Sprintf("%d", location.Policy.FailureThreshold) } required/>
+				</label>
+				<label class="xis-field" for="location-edit-recovery">Recover after successes
+					<input id="location-edit-recovery" name="recoveryThreshold" type="number" class="xis-input" min="1" max="100" value={ fmt.Sprintf("%d", location.Policy.RecoveryThreshold) } required/>
+				</label>
+			</div>
 			<label class="xis-field" for="location-edit-enabled">Lifecycle
 				if locationEnabled(location) {
 					<span><input id="location-edit-enabled" name="enabled" type="checkbox" value="true" checked/> Enabled</span>
@@ -859,19 +909,37 @@ func locationTable(data LocationList) table.Config {
 			ID: id,
 			HTMX: &table.RowHTMXConfig{Get: locationPageURL("", id), Target: "#main-content", Swap: "outerHTML", PushURL: true},
 			AlpineAttrs: attrs,
-			Cells: map[string]table.Cell{
-				"name": {Text: location.Name},
-				"status": {Component: locationStatusBadge(location)},
-				"updated": {Text: formattedTime(pointerTime(location.UpdatedAt))},
-			},
+				Cells: map[string]table.Cell{
+					"name":     {Text: location.Name},
+					"address":  {Text: locationAddressLabel(location)},
+					"protocol": {Text: strings.ToUpper(string(location.Protocol))},
+					"policy":   {Text: locationPolicyLabel(location)},
+					"status":   {Component: locationStatusBadge(location)},
+					"updated":  {Text: formattedTime(pointerTime(location.UpdatedAt))},
+				},
 		})
 	}
 	return table.Config{
 		ID: "location-table",
 		Caption: "Configured monitoring locations",
-		Columns: []table.Column{{Key: "name", Label: "Location"}, {Key: "status", Label: "Status"}, {Key: "updated", Label: "Updated"}},
+		Columns: []table.Column{
+			{Key: "name", Label: "Location"}, {Key: "address", Label: "Address"},
+			{Key: "protocol", Label: "Protocol"}, {Key: "policy", Label: "Policy"},
+			{Key: "status", Label: "Status"}, {Key: "updated", Label: "Updated"},
+		},
 		Rows: rows,
 	}
+}
+
+func locationAddressLabel(location sdk.Location) string {
+	if strings.TrimSpace(location.Address) == "" {
+		return "Discovery placeholder"
+	}
+	return location.Address
+}
+
+func locationPolicyLabel(location sdk.Location) string {
+	return fmt.Sprintf("%ds / %dms / %d/%d", location.Policy.IntervalSeconds, location.Policy.TimeoutMillis, location.Policy.FailureThreshold, location.Policy.RecoveryThreshold)
 }
 
 func pointerTime(value *time.Time) time.Time {

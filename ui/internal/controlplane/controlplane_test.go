@@ -167,7 +167,7 @@ func TestSDKClientManagesLocationsWithBearer(t *testing.T) {
 				t.Errorf("create location body = %#v", request)
 			}
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(sdk.Location{Id: locationID, Name: request.Name, Enabled: &enabled, CreatedAt: updatedAt, UpdatedAt: &updatedAt})
+			_ = json.NewEncoder(w).Encode(sdk.Location{Id: locationID, Name: request.Name, Protocol: sdk.LocationProtocol("http"), Policy: sdk.LocationPolicy{IntervalSeconds: 60, TimeoutMillis: 5000, FailureThreshold: 3, RecoveryThreshold: 2}, Enabled: &enabled, CreatedAt: updatedAt, UpdatedAt: &updatedAt})
 		case r.Method == http.MethodPatch && r.URL.Path == "/v1/locations/"+locationID.String():
 			assertBearer(t, r)
 			if r.Header.Get("Idempotency-Key") == "" {
@@ -198,11 +198,11 @@ func TestSDKClientManagesLocationsWithBearer(t *testing.T) {
 	if err != nil || len(page.Items) != 1 || page.Items[0].Name != "home-lab" {
 		t.Fatalf("locations page = %#v, %v", page, err)
 	}
-	created, err := client.CreateLocation(t.Context(), "bearer-token", "edge")
+	created, err := client.CreateLocation(t.Context(), "bearer-token", LocationInput{Name: "edge"})
 	if err != nil || created.Name != "edge" {
 		t.Fatalf("created location = %#v, %v", created, err)
 	}
-	updated, err := client.UpdateLocation(t.Context(), "bearer-token", locationID, "edge-renamed", false)
+	updated, err := client.UpdateLocation(t.Context(), "bearer-token", locationID, LocationInput{Name: "edge-renamed", Enabled: false})
 	if err != nil || updated.Name != "edge-renamed" || updated.Enabled == nil || *updated.Enabled {
 		t.Fatalf("updated location = %#v, %v", updated, err)
 	}

@@ -16,8 +16,11 @@ import (
 )
 
 type UpdateLocationCommand struct {
-	Name    *string
-	Enabled *bool
+	Name     *string
+	Address  *string
+	Protocol *domain.LocationProtocol
+	Policy   *domain.LocationPolicy
+	Enabled  *bool
 }
 
 type ReplaceMonitorCommand struct {
@@ -47,7 +50,7 @@ func (s *ManagementService) UpdateLocation(
 	if err := authorizeManagementMutation("updateLocation", principal); err != nil {
 		return domain.Location{}, err
 	}
-	if command.Name == nil && command.Enabled == nil {
+	if command.Name == nil && command.Address == nil && command.Protocol == nil && command.Policy == nil && command.Enabled == nil {
 		return domain.Location{}, validationField("location", "must include at least one change")
 	}
 	service := NewIdempotencyService[domain.Location](s.store)
@@ -66,7 +69,7 @@ func (s *ManagementService) UpdateLocation(
 			return "", domain.Location{}, err
 		}
 		updated := current
-		changed := make([]string, 0, 2)
+		changed := make([]string, 0, 6)
 		if command.Name != nil {
 			updated.Name = strings.TrimSpace(*command.Name)
 			if updated.Name == "" {
@@ -76,11 +79,53 @@ func (s *ManagementService) UpdateLocation(
 				changed = append(changed, "name")
 			}
 		}
+		if command.Address != nil {
+			updated.Address = strings.TrimSpace(*command.Address)
+			if updated.Address != current.Address {
+				changed = append(changed, "address")
+			}
+		}
+		if command.Protocol != nil {
+			updated.Protocol = *command.Protocol
+			if updated.Protocol != current.Protocol {
+				changed = append(changed, "protocol")
+			}
+		}
+		if command.Policy != nil {
+			updated.Policy = *command.Policy
+			// PATCH policy fields independently. A missing field is represented by
+			// zero in the application command and keeps the current default rather
+			// than resetting it to the system default.
+			if updated.Policy.Interval <= 0 {
+				updated.Policy.Interval = current.Policy.Interval
+			}
+			if updated.Policy.Timeout <= 0 {
+				updated.Policy.Timeout = current.Policy.Timeout
+			}
+			if updated.Policy.FailureThreshold == 0 {
+				updated.Policy.FailureThreshold = current.Policy.FailureThreshold
+			}
+			if updated.Policy.RecoveryThreshold == 0 {
+				updated.Policy.RecoveryThreshold = current.Policy.RecoveryThreshold
+			}
+			if updated.Policy != current.Policy {
+				changed = append(changed, "policy")
+			}
+		}
 		if command.Enabled != nil {
 			updated.Enabled = *command.Enabled
 			if updated.Enabled != current.Enabled {
 				changed = append(changed, "enabled")
 			}
+		}
+		if command.Address != nil || command.Protocol != nil || command.Policy != nil {
+			candidate, err := domain.NewLocationWithDefaults(
+				updated.ID, updated.Name, updated.Address, updated.Protocol, updated.Policy, updated.CreatedAt,
+			)
+			if err != nil {
+				return "", domain.Location{}, validationField("location", "contains invalid configuration")
+			}
+			updated.Address, updated.Protocol, updated.Policy = candidate.Address, candidate.Protocol, candidate.Policy
 		}
 		if len(changed) == 0 {
 			return string(id), current, nil

@@ -109,9 +109,12 @@ func TestLocationsCRUDWithNoneAuth(t *testing.T) {
 	if len(client.Locations) != 2 || client.Locations[1].Name != "edge" {
 		t.Fatalf("created locations = %#v", client.Locations)
 	}
+	if client.Locations[1].Protocol != sdk.LocationProtocol("http") || client.Locations[1].Policy.IntervalSeconds != 60 {
+		t.Fatalf("created location defaults = %#v", client.Locations[1])
+	}
 
 	_, csrf = getLocations(locationID.String())
-	updateForm := url.Values{"_csrf": {csrf}, "name": {"home-lab-renamed"}, "enabled": {"true"}}
+	updateForm := url.Values{"_csrf": {csrf}, "name": {"home-lab-renamed"}, "protocol": {"http"}, "enabled": {"true"}}
 	updateRequest := httptest.NewRequest(http.MethodPost, "https://ui.example.test/locations/"+locationID.String(), strings.NewReader(updateForm.Encode()))
 	updateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	updateRecorder := httptest.NewRecorder()

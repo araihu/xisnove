@@ -1,14 +1,14 @@
 {
   "format_version": 2,
-  "runtime_version": "m6.1-future-n-minus-one-baseline-v2",
+  "runtime_version": "m6.2-future-n-minus-one-baseline-v3",
   "source": "probe/main.go",
   "schema": {
-    "baseline": 11,
-    "expand": 12,
-    "minimum": 11,
-    "maximum": 12
+    "baseline": 12,
+    "expand": 13,
+    "minimum": 12,
+    "maximum": 13
   },
   "sha256": {
-    "probe/main.go": "aba10fab50507ec28cd4287f7d990df7a069e20c6867e31a440e7419271b218c"
+    "probe/main.go": "885b850fe77a9ed9611f0fe93d394d671722656c718cdac14fd4560e306dc5fa"
   }
 }

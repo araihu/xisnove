@@ -1,4 +1,4 @@
-// Frozen M6.1 compatibility baseline v2 for the state-ticks schema-12
+// Frozen M6.2 compatibility baseline v3 for the location-defaults schema-13
 // transition. Keep this source standalone: it must not import Xisnove packages.
 package main
 
@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	minimumSchemaVersion int64 = 11
-	maximumSchemaVersion int64 = 12
+	minimumSchemaVersion int64 = 12
+	maximumSchemaVersion int64 = 13
 )
 
 func main() {

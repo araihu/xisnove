@@ -261,11 +261,10 @@ type locationRepository struct {
 
 func (r *locationRepository) Create(ctx context.Context, location domain.Location) error {
 	err := r.queries.CreateLocation(ctx, dbsqlite.CreateLocationParams{
-		ID:        string(location.ID),
-		Name:      location.Name,
-		Enabled:   boolInt(location.Enabled),
-		CreatedAt: formatTime(location.CreatedAt),
-		UpdatedAt: nullableTimeValue(location.UpdatedAt),
+		ID: string(location.ID), Name: location.Name, Address: location.Address, Protocol: string(location.Protocol),
+		DefaultIntervalMs: location.Policy.Interval.Milliseconds(), DefaultTimeoutMs: location.Policy.Timeout.Milliseconds(),
+		DefaultFailureThreshold: int64(location.Policy.FailureThreshold), DefaultRecoveryThreshold: int64(location.Policy.RecoveryThreshold),
+		Enabled: boolInt(location.Enabled), CreatedAt: formatTime(location.CreatedAt), UpdatedAt: nullableTimeValue(location.UpdatedAt),
 	})
 	if err != nil {
 		return repositoryError("create location", err)
@@ -281,7 +280,7 @@ func (r *locationRepository) Get(
 	if err != nil {
 		return domain.Location{}, repositoryError("get location", err)
 	}
-	return mapManagementLocation(record.ID, record.Name, record.Enabled, record.CreatedAt, record.UpdatedAt)
+	return mapManagementLocation(record.ID, record.Name, record.Address, record.Protocol, record.DefaultIntervalMs, record.DefaultTimeoutMs, record.DefaultFailureThreshold, record.DefaultRecoveryThreshold, record.Enabled, record.CreatedAt, record.UpdatedAt)
 }
 
 type monitorRepository struct {

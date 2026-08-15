@@ -24,7 +24,8 @@ func (s *Server) UpdateLocation(ctx context.Context, request UpdateLocationReque
 		return updateLocationProblem(requiredBodyError())
 	}
 	location, err := s.management.UpdateLocation(ctx, principal, domain.LocationID(request.LocationId.String()), key, application.UpdateLocationCommand{
-		Name: request.Body.Name, Enabled: request.Body.Enabled,
+		Name: request.Body.Name, Address: request.Body.Address, Enabled: request.Body.Enabled,
+		Protocol: locationProtocolUpdate(request.Body.Protocol), Policy: locationPolicyInputPointer(request.Body.Policy),
 	})
 	if err != nil {
 		return updateLocationProblem(err)
@@ -34,6 +35,22 @@ func (s *Server) UpdateLocation(ctx context.Context, request UpdateLocationReque
 		return nil, err
 	}
 	return UpdateLocation200JSONResponse(mapped), nil
+}
+
+func locationProtocolUpdate(protocol *UpdateLocationRequestProtocol) *domain.LocationProtocol {
+	if protocol == nil {
+		return nil
+	}
+	value := domain.LocationProtocol(*protocol)
+	return &value
+}
+
+func locationPolicyInputPointer(input *LocationPolicyInput) *domain.LocationPolicy {
+	if input == nil {
+		return nil
+	}
+	value := locationPolicyFromInput(input)
+	return &value
 }
 
 func (s *Server) DisableLocation(ctx context.Context, request DisableLocationRequestObject) (DisableLocationResponseObject, error) {

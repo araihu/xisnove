@@ -84,7 +84,11 @@ func (s *Server) CreateLocation(
 	}
 	location, err := s.configuration.CreateLocation(
 		ctx,
-		application.CreateLocationCommand{Name: request.Body.Name},
+		application.CreateLocationCommand{
+			Name: request.Body.Name, Address: pointerValue(request.Body.Address),
+			Protocol: domain.LocationProtocol(pointerValue(request.Body.Protocol)),
+			Policy:   locationPolicyFromInput(request.Body.Policy),
+		},
 	)
 	if err != nil {
 		response, ok := createLocationProblem(err)
@@ -188,9 +192,33 @@ func mapLocation(location domain.Location) (Location, error) {
 		return Location{}, fmt.Errorf("map location ID: %w", err)
 	}
 	return Location{
-		Id: id, Name: location.Name, Enabled: &location.Enabled,
+		Id: id, Name: location.Name, Address: location.Address, Protocol: LocationProtocol(location.Protocol),
+		Policy: LocationPolicy{
+			IntervalSeconds: int32(location.Policy.Interval / time.Second), TimeoutMillis: int32(location.Policy.Timeout / time.Millisecond),
+			FailureThreshold: int32(location.Policy.FailureThreshold), RecoveryThreshold: int32(location.Policy.RecoveryThreshold),
+		}, Enabled: &location.Enabled,
 		CreatedAt: location.CreatedAt, UpdatedAt: &location.UpdatedAt,
 	}, nil
+}
+
+func locationPolicyFromInput(input *LocationPolicyInput) domain.LocationPolicy {
+	policy := domain.LocationPolicy{}
+	if input == nil {
+		return policy
+	}
+	if input.IntervalSeconds != nil {
+		policy.Interval = time.Duration(*input.IntervalSeconds) * time.Second
+	}
+	if input.TimeoutMillis != nil {
+		policy.Timeout = time.Duration(*input.TimeoutMillis) * time.Millisecond
+	}
+	if input.FailureThreshold != nil {
+		policy.FailureThreshold = uint16(*input.FailureThreshold)
+	}
+	if input.RecoveryThreshold != nil {
+		policy.RecoveryThreshold = uint16(*input.RecoveryThreshold)
+	}
+	return policy
 }
 
 func mapMonitor(configured application.ConfiguredMonitor) (Monitor, error) {

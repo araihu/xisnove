@@ -49,7 +49,7 @@ func (r *managementRepository) GetLocation(ctx context.Context, id domain.Locati
 	if err != nil {
 		return domain.Location{}, repositoryError("management get location", err)
 	}
-	return mapManagementLocation(record.ID, record.Name, record.Enabled, record.CreatedAt, record.UpdatedAt)
+	return mapManagementLocation(record.ID, record.Name, record.Address, record.Protocol, record.DefaultIntervalMs, record.DefaultTimeoutMs, record.DefaultFailureThreshold, record.DefaultRecoveryThreshold, record.Enabled, record.CreatedAt, record.UpdatedAt)
 }
 
 func (r *managementRepository) ListLocations(ctx context.Context, request application.StringKeysetRequest) ([]domain.Location, error) {
@@ -62,7 +62,7 @@ func (r *managementRepository) ListLocations(ctx context.Context, request applic
 	}
 	result := make([]domain.Location, 0, len(records))
 	for _, record := range records {
-		location, err := mapManagementLocation(record.ID, record.Name, record.Enabled, record.CreatedAt, record.UpdatedAt)
+		location, err := mapManagementLocation(record.ID, record.Name, record.Address, record.Protocol, record.DefaultIntervalMs, record.DefaultTimeoutMs, record.DefaultFailureThreshold, record.DefaultRecoveryThreshold, record.Enabled, record.CreatedAt, record.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -73,7 +73,10 @@ func (r *managementRepository) ListLocations(ctx context.Context, request applic
 
 func (r *managementRepository) ReplaceLocation(ctx context.Context, location domain.Location) (bool, error) {
 	count, err := r.queries.ManagementReplaceLocation(ctx, dbsqlite.ManagementReplaceLocationParams{
-		ID: string(location.ID), Name: location.Name, Enabled: boolInt(location.Enabled),
+		ID: string(location.ID), Name: location.Name, Address: location.Address, Protocol: string(location.Protocol),
+		DefaultIntervalMs: location.Policy.Interval.Milliseconds(), DefaultTimeoutMs: location.Policy.Timeout.Milliseconds(),
+		DefaultFailureThreshold: int64(location.Policy.FailureThreshold), DefaultRecoveryThreshold: int64(location.Policy.RecoveryThreshold),
+		Enabled:   boolInt(location.Enabled),
 		UpdatedAt: nullableTimeValue(location.UpdatedAt),
 	})
 	if err != nil {
@@ -341,7 +344,7 @@ func (r *managementRepository) ListIncidentEvents(ctx context.Context, incidentI
 	return result, nil
 }
 
-func mapManagementLocation(id, name string, enabled int64, created string, updated sql.NullString) (domain.Location, error) {
+func mapManagementLocation(id, name, address, protocol string, intervalMs, timeoutMs, failureThreshold, recoveryThreshold int64, enabled int64, created string, updated sql.NullString) (domain.Location, error) {
 	createdAt, err := parseTime(created)
 	if err != nil {
 		return domain.Location{}, fmt.Errorf("map location creation: %w", err)
@@ -353,7 +356,16 @@ func mapManagementLocation(id, name string, enabled int64, created string, updat
 	if updatedAt == nil {
 		return domain.Location{}, errors.New("map location update: missing timestamp")
 	}
-	return domain.Location{ID: domain.LocationID(id), Name: name, Enabled: enabled == 1, CreatedAt: createdAt, UpdatedAt: *updatedAt}, nil
+	location, err := domain.NewLocationWithDefaults(domain.LocationID(id), name, address, domain.LocationProtocol(protocol), domain.LocationPolicy{
+		Interval: time.Duration(intervalMs) * time.Millisecond, Timeout: time.Duration(timeoutMs) * time.Millisecond,
+		FailureThreshold: uint16(failureThreshold), RecoveryThreshold: uint16(recoveryThreshold),
+	}, createdAt)
+	if err != nil {
+		return domain.Location{}, fmt.Errorf("map location configuration: %w", err)
+	}
+	location.Enabled = enabled == 1
+	location.UpdatedAt = *updatedAt
+	return location, nil
 }
 
 func mapManagementCredential(record dbsqlite.AgentCredential) (application.AgentCredentialRecord, error) {

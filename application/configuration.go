@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/araihu/xisnove/domain"
@@ -17,7 +18,10 @@ func (e *ValidationError) Error() string {
 }
 
 type CreateLocationCommand struct {
-	Name string
+	Name     string
+	Address  string
+	Protocol domain.LocationProtocol
+	Policy   domain.LocationPolicy
 }
 
 type CreateMonitorCommand struct {
@@ -59,14 +63,21 @@ func (s *ConfigurationService) CreateLocation(
 	ctx context.Context,
 	command CreateLocationCommand,
 ) (domain.Location, error) {
-	location, err := domain.NewLocation(
+	location, err := domain.NewLocationWithDefaults(
 		domain.LocationID(s.newID()),
 		command.Name,
+		command.Address,
+		command.Protocol,
+		command.Policy,
 		s.now().UTC(),
 	)
 	if err != nil {
+		field := "location"
+		if strings.TrimSpace(command.Name) == "" {
+			field = "name"
+		}
 		return domain.Location{}, &ValidationError{
-			Fields: map[string]string{"name": "must not be empty"},
+			Fields: map[string]string{field: "contains invalid configuration"},
 		}
 	}
 	if err := s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {

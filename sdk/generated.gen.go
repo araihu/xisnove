@@ -124,6 +124,27 @@ func (e AlertmanagerChannelConfigurationInputKind) Valid() bool {
 	}
 }
 
+// Defines values for CreateLocationRequestProtocol.
+const (
+	CreateLocationRequestProtocolDns  CreateLocationRequestProtocol = "dns"
+	CreateLocationRequestProtocolHttp CreateLocationRequestProtocol = "http"
+	CreateLocationRequestProtocolTcp  CreateLocationRequestProtocol = "tcp"
+)
+
+// Valid indicates whether the value is a known member of the CreateLocationRequestProtocol enum.
+func (e CreateLocationRequestProtocol) Valid() bool {
+	switch e {
+	case CreateLocationRequestProtocolDns:
+		return true
+	case CreateLocationRequestProtocolHttp:
+		return true
+	case CreateLocationRequestProtocolTcp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DNSProbeDefinitionKind.
 const (
 	DNSProbeDefinitionKindDns DNSProbeDefinitionKind = "dns"
@@ -337,6 +358,27 @@ func (e IncidentSeverity) Valid() bool {
 	case Critical:
 		return true
 	case Warning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LocationProtocol.
+const (
+	LocationProtocolDns  LocationProtocol = "dns"
+	LocationProtocolHttp LocationProtocol = "http"
+	LocationProtocolTcp  LocationProtocol = "tcp"
+)
+
+// Valid indicates whether the value is a known member of the LocationProtocol enum.
+func (e LocationProtocol) Valid() bool {
+	switch e {
+	case LocationProtocolDns:
+		return true
+	case LocationProtocolHttp:
+		return true
+	case LocationProtocolTcp:
 		return true
 	default:
 		return false
@@ -736,6 +778,27 @@ func (e TCPProbeDefinitionKind) Valid() bool {
 	}
 }
 
+// Defines values for UpdateLocationRequestProtocol.
+const (
+	UpdateLocationRequestProtocolDns  UpdateLocationRequestProtocol = "dns"
+	UpdateLocationRequestProtocolHttp UpdateLocationRequestProtocol = "http"
+	UpdateLocationRequestProtocolTcp  UpdateLocationRequestProtocol = "tcp"
+)
+
+// Valid indicates whether the value is a known member of the UpdateLocationRequestProtocol enum.
+func (e UpdateLocationRequestProtocol) Valid() bool {
+	switch e {
+	case UpdateLocationRequestProtocolDns:
+		return true
+	case UpdateLocationRequestProtocolHttp:
+		return true
+	case UpdateLocationRequestProtocolTcp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListIncidentsParamsState.
 const (
 	ListIncidentsParamsStateOpen     ListIncidentsParamsState = "open"
@@ -860,8 +923,15 @@ type CreateAgentEnrollmentTokenRequest struct {
 
 // CreateLocationRequest defines model for CreateLocationRequest.
 type CreateLocationRequest struct {
-	Name string `json:"name"`
+	// Address IPv4, IPv6, or hostname. Omit only for an abstract discovery location.
+	Address  *string                        `json:"address,omitempty"`
+	Name     string                         `json:"name"`
+	Policy   *LocationPolicyInput           `json:"policy,omitempty"`
+	Protocol *CreateLocationRequestProtocol `json:"protocol,omitempty"`
 }
+
+// CreateLocationRequestProtocol defines model for CreateLocationRequest.Protocol.
+type CreateLocationRequestProtocol string
 
 // CreateMaintenanceRequest defines model for CreateMaintenanceRequest.
 type CreateMaintenanceRequest struct {
@@ -1110,12 +1180,18 @@ type LeaseWorkRequest struct {
 
 // Location defines model for Location.
 type Location struct {
+	Address   string             `json:"address"`
 	CreatedAt time.Time          `json:"createdAt"`
 	Enabled   *bool              `json:"enabled,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
 	Name      string             `json:"name"`
+	Policy    LocationPolicy     `json:"policy"`
+	Protocol  LocationProtocol   `json:"protocol"`
 	UpdatedAt *time.Time         `json:"updatedAt,omitempty"`
 }
+
+// LocationProtocol defines model for Location.Protocol.
+type LocationProtocol string
 
 // LocationHealth defines model for LocationHealth.
 type LocationHealth struct {
@@ -1130,6 +1206,22 @@ type LocationHealth struct {
 type LocationPage struct {
 	Items []Location   `json:"items"`
 	Page  PageMetadata `json:"page"`
+}
+
+// LocationPolicy defines model for LocationPolicy.
+type LocationPolicy struct {
+	FailureThreshold  int32 `json:"failureThreshold"`
+	IntervalSeconds   int32 `json:"intervalSeconds"`
+	RecoveryThreshold int32 `json:"recoveryThreshold"`
+	TimeoutMillis     int32 `json:"timeoutMillis"`
+}
+
+// LocationPolicyInput defines model for LocationPolicyInput.
+type LocationPolicyInput struct {
+	FailureThreshold  *int32 `json:"failureThreshold,omitempty"`
+	IntervalSeconds   *int32 `json:"intervalSeconds,omitempty"`
+	RecoveryThreshold *int32 `json:"recoveryThreshold,omitempty"`
+	TimeoutMillis     *int32 `json:"timeoutMillis,omitempty"`
 }
 
 // Maintenance defines model for Maintenance.
@@ -1642,9 +1734,15 @@ type UpdateAgentRequest struct {
 
 // UpdateLocationRequest defines model for UpdateLocationRequest.
 type UpdateLocationRequest struct {
-	Enabled *bool   `json:"enabled,omitempty"`
-	Name    *string `json:"name,omitempty"`
+	Address  *string                        `json:"address,omitempty"`
+	Enabled  *bool                          `json:"enabled,omitempty"`
+	Name     *string                        `json:"name,omitempty"`
+	Policy   *LocationPolicyInput           `json:"policy,omitempty"`
+	Protocol *UpdateLocationRequestProtocol `json:"protocol,omitempty"`
 }
+
+// UpdateLocationRequestProtocol defines model for UpdateLocationRequest.Protocol.
+type UpdateLocationRequestProtocol string
 
 // UpdateMonitorRequest defines model for UpdateMonitorRequest.
 type UpdateMonitorRequest struct {

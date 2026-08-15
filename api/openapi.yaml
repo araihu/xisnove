@@ -1481,13 +1481,25 @@ components:
       required: [name]
       properties:
         name: {type: string, minLength: 1, maxLength: 120}
+        address:
+          type: string
+          maxLength: 253
+          description: IPv4, IPv6, or hostname. Omit only for an abstract discovery location.
+        protocol:
+          type: string
+          enum: [http, tcp, dns]
+          default: http
+        policy: {$ref: '#/components/schemas/LocationPolicyInput'}
     Location:
       type: object
       additionalProperties: false
-      required: [id, name, createdAt]
+      required: [id, name, address, protocol, policy, createdAt]
       properties:
         id: {type: string, format: uuid}
         name: {type: string, minLength: 1, maxLength: 120}
+        address: {type: string, maxLength: 253}
+        protocol: {type: string, enum: [http, tcp, dns]}
+        policy: {$ref: '#/components/schemas/LocationPolicy'}
         enabled: {type: boolean}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
@@ -1497,7 +1509,27 @@ components:
       minProperties: 1
       properties:
         name: {type: string, minLength: 1, maxLength: 120}
+        address: {type: string, maxLength: 253}
+        protocol: {type: string, enum: [http, tcp, dns]}
+        policy: {$ref: '#/components/schemas/LocationPolicyInput'}
         enabled: {type: boolean}
+    LocationPolicyInput:
+      type: object
+      additionalProperties: false
+      properties:
+        intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400, default: 60}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000, default: 5000}
+        failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100, default: 3}
+        recoveryThreshold: {type: integer, format: int32, minimum: 1, maximum: 100, default: 2}
+    LocationPolicy:
+      type: object
+      additionalProperties: false
+      required: [intervalSeconds, timeoutMillis, failureThreshold, recoveryThreshold]
+      properties:
+        intervalSeconds: {type: integer, format: int32, minimum: 5, maximum: 86400}
+        timeoutMillis: {type: integer, format: int32, minimum: 100, maximum: 120000}
+        failureThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
+        recoveryThreshold: {type: integer, format: int32, minimum: 1, maximum: 100}
     LocationPage:
       type: object
       additionalProperties: false

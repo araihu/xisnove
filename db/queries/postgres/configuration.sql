@@ -1,12 +1,18 @@
 -- name: CreateLocation :exec
-INSERT INTO locations (id, name, enabled, created_at, updated_at)
+INSERT INTO locations (
+  id, name, address, protocol, default_interval_ms, default_timeout_ms,
+  default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
+)
 VALUES (
-  sqlc.arg(id), sqlc.arg(name), sqlc.arg(enabled),
-  sqlc.arg(created_at), sqlc.arg(updated_at)
+  sqlc.arg(id), sqlc.arg(name), sqlc.arg(address), sqlc.arg(protocol),
+  sqlc.arg(default_interval_ms), sqlc.arg(default_timeout_ms),
+  sqlc.arg(default_failure_threshold), sqlc.arg(default_recovery_threshold),
+  sqlc.arg(enabled), sqlc.arg(created_at), sqlc.arg(updated_at)
 );
 
 -- name: GetLocation :one
-SELECT id, name, enabled, created_at, updated_at
+SELECT id, name, address, protocol, default_interval_ms, default_timeout_ms,
+       default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
 FROM locations
 WHERE id = sqlc.arg(id);
 

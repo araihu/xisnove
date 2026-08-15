@@ -191,15 +191,23 @@ func (q *Queries) ManagementGetIncident(ctx context.Context, id string) (Inciden
 }
 
 const managementGetLocation = `-- name: ManagementGetLocation :one
-SELECT id, name, enabled, created_at, updated_at FROM locations WHERE id = $1
+SELECT id, name, address, protocol, default_interval_ms, default_timeout_ms,
+       default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
+FROM locations WHERE id = $1
 `
 
 type ManagementGetLocationRow struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Enabled   bool      `json:"enabled"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                       string    `json:"id"`
+	Name                     string    `json:"name"`
+	Address                  string    `json:"address"`
+	Protocol                 string    `json:"protocol"`
+	DefaultIntervalMs        int64     `json:"default_interval_ms"`
+	DefaultTimeoutMs         int64     `json:"default_timeout_ms"`
+	DefaultFailureThreshold  int32     `json:"default_failure_threshold"`
+	DefaultRecoveryThreshold int32     `json:"default_recovery_threshold"`
+	Enabled                  bool      `json:"enabled"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
 }
 
 func (q *Queries) ManagementGetLocation(ctx context.Context, id string) (ManagementGetLocationRow, error) {
@@ -208,6 +216,12 @@ func (q *Queries) ManagementGetLocation(ctx context.Context, id string) (Managem
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Address,
+		&i.Protocol,
+		&i.DefaultIntervalMs,
+		&i.DefaultTimeoutMs,
+		&i.DefaultFailureThreshold,
+		&i.DefaultRecoveryThreshold,
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -462,7 +476,8 @@ func (q *Queries) ManagementListIncidents(ctx context.Context, arg ManagementLis
 }
 
 const managementListLocations = `-- name: ManagementListLocations :many
-SELECT id, name, enabled, created_at, updated_at
+SELECT id, name, address, protocol, default_interval_ms, default_timeout_ms,
+       default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
 FROM locations
 WHERE NOT $1::boolean
    OR name > $2
@@ -479,11 +494,17 @@ type ManagementListLocationsParams struct {
 }
 
 type ManagementListLocationsRow struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Enabled   bool      `json:"enabled"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                       string    `json:"id"`
+	Name                     string    `json:"name"`
+	Address                  string    `json:"address"`
+	Protocol                 string    `json:"protocol"`
+	DefaultIntervalMs        int64     `json:"default_interval_ms"`
+	DefaultTimeoutMs         int64     `json:"default_timeout_ms"`
+	DefaultFailureThreshold  int32     `json:"default_failure_threshold"`
+	DefaultRecoveryThreshold int32     `json:"default_recovery_threshold"`
+	Enabled                  bool      `json:"enabled"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
 }
 
 func (q *Queries) ManagementListLocations(ctx context.Context, arg ManagementListLocationsParams) ([]ManagementListLocationsRow, error) {
@@ -503,6 +524,12 @@ func (q *Queries) ManagementListLocations(ctx context.Context, arg ManagementLis
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.Address,
+			&i.Protocol,
+			&i.DefaultIntervalMs,
+			&i.DefaultTimeoutMs,
+			&i.DefaultFailureThreshold,
+			&i.DefaultRecoveryThreshold,
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -616,20 +643,37 @@ func (q *Queries) ManagementListMonitors(ctx context.Context, arg ManagementList
 
 const managementReplaceLocation = `-- name: ManagementReplaceLocation :execrows
 UPDATE locations
-SET name = $1, enabled = $2, updated_at = $3
-WHERE id = $4
+SET name = $1, address = $2, protocol = $3,
+    default_interval_ms = $4,
+    default_timeout_ms = $5,
+    default_failure_threshold = $6,
+    default_recovery_threshold = $7,
+    enabled = $8, updated_at = $9
+WHERE id = $10
 `
 
 type ManagementReplaceLocationParams struct {
-	Name      string    `json:"name"`
-	Enabled   bool      `json:"enabled"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ID        string    `json:"id"`
+	Name                     string    `json:"name"`
+	Address                  string    `json:"address"`
+	Protocol                 string    `json:"protocol"`
+	DefaultIntervalMs        int64     `json:"default_interval_ms"`
+	DefaultTimeoutMs         int64     `json:"default_timeout_ms"`
+	DefaultFailureThreshold  int32     `json:"default_failure_threshold"`
+	DefaultRecoveryThreshold int32     `json:"default_recovery_threshold"`
+	Enabled                  bool      `json:"enabled"`
+	UpdatedAt                time.Time `json:"updated_at"`
+	ID                       string    `json:"id"`
 }
 
 func (q *Queries) ManagementReplaceLocation(ctx context.Context, arg ManagementReplaceLocationParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, managementReplaceLocation,
 		arg.Name,
+		arg.Address,
+		arg.Protocol,
+		arg.DefaultIntervalMs,
+		arg.DefaultTimeoutMs,
+		arg.DefaultFailureThreshold,
+		arg.DefaultRecoveryThreshold,
 		arg.Enabled,
 		arg.UpdatedAt,
 		arg.ID,

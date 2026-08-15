@@ -335,7 +335,11 @@ func advertisedScope(operationID string) string {
 
 func locationFixture() map[string]any {
 	return map[string]any{
-		"id": fixtureLocationID, "name": "hybrid homelab", "enabled": true,
+		"id": fixtureLocationID, "name": "hybrid homelab", "address": "192.0.2.10", "protocol": "http",
+		"policy": map[string]any{
+			"intervalSeconds": 60, "timeoutMillis": 5000,
+			"failureThreshold": 3, "recoveryThreshold": 2,
+		}, "enabled": true,
 		"createdAt": fixtureTime, "updatedAt": fixtureTime,
 	}
 }

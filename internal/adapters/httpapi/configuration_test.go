@@ -35,6 +35,38 @@ func TestCreateLocationReturnsGeneratedCreatedResponse(t *testing.T) {
 	if created.Id.String() != "11111111-1111-4111-8111-111111111111" {
 		t.Fatalf("Id = %s", created.Id)
 	}
+	if created.Address != "" || created.Protocol != httpapi.LocationProtocol("http") {
+		t.Fatalf("location identity defaults = %#v", created)
+	}
+	if created.Policy.IntervalSeconds != 60 || created.Policy.TimeoutMillis != 5000 ||
+		created.Policy.FailureThreshold != 3 || created.Policy.RecoveryThreshold != 2 {
+		t.Fatalf("location policy defaults = %#v", created.Policy)
+	}
+}
+
+func TestCreateLocationMapsAddressProtocolAndPolicy(t *testing.T) {
+	server := newConfigurationServer(t)
+	interval, timeout, failures, recoveries := int32(120), int32(2500), int32(4), int32(3)
+	address := "192.0.2.10"
+	protocol := httpapi.CreateLocationRequestProtocol("tcp")
+	response, err := server.CreateLocation(context.Background(), httpapi.CreateLocationRequestObject{
+		Body: &httpapi.CreateLocationJSONRequestBody{
+			Name: "edge", Address: &address, Protocol: &protocol,
+			Policy: &httpapi.LocationPolicyInput{IntervalSeconds: &interval, TimeoutMillis: &timeout, FailureThreshold: &failures, RecoveryThreshold: &recoveries},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, ok := response.(httpapi.CreateLocation201JSONResponse)
+	if !ok {
+		t.Fatalf("response = %#v", response)
+	}
+	if created.Address != "192.0.2.10" || created.Protocol != httpapi.LocationProtocol("tcp") ||
+		created.Policy.IntervalSeconds != interval || created.Policy.TimeoutMillis != timeout ||
+		created.Policy.FailureThreshold != failures || created.Policy.RecoveryThreshold != recoveries {
+		t.Fatalf("location = %#v", created)
+	}
 }
 
 func TestCreateLocationMapsDuplicateNameToConflictProblem(t *testing.T) {

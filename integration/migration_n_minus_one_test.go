@@ -21,9 +21,9 @@ import (
 )
 
 const frozenNMinusOneFixturePath = "integration/testdata/migration-n-minus-one/v2"
-const frozenNMinusOneManifestSHA256 = "0f2f52b37333b1bd1fea3930c220c83c731fdb1d1c965a94296e2e92635de031"
+const frozenNMinusOneManifestSHA256 = "18c20daf125ef09d5f7e5596b25c520b1c2bde602f3639776a130158a7cf3708"
 const postgresNMinusOneFixturePath = "integration/testdata/migration-n-minus-one/v3-postgres"
-const postgresNMinusOneManifestSHA256 = "63944dd5544d7ff091b4c22c9c96d9e22ee88d8508945fb8029b41eaef86cd3c"
+const postgresNMinusOneManifestSHA256 = "5858296af09d58cb2177b82e58ae956e1bb0719c2bc215fcfbc4bb981d87b857"
 
 type frozenNMinusOneManifest struct {
 	FormatVersion  int               `json:"format_version"`
@@ -45,10 +45,10 @@ func TestNMinusOneBinaryRemainsReadyAfterExpandMigration(t *testing.T) {
 	fixtureRoot := filepath.Join(repositoryRoot, filepath.FromSlash(frozenNMinusOneFixturePath))
 	manifest := loadFrozenNMinusOneManifest(t, fixtureRoot)
 
-	if manifest.FormatVersion != 2 || manifest.RuntimeVersion != "m6.1-future-n-minus-one-baseline-v2" {
+	if manifest.FormatVersion != 2 || manifest.RuntimeVersion != "m6.2-future-n-minus-one-baseline-v3" {
 		t.Fatalf("unexpected frozen fixture identity: format=%d runtime=%q", manifest.FormatVersion, manifest.RuntimeVersion)
 	}
-	if manifest.Schema != (frozenSchemaRange{Baseline: 11, Expand: 12, Minimum: 11, Maximum: 12}) {
+	if manifest.Schema != (frozenSchemaRange{Baseline: 12, Expand: 13, Minimum: 12, Maximum: 13}) {
 		t.Fatalf("frozen schema range = %+v", manifest.Schema)
 	}
 	if sqlitemigrations.LatestVersion != manifest.Schema.Expand {
@@ -130,10 +130,10 @@ func TestPostgresNMinusOneFixtureRemainsReadyAfterPrecisionExpand(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.FormatVersion != 3 || manifest.RuntimeVersion != "m6.2-future-n-minus-one-postgres-v3" {
+	if manifest.FormatVersion != 3 || manifest.RuntimeVersion != "m6.3-future-n-minus-one-postgres-v4" {
 		t.Fatalf("unexpected PostgreSQL frozen fixture identity: format=%d runtime=%q", manifest.FormatVersion, manifest.RuntimeVersion)
 	}
-	if manifest.Schema != (frozenSchemaRange{Baseline: 12, Expand: 13, Minimum: 12, Maximum: 13}) {
+	if manifest.Schema != (frozenSchemaRange{Baseline: 13, Expand: 14, Minimum: 13, Maximum: 14}) {
 		t.Fatalf("PostgreSQL frozen schema range = %+v", manifest.Schema)
 	}
 	if postgresmigrations.LatestVersion != manifest.Schema.Expand {
@@ -209,7 +209,7 @@ func buildFrozenNMinusOneProbe(t *testing.T, fixtureRoot string, manifest frozen
 }
 
 func assertFrozenNMinusOneReady(t *testing.T, probe string, schemaVersion int64) {
-	assertFrozenNMinusOneReadyForInterval(t, probe, schemaVersion, 11, 12)
+	assertFrozenNMinusOneReadyForInterval(t, probe, schemaVersion, 12, 13)
 }
 
 func assertFrozenNMinusOneReadyForInterval(t *testing.T, probe string, schemaVersion, minimum, maximum int64) {
@@ -226,7 +226,7 @@ func assertFrozenNMinusOneReadyForInterval(t *testing.T, probe string, schemaVer
 }
 
 func assertFrozenNMinusOneNotReady(t *testing.T, probe string, schemaVersion int64) {
-	assertFrozenNMinusOneNotReadyForInterval(t, probe, schemaVersion, 11, 12)
+	assertFrozenNMinusOneNotReadyForInterval(t, probe, schemaVersion, 12, 13)
 }
 
 func assertFrozenNMinusOneNotReadyForInterval(t *testing.T, probe string, schemaVersion, minimum, maximum int64) {

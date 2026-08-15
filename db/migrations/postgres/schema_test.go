@@ -11,7 +11,7 @@ import (
 func TestMigrationFamilyContainsNativeCurrentSchema(t *testing.T) {
 	t.Parallel()
 
-	if migrations.LatestVersion != 13 {
+	if migrations.LatestVersion != 14 {
 		t.Fatalf("LatestVersion = %d", migrations.LatestVersion)
 	}
 	var schema strings.Builder

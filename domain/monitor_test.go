@@ -269,3 +269,47 @@ func TestNewLocationRejectsEmptyIdentity(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestNewLocationWithDefaultsNormalizesAddressProtocolAndPolicy(t *testing.T) {
+	now := time.Date(2026, 8, 15, 12, 0, 0, 0, time.FixedZone("test", -3*60*60))
+	location, err := domain.NewLocationWithDefaults(
+		"location-1", " edge ", " 2001:db8::10 ", "", domain.LocationPolicy{}, now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := domain.DefaultLocationPolicy()
+	if location.Name != "edge" || location.Address != "2001:db8::10" || location.Protocol != domain.LocationProtocolHTTP {
+		t.Fatalf("location identity = %#v", location)
+	}
+	if location.Policy != defaults {
+		t.Fatalf("policy = %#v, want %#v", location.Policy, defaults)
+	}
+	if !location.CreatedAt.Equal(now.UTC()) || !location.UpdatedAt.Equal(now.UTC()) {
+		t.Fatalf("timestamps = %v/%v", location.CreatedAt, location.UpdatedAt)
+	}
+}
+
+func TestNewLocationWithDefaultsAcceptsIPv4AndRejectsInvalidAddressOrPolicy(t *testing.T) {
+	for _, address := range []string{"192.0.2.10", "target.example.test"} {
+		if _, err := domain.NewLocationWithDefaults("location-1", "edge", address, domain.LocationProtocolTCP, domain.LocationPolicy{}, time.Now()); err != nil {
+			t.Fatalf("address %q: %v", address, err)
+		}
+	}
+	for _, test := range []struct {
+		name     string
+		address  string
+		protocol domain.LocationProtocol
+		policy   domain.LocationPolicy
+	}{
+		{name: "bad address", address: "not a host", protocol: domain.LocationProtocolHTTP},
+		{name: "bad protocol", address: "192.0.2.10", protocol: "icmp"},
+		{name: "timeout at interval", address: "192.0.2.10", protocol: domain.LocationProtocolHTTP, policy: domain.LocationPolicy{Interval: time.Second, Timeout: time.Second}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := domain.NewLocationWithDefaults("location-1", "edge", test.address, test.protocol, test.policy, time.Now()); !errors.Is(err, domain.ErrInvalidLocation) {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}

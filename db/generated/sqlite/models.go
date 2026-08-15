@@ -161,11 +161,17 @@ type IncidentEvent struct {
 }
 
 type Location struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	CreatedAt string         `json:"created_at"`
-	Enabled   int64          `json:"enabled"`
-	UpdatedAt sql.NullString `json:"updated_at"`
+	ID                       string         `json:"id"`
+	Name                     string         `json:"name"`
+	CreatedAt                string         `json:"created_at"`
+	Enabled                  int64          `json:"enabled"`
+	UpdatedAt                sql.NullString `json:"updated_at"`
+	Address                  string         `json:"address"`
+	Protocol                 string         `json:"protocol"`
+	DefaultIntervalMs        int64          `json:"default_interval_ms"`
+	DefaultTimeoutMs         int64          `json:"default_timeout_ms"`
+	DefaultFailureThreshold  int64          `json:"default_failure_threshold"`
+	DefaultRecoveryThreshold int64          `json:"default_recovery_threshold"`
 }
 
 type LocationHealth struct {

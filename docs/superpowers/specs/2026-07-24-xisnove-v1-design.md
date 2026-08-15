@@ -585,10 +585,17 @@ neither action starts work or creates health. Examples are `public-vps`,
 `home-k8s`, `home-lan`, a Kubernetes cluster, a VM, a bare-metal host, or a
 Docker environment.
 
-A Location may carry labels, a failure-domain description, an optional Agent
-selector, and policy defaults such as probe kind, interval, timeout, jitter,
-and thresholds. These are templates, not immutable requirements. A Monitor or
-its MonitorLocation association may override them.
+A Location may carry a network address (IPv4, IPv6, or hostname), a default
+probe protocol (`http`, `tcp`, or `dns`), labels, a failure-domain description,
+an optional Agent selector, and policy defaults such as interval, timeout,
+jitter, and thresholds. Discovery-only failure-domain locations may omit the
+address until an address is known. These are templates, not immutable
+requirements. A Monitor or its MonitorLocation association may override them.
+
+The minimal useful policy defaults are interval `60s`, timeout `5s`, failure
+threshold `3`, and recovery threshold `2`. The API returns these effective
+defaults even when the create request omits the policy object, so a location can
+be assigned to several monitors without repeating boilerplate.
 
 The effective policy precedence is:
 

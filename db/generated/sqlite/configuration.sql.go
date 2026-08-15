@@ -51,22 +51,37 @@ func (q *Queries) AssignMonitorLocation(ctx context.Context, arg AssignMonitorLo
 }
 
 const createLocation = `-- name: CreateLocation :exec
-INSERT INTO locations (id, name, enabled, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO locations (
+  id, name, address, protocol, default_interval_ms, default_timeout_ms,
+  default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateLocationParams struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Enabled   int64          `json:"enabled"`
-	CreatedAt string         `json:"created_at"`
-	UpdatedAt sql.NullString `json:"updated_at"`
+	ID                       string         `json:"id"`
+	Name                     string         `json:"name"`
+	Address                  string         `json:"address"`
+	Protocol                 string         `json:"protocol"`
+	DefaultIntervalMs        int64          `json:"default_interval_ms"`
+	DefaultTimeoutMs         int64          `json:"default_timeout_ms"`
+	DefaultFailureThreshold  int64          `json:"default_failure_threshold"`
+	DefaultRecoveryThreshold int64          `json:"default_recovery_threshold"`
+	Enabled                  int64          `json:"enabled"`
+	CreatedAt                string         `json:"created_at"`
+	UpdatedAt                sql.NullString `json:"updated_at"`
 }
 
 func (q *Queries) CreateLocation(ctx context.Context, arg CreateLocationParams) error {
 	_, err := q.db.ExecContext(ctx, createLocation,
 		arg.ID,
 		arg.Name,
+		arg.Address,
+		arg.Protocol,
+		arg.DefaultIntervalMs,
+		arg.DefaultTimeoutMs,
+		arg.DefaultFailureThreshold,
+		arg.DefaultRecoveryThreshold,
 		arg.Enabled,
 		arg.CreatedAt,
 		arg.UpdatedAt,
@@ -124,17 +139,24 @@ func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) er
 }
 
 const getLocation = `-- name: GetLocation :one
-SELECT id, name, enabled, created_at, updated_at
+SELECT id, name, address, protocol, default_interval_ms, default_timeout_ms,
+       default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
 FROM locations
 WHERE id = ?
 `
 
 type GetLocationRow struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Enabled   int64          `json:"enabled"`
-	CreatedAt string         `json:"created_at"`
-	UpdatedAt sql.NullString `json:"updated_at"`
+	ID                       string         `json:"id"`
+	Name                     string         `json:"name"`
+	Address                  string         `json:"address"`
+	Protocol                 string         `json:"protocol"`
+	DefaultIntervalMs        int64          `json:"default_interval_ms"`
+	DefaultTimeoutMs         int64          `json:"default_timeout_ms"`
+	DefaultFailureThreshold  int64          `json:"default_failure_threshold"`
+	DefaultRecoveryThreshold int64          `json:"default_recovery_threshold"`
+	Enabled                  int64          `json:"enabled"`
+	CreatedAt                string         `json:"created_at"`
+	UpdatedAt                sql.NullString `json:"updated_at"`
 }
 
 func (q *Queries) GetLocation(ctx context.Context, id string) (GetLocationRow, error) {
@@ -143,6 +165,12 @@ func (q *Queries) GetLocation(ctx context.Context, id string) (GetLocationRow, e
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Address,
+		&i.Protocol,
+		&i.DefaultIntervalMs,
+		&i.DefaultTimeoutMs,
+		&i.DefaultFailureThreshold,
+		&i.DefaultRecoveryThreshold,
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,

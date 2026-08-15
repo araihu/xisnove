@@ -1,9 +1,13 @@
 -- name: CreateLocation :exec
-INSERT INTO locations (id, name, enabled, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO locations (
+  id, name, address, protocol, default_interval_ms, default_timeout_ms,
+  default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetLocation :one
-SELECT id, name, enabled, created_at, updated_at
+SELECT id, name, address, protocol, default_interval_ms, default_timeout_ms,
+       default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
 FROM locations
 WHERE id = ?;
 

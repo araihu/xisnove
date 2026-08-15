@@ -1,5 +1,5 @@
-// Frozen PostgreSQL compatibility baseline v3 for the schema-13 state-tick
-// precision expansion. Keep this source standalone: it must not import
+// Frozen PostgreSQL compatibility baseline v4 for the schema-14 location
+// defaults expansion. Keep this source standalone: it must not import
 // Xisnove packages.
 package main
 
@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	minimumSchemaVersion int64 = 12
-	maximumSchemaVersion int64 = 13
+	minimumSchemaVersion int64 = 13
+	maximumSchemaVersion int64 = 14
 )
 
 func main() {

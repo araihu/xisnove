@@ -1,5 +1,7 @@
 -- name: ManagementGetLocation :one
-SELECT id, name, enabled, created_at, updated_at FROM locations WHERE id = ?;
+SELECT id, name, address, protocol, default_interval_ms, default_timeout_ms,
+       default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
+FROM locations WHERE id = ?;
 
 -- name: ManagementSearchResources :many
 SELECT id, name, description, kind,
@@ -20,7 +22,8 @@ ORDER BY search_rank ASC,
 LIMIT sqlc.arg(row_limit);
 
 -- name: ManagementListLocations :many
-SELECT id, name, enabled, created_at, updated_at
+SELECT id, name, address, protocol, default_interval_ms, default_timeout_ms,
+       default_failure_threshold, default_recovery_threshold, enabled, created_at, updated_at
 FROM locations
 WHERE sqlc.arg(has_after) = 0
    OR name > sqlc.arg(after_sort)
@@ -30,7 +33,12 @@ LIMIT sqlc.arg(row_limit);
 
 -- name: ManagementReplaceLocation :execrows
 UPDATE locations
-SET name = sqlc.arg(name), enabled = sqlc.arg(enabled), updated_at = sqlc.arg(updated_at)
+SET name = sqlc.arg(name), address = sqlc.arg(address), protocol = sqlc.arg(protocol),
+    default_interval_ms = sqlc.arg(default_interval_ms),
+    default_timeout_ms = sqlc.arg(default_timeout_ms),
+    default_failure_threshold = sqlc.arg(default_failure_threshold),
+    default_recovery_threshold = sqlc.arg(default_recovery_threshold),
+    enabled = sqlc.arg(enabled), updated_at = sqlc.arg(updated_at)
 WHERE id = sqlc.arg(id);
 
 -- name: ManagementDisableLocation :execrows
