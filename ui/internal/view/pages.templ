@@ -23,7 +23,6 @@ import (
 	"github.com/araihu/goshtoso/components/skeleton"
 	"github.com/araihu/goshtoso/components/table"
 	"github.com/araihu/goshtoso/components/textinput"
-	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/araihu/xisnove/sdk"
 )
 
@@ -162,11 +161,7 @@ templ AppStyles() {
 		html.dark .console-shell__menu:hover { background-color: var(--color-surface-dark-alt); }
 		.console-shell-root .console-shell__menu:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }
 		.console-shell__brand { min-width: 0; }
-		.xis-brand-mark-slot { display: inline-flex; width: 2.25rem; height: 2.25rem; flex: 0 0 auto; align-items: center; justify-content: center; }
-		.xis-brand-mark-slot img { display: none; width: 100%; height: 100%; }
-		.xis-brand-mark-slot img:first-child { display: block; }
-		.dark .xis-brand-mark-slot img:first-child { display: none; }
-		.dark .xis-brand-mark-slot img:last-child { display: block; }
+		.console-shell__brand-name { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 		.console-shell__actions { min-width: 0; gap: .75rem; }
 		.xis-global-search-trigger { flex: 1 1 28rem; min-width: 10rem; margin-left: 0; }
 		.xis-global-search-trigger > div { width: 100%; min-width: 0; }
@@ -240,13 +235,6 @@ templ Brand() {
 		<img class="xis-brand-logo" src="/ui/xisnove-logo-ab01f1a.svg" alt="" width="120" height="32"/>
 		<img class="xis-brand-mark" src="/ui/xisnove-mark-ab01f1a.svg" alt="" width="36" height="36"/>
 		<img class="xis-brand-mark-reverse" src="/ui/xisnove-mark-reverse-ab01f1a.svg" alt="" width="36" height="36"/>
-	</span>
-}
-
-templ BrandMark() {
-	<span class="xis-brand-mark-slot" aria-hidden="true">
-		<img src={ seasonalassets.MarkPath } alt="" width="36" height="36"/>
-		<img src={ seasonalassets.ReverseMarkPath } alt="" width="36" height="36"/>
 	</span>
 }
 

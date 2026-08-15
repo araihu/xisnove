@@ -656,7 +656,7 @@ func assertP1Accessibility(t *testing.T, ctx context.Context) {
 	var violations []string
 	script := `(() => {
 		const visible = e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
-		const name = e => (e.getAttribute('aria-label') || (e.labels && [...e.labels].map(l=>l.textContent).join(' ')) || e.textContent || '').trim();
+		const name = e => { const imageAlt = [...e.querySelectorAll('img[alt]')].map(img=>img.getAttribute('alt')).filter(Boolean).join(' '); return (e.getAttribute('aria-label') || (e.labels && [...e.labels].map(l=>l.textContent).join(' ')) || imageAlt || e.textContent || '').trim(); };
 		const failures = [];
 		const ids = [...document.querySelectorAll('[id]')].map(e=>e.id).filter(Boolean);
 		for (const id of new Set(ids)) if (ids.filter(v=>v===id).length > 1) failures.push('duplicate-id:'+id);

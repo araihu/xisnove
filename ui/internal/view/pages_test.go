@@ -61,7 +61,7 @@ func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 		`/consoleshell/assets/shell.js`,
 		`/assets/styles.css`,
 		`/ui/araihu-f841fe90.css`,
-		seasonalassets.MarkPath,
+		seasonalassets.LogoPath,
 		seasonalassets.FaviconPath,
 		`/assets/icons/heroicons.svg#hi-16-solid-magnifying-glass`,
 		`data-consoleshell-nav-id="nav-monitors"`,

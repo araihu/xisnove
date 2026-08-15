@@ -253,7 +253,7 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 		t.Fatalf("dashboard status = %d", dashboardRecorder.Code)
 	}
 	dashboard := dashboardRecorder.Body.String()
-	for _, want := range []string{"<nav", `class="console-shell-root"`, `id="main-content"`, `action="/logout"`, `name="_csrf"`, `href="/status"`, `/consoleshell/assets/shell.css`, seasonalassets.MarkPath, seasonalassets.FaviconPath, `id="account-menu"`, "Sign out", "No monitors yet"} {
+	for _, want := range []string{"<nav", `class="console-shell-root"`, `id="main-content"`, `action="/logout"`, `name="_csrf"`, `href="/status"`, `/consoleshell/assets/shell.css`, seasonalassets.LogoPath, `data-asset-brand="logo"`, seasonalassets.FaviconPath, `id="account-menu"`, "Sign out", "No monitors yet"} {
 		if !strings.Contains(dashboard, want) {
 			t.Errorf("dashboard missing %q", want)
 		}

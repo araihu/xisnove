@@ -29,11 +29,11 @@ single current monitor destination does not request a navigation OOB update,
 avoiding a sidebar swap when a full-page public route is active.
 
 The public Manja documentation shell is the visual reference for this
-composition: a compact top bar with a square menu trigger, one brand mark, an
+composition: a compact top bar with a square menu trigger, one brand logo, an
 outlined global search trigger with a keyboard hint, a mode toggle, and an
 account menu. Xisnove keeps that composition application-owned while reusing
 the public Goshtoso shell slots; the responsive drawer contains only the
-status link. The authenticated shell now uses the immutable X-9 mark and
+status link. The authenticated shell now uses the immutable X-9 logo and
 favicon from the staged seasonal asset set under the explicit
 `/ui/seasonal/v0.1.1/` routes; those bytes are served by the UI's
 `seasonalassets.Handler` and are not copied into the view layer.

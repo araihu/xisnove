@@ -36,9 +36,14 @@ func ConsoleFragment(title, csrfToken string, content templ.Component) templ.Com
 func consoleConfig(csrfToken string) consoleshell.Config {
 	return consoleshell.Config{
 		Brand: consoleshell.Brand{
-			Name:       "Xisnove",
-			HomeURL:    "/monitors",
-			Logo:       BrandMark(),
+			Name:     "X-9",
+			HomeURL:  "/monitors",
+			ManagedLogo: &consoleshell.ManagedBrandAsset{
+				URL:    seasonalassets.LogoPath,
+				Alt:    "X-9",
+				Width:  120,
+				Height: 32,
+			},
 			FaviconURL: seasonalassets.FaviconPath,
 		},
 		Navigation: consoleshell.Navigation{
