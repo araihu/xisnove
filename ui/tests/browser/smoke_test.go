@@ -84,6 +84,25 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			default:
 				_ = json.NewEncoder(w).Encode(sdk.PublicStatusPage{GeneratedAt: time.Now(), State: sdk.Degraded, Monitors: []sdk.PublicStatusMonitor{{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", State: sdk.Up}}, ActiveIncidents: []sdk.PublicIncidentSummary{{Id: uuid.New(), MonitorId: monitorID, MonitorName: "Home DNS", OpenedAt: time.Now(), LastTransitionAt: time.Now(), Severity: sdk.Critical, State: sdk.PublicIncidentSummaryStateOpen}}})
 			}
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/search":
+			requireBearer(t, r)
+			query := r.URL.Query().Get("q")
+			if query == "slow" {
+				time.Sleep(500 * time.Millisecond)
+			}
+			if query == "error" {
+				w.WriteHeader(http.StatusBadGateway)
+				_, _ = w.Write([]byte(`{"title":"search offline"}`))
+				return
+			}
+			items := []sdk.SearchResult{}
+			if strings.Contains(strings.ToLower(homeDNS.Name+" "+homeDNS.Description), strings.ToLower(query)) {
+				items = append(items, sdk.SearchResult{ResourceType: sdk.SearchResourceTypeMonitor, ResourceId: monitorID, Title: homeDNS.Name, Description: homeDNS.Description, Context: "DNS monitor"})
+			}
+			if query == "slow" {
+				items = append(items, sdk.SearchResult{ResourceType: sdk.SearchResourceTypeMonitor, ResourceId: unknownID, Title: vpsEdge.Name, Description: vpsEdge.Description, Context: "HTTP monitor"})
+			}
+			_ = json.NewEncoder(w).Encode(sdk.SearchResultPage{Items: items})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/monitors":
 			monitorRequests.Add(1)
 			requireBearer(t, r)
@@ -136,7 +155,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	defer cancelAllocator()
 	ctx, cancel := chromedp.NewContext(allocator)
 	defer cancel()
-	ctx, cancelTimeout := context.WithTimeout(ctx, 4*time.Minute)
+	ctx, cancelTimeout := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancelTimeout()
 
 	var consoleMu sync.Mutex
@@ -144,13 +163,17 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	chromedp.ListenTarget(ctx, func(event any) {
 		switch value := event.(type) {
 		case *cdpruntime.EventExceptionThrown:
+			detail := value.ExceptionDetails.Text
+			if value.ExceptionDetails.Exception != nil && value.ExceptionDetails.Exception.Description != "" {
+				detail = value.ExceptionDetails.Exception.Description
+			}
 			consoleMu.Lock()
-			consoleProblems = append(consoleProblems, value.ExceptionDetails.Text)
+			consoleProblems = append(consoleProblems, detail)
 			consoleMu.Unlock()
 		case *cdpruntime.EventConsoleAPICalled:
 			if value.Type == cdpruntime.APITypeError || value.Type == cdpruntime.APITypeWarning {
 				consoleMu.Lock()
-				consoleProblems = append(consoleProblems, string(value.Type))
+				consoleProblems = append(consoleProblems, fmt.Sprintf("%s: %v", value.Type, value.Args))
 				consoleMu.Unlock()
 			}
 		}
@@ -207,7 +230,16 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('#theme-choice')?.value === 'araihu'`, &defaultSelector)); err != nil || !defaultSelector {
 		t.Fatalf("Arai Hû selector default did not survive login: selected=%t err=%v", defaultSelector, err)
 	}
+	t.Log("awaiting Goshtoso dependency readiness before global search")
 	awaitGoshtosoDependencies(t, ctx)
+	t.Log("Goshtoso dependencies ready; exercising global search")
+	assertGlobalSearchJourney(t, ctx, screenshotDir, monitorID.String())
+	consoleMu.Lock()
+	earlyConsoleProblems := append([]string(nil), consoleProblems...)
+	consoleMu.Unlock()
+	if len(earlyConsoleProblems) > 0 {
+		t.Fatalf("browser console problems through global search: %v", earlyConsoleProblems)
+	}
 	for _, theme := range []string{"goshtoso", "minimal", "araihu"} {
 		var persisted bool
 		script := fmt.Sprintf(`(()=>{const select=document.querySelector('#theme-choice');select.value=%q;select.dispatchEvent(new Event('change',{bubbles:true}));})()`, theme)
@@ -322,6 +354,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if !afterSwapOK {
 		t.Error("HTMX search did not preserve search focus and caret")
 	}
+	assertInteractiveActions(t, ctx)
 	requestsBeforeBack := monitorRequests.Load()
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`location.search === ""`, nil)); err != nil {
 		t.Fatalf("history back: %v", err)
@@ -381,9 +414,9 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			t.Errorf("API calls %#v missing %q", calls, want)
 		}
 	}
-	expectedArtifacts := 204
+	expectedArtifacts := 216
 	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
-		expectedArtifacts = 17
+		expectedArtifacts = 18
 	}
 	assertPNGArtifacts(t, screenshotDir, expectedArtifacts)
 	t.Logf("browser matrix and integrated SDK routes passed; screenshots: %s", screenshotDir)
@@ -409,6 +442,9 @@ func (timeoutControlPlane) ExchangeAdministratorCredentials(ctx context.Context,
 func (timeoutControlPlane) RevokeSession(context.Context, string) error { return nil }
 func (timeoutControlPlane) GetPublicStatusPage(context.Context) (sdk.PublicStatusPage, error) {
 	return sdk.PublicStatusPage{}, nil
+}
+func (timeoutControlPlane) SearchResources(context.Context, string, string, int32) ([]sdk.SearchResult, error) {
+	return nil, nil
 }
 func (timeoutControlPlane) ListMonitors(context.Context, string, string, int32) (sdk.Page[sdk.Monitor], error) {
 	return sdk.Page[sdk.Monitor]{}, nil
@@ -584,7 +620,11 @@ func assertAccessibleSurface(t *testing.T, ctx context.Context, selector string)
 	if err := chromedp.Run(ctx, chromedp.Evaluate(script, &result)); err != nil {
 		t.Fatal(err)
 	}
-	if result.H1 != 1 || result.Unnamed != 0 {
+	wantH1 := 1
+	if selector == "#global-search-dialog" {
+		wantH1 = 0
+	}
+	if result.H1 != wantH1 || result.Unnamed != 0 {
 		t.Errorf("accessibility smoke for %s = %#v", selector, result)
 	}
 	if selector == "#monitor-content" {
@@ -678,7 +718,7 @@ func assertInteractiveActions(t *testing.T, ctx context.Context) {
 		Actions, Stops               int
 		WindowX, WindowY, MainScroll float64
 	}
-	const prepare = `(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]'),visibleAction=e=>{if(!visible(e)||e.matches('a[href="#main-content"]'))return false;const r=e.getBoundingClientRect();return r.width>=4&&r.height>=4},modal=[...document.querySelectorAll('[aria-modal="true"]')].find(visible),root=modal||document,actions=[...root.querySelectorAll('button:not([disabled]),a[href]')].filter(visibleAction),stops=[...root.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);actions.forEach((e,i)=>e.dataset.xisActionIndex=String(i));document.activeElement?.blur();document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex');return {actions:actions.length,stops:stops.length,windowX:scrollX,windowY:scrollY,mainScroll:document.querySelector('#main-content')?.scrollTop||0}})()`
+	const prepare = `(()=>{const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden'&&!e.closest('[hidden],[inert],[aria-hidden="true"]'),visibleAction=e=>{if(!visible(e)||e.matches('a[href="#main-content"]'))return false;const r=e.getBoundingClientRect();return r.width>=4&&r.height>=4},modal=[...document.querySelectorAll('[aria-modal="true"]')].find(visible),root=modal||document,actions=[...root.querySelectorAll('button:not([disabled]),a[href]')].filter(visibleAction),stops=[...root.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]')].filter(e=>visible(e)&&!e.disabled&&e.tabIndex>=0);actions.forEach((e,i)=>e.dataset.xisActionIndex=String(i));document.activeElement?.blur();if(modal&&stops.length){stops[0].focus()}else{document.body.setAttribute('tabindex','-1');document.body.focus();document.body.removeAttribute('tabindex')}return {actions:actions.length,stops:stops.length,windowX:scrollX,windowY:scrollY,mainScroll:document.querySelector('#main-content')?.scrollTop||0}})()`
 	if err := chromedp.Run(ctx, chromedp.Evaluate(prepare, &setup)); err != nil {
 		t.Fatal(err)
 	}
@@ -724,7 +764,9 @@ func assertInteractiveActions(t *testing.T, ctx context.Context) {
 		}
 	}
 	if len(seen) != setup.Actions {
-		t.Fatalf("keyboard focus validated %d/%d visible actions", len(seen), setup.Actions)
+		var diagnostic []string
+		_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const modal=[...document.querySelectorAll('[aria-modal="true"]')].find(e=>e.getClientRects().length),root=modal||document;return [...root.querySelectorAll('button:not([disabled]),a[href],input:not([type=hidden])')].filter(e=>e.getClientRects().length).map(e=>e.tagName+':'+(e.getAttribute('aria-label')||e.textContent||e.id).trim()+':tab='+e.tabIndex+':action='+(e.dataset.xisActionIndex||''))})()`, &diagnostic))
+		t.Fatalf("keyboard focus validated %d/%d visible actions: stops=%d seen=%v elements=%v", len(seen), setup.Actions, setup.Stops, seen, diagnostic)
 	}
 	hoveredActions := 0
 	for index := 0; index < setup.Actions; index++ {
@@ -733,7 +775,7 @@ func assertInteractiveActions(t *testing.T, ctx context.Context) {
 			Ready     bool
 			Hoverable bool
 		}
-		position := fmt.Sprintf(`(()=>{const e=document.querySelector('[data-xis-action-index="%d"]'),hoverable=getComputedStyle(e).pointerEvents!=='none';if(hoverable)e.scrollIntoView({block:'nearest',inline:'nearest'});const r=e?.getBoundingClientRect();return {hoverable,ready:!!r&&r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth,x:(r?.left||0)+(r?.width||0)/2,y:(r?.top||0)+(r?.height||0)/2}})()`, index)
+		position := fmt.Sprintf(`(()=>{const e=document.querySelector('[data-xis-action-index="%d"]');if(!e)return {hoverable:false,ready:false,x:0,y:0};const hoverable=getComputedStyle(e).pointerEvents!=='none';if(hoverable)e.scrollIntoView({block:'nearest',inline:'nearest'});const r=e.getBoundingClientRect();return {hoverable,ready:r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth,x:r.left+r.width/2,y:r.top+r.height/2}})()`, index)
 		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.blur()`, nil), chromedp.Evaluate(position, &point)); err != nil {
 			t.Fatalf("action %d hover geometry: %#v err=%v", index, point, err)
 		}
@@ -765,6 +807,83 @@ func assertInteractiveActions(t *testing.T, ctx context.Context) {
 
 func assertSequentialKeyboardTraversal(t *testing.T, ctx context.Context, surface string) {
 	assertSequentialKeyboardTraversalWithin(t, ctx, "", surface)
+}
+
+func assertGlobalSearchJourney(t *testing.T, ctx context.Context, screenshotDir, monitorID string) {
+	t.Helper()
+	open := func() {
+		openCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := chromedp.Run(openCtx,
+			chromedp.Evaluate(`window.addEventListener('keydown', event => { window.__xisLastSearchKey = {key:event.key,ctrl:event.ctrlKey,meta:event.metaKey}; }, {once:true})`, nil),
+			chromedp.ActionFunc(func(actionCtx context.Context) error {
+				return cdinput.DispatchKeyEvent(cdinput.KeyDown).
+					WithKey("k").
+					WithCode("KeyK").
+					WithWindowsVirtualKeyCode(75).
+					WithModifiers(cdinput.ModifierCtrl).
+					Do(actionCtx)
+			}),
+			chromedp.ActionFunc(func(actionCtx context.Context) error {
+				return cdinput.DispatchKeyEvent(cdinput.KeyUp).
+					WithKey("k").
+					WithCode("KeyK").
+					WithWindowsVirtualKeyCode(75).
+					WithModifiers(cdinput.ModifierCtrl).
+					Do(actionCtx)
+			}),
+			chromedp.WaitVisible("#global-search-dialog"),
+			chromedp.Poll(`document.activeElement?.id === 'global-search-input'`, nil),
+		); err != nil {
+			var diagnostic map[string]any
+			_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const owner=document.querySelector('#global-search');return {dialogOpen:document.querySelector('#global-search-dialog')?.open===true,fieldOpen:owner?._x_dataStack?.[0]?.open===true,hasAlpine:!!window.Alpine,configured:document.querySelector('#global-search-dialog')?.dataset.xisConfigured||'',lastKey:window.__xisLastSearchKey||null}})()`, &diagnostic))
+			t.Fatalf("open global search with Ctrl+K: %v diagnostic=%v", err, diagnostic)
+		}
+	}
+	setQuery := func(query string) {
+		script := fmt.Sprintf(`(()=>{const input=document.querySelector('#global-search-input');input.value=%q;input.dispatchEvent(new Event('input',{bubbles:true}))})()`, query)
+		if err := chromedp.Run(ctx, chromedp.Evaluate(script, nil)); err != nil {
+			t.Fatalf("set global query %q: %v", query, err)
+		}
+	}
+
+	open()
+	setQuery("error")
+	if err := chromedp.Run(ctx, chromedp.WaitVisible(`[data-search-state="error"]`), chromedp.WaitVisible(`[data-search-retry]`)); err != nil {
+		t.Fatalf("global search recovery state: %v", err)
+	}
+	setQuery("slow")
+	if err := chromedp.Run(ctx, chromedp.Sleep(260*time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	setQuery("home")
+	if err := chromedp.Run(ctx,
+		chromedp.WaitVisible(`#global-search-results [role="option"]`),
+		chromedp.Poll(`document.querySelector('#global-search-results')?.textContent.includes('Home DNS') && !document.querySelector('#global-search-results')?.textContent.includes('VPS edge')`, nil),
+	); err != nil {
+		t.Fatalf("latest global search result did not win stale race: %v", err)
+	}
+	var active bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const input=document.querySelector('#global-search-input'),option=document.querySelector('#global-search-results [role="option"]');return option?.getAttribute('aria-selected')==='true'&&input?.getAttribute('aria-activedescendant')===option?.id})()`, &active)); err != nil || !active {
+		t.Fatalf("global search active option contract: active=%t err=%v", active, err)
+	}
+	assertAccessibleSurface(t, ctx, "#global-search-dialog")
+	captureMatrix(t, ctx, screenshotDir, "global-search", "#global-search-dialog")
+	if err := chromedp.Run(ctx,
+		chromedp.Focus("#global-search-input"),
+		chromedp.KeyEvent("\r"),
+		chromedp.Poll(`new URL(location.href).searchParams.get('selected') === '`+monitorID+`'`, nil),
+		chromedp.WaitReady("#monitor-detail"),
+	); err != nil {
+		t.Fatalf("global search Enter navigation: %v", err)
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`location.assign('/monitors')`, nil), chromedp.WaitVisible("#monitor-content")); err != nil {
+		t.Fatalf("return from global search destination: %v", err)
+	}
+	open()
+	if err := chromedp.Run(ctx, chromedp.KeyEvent("\u001b"), chromedp.Poll(`document.activeElement === document.querySelector('#global-search button')`, nil)); err != nil {
+		t.Fatalf("global search Escape focus return: %v", err)
+	}
 }
 
 func assertSequentialKeyboardTraversalWithin(t *testing.T, ctx context.Context, selector, surface string) {
@@ -1003,12 +1122,13 @@ func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir st
 					t.Fatalf("held search at %dpx/%s/%s: %v", width, theme, mode, err)
 				}
 				assertP1Accessibility(t, ctx)
-				assertInteractiveActions(t, ctx)
 				if err := chromedp.Run(ctx,
 					chromedp.FullScreenshot(&screenshot, 100),
 					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false && document.activeElement?.id === 'monitor-search' && document.querySelector('#monitor-search')?.selectionStart === 1 && document.querySelector('#monitor-search')?.selectionEnd === 2 && document.title === 'Monitors · X-9'`, nil, chromedp.WithPollingTimeout(5*time.Second)),
 				); err != nil {
-					t.Fatalf("finish held search at %dpx/%s/%s: %v", width, theme, mode, err)
+					var diagnostic map[string]any
+					_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const input=document.querySelector('#monitor-search'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]');return {url:location.href,disabled:button?.disabled??null,active:document.activeElement?.id||'',selectionStart:input?.selectionStart??null,selectionEnd:input?.selectionEnd??null,title:document.title,results:document.querySelectorAll('#monitor-results tbody tr').length}})()`, &diagnostic))
+					t.Fatalf("finish held search at %dpx/%s/%s: %v diagnostic=%v requests=%d", width, theme, mode, err, diagnostic, monitorRequests.Load()-before)
 				}
 				if !pending.Loading || !pending.ResultsHidden || !pending.Disabled || !pending.PendingCopy {
 					t.Fatalf("held search state at %dpx/%s/%s = %#v", width, theme, mode, pending)

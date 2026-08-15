@@ -9,13 +9,16 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestBrandUsesX9DisplayName(t *testing.T) {
+func TestBrandUsesCanonicalV10IdentityAssets(t *testing.T) {
 	var rendered strings.Builder
 	if err := Brand().Render(t.Context(), &rendered); err != nil {
 		t.Fatalf("render brand: %v", err)
 	}
-	if body := rendered.String(); !strings.Contains(body, ">X-9<") || strings.Contains(body, "Xisnove") {
-		t.Fatalf("unexpected display brand: %s", body)
+	body := rendered.String()
+	for _, want := range []string{`aria-label="Xisnove"`, `/ui/xisnove-logo-ab01f1a.svg`, `/ui/xisnove-mark-ab01f1a.svg`, `/ui/xisnove-mark-reverse-ab01f1a.svg`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("canonical brand missing %q: %s", want, body)
+		}
 	}
 }
 

@@ -194,8 +194,8 @@ consumer that expects password semantics to remain safe without Alpine.
     resource only in Alpine state.
 25. **Search `ItemsURL` v0.0.13 is a lazy client index, not server-backed
     typeahead.** Xisnove must keep authorization, ranking and result bounds in
-    the control plane, so it uses the public `SearchField` as the single
-    Ctrl/Cmd+K owner and an application-owned remote dialog adapter with
+    the control plane, so it composes the public `button.Button` as the trigger
+    with an application-owned remote dialog adapter and single Ctrl/Cmd+K owner with
     debounce, abort, stale-response rejection, loading, empty, error/retry and
     active-option semantics. The upstream Goshtoso task implemented a generic
     `RemoteSource` contract on branch `codex/server-backed-search` at
@@ -211,11 +211,17 @@ consumer that expects password semantics to remain safe without Alpine.
     hatch; responsive light/dark mark selection stays inside the application
     brand slot.
 27. **`SearchField`'s global shortcut did not fire without a paired Goshtoso
-    modal.** Chromium delivered a real `Ctrl+K` event with `ctrlKey=true`, and
-    Alpine plus the component data were ready, but the field's
-    `x-on:keydown.window` handler did not dispatch `goshtoso-search-open` in the
-    split app-owned-modal composition. Xisnove disables `GlobalShortcut` and
-    installs exactly one application owner that dispatches the documented open
-    event for Ctrl/Cmd+K. Trigger clicks still use the public component. The
-    upstream `RemoteSource` integration should cover this split composition so
-    the application owner can be removed after release.
+    modal.** Chromium delivered a real `Ctrl+K` event with `ctrlKey=true`, but
+    the field's `x-on:keydown.window` handler did not dispatch
+    `goshtoso-search-open` in the split app-owned-modal composition. Xisnove now
+    installs exactly one application owner for trigger clicks and Ctrl/Cmd+K.
+    The upstream `RemoteSource` integration should cover this split composition
+    so the application owner can be removed after release.
+28. **`SearchField` v0.0.13 embeds an inline runtime that the required nonce CSP
+    blocks.** The rendered field called `goshtosoSearchField(...)`, but its raw
+    inline script had no request nonce. Chromium reported the function and
+    `searchId` as undefined. The selected release exposes no external-runtime or
+    nonce option for this split server-backed dialog. Xisnove therefore composes
+    the public `button.Button` trigger with its existing same-origin application
+    script. A nonce-aware component script or external first-party runtime would
+    remove this consumer fallback.

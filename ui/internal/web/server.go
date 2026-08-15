@@ -308,6 +308,135 @@ const applicationJS = `(() => {
 	if (attempt < 40) setTimeout(() => openMonitorDrawer(attempt + 1), 25);
   }
 
+  function configureGlobalSearch() {
+    const dialog = document.getElementById("global-search-dialog");
+    const input = document.getElementById("global-search-input");
+    const results = document.getElementById("global-search-results");
+    const trigger = document.querySelector("#global-search button");
+    if (!dialog || !input || !results || dialog.dataset.xisConfigured) return;
+    dialog.dataset.xisConfigured = "true";
+    let timer = null;
+    let controller = null;
+    let generation = 0;
+    let activeIndex = -1;
+    let restoreFocus = true;
+
+    const options = () => Array.from(results.querySelectorAll('[role="option"]'));
+    const select = index => {
+      const items = options();
+      if (!items.length) {
+        activeIndex = -1;
+        input.removeAttribute("aria-activedescendant");
+        return;
+      }
+      activeIndex = (index + items.length) % items.length;
+      items.forEach((item, itemIndex) => item.setAttribute("aria-selected", itemIndex === activeIndex ? "true" : "false"));
+      input.setAttribute("aria-activedescendant", items[activeIndex].id);
+      items[activeIndex].scrollIntoView({block: "nearest"});
+    };
+    const state = (kind, message) => {
+      results.replaceChildren();
+      const region = document.createElement("div");
+      region.className = "xis-global-search-state";
+      region.dataset.searchState = kind;
+      region.textContent = message;
+      results.append(region);
+      results.setAttribute("aria-busy", kind === "loading" ? "true" : "false");
+      activeIndex = -1;
+      input.removeAttribute("aria-activedescendant");
+    };
+    const search = async () => {
+      const query = input.value.trim();
+      controller?.abort();
+      controller = null;
+      generation += 1;
+      if (Array.from(query).length < 2) {
+        state("prompt", "Type at least 2 characters to search the control plane.");
+        return;
+      }
+      const requestGeneration = generation;
+      const request = new AbortController();
+      controller = request;
+      state("loading", "Searching the control plane…");
+      try {
+        const response = await fetch("/search?q=" + encodeURIComponent(query), {headers: {"Accept": "text/html"}, cache: "no-store", credentials: "same-origin", signal: request.signal});
+        const body = await response.text();
+        if (request.signal.aborted || requestGeneration !== generation || input.value.trim() !== query || !dialog.open) return;
+        results.innerHTML = body;
+        results.setAttribute("aria-busy", "false");
+        window.htmx?.process(results);
+        select(0);
+      } catch (error) {
+        if (request.signal.aborted || requestGeneration !== generation || error?.name === "AbortError") return;
+        state("error", "Search could not reach the server. Retry or edit the query.");
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "xis-recovery-action";
+        retry.dataset.searchRetry = "";
+        retry.textContent = "Retry search";
+        results.firstElementChild?.append(retry);
+      } finally {
+        if (controller === request) controller = null;
+      }
+    };
+    const close = shouldRestore => {
+      restoreFocus = shouldRestore;
+      controller?.abort();
+      generation += 1;
+      if (dialog.open) dialog.close();
+    };
+	const open = () => {
+	  restoreFocus = true;
+	  if (!dialog.open) dialog.showModal();
+	  trigger?.setAttribute("aria-expanded", "true");
+	  requestAnimationFrame(() => input.focus({preventScroll: true}));
+	};
+
+    window.addEventListener("goshtoso-search-open", event => {
+      if (event.detail?.id !== "global-search") return;
+	  open();
+    });
+	trigger?.addEventListener("click", open);
+    window.addEventListener("keydown", event => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent("goshtoso-search-open", {detail: {id: "global-search"}}));
+    });
+    dialog.addEventListener("close", () => {
+      clearTimeout(timer);
+      controller?.abort();
+      generation += 1;
+      input.value = "";
+      state("prompt", "Type at least 2 characters to search the control plane.");
+	  trigger?.setAttribute("aria-expanded", "false");
+      window.dispatchEvent(new CustomEvent("goshtoso-search-close", {detail: {id: "global-search"}}));
+      if (restoreFocus) trigger?.focus({preventScroll: true});
+      restoreFocus = true;
+    });
+    dialog.addEventListener("click", event => { if (event.target === dialog) close(true); });
+    dialog.querySelector("[data-search-close]")?.addEventListener("click", () => close(true));
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(search, 220);
+    });
+    input.addEventListener("keydown", event => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        select(activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+      } else if (event.key === "Enter" && activeIndex >= 0) {
+        event.preventDefault();
+        options()[activeIndex]?.click();
+      }
+    });
+    results.addEventListener("click", event => {
+      if (event.target.closest("[data-search-retry]")) {
+        search();
+        return;
+      }
+      if (event.target.closest('[role="option"]')) close(false);
+    });
+  }
+
   window.addEventListener("drawer:open", event => {
 	if (event.detail?.id !== "monitor-detail-drawer") return;
 	requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -334,11 +463,13 @@ const applicationJS = `(() => {
   window.addEventListener("pageshow", event => { if (event.persisted) refreshAuthoritative(); });
   window.goshtosoDependencies?.ready.then(() => {
     configureMobileNavigation();
+	configureGlobalSearch();
     openMonitorDrawer();
     if (document.querySelector("#main-content [data-autofocus]")) focusMain();
   }).catch(() => {});
   document.addEventListener("htmx:afterSettle", () => {
 	configureMobileNavigation();
+	configureGlobalSearch();
 	openMonitorDrawer();
   });
 })();
@@ -365,6 +496,12 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.monitors(w, r)
+	case "/search":
+		if r.Method != http.MethodGet {
+			s.methodNotAllowed(w, r, http.MethodGet)
+			return
+		}
+		s.search(w, r)
 	case "/login":
 		s.login(w, r)
 	case "/logout":
@@ -388,6 +525,34 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 			Code:   "not_found",
 		})
 	}
+}
+
+func (s *server) search(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	credential, ok := s.cookies.Session(r)
+	if !ok {
+		w.Header().Set("X-Xisnove-App-Status", "401")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = view.GlobalSearchResults(view.GlobalSearchData{Error: "Your session expired. Sign in again to search."}).Render(r.Context(), w)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	results, err := s.controlPlane.SearchResources(r.Context(), credential, query, 8)
+	if err != nil {
+		status := http.StatusBadGateway
+		message := "Search is temporarily unavailable. Retry or edit the query."
+		if errors.Is(err, controlplane.ErrUnauthorized) {
+			s.cookies.ClearSession(w)
+			status = http.StatusUnauthorized
+			message = "Your session expired. Sign in again to search."
+		}
+		w.Header().Set("X-Xisnove-App-Status", fmt.Sprint(status))
+		w.WriteHeader(status)
+		_ = view.GlobalSearchResults(view.GlobalSearchData{Query: query, Error: message}).Render(r.Context(), w)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = view.GlobalSearchResults(view.GlobalSearchData{Query: query, Items: results}).Render(r.Context(), w)
 }
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {

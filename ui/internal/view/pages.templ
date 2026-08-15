@@ -44,6 +44,12 @@ type Problem struct {
 	RetryURL string
 }
 
+type GlobalSearchData struct {
+	Query string
+	Items []sdk.SearchResult
+	Error string
+}
+
 templ Document(title string, content templ.Component) {
 	<!doctype html>
 	<html lang="en" data-theme="araihu" x-data="{ theme: localStorage.getItem('xisnove-theme') || 'araihu', dark: localStorage.getItem('xisnove-mode') === 'dark' }" x-init="$el.dataset.theme = theme; localStorage.setItem('xisnove-theme', theme); $el.classList.toggle('dark', dark)">
@@ -60,8 +66,12 @@ templ Document(title string, content templ.Component) {
 				.dark { --xis-action-bg: var(--color-primary-dark); --xis-action-fg: var(--color-on-primary-dark); --xis-link: var(--color-primary-dark); --xis-control-outline: var(--color-outline-dark-strong); }
 				body { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }
 				.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }
-				.xis-brand { font-size: 1.25rem; font-weight: 700; color: var(--color-on-surface-strong); }
+				.xis-brand { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; color: var(--color-on-surface-strong); }
 				.dark .xis-brand { color: var(--color-on-surface-dark-strong); }
+				.xis-brand-logo { display: block; width: 7.5rem; height: 2rem; }
+				.xis-brand-mark, .xis-brand-mark-reverse { display: none; width: 2.25rem; height: 2.25rem; }
+				.dark .xis-brand-logo, .dark .xis-brand-mark { display: none; }
+				.dark .xis-brand-mark-reverse { display: block; }
 				.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; }
 				.xis-stack { display: grid; gap: var(--xis-gap); }
 				.xis-theme-controls { display: flex; align-items: end; gap: .5rem; min-width: 0; }
@@ -127,7 +137,28 @@ templ Document(title string, content templ.Component) {
 				.xis-topbar { min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--color-outline); background: var(--color-surface); }
 				.dark .xis-topbar { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark); }
 				.xis-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
-				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-topbar { min-height: 4rem; gap: .35rem; padding: .35rem .5rem; } .xis-topbar > .xis-brand { font-size: 1rem; } .xis-topbar-actions { gap: .25rem; min-width: 0; } .xis-topbar .xis-theme-controls { width: auto; align-items: end; flex-direction: row; gap: .2rem; } .xis-topbar .xis-field { font-size: .6875rem; } .xis-topbar .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; } .xis-topbar #theme-choice { width: 5.75rem; } .xis-topbar #mode-choice { width: 4.75rem; } .xis-topbar form button { padding-inline: .45rem; font-size: .75rem; } .xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; } .xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; } .xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; } .dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); } .xis-mobile-nav { display: block; } }
+				.xis-global-search-trigger { flex: 0 1 28rem; min-width: 12rem; margin-left: clamp(.25rem, 3vw, 3rem); }
+				.xis-global-search-trigger > div { width: 100%; }
+				.xis-global-search-trigger button { width: 100%; display: flex; align-items: center; gap: .5rem; border: 2px solid var(--xis-control-outline); }
+				.xis-global-search-trigger kbd { margin-left: auto; }
+				.xis-global-search-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: min(38rem, calc(100vh - 5rem)); margin: 4.5rem auto auto; padding: 0; border: 0; border-radius: .75rem; color: var(--color-on-surface); background: var(--color-surface); box-shadow: 0 .75rem 2.5rem rgba(0, 0, 0, .28); overflow: hidden; }
+				.xis-global-search-dialog::backdrop { background: rgba(2, 6, 23, .62); }
+				.dark .xis-global-search-dialog { color: var(--color-on-surface-dark); background: var(--color-surface-dark-alt); }
+				.xis-global-search-panel { display: grid; min-height: 18rem; grid-template-rows: auto minmax(0, 1fr) auto; }
+				.xis-global-search-input-row { display: flex; align-items: center; gap: .75rem; padding: .875rem 1rem; border-bottom: 1px solid var(--color-outline); }
+				.dark .xis-global-search-input-row { border-color: var(--color-outline-dark-strong); }
+				.xis-global-search-input { flex: 1; min-width: 0; min-height: 2.75rem; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.05rem; }
+				.xis-global-search-input:focus { outline: 0; }
+				.xis-global-search-results { overflow-y: auto; padding: .5rem; }
+				.xis-global-search-result { display: grid; gap: .2rem; padding: .75rem; border-radius: .5rem; color: inherit; text-decoration: none; }
+				.xis-global-search-result:hover, .xis-global-search-result[aria-selected="true"] { background: var(--color-surface-alt); }
+				.dark .xis-global-search-result:hover, .dark .xis-global-search-result[aria-selected="true"] { background: var(--color-surface-dark); }
+				.xis-global-search-result-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+				.xis-global-search-state { display: grid; place-content: center; min-height: 12rem; padding: 1.5rem; text-align: center; color: var(--color-on-surface-muted); }
+				.dark .xis-global-search-state { color: var(--color-on-surface-dark-muted); }
+				.xis-global-search-footer { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 1rem; border-top: 1px solid var(--color-outline); font-size: .75rem; color: var(--color-on-surface-muted); }
+				.dark .xis-global-search-footer { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); }
+				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-topbar { min-height: 4rem; gap: .35rem; padding: .35rem .5rem; } .xis-brand-logo { display: none; } .xis-brand-mark { display: block; } .dark .xis-brand-mark { display: none; } .xis-global-search-trigger { flex: 1 1 auto; min-width: 2.75rem; margin-left: 0; } .xis-global-search-trigger span { display: none; } .xis-global-search-trigger kbd { display: none; } .xis-topbar-actions { gap: .25rem; min-width: 0; } .xis-topbar .xis-theme-controls { width: auto; align-items: end; flex-direction: row; gap: .2rem; } .xis-topbar .xis-field { font-size: .6875rem; } .xis-topbar .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; } .xis-topbar #theme-choice { width: 5.75rem; } .xis-topbar #mode-choice { width: 4.75rem; } .xis-topbar form button { padding-inline: .45rem; font-size: .75rem; } .xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; } .xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; } .xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; } .xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; } .dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); } .xis-mobile-nav { display: block; } }
 			</style>
 		</head>
 		<body>
@@ -136,7 +167,14 @@ templ Document(title string, content templ.Component) {
 	</html>
 }
 
-templ Brand() { <span class="xis-brand">X-9</span> }
+templ Brand() {
+	<span class="xis-brand" aria-label="Xisnove">
+		<span class="sr-only">Xisnove</span>
+		<img class="xis-brand-logo" src="/ui/xisnove-logo-ab01f1a.svg" alt="" width="120" height="32"/>
+		<img class="xis-brand-mark" src="/ui/xisnove-mark-ab01f1a.svg" alt="" width="36" height="36"/>
+		<img class="xis-brand-mark-reverse" src="/ui/xisnove-mark-reverse-ab01f1a.svg" alt="" width="36" height="36"/>
+	</span>
+}
 
 templ ThemeControls() {
 	<div class="xis-theme-controls" aria-label="Appearance controls">
@@ -207,14 +245,65 @@ templ Shell(csrfToken string, content templ.Component) {
 		MainID: "main-content",
 		MainAttrs: templ.Attributes{"aria-live": "polite"},
 	})
+	@GlobalSearchModal()
 }
 
 templ TopBar(csrfToken string) {
 	<div class="xis-topbar">
 		@MobileNavigation()
-		<a class="xis-brand xis-native-link" href="/monitors">X-9</a>
+		<a class="xis-native-link" href="/monitors" aria-label="Xisnove home">@Brand()</a>
+		@GlobalSearchTrigger()
 		<div class="xis-topbar-actions">@ThemeControls() @LogoutForm(csrfToken)</div>
 	</div>
+}
+
+templ GlobalSearchTrigger() {
+	<div class="xis-global-search-trigger">
+		<div id="global-search">
+			@button.Button(
+				button.WithType("button"),
+				button.WithRootClass("min-h-11"),
+				button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": "global-search-dialog", "aria-expanded": "false"}),
+			) {
+				<span>Search X-9</span><kbd>⌘ K</kbd>
+			}
+		</div>
+	</div>
+}
+
+templ GlobalSearchModal() {
+	<dialog id="global-search-dialog" class="xis-global-search-dialog" aria-modal="true" aria-labelledby="global-search-label">
+		<div class="xis-global-search-panel">
+			<div class="xis-global-search-input-row">
+				<label id="global-search-label" class="sr-only" for="global-search-input">Search X-9</label>
+				<input id="global-search-input" class="xis-global-search-input" type="search" placeholder="Search monitors" autocomplete="off" spellcheck="false" minlength="2" maxlength="120" aria-controls="global-search-results" aria-autocomplete="list"/>
+				<button type="button" data-search-close aria-label="Close search">Close</button>
+			</div>
+			<div id="global-search-results" class="xis-global-search-results" role="listbox" aria-label="Search X-9 results" aria-live="polite">
+				@GlobalSearchPrompt()
+			</div>
+			<div class="xis-global-search-footer"><span>↑↓ Navigate · Enter Open</span><span>Esc Close</span></div>
+		</div>
+	</dialog>
+}
+
+templ GlobalSearchPrompt() {
+	<div class="xis-global-search-state" data-search-state="prompt"><p>Type at least 2 characters to search the control plane.</p></div>
+}
+
+templ GlobalSearchResults(data GlobalSearchData) {
+	if data.Error != "" {
+		<div class="xis-global-search-state xis-state-danger" data-search-state="error"><p>{ data.Error }</p><button type="button" class="xis-recovery-action" data-search-retry>Retry search</button></div>
+	} else if len(data.Items) == 0 {
+		<div class="xis-global-search-state" data-search-state="empty"><p>No control-plane resources match <strong>{ data.Query }</strong>.</p><p>Edit the query or close search.</p></div>
+	} else {
+		for _, item := range data.Items {
+			<a id={ "global-search-result-" + item.ResourceId.String() } class="xis-global-search-result" role="option" aria-selected="false" tabindex="0" href={ templ.SafeURL(searchResultURL(item)) } hx-get={ searchResultURL(item) } hx-target="#main-content" hx-push-url="true">
+				<span class="xis-global-search-result-line"><strong>{ item.Title }</strong><span class="xis-meta">{ item.Context }</span></span>
+				<span class="xis-meta">{ item.Description }</span>
+			</a>
+		}
+	}
 }
 
 templ MobileNavigation() {
@@ -439,6 +528,13 @@ func monitorURL(query, cursor, selected string) string {
 	if cursor != "" { values.Set("cursor", cursor) }
 	if selected != "" { values.Set("selected", selected) }
 	if encoded := values.Encode(); encoded != "" { return "/monitors?" + encoded }
+	return "/monitors"
+}
+
+func searchResultURL(item sdk.SearchResult) string {
+	if item.ResourceType == sdk.SearchResourceTypeMonitor {
+		return monitorURL("", "", item.ResourceId.String())
+	}
 	return "/monitors"
 }
 

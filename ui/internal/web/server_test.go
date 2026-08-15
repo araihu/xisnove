@@ -227,6 +227,59 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 	}
 }
 
+func TestAuthenticatedShellRendersOneGlobalSearchOwner(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	session := loginSession(t, handler)
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/monitors", nil)
+	request.AddCookie(session)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	for _, want := range []string{`id="global-search"`, `aria-controls="global-search-dialog"`, `id="global-search-dialog"`, `id="global-search-input"`, `aria-autocomplete="list"`} {
+		if strings.Count(body, want) != 1 {
+			t.Errorf("shell count(%q) = %d", want, strings.Count(body, want))
+		}
+	}
+	if strings.Contains(body, `x-on:keydown.window`) {
+		t.Fatal("Goshtoso and the BFF must not both own the global search shortcut")
+	}
+	if strings.Contains(body, `goshtosoSearchField`) {
+		t.Fatal("global search trigger must not depend on CSP-blocked inline component runtime")
+	}
+}
+
+func TestGlobalSearchBFFReturnsBoundedCanonicalMonitorResultsAndRecovery(t *testing.T) {
+	monitorID := uuid.MustParse("00000000-0000-4000-8000-000000000091")
+	client := controlplane.NewFake(testUsername, testPassword, testCredential)
+	client.Monitors = []sdk.Monitor{{Id: monitorID, Name: "Kubernetes API LAN", Description: "Homelab control plane", Kind: sdk.MonitorKindTcp}}
+	handler, _ := newTestHandler(t, client, time.Second)
+	session := loginSession(t, handler)
+
+	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/search?q=kubernetes", nil)
+	request.AddCookie(session)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("search status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{`role="option"`, `aria-selected="false"`, "Kubernetes API LAN", `/monitors?selected=00000000-0000-4000-8000-000000000091`, `hx-target="#main-content"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("search body missing %q: %s", want, body)
+		}
+	}
+
+	client.SearchError = errors.New("upstream unavailable")
+	errorRequest := httptest.NewRequest(http.MethodGet, "https://ui.example.test/search?q=kubernetes", nil)
+	errorRequest.AddCookie(session)
+	errorRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(errorRecorder, errorRequest)
+	if errorRecorder.Code != http.StatusBadGateway || !strings.Contains(errorRecorder.Body.String(), `data-search-retry`) {
+		t.Fatalf("search recovery = %d %s", errorRecorder.Code, errorRecorder.Body.String())
+	}
+}
+
 func TestPublicStatusRendersFullPageOrHTMXFragment(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
 
@@ -279,6 +332,11 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
 		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
+	}
+	for _, want := range []string{`event.metaKey || event.ctrlKey`, `event.key.toLowerCase() !== "k"`, `goshtoso-search-open`} {
+		if strings.Count(recorder.Body.String(), want) == 0 {
+			t.Errorf("application search shortcut missing %q", want)
+		}
 	}
 	for _, want := range []string{"script-src 'nonce-", "'strict-dynamic'", "'unsafe-eval'", "https://unpkg.com", "'self'", "connect-src 'self'"} {
 		if got := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, want) {
@@ -661,6 +719,10 @@ func (blockingClient) RevokeSession(context.Context, string) error { return nil 
 func (blockingClient) GetPublicStatusPage(ctx context.Context) (sdk.PublicStatusPage, error) {
 	<-ctx.Done()
 	return sdk.PublicStatusPage{}, ctx.Err()
+}
+func (blockingClient) SearchResources(ctx context.Context, _, _ string, _ int32) ([]sdk.SearchResult, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
 }
 func (blockingClient) ListMonitors(ctx context.Context, _, _ string, _ int32) (sdk.Page[sdk.Monitor], error) {
 	<-ctx.Done()

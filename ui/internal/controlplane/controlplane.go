@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/araihu/xisnove/sdk"
@@ -23,6 +24,7 @@ type Client interface {
 	ExchangeAdministratorCredentials(ctx context.Context, email, password string) (opaqueCredential string, err error)
 	RevokeSession(ctx context.Context, opaqueCredential string) error
 	GetPublicStatusPage(ctx context.Context) (sdk.PublicStatusPage, error)
+	SearchResources(ctx context.Context, opaqueCredential, query string, limit int32) ([]sdk.SearchResult, error)
 	ListMonitors(ctx context.Context, opaqueCredential, cursor string, limit int32) (sdk.Page[sdk.Monitor], error)
 	GetMonitorHealth(ctx context.Context, opaqueCredential string, monitorID openapi_types.UUID) (sdk.MonitorHealth, error)
 }
@@ -85,6 +87,20 @@ func (c *SDKClient) GetPublicStatusPage(ctx context.Context) (sdk.PublicStatusPa
 	return sdk.PublicStatusPage{}, responseError(response.HTTPResponse, response.Body, "get public status")
 }
 
+func (c *SDKClient) SearchResources(ctx context.Context, credential, query string, limit int32) ([]sdk.SearchResult, error) {
+	response, err := c.client.SearchResourcesWithResponse(ctx, &sdk.SearchResourcesParams{Q: query, Limit: &limit}, sdk.WithBearerToken(credential))
+	if err != nil {
+		return nil, err
+	}
+	if response.JSON200 != nil {
+		return append([]sdk.SearchResult(nil), response.JSON200.Items...), nil
+	}
+	if response.StatusCode() == http.StatusUnauthorized {
+		return nil, ErrUnauthorized
+	}
+	return nil, responseError(response.HTTPResponse, response.Body, "search resources")
+}
+
 func (c *SDKClient) ListMonitors(ctx context.Context, credential, cursor string, limit int32) (sdk.Page[sdk.Monitor], error) {
 	params := sdk.ListMonitorsParams{Limit: &limit}
 	return c.client.MonitorsPageFetcher(params, sdk.WithBearerToken(credential))(ctx, cursor)
@@ -124,7 +140,34 @@ type Fake struct {
 	Health       map[openapi_types.UUID]sdk.MonitorHealth
 	PublicError  error
 	MonitorError error
+	SearchError  error
 	HealthErrors map[openapi_types.UUID]error
+}
+
+func (f *Fake) SearchResources(ctx context.Context, credential, query string, limit int32) ([]sdk.SearchResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if subtle.ConstantTimeCompare([]byte(credential), []byte(f.credential)) != 1 {
+		return nil, ErrUnauthorized
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.SearchError != nil {
+		return nil, f.SearchError
+	}
+	query = strings.ToLower(strings.TrimSpace(query))
+	results := make([]sdk.SearchResult, 0, limit)
+	for _, monitor := range f.Monitors {
+		if !strings.Contains(strings.ToLower(monitor.Name+" "+monitor.Description+" "+monitor.Id.String()), query) {
+			continue
+		}
+		results = append(results, sdk.SearchResult{ResourceType: sdk.SearchResourceTypeMonitor, ResourceId: monitor.Id, Title: monitor.Name, Description: monitor.Description, Context: strings.ToUpper(string(monitor.Kind)) + " monitor"})
+		if int32(len(results)) == limit {
+			break
+		}
+	}
+	return results, nil
 }
 
 func NewFake(username, password, credential string) *Fake {
