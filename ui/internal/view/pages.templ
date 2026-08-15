@@ -29,6 +29,7 @@ import (
 type MonitorList struct {
 	Monitors []sdk.Monitor
 	Health map[string]sdk.MonitorHealth
+	StateHistory map[string]sdk.MonitorStateHistory
 	Cursor string
 	NextCursor string
 	Query string
@@ -145,6 +146,26 @@ templ AppStyles() {
 		.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }
 		.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
 		.xis-detail-section-heading { margin: 0; font-weight: 700; }
+		.xis-state-history { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }
+		.dark .xis-state-history { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }
+		.xis-state-history-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+		.xis-state-history-heading h3 { margin: 0; }
+		.xis-state-history-heading p { margin: .25rem 0 0; }
+		.xis-state-ticks { display: grid; gap: .625rem; list-style: none; margin: .75rem 0 0; padding: 0; }
+		.xis-state-tick { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 1rem; border-top: 1px solid var(--color-outline); padding: .75rem 0 0; }
+		.dark .xis-state-tick { border-color: var(--color-outline-dark-strong); }
+		.xis-state-tick:first-child { border-top: 0; padding-top: 0; }
+		.xis-state-tick-main { display: grid; gap: .35rem; min-width: 0; }
+		.xis-state-tick-summary, .xis-state-tick-provenance { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem .65rem; min-width: 0; }
+		.xis-state-tick-summary { font-weight: 600; }
+		.xis-state-tick-reason { margin: 0; color: var(--color-on-surface-muted); font-size: .875rem; }
+		.dark .xis-state-tick-reason { color: var(--color-on-surface-dark-muted); }
+		.xis-state-tick-provenance { margin: 0; color: var(--color-on-surface-muted); font-size: .8rem; overflow-wrap: anywhere; }
+		.dark .xis-state-tick-provenance { color: var(--color-on-surface-dark-muted); }
+		.xis-state-tick-time { min-width: 9.5rem; color: var(--color-on-surface-muted); font-size: .8rem; text-align: right; white-space: nowrap; }
+		.dark .xis-state-tick-time { color: var(--color-on-surface-dark-muted); }
+		.xis-state-history-gap { margin-top: .75rem; border: 1px dashed var(--color-outline-strong); border-radius: .5rem; padding: .875rem; color: var(--color-on-surface-muted); background: var(--color-surface); }
+		.dark .xis-state-history-gap { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); background: var(--color-surface-dark); }
 		.xis-availability { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }
 		.dark .xis-availability { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }
 		.xis-availability-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
@@ -157,11 +178,13 @@ templ AppStyles() {
 		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
 		#monitor-loading.htmx-request ~ .xis-results, #status-loading.htmx-request ~ .xis-status-results { display: none; }
 		.xis-state-info { color: var(--color-info-text); }
+		.xis-state-unknown { color: var(--color-on-surface-muted); }
 		.xis-state-warning { color: var(--color-warning-text); }
 		.xis-state-success { color: var(--color-success-text); }
 		.xis-state-danger { color: var(--color-danger-text); }
-		.xis-state-info *, .xis-state-warning *, .xis-state-success *, .xis-state-danger * { color: inherit; }
+		.xis-state-info *, .xis-state-unknown *, .xis-state-warning *, .xis-state-success *, .xis-state-danger * { color: inherit; }
 		.dark .xis-state-info { color: var(--color-info-text-dark); }
+		.dark .xis-state-unknown { color: var(--color-on-surface-dark-muted); }
 		.dark .xis-state-warning { color: var(--color-warning-text-dark); }
 		.dark .xis-state-success { color: var(--color-success-text-dark); }
 		.dark .xis-state-danger { color: var(--color-danger-text-dark); }
@@ -433,17 +456,20 @@ templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Moni
 }
 
 templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
-	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-drawerTitle" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(health.State) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) }>
+	{{ history := stateHistoryFor(data, monitor) }}
+	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-drawerTitle" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(healthStateValue(health.State)) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) }>
 		<div class="xis-detail-main">
 			<section class="xis-detail-section" aria-labelledby="monitor-detail-heading">
 				<h3 id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus>Current health</h3>
 				<p>{ monitor.Description }</p>
 				<dl class="xis-detail-facts">
-					<dt>State</dt><dd>{ strings.ToUpper(string(health.State)) }</dd>
+					<dt>Lifecycle</dt><dd>{ lifecycleLabel(monitorLifecycle(monitor, history)) }</dd>
+					<dt>State</dt><dd>{ healthStateLabel(health.State) }</dd>
 					<dt>Last transition</dt><dd>{ formattedTime(health.LastTransitionAt) }</dd>
 					<dt>Locations observed</dt><dd>{ fmt.Sprintf("%d", len(health.Locations)) }</dd>
 				</dl>
 			</section>
+			@MonitorStateHistory(history)
 			<section class="xis-detail-section" aria-labelledby="monitor-configuration-heading">
 				<h3 id="monitor-configuration-heading">Configuration</h3>
 				<dl class="xis-detail-facts">
@@ -473,6 +499,36 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 				<dt>Updated</dt><dd>{ formattedTime(monitor.UpdatedAt) }</dd>
 			</dl>
 		</aside>
+	</section>
+}
+
+templ MonitorStateHistory(history sdk.MonitorStateHistory) {
+	<section class="xis-detail-section xis-state-history" aria-labelledby="monitor-state-history-heading" data-state-history-window="3h">
+		<div class="xis-state-history-heading">
+			<div>
+				<h3 id="monitor-state-history-heading">State history</h3>
+				<p class="xis-meta">Immutable lifecycle and health evaluations from the last 3 hours.</p>
+			</div>
+		</div>
+		if len(history.Ticks) == 0 {
+			<div class="xis-state-history-gap" role="status">No state ticks recorded in this 3-hour window. Unknown means no confirmed state, not a failed probe.</div>
+		} else {
+			<ol class="xis-state-ticks">
+				for _, tick := range history.Ticks {
+					<li class="xis-state-tick" data-state-health={ string(stateTickHealth(tick.Health)) }>
+						<div class="xis-state-tick-main">
+							<div class="xis-state-tick-summary">
+								@healthBadge(tick.Health)
+								<span>{ lifecycleLabel(tick.Lifecycle) }</span>
+							</div>
+							<p class="xis-state-tick-reason"><strong>Reason</strong> <code>{ string(tick.ReasonCode) }</code></p>
+							<p class="xis-state-tick-provenance"><strong>Provenance</strong> <span>{ stateTickProvenance(tick) }</span></p>
+						</div>
+						<time class="xis-state-tick-time" datetime={ tick.OccurredAt.UTC().Format(time.RFC3339) }>{ stateTickTime(tick) }</time>
+					</li>
+				}
+			</ol>
+		}
 	</section>
 }
 
@@ -607,13 +663,14 @@ func monitorDetailState(health sdk.MonitorHealth) string {
 func enabledLabel(enabled bool) string { if enabled { return "Yes" }; return "No" }
 
 func healthBadge(state sdk.HealthState) templ.Component {
+	state = healthStateValue(state)
 	tone := badge.ToneDefault
 	switch state { case sdk.Up: tone = badge.ToneSuccess; case sdk.Down: tone = badge.ToneDanger; case sdk.Degraded: tone = badge.ToneWarning; case sdk.Pending: tone = badge.ToneInfo }
-	return badge.Badge(badge.Config{Label: strings.ToUpper(string(state)), Tone: tone, Appearance: badge.AppearanceSoft, Indicator: true, RootClass: "xis-status-badge " + healthStateClass(state)})
+	return badge.Badge(badge.Config{Label: healthStateLabel(state), Tone: tone, Appearance: badge.AppearanceSoft, Indicator: true, RootClass: "xis-status-badge " + healthStateClass(state)})
 }
 
 func healthStateClass(state sdk.HealthState) string {
-	switch state { case sdk.Up: return "xis-state-success"; case sdk.Degraded: return "xis-state-warning"; case sdk.Down: return "xis-state-danger"; default: return "xis-state-info" }
+	switch healthStateValue(state) { case sdk.Up: return "xis-state-success"; case sdk.Degraded: return "xis-state-warning"; case sdk.Down: return "xis-state-danger"; default: return "xis-state-unknown" }
 }
 
 func healthTone(state sdk.HealthState) alert.Tone {

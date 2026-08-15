@@ -342,3 +342,93 @@ func TestMonitorContentNamesUnavailableSelectionWithoutReplacingTheList(t *testi
 		}
 	}
 }
+
+func TestMonitorContentRendersBoundedStateTickHistoryAndProvenance(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000011")
+	locationID := uuid.MustParse("20000000-0000-4000-8000-000000000011")
+	userActionID := uuid.MustParse("30000000-0000-4000-8000-000000000011")
+	causalDependencyID := uuid.MustParse("40000000-0000-4000-8000-000000000011")
+	base := time.Date(2026, time.August, 15, 9, 0, 0, 0, time.UTC)
+	history := sdk.MonitorStateHistory{
+		MonitorId: monitorID,
+		StartsAt:  base,
+		EndsAt:    base.Add(3 * time.Hour),
+		Ticks: []sdk.MonitorStateTick{
+			{MonitorId: monitorID, LocationId: &locationID, Lifecycle: sdk.Active, Health: sdk.Up, ReasonCode: sdk.StateTickReasonCodeProbeSuccess, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem}, OccurredAt: base.Add(15 * time.Minute)},
+			{MonitorId: monitorID, LocationId: &locationID, Lifecycle: sdk.Active, Health: sdk.Degraded, ReasonCode: sdk.StateTickReasonCodeProbeFailure, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindAgent}, OccurredAt: base.Add(75 * time.Minute)},
+			{MonitorId: monitorID, Lifecycle: sdk.Paused, Health: sdk.Unknown, ReasonCode: sdk.StateTickReasonCodeDependencyPaused, ActionId: uuid.MustParse("50000000-0000-4000-8000-000000000011"), UserActionId: &userActionID, CausalDependencyId: &causalDependencyID, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindUser}, OccurredAt: base.Add(150 * time.Minute)},
+		},
+	}
+	data := MonitorList{
+		Monitors:     []sdk.Monitor{{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", Kind: sdk.MonitorKindDns, Enabled: true, LocationId: locationID}},
+		Health:       map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Unknown}},
+		StateHistory: map[string]sdk.MonitorStateHistory{monitorID.String(): history},
+		Selected:     monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		"State history", "Last 3 hours.", "Lifecycle", "Health", "Reason", "Provenance",
+		"Active", "Paused", "UP", "DEGRADED", "UNKNOWN", "probe_success", "probe_failure", "dependency_paused",
+		"system", "agent", "user", "User action", "Causal dependency",
+		`data-state-history-window="3h"`, `data-state-health="unknown"`, `data-state-health="degraded"`,
+		"xis-state-unknown", "xis-state-warning",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("state history drawer missing %q", want)
+		}
+	}
+	if strings.Index(body, "probe_success") >= strings.Index(body, "probe_failure") || strings.Index(body, "probe_failure") >= strings.Index(body, "dependency_paused") {
+		t.Fatalf("state ticks lost chronological order: %s", body)
+	}
+	if strings.Contains(body, `><code>`+monitorID.String()+`</code><`) || strings.Contains(body, `><code>`+locationID.String()+`</code><`) {
+		t.Fatalf("drawer rendered raw technical identifiers: %s", body)
+	}
+	tableStart, tableEnd := strings.Index(body, "<table"), strings.Index(body, "</table>")
+	if tableStart < 0 || tableEnd < tableStart {
+		t.Fatalf("monitor list table missing: %s", body)
+	}
+	listMarkup := body[tableStart:tableEnd]
+	if strings.Contains(listMarkup, ">"+monitorID.String()+"<") || strings.Contains(listMarkup, ">"+locationID.String()+"<") {
+		t.Fatalf("monitor list exposed raw identifiers: %s", listMarkup)
+	}
+}
+
+func TestMonitorContentTrimsStateTicksToLatestThreeHours(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000012")
+	base := time.Date(2026, time.August, 15, 9, 0, 0, 0, time.UTC)
+	history := sdk.MonitorStateHistory{
+		MonitorId: monitorID,
+		StartsAt:  base,
+		EndsAt:    base.Add(4 * time.Hour),
+		Ticks: []sdk.MonitorStateTick{
+			{MonitorId: monitorID, Lifecycle: sdk.Active, Health: sdk.Up, ReasonCode: sdk.StateTickReasonCodeInitial, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem}, OccurredAt: base.Add(30 * time.Minute)},
+			{MonitorId: monitorID, Lifecycle: sdk.Active, Health: sdk.Degraded, ReasonCode: sdk.StateTickReasonCodeProbeFailure, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem}, OccurredAt: base.Add(90 * time.Minute)},
+			{MonitorId: monitorID, Lifecycle: sdk.Active, Health: sdk.Up, ReasonCode: sdk.StateTickReasonCodeProbeSuccess, Actor: sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem}, OccurredAt: base.Add(3*time.Hour + 30*time.Minute)},
+		},
+	}
+	data := MonitorList{
+		Monitors:     []sdk.Monitor{{Id: monitorID, Name: "Windowed monitor", Enabled: true}},
+		Health:       map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
+		StateHistory: map[string]sdk.MonitorStateHistory{monitorID.String(): history},
+		Selected:     monitorID.String(),
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	if strings.Contains(body, "initial") {
+		t.Fatal("state history rendered tick older than three-hour window")
+	}
+	for _, want := range []string{"probe_failure", "probe_success", "15 Aug 2026 12:30 UTC"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("bounded state history missing %q", want)
+		}
+	}
+}
