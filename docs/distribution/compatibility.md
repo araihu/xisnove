@@ -14,20 +14,24 @@ replicas and remain readable by both N-1 and N. Contract migrations run
 separately only after every live N-1 process lease is gone. Readiness accepts
 the documented schema interval and fails closed outside it.
 
-The frozen portable fixture lives under
-`integration/testdata/migration-n-minus-one`. It is the M6.1 baseline for the
-next release transition, not evidence that a pre-M6.1 binary reads schema 11.
-Its checksum-anchored standalone source builds a native probe without network
-access or Git history. The gate creates schema 10, expands to schema 11, and
-proves both the future N-1 interval and current runtime remain ready. Any
-fixture or manifest change requires an explicit checksum and
-compatibility-contract update.
+The frozen portable fixture has explicit revisions under
+`integration/testdata/migration-n-minus-one`: the original M6.1 fixture remains
+at the root with manifest format 1 and schema interval `[10,11]`; the active
+state-ticks revision is `v2/`, with manifest format 2 and interval `[11,12]`.
+The v2 revision is a separate checksum-anchored standalone probe, not a silent
+mutation of the M6.1 artifact. Its gate creates schema 11, expands through the
+state-ticks migration to schema 12, and proves both the v2 N-1 probe and the
+current runtime remain ready. Any fixture or manifest change requires an
+explicit revision, checksum, and compatibility-contract update.
 
 The first upgrade from a pre-M6.1 binary is a singleton downtime transition:
-stop every old server, back up schema 10, run M6.1 expand migration, then start
-M6.1. Pre-M6.1 binaries accepted only exact schema 10; rollback after migration
-therefore restores the schema-10 backup. Rolling mixed-version guarantees begin
-with the M6.1 baseline and later releases.
+stop every old server, back up schema 10, run the M6.1 expand migration to
+schema 11, then start M6.1. Pre-M6.1 binaries accepted only exact schema 10;
+rollback after that migration therefore restores the schema-10 backup. For the
+state-ticks revision, start from a schema-11 backup, run the schema-12 expand
+migration, and keep the v2 N-1 probe and current runtime ready before the
+contract phase. Rolling mixed-version guarantees begin with the M6.1 baseline
+and its explicit v2 revision.
 
 PostgreSQL and managed Turso allow N-1 and N replicas during the expand window.
 SQLite and local Turso use a singleton downtime upgrade: stop old process,

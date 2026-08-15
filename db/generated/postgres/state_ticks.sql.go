@@ -7,8 +7,84 @@ package dbpostgres
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
+
+const appendStateTick = `-- name: AppendStateTick :execrows
+INSERT INTO state_ticks (
+  id,
+  monitor_id,
+  location_id,
+  lifecycle,
+  health,
+  reason_code,
+  action_id,
+  user_action_id,
+  actor_kind,
+  actor_id,
+  occurred_at,
+  observation_id,
+  causal_tick_id,
+  causal_dependency_id
+) VALUES (
+  $1,
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  $7,
+  $8,
+  $9,
+  $10,
+  $11,
+  $12,
+  $13,
+  $14
+)
+ON CONFLICT (id) DO NOTHING
+`
+
+type AppendStateTickParams struct {
+	ID                 string         `json:"id"`
+	MonitorID          string         `json:"monitor_id"`
+	LocationID         sql.NullString `json:"location_id"`
+	Lifecycle          string         `json:"lifecycle"`
+	Health             string         `json:"health"`
+	ReasonCode         string         `json:"reason_code"`
+	ActionID           string         `json:"action_id"`
+	UserActionID       sql.NullString `json:"user_action_id"`
+	ActorKind          string         `json:"actor_kind"`
+	ActorID            sql.NullString `json:"actor_id"`
+	OccurredAt         time.Time      `json:"occurred_at"`
+	ObservationID      sql.NullString `json:"observation_id"`
+	CausalTickID       sql.NullString `json:"causal_tick_id"`
+	CausalDependencyID sql.NullString `json:"causal_dependency_id"`
+}
+
+func (q *Queries) AppendStateTick(ctx context.Context, arg AppendStateTickParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, appendStateTick,
+		arg.ID,
+		arg.MonitorID,
+		arg.LocationID,
+		arg.Lifecycle,
+		arg.Health,
+		arg.ReasonCode,
+		arg.ActionID,
+		arg.UserActionID,
+		arg.ActorKind,
+		arg.ActorID,
+		arg.OccurredAt,
+		arg.ObservationID,
+		arg.CausalTickID,
+		arg.CausalDependencyID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
 
 const listStateTicks = `-- name: ListStateTicks :many
 SELECT
@@ -30,7 +106,7 @@ FROM state_ticks
 WHERE monitor_id = $1
   AND occurred_at >= $2
   AND occurred_at < $3
-ORDER BY occurred_at, id
+ORDER BY occurred_at DESC, id DESC
 LIMIT $4
 `
 

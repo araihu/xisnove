@@ -90,6 +90,7 @@ func (s *store) transact(
 
 func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 	management := &managementRepository{queries: queries}
+	stateTicks := &stateTickRepository{queries: queries}
 	return application.Repositories{
 		Admins:               &adminRepository{queries: queries},
 		Sessions:             &sessionRepository{queries: queries},
@@ -101,7 +102,8 @@ func newRepositories(queries *dbpostgres.Queries) application.Repositories {
 		Agents:               &agentRepository{queries: queries},
 		Runs:                 &runRepository{queries: queries},
 		Results:              &resultRepository{queries: queries},
-		StateTicks:           &stateTickRepository{queries: queries},
+		StateTicks:           stateTicks,
+		StateTickWriter:      stateTicks,
 		Incidents:            &incidentRepository{queries: queries},
 		NotificationChannels: &notificationChannelRepository{queries: queries},
 		NotificationRoutes:   &notificationRouteRepository{queries: queries},

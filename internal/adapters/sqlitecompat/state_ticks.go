@@ -21,6 +21,32 @@ type stateTickRepository struct {
 	queries *dbsqlite.Queries
 }
 
+func (r *stateTickRepository) AppendStateTick(ctx context.Context, tick domain.StateTick) (bool, error) {
+	if err := tick.Validate(); err != nil {
+		return false, fmt.Errorf("append state tick: %w", err)
+	}
+	count, err := r.queries.AppendStateTick(ctx, dbsqlite.AppendStateTickParams{
+		ID:                 tick.ID,
+		MonitorID:          string(tick.MonitorID),
+		LocationID:         nullableStateTickLocationID(tick.LocationID),
+		Lifecycle:          string(tick.Lifecycle),
+		Health:             string(tick.Health),
+		ReasonCode:         string(tick.ReasonCode),
+		ActionID:           tick.ActionID,
+		UserActionID:       nullableStateTickPointer(tick.UserActionID),
+		ActorKind:          string(tick.Actor.Kind),
+		ActorID:            nullableStateTickID(tick.Actor.ID),
+		OccurredAt:         formatStateTickTime(tick.OccurredAt),
+		ObservationID:      nullableStateTickPointer(tick.ObservationID),
+		CausalTickID:       nullableStateTickPointer(tick.CausalTickID),
+		CausalDependencyID: nullableStateTickPointer(tick.CausalDependencyID),
+	})
+	if err != nil {
+		return false, repositoryError("append state tick", err)
+	}
+	return count == 1, nil
+}
+
 func (r *stateTickRepository) ListStateTicks(
 	ctx context.Context,
 	monitorID domain.MonitorID,
@@ -35,15 +61,18 @@ func (r *stateTickRepository) ListStateTicks(
 	}
 	records, err := r.queries.ListStateTicks(ctx, dbsqlite.ListStateTicksParams{
 		MonitorID: string(monitorID),
-		StartsAt:  formatTime(start),
-		EndsAt:    formatTime(end),
+		StartsAt:  formatStateTickTime(start),
+		EndsAt:    formatStateTickTime(end),
 		RowLimit:  int64(normalizeStateTickHistoryLimit(limit)),
 	})
 	if err != nil {
 		return nil, repositoryError("list state ticks", err)
 	}
 	ticks := make([]domain.StateTick, 0, len(records))
-	for _, record := range records {
+	// Storage selects newest rows first so a bounded query retains the latest
+	// history. Expose the repository contract chronologically.
+	for index := len(records) - 1; index >= 0; index-- {
+		record := records[index]
 		occurredAt, err := parseTime(record.OccurredAt)
 		if err != nil {
 			return nil, fmt.Errorf("map state tick timestamp: %w", err)
@@ -58,6 +87,34 @@ func (r *stateTickRepository) ListStateTicks(
 		ticks = append(ticks, tick)
 	}
 	return ticks, nil
+}
+
+// SQLite stores state tick timestamps as canonical, fixed-width UTC text so
+// lexical comparisons preserve nanosecond ordering without julianday's
+// floating-point precision loss.
+func formatStateTickTime(value time.Time) string {
+	return value.UTC().Format("2006-01-02T15:04:05.000000000Z")
+}
+
+func nullableStateTickLocationID(value *domain.LocationID) sql.NullString {
+	if value == nil {
+		return sql.NullString{}
+	}
+	return nullableStateTickID(string(*value))
+}
+
+func nullableStateTickPointer(value *string) sql.NullString {
+	if value == nil {
+		return sql.NullString{}
+	}
+	return nullableStateTickID(*value)
+}
+
+func nullableStateTickID(value string) sql.NullString {
+	if value == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: value, Valid: true}
 }
 
 func mapSQLiteStateTick(record dbsqlite.StateTick, occurredAt time.Time) (domain.StateTick, error) {
@@ -112,3 +169,4 @@ func normalizeStateTickHistoryLimit(limit int) int {
 }
 
 var _ port.StateTickRepository = (*stateTickRepository)(nil)
+var _ port.StateTickWriter = (*stateTickRepository)(nil)

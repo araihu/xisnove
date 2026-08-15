@@ -19,7 +19,8 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-const frozenNMinusOneManifestSHA256 = "838d8e00407f50f327d695f1340774dd3ea2f3b82ce04fd03fd7b87ae2e3ec9a"
+const frozenNMinusOneFixturePath = "integration/testdata/migration-n-minus-one/v2"
+const frozenNMinusOneManifestSHA256 = "0f2f52b37333b1bd1fea3930c220c83c731fdb1d1c965a94296e2e92635de031"
 
 type frozenNMinusOneManifest struct {
 	FormatVersion  int               `json:"format_version"`
@@ -38,10 +39,10 @@ type frozenSchemaRange struct {
 
 func TestNMinusOneBinaryRemainsReadyAfterExpandMigration(t *testing.T) {
 	repositoryRoot := nMinusOneRepositoryRoot(t)
-	fixtureRoot := filepath.Join(repositoryRoot, "integration", "testdata", "migration-n-minus-one")
+	fixtureRoot := filepath.Join(repositoryRoot, filepath.FromSlash(frozenNMinusOneFixturePath))
 	manifest := loadFrozenNMinusOneManifest(t, fixtureRoot)
 
-	if manifest.FormatVersion != 1 || manifest.RuntimeVersion != "m6.1-future-n-minus-one-baseline" {
+	if manifest.FormatVersion != 2 || manifest.RuntimeVersion != "m6.1-future-n-minus-one-baseline-v2" {
 		t.Fatalf("unexpected frozen fixture identity: format=%d runtime=%q", manifest.FormatVersion, manifest.RuntimeVersion)
 	}
 	if manifest.Schema != (frozenSchemaRange{Baseline: 11, Expand: 12, Minimum: 11, Maximum: 12}) {
@@ -86,7 +87,7 @@ func TestNMinusOneBinaryRemainsReadyAfterExpandMigration(t *testing.T) {
 }
 
 func TestNMinusOneFixtureRejectsChecksumTampering(t *testing.T) {
-	fixtureRoot := filepath.Join(nMinusOneRepositoryRoot(t), "integration", "testdata", "migration-n-minus-one")
+	fixtureRoot := filepath.Join(nMinusOneRepositoryRoot(t), filepath.FromSlash(frozenNMinusOneFixturePath))
 	manifest := loadFrozenNMinusOneManifest(t, fixtureRoot)
 	source, err := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(manifest.Source)))
 	if err != nil {

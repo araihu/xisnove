@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AdvanceMonitorSchedule(ctx context.Context, arg AdvanceMonitorScheduleParams) (int64, error)
 	AppendNotificationDeliveryAttempt(ctx context.Context, arg AppendNotificationDeliveryAttemptParams) error
+	AppendStateTick(ctx context.Context, arg AppendStateTickParams) (int64, error)
 	AssignMonitorLocation(ctx context.Context, arg AssignMonitorLocationParams) error
 	ChangeIncident(ctx context.Context, arg ChangeIncidentParams) (int64, error)
 	ClaimDueNotificationOutbox(ctx context.Context, arg ClaimDueNotificationOutboxParams) (NotificationOutbox, error)
