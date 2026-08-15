@@ -25,6 +25,7 @@ type ServerConfig struct {
 	Results       *application.ResultService
 	Health        *application.HealthService
 	History       *application.MonitorHistoryService
+	StateHistory  *application.StateTickHistoryService
 	Notifications *application.NotificationAdminService
 	Management    *application.ManagementService
 	PublicStatus  *application.PublicStatusService
@@ -44,6 +45,7 @@ type Server struct {
 	results       *application.ResultService
 	health        *application.HealthService
 	history       *application.MonitorHistoryService
+	stateHistory  *application.StateTickHistoryService
 	notifications *application.NotificationAdminService
 	management    *application.ManagementService
 	publicStatus  *application.PublicStatusService
@@ -61,6 +63,7 @@ func NewServer(config ServerConfig) *Server {
 		results:       config.Results,
 		health:        config.Health,
 		history:       config.History,
+		stateHistory:  config.StateHistory,
 		notifications: config.Notifications,
 		management:    config.Management,
 		publicStatus:  config.PublicStatus,
