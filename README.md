@@ -3,14 +3,17 @@
 Xisnove is an API-first, cloud-native monitoring system written in Go. The
 current milestone supports HTTP/TLS, TCP, and resolver-pinned DNS monitors
 stored in SQLite, local Turso Database, managed Turso Cloud, or PostgreSQL;
-work is leased by capability to outbound Agents, projected into health, and
-promoted into Incidents after failures or durable staleness. Incident changes
+work is leased or delivered by capability to outbound Agents, projected into
+health, and promoted into Incidents after failures or durable staleness.
+Incident changes
 can be routed through an encrypted transactional outbox to Shoutrrr or
 Alertmanager, with durable attempts, bounded retries, and explicit replay.
-One-off maintenance suppresses delivery without stopping probes, while bounded
-retention publishes daily uptime aggregates. Structured logs, bounded metrics,
-optional tracing, readiness, and ordered shutdown provide the operations
-surface for a self-hosted installation.
+Maintenance explicitly chooses between pausing observation (which projects
+dependent monitors to `unknown`) and suppressing delivery while probes
+continue. State ticks retain reason, actor, user-action, and causal history;
+bounded retention publishes daily uptime aggregates. Structured logs, bounded
+metrics, optional tracing, readiness, and ordered shutdown provide the
+operations surface for a self-hosted installation.
 
 The repository also contains separately buildable UI/BFF, CLI, Agent, and
 Kubernetes operator modules. The
@@ -29,7 +32,7 @@ internal. `agent/`, `cli/`, `operator/`, and `ui/` are independently buildable
 Go modules. Release builds use the repository workspace so every consumer
 resolves the SDK and OpenAPI-generated code from the same checkout.
 
-- [v1 architecture](docs/superpowers/specs/2026-07-24-xisnove-v1-design.md)
+- [canonical monitoring architecture](docs/superpowers/specs/2026-07-24-xisnove-v1-design.md)
 - [Open Core extension surface](docs/architecture/open-core.md)
 - [milestone implementation plan](docs/superpowers/plans/2026-07-24-milestone-1-first-observation.md)
 - [protocol breadth plan](docs/superpowers/plans/2026-07-25-milestone-2a-protocol-breadth.md)

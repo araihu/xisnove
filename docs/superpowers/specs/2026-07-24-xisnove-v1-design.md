@@ -1,32 +1,37 @@
-# Xisnove v1 Design
+# Xisnove Canonical Monitoring Design
 
-Status: approved architecture, pending written-spec review
+Status: canonical architecture; replaces the monitor/location model from 2026-07-24
 
-Date: 2026-07-24
+Date: 2026-08-15
 
 ## Summary
 
 Xisnove is an API-first, self-hosted monitoring service written in Go. It
-combines the simple operating model of tools such as Uptime Kuma with a public
-OpenAPI contract, a generated Go SDK, a CLI, a Goshtoso-based UI BFF, remote
-probing agents, and optional Kubernetes-native reconciliation and discovery.
+combines a public OpenAPI contract, a generated Go SDK, a CLI, a Goshtoso-based
+UI BFF, remote probing agents, and optional Kubernetes-native reconciliation
+and discovery.
 
-The v1 architecture is a modular hexagonal control plane backed only by a
-relational database. The control plane normally runs outside the infrastructure
-it monitors. Lightweight agents make outbound HTTPS connections to lease probe
-work, upload results, and publish discovery candidates from otherwise
-unreachable locations.
+The architecture is a modular hexagonal control plane backed only by a
+relational database. `Location` is an inert descriptor: it has no health and
+does no work until it is associated with a `Monitor`. An `Agent` is a separate
+runtime assigned to a Location; it may pull leased work or push observations
+through an authenticated endpoint. A MonitorLocation association activates a
+Location for that Monitor and resolves the effective execution policy.
+
+Monitors and Locations share a common observable read model, but they retain
+different write semantics. A Monitor may be direct (HTTP, TCP, DNS, or another
+probe) or composite (a monitor of other monitors). This lets Xisnove represent
+services, platforms, and infrastructure composition without introducing a
+separate `Service` entity.
 
 Kubernetes is a client and desired-state surface, not a database. A separate
 operator reconciles `Monitor` and `Agent` custom resources through the same
-public API used by the CLI and UI. Probe history, incidents, notification
-delivery, and audit state remain in SQLite, Turso, or PostgreSQL.
+public API used by the CLI and UI. Observations, state ticks, incidents,
+notification delivery, and audit state remain in SQLite, Turso, or PostgreSQL.
 
-This document defines the complete v1 system design. Implementation will be
-split into independently verifiable milestones. The first implementation plan
-will cover the smallest end-to-end slice: OpenAPI contract, monitor
-configuration, agent enrollment and leasing, an HTTP probe, result ingestion,
-health projection, and incident transition on SQLite.
+This document is the canonical monitoring model. Existing implementation
+milestones remain useful delivery slices, but any older monitor/location
+semantics are superseded here and must be migrated through the public contract.
 
 ## Open Core product boundary
 
@@ -93,6 +98,12 @@ profiles, agents, operator, notifications, UI, CLI, or deployment resources.
 - Run the control plane outside the primary monitored failure domain.
 - Reach private, Tailscale-only, physical, VPS, and Kubernetes targets through
   outbound-only agents.
+- Keep Locations inert until a MonitorLocation association activates them.
+- Support pull and push observation paths without changing health semantics.
+- Represent services and platforms as composite Monitors rather than a separate
+  Service entity.
+- Preserve lifecycle, health, reason, actor, user-action, and causal history for
+  every state tick.
 - Discover Kubernetes services and routes with read-only RBAC, then require
   explicit user promotion before monitoring them.
 - Support simple single-node deployments and multi-replica managed
@@ -111,7 +122,9 @@ profiles, agents, operator, notifications, UI, CLI, or deployment resources.
   requirements.
 - Browser scripting, full transaction monitoring, or arbitrary user-supplied
   probe code.
-- Automatic creation of monitors from discovered resources.
+- Automatic promotion of discovered resources into monitors. Agent enrollment
+  may optionally create one idempotent, agent-managed heartbeat Monitor for
+  convenience.
 - Kubernetes API/etcd as a control-plane persistence backend.
 - A CRD for every result, incident, notification, or delivery attempt.
 - A Kubernetes Job per probe or notification.
@@ -128,7 +141,7 @@ profiles, agents, operator, notifications, UI, CLI, or deployment resources.
 
 ## Success criteria
 
-The v1 design is successful when:
+The canonical design is successful when:
 
 1. A control plane running on a cloud VPS or separate cluster can monitor public
    endpoints while agents monitor LAN, Tailscale, physical-node, and Kubernetes
@@ -148,6 +161,11 @@ The v1 design is successful when:
 8. An external Go module can import the public domain, application, ports, and
    contract tests, inject a replacement adapter, and construct an application
    service without importing self-hosted implementation details.
+9. Pausing a Monitor or MonitorLocation produces an auditable administrative
+   state and causes dependent Monitors to project `unknown` with a causal reason.
+10. Every health transition can distinguish infrastructure failure, dependency
+    uncertainty, and maintenance through a stable reason code and actor/action
+    provenance.
 
 ## Homelab fit
 
@@ -163,10 +181,12 @@ The reference deployment has several distinct failure and reachability domains:
 Xisnove complements that telemetry stack with active reachability and
 desired-state monitoring:
 
-- a public/VPS location observes public Cloudflare records and endpoints;
-- a LAN location observes physical hosts, private DNS, and Tailscale paths;
-- a Kubernetes location discovers cluster services and observes their
-  in-cluster routes;
+- a public/VPS Location, served by one or more Agents, observes public
+  Cloudflare records and endpoints;
+- a LAN Location, served by one or more Agents, observes physical hosts,
+  private DNS, and Tailscale paths;
+- a Kubernetes Location, served by an edge Agent, discovers cluster services
+  and observes their in-cluster routes;
 - Alertmanager remains available as a semantic notification sink, while
   Shoutrrr provides embedded delivery channels.
 
@@ -195,10 +215,16 @@ flowchart LR
 
     DB[("SQLite, local Turso, managed Turso, or PostgreSQL")]
 
-    subgraph LOC["Monitored locations"]
-        PUB["Public or VPS agent"]
-        K8S["Kubernetes agent"]
-        LAN["LAN or physical agent"]
+    subgraph LOC["Inert Location descriptors"]
+        PUBLOC["public-vps"]
+        K8SLOC["home-k8s"]
+        LANLOC["home-lan"]
+    end
+
+    subgraph AG["Agent runtimes"]
+        PUBAG["Public or VPS agent"]
+        K8SAG["Kubernetes agent"]
+        LANAG["LAN or physical agent"]
     end
 
     UI -->|HTTPS| API
@@ -217,9 +243,12 @@ flowchart LR
     OUT --> DB
     STATUS --> DB
     ENROLL --> DB
-    PUB -->|outbound HTTPS| API
-    K8S -->|outbound HTTPS| API
-    LAN -->|outbound HTTPS| API
+    PUBAG -->|pull or push HTTPS| API
+    K8SAG -->|pull or push HTTPS| API
+    LANAG -->|pull or push HTTPS| API
+    PUBAG -. assigned to .-> PUBLOC
+    K8SAG -. assigned to .-> K8SLOC
+    LANAG -. assigned to .-> LANLOC
 ```
 
 The server is one deployable in v1. Its internal modules share a relational
@@ -227,9 +256,17 @@ transaction boundary, while ports preserve the option to split deployments
 later. Multiple server processes may run the same roles when the database mode
 supports them; database leases coordinate schedules and workers.
 
-All probes are agent-executed. A simple installation runs an agent beside the
-control plane and assigns it to a public/default Location. Larger installations
-add remote agents without changing the scheduling model.
+Locations are inert descriptors and do not execute probes or acquire health by
+themselves. A MonitorLocation association activates a Location for one Monitor
+and may be paused independently. A simple installation runs an Agent beside the
+control plane and assigns it to a default Location. Larger installations add
+remote Agents without changing the observable or health contracts.
+
+Agents are separate runtimes, never Locations. Each Agent has a Location
+assignment, capabilities, and a transport mode (`pull`, `push`, or `webhook`).
+Agent creation may request an idempotent managed heartbeat Monitor, but the
+heartbeat Monitor remains a normal Monitor and the Agent remains a separate
+identity.
 
 The following rules are architectural invariants:
 
@@ -322,12 +359,16 @@ release from accidentally depending on a local workspace replacement.
 The domain layer owns entities, value objects, invariants, and pure state
 transitions:
 
-- monitor and location assignment rules;
+- observable identity and labels for Monitors and Locations;
+- inert Location and MonitorLocation activation rules;
+- monitor composition edges and cycle prevention;
+- location policy defaults and per-association policy resolution;
 - typed probe definitions;
-- per-location threshold state;
-- aggregate monitor health;
+- per-association threshold state and lifecycle;
+- aggregate health for direct and composite Monitors;
+- state-tick reason, actor, user-action, and causal provenance;
 - incident opening, severity change, and recovery;
-- maintenance suppression decisions;
+- pause, resume, and maintenance decisions;
 - notification event identity.
 
 It receives explicit time values and has no global clock, storage, network, or
@@ -372,9 +413,9 @@ type UnitOfWork interface {
 ```
 
 The callback receives the same context and a transaction-scoped repository
-set. Result ingestion can therefore commit the ProbeResult, health transition,
-Incident mutation, IncidentEvent, audit event, and notification outbox rows as
-one unit.
+set. Observation ingestion can therefore commit the Observation, health
+transition, StateTick, Incident mutation, IncidentEvent, audit event, and
+notification outbox rows as one unit.
 
 Historical analytics is a separate concern. The operational UnitOfWork owns
 configuration, scheduling, leases, result idempotency, health, Incidents,
@@ -444,11 +485,11 @@ errors. Internal error strings and secrets are never exposed.
 The initial resource families are:
 
 - sessions and API tokens;
-- monitors and monitor-location assignments;
-- locations and agents;
+- observable Monitors, composite edges, and MonitorLocation assignments;
+- inert Locations, Agents, and Agent transport bindings;
 - enrollment tokens and credential rotation;
-- agent work leases, heartbeats, and batched results;
-- health summaries and incidents;
+- agent work leases, heartbeats, observations, and batched results;
+- health summaries, state ticks, and incidents;
 - notification channels, routes, deliveries, and replay;
 - discovery candidates and promotion;
 - maintenance intervals;
@@ -484,22 +525,47 @@ destructive future migration. V1 does not expose multi-workspace behavior.
 
 ## Monitor model
 
+### Common observable contract
+
+Monitor and Location are different domain entities but share a common
+observable read model. The read model exposes a stable ID, name, kind, labels,
+administrative lifecycle, effective health, last transition time, reason, and
+causal provenance. It is a common projection, not permission to collapse
+Monitor configuration and Location descriptors into one write schema.
+
+`paused` and `disabled` belong to the administrative lifecycle. `pending`,
+`up`, `degraded`, `down`, and `unknown` belong to health. An unassociated
+Location has no health state; it is inactive rather than `unknown`.
+
 ### Monitor
+
+A Monitor is a logical health evaluator. It may be direct or composite. A direct
+Monitor evaluates a typed probe; a composite Monitor evaluates other Monitors
+through explicit composition edges. A service, platform, or infrastructure
+component is therefore represented by a composite Monitor rather than a
+separate `Service` entity.
 
 A Monitor contains:
 
-- stable ID, name, description, labels, enabled state, and display order;
-- one typed probe definition;
-- a fixed-interval schedule, timeout, and bounded jitter;
-- failure and recovery thresholds;
-- assigned required and optional locations;
-- maintenance state;
+- stable ID, name, description, labels, and display order;
+- direct probe or composite-child definition;
+- administrative lifecycle (`active`, `paused`, or `disabled`);
+- monitor-wide policy defaults;
+- assigned required and optional MonitorLocations;
+- composition policy for child Monitors;
 - public-status-page inclusion.
 
-V1 schedules fixed intervals rather than arbitrary cron expressions. The API
-defaults to three consecutive failures before a location becomes failing and
-two consecutive successes before it recovers. Both values are configurable per
-monitor.
+Each composition edge identifies a child Monitor, whether that child is
+required, its impact policy, and how Locations map across the edge. The default
+mapping is the same active Location; an explicit edge may instead consume the
+child's aggregate state or a selected child Location. Cycles are rejected at
+write time, and labels never create implicit dependencies.
+
+Fixed intervals remain the default rather than arbitrary cron expressions. A
+Monitor may define default interval, timeout, jitter, failure threshold, and
+recovery threshold values. The effective values are resolved for each active
+MonitorLocation, so one Monitor may be observed with different operational
+policies from different Locations.
 
 Probe configurations are discriminated OpenAPI schemas, not arbitrary JSON:
 
@@ -513,81 +579,145 @@ redacted from logs and API responses. ICMP is deferred.
 
 ### Location
 
-A Location represents a network perspective, not a physical process. Examples
-are `public-vps`, `home-k8s`, and `home-lan`.
+A Location is an inert descriptor for a possible observation scope or failure
+domain. It can be created arbitrarily or emitted speculatively by discovery;
+neither action starts work or creates health. Examples are `public-vps`,
+`home-k8s`, `home-lan`, a Kubernetes cluster, a VM, a bare-metal host, or a
+Docker environment.
 
-An Agent belongs to one Location and advertises probe and discovery
-capabilities. Multiple agents may serve the same Location for availability.
+A Location may carry labels, a failure-domain description, an optional Agent
+selector, and policy defaults such as probe kind, interval, timeout, jitter,
+and thresholds. These are templates, not immutable requirements. A Monitor or
+its MonitorLocation association may override them.
 
-`MonitorLocation` assigns a Monitor to a Location and marks it required or
-optional. Optional location state is visible but does not gate aggregate
-health.
+The effective policy precedence is:
 
-### CheckRun and lease
+```text
+system defaults < Location defaults < Monitor defaults < MonitorLocation override
+```
 
-The scheduler creates one CheckRun for each enabled Monitor, assigned Location,
-and scheduled time. A unique `(monitor_id, location_id, scheduled_for)` key
-prevents duplicates.
+If probe kind or probe definition is allowed to vary by Location, the resolved
+kind is part of the MonitorLocation execution profile. A Monitor must not hide
+that distinction behind one global kind in its read model.
+
+### Agent and MonitorLocation
+
+An Agent is a separate runtime identity. It belongs to one Location, advertises
+probe and discovery capabilities, records liveness, and uses `pull`, `push`, or
+`webhook` transport. Multiple Agents may serve the same Location. A Location
+selector may resolve a group of compatible Agents, with an explicit selection
+or quorum policy rather than an implicit tag meaning.
+
+`MonitorLocation` is the activation boundary. It assigns a Monitor to a
+Location, resolves the effective policy, marks the assignment required or
+optional, and may be paused independently of both the Monitor and the base
+Location. Optional location state is visible but does not gate aggregate health.
+
+Pausing a Monitor stops all of its active assignments. Pausing a
+MonitorLocation stops only that execution scope. Neither action is an
+infrastructure failure; dependent Monitors project `unknown` with an
+administrative reason such as `dependency_paused` or `location_paused`.
+
+Agent creation may request an idempotent, agent-managed heartbeat Monitor for
+convenience. The heartbeat remains a normal Monitor; the Agent does not become
+a Location and the generated Monitor is linked to the Agent for provenance.
+
+### CheckRun, lease, and Observation
+
+The scheduler creates one CheckRun for each active direct MonitorLocation,
+assigned Location, and scheduled time. A unique
+`(monitor_id, location_id, scheduled_for)` key prevents duplicates. Paused or
+disabled assignments do not create new runs.
 
 A CheckRun progresses through available, leased, and resolved states. The lease
 records an agent, attempt number, opaque lease token, and database-time expiry.
-A compatible agent obtains work through a bounded REST long-poll. If it crashes
-or fails to report, the expired run becomes claimable again. Agents never own
-the schedule.
+A compatible Agent obtains work through bounded REST long-poll or an equivalent
+push-capable work path. If it crashes or fails to report, the expired run
+becomes claimable again. Agents never own the schedule.
 
 After scheduler downtime, catch-up is bounded per monitor. Missed intervals
 beyond the configured catch-up window are summarized as scheduler lag rather
 than replayed into an unbounded probe storm.
 
-### ProbeResult
+Every pull result and push report is normalized into an immutable Observation
+containing:
 
-ProbeResult is an immutable observation containing:
-
-- result and run IDs;
-- agent and location IDs;
+- observation and optional run IDs;
+- monitor and location IDs;
+- optional reporting Agent ID and transport mode;
 - start, finish, and receipt timestamps;
 - outcome and structured error class;
 - total latency and protocol-specific timings;
 - assertion outcomes;
-- a bounded, redacted diagnostic sample.
+- a bounded, redacted diagnostic sample;
+- an idempotency key and correlation metadata.
 
-The result ID is the ingestion idempotency key. The first valid result resolves
-the run. Repeated or late uploads return a successful duplicate acknowledgement
-and cannot trigger a second projection or incident transition.
+Pull `ProbeResult` is the execution-specific form of an Observation. The first
+valid observation resolves a run. Repeated or late uploads return a successful
+duplicate acknowledgement and cannot trigger a second projection or incident
+transition.
 
-Agents batch result uploads and retain a bounded in-memory retry queue until the
-server acknowledges each result. A process crash may discard that queue, after
-which the lease expires and the run is executed again. A durable offline agent
-spool is deferred.
+Agents batch observations and retain a bounded in-memory retry queue until the
+server acknowledges each item. A process crash may discard that queue, after
+which a pull lease expires or a push observation is retried idempotently. A
+durable offline Agent spool is deferred.
 
 ## Health and incidents
 
-Each MonitorLocation has a durable health projection. Results apply the
-configured consecutive failure and recovery thresholds. A location becomes
-stale when it misses two expected schedules plus the maximum probe/lease
-timeout; the exact deadline is stored so all replicas agree.
+Each active MonitorLocation has a durable health projection. Observations apply
+the resolved consecutive failure and recovery thresholds. A location becomes
+stale when it misses its expected schedule plus the maximum probe/lease or
+push-heartbeat timeout; the exact deadline is stored so all replicas agree.
+
+An unassociated Location has no health projection. A paused Monitor or
+MonitorLocation has administrative lifecycle `paused`; it is not itself a
+probe failure. A dependent Monitor receives a projected `unknown` with a
+reason such as `dependency_paused`, `monitor_paused`, or `location_paused`.
+When an Agent loses heartbeat, its Agent health becomes `down` after the
+configured TTL, while observations that require that Agent become `unknown`
+with reason `agent_disconnected`.
 
 Required locations roll up deterministically in this order:
 
-1. Any required location missing or stale after its grace period produces
-   `unknown`.
+1. Any required location missing, paused, or stale after its grace period
+   produces `unknown`.
 2. All required locations passing produces `up`.
 3. All required locations failing produces `down`.
 4. A fresh mixture of passing and failing required locations produces
    `degraded`.
 
 Initial `pending` state does not notify. Optional locations are reported but do
-not change the aggregate state.
+not change the aggregate state. Composite Monitors apply the same explicit
+policy to child Monitors; they never infer a Service state from an undeclared
+relationship.
+
+Every health or lifecycle evaluation appends an immutable StateTick with:
+
+- subject kind and ID;
+- resulting lifecycle and health;
+- stable `reason_code`;
+- action ID for the state evaluation (with a linked `user_action_id` when a
+  user initiated pause, resume, maintenance, or another explicit action);
+- actor kind and ID (`user`, `system`, or `agent`);
+- occurrence time, observation ID, and optional causal tick/dependency ID.
+
+Reason codes distinguish facts such as `probe_failure`, `probe_timeout`,
+`stale_observation`, `agent_disconnected`, `dependency_unknown`,
+`dependency_paused`, `paused_by_user`, and `maintenance`. A reason is never
+reconstructed from free-form text after the fact.
 
 There is at most one active Incident per Monitor. A transition from a healthy
 state to `degraded`, `down`, or post-grace `unknown` opens an Incident. State and
 severity changes append IncidentEvents to it. `down` is critical;
-`degraded` and agent-unavailable `unknown` are warning states. Recovery to `up`
-closes the Incident.
+`degraded` and agent-unavailable `unknown` are warning states. Administrative
+unknown caused by an intentional pause or maintenance is recorded and visible
+but does not masquerade as an infrastructure failure. Recovery to `up` closes
+the Incident.
 
-Health projection, Incident transition, audit entry, and all required
-notification outbox records commit in one transaction. Current projections are
-rebuildable from immutable results, but are stored for efficient reads.
+Observation, health projection, StateTick, Incident transition, audit entry,
+and all required notification outbox records commit in one transaction.
+Current projections are rebuildable from immutable observations and StateTicks,
+but are stored for efficient reads.
 
 ## Scheduling, leasing, and failure handling
 
@@ -703,16 +833,28 @@ mandatory. Kubernetes Jobs are not used for notification delivery.
 
 ## Maintenance and retention
 
-V1 supports one-off and indefinite maintenance intervals. Probes continue and
-health continues to update, but notification delivery is suppressed. If a
-Monitor remains unhealthy when maintenance ends, Xisnove emits a fresh
-transition so the condition is not silently lost.
+Xisnove supports one-off and indefinite maintenance intervals with an explicit
+mode:
+
+- `pause` stops a Monitor or MonitorLocation from scheduling or accepting new
+  observations. Dependents project `unknown`, and the administrative reason is
+  recorded in StateTicks without being mislabeled as infrastructure failure;
+- `suppress_notifications` keeps observations and health running while
+  suppressing matching notification deliveries.
+
+Pause and resume are user actions with immutable action IDs. If a paused
+Monitor remains unhealthy when it resumes, Xisnove emits a fresh transition so
+the condition is not silently lost. Ending notification-only maintenance also
+creates the existing post-maintenance transition when the condition remains
+unhealthy.
 
 Recurring maintenance schedules are deferred.
 
 Default retention is:
 
 - raw ProbeResults: 30 days;
+- normalized Observations and StateTicks: 30 days by default, subject to the
+  same bounded retention policy;
 - daily uptime aggregates: 13 months;
 - Incident and IncidentEvent history: retained until explicit deletion;
 - delivery attempts and audit events: retained with their Incident unless an
@@ -721,9 +863,11 @@ Default retention is:
 Aggregation and cleanup use bounded batches to avoid long SQLite or libSQL
 write locks.
 
-V1 exposes one public status page. Only explicitly selected Monitors appear.
-The page shows current aggregate state, active incidents, and recent uptime
-history. Multiple pages, custom domains, and advanced branding are deferred.
+V1 exposes one public status page. Only explicitly selected observable roots
+appear. The page shows current aggregate state, active incidents, and recent
+uptime history; composite children and Location context are available through
+the selected observable detail. Multiple pages, custom domains, and advanced
+branding are deferred.
 
 ## Agent protocol and security
 
@@ -740,12 +884,17 @@ database access.
 
 The steady-state protocol is:
 
-1. heartbeat with identity, version, location, capabilities, and credential
-   generation;
-2. bounded REST long-poll for compatible work;
-3. local probe execution under agent policy;
-4. idempotent batched result upload;
+1. heartbeat with identity, version, Location, capabilities, transport, and
+   credential generation;
+2. bounded REST long-poll for compatible work when transport is `pull`;
+3. local probe execution under Agent policy;
+4. idempotent batched Observation upload, or push/webhook delivery when
+   transport is `push` or `webhook`;
 5. discovery-candidate upsert batches when discovery is enabled.
+
+Heartbeat liveness is independent of probe observations. A missed heartbeat
+changes Agent health after its configured TTL and projects `unknown` into
+dependent MonitorLocations; it never fabricates a target probe failure.
 
 Agent policy constrains schemes, ports, CIDRs, redirect count, DNS
 re-resolution, timeout, response bytes, concurrency, and upload batch size.
@@ -801,9 +950,10 @@ provisioning credential through `existingSecret`.
 
 ### Monitor CRD
 
-`Monitor.spec` contains the Kubernetes representation of a supported Monitor
-and its location selection. The controller creates or updates only the remote
-Monitor owned by that resource.
+`Monitor.spec` contains the Kubernetes representation of a direct or composite
+Monitor, its MonitorLocation associations, lifecycle, and per-association
+policy overrides. The controller creates or updates only the remote Monitor
+owned by that resource.
 
 `Monitor.status` is bounded:
 
@@ -823,8 +973,9 @@ permanently gone. The operator never deletes a Monitor it does not own.
 
 ### Agent CRD
 
-An `Agent` CR defines location, enabled capabilities, permitted discovery
-namespaces, resource policy, and workload settings. The controller:
+An `Agent` CR defines its Location assignment, transport, enabled capabilities,
+permitted discovery namespaces, resource policy, optional heartbeat-Monitor
+request, and workload settings. The controller:
 
 - registers or updates the remote Agent identity;
 - materializes its credential into an operator-owned namespaced Secret;
@@ -891,8 +1042,11 @@ The `xisnove-ui` module is a separate server-rendered BFF:
 - Goshtoso's bundled `assets.Handler()` is mounted directly at `/assets/`;
 - runtime operation needs no CDN.
 
-Xisnove-specific monitor cards, health timelines, incident views, discovery
-workflows, and status-page views live in `ui/`.
+Xisnove-specific observable trees, Monitor composition views, Location and
+Agent context, health timelines, StateTick/audit views, incident views,
+discovery workflows, and status-page views live in `ui/`. The canonical UI is
+not a flat table with one Location column: it must make composition, paused
+scope, current health, reason, and causal history visible.
 
 If Xisnove needs a genuinely generic UI primitive that Goshtoso lacks, that
 primitive is designed and tested upstream in `araihu/goshtoso`, released, and
@@ -1004,7 +1158,10 @@ The server exposes:
 Metrics include:
 
 - monitor state and transitions;
+- lifecycle pauses, StateTick reason codes, user actions, and causal links;
 - probe outcome and latency;
+- push observation age and Agent liveness;
+- dependency-projected `unknown` states;
 - scheduler lag and bounded catch-up;
 - lease claims, expiries, and retries;
 - agent heartbeat age;
@@ -1022,7 +1179,10 @@ configured administrative listener.
 
 - table and property tests for health rollup truth tables;
 - incident state-machine tests;
-- fake-clock scheduling and stale-location tests;
+- fake-clock scheduling, stale-location, and Agent-TTL tests;
+- pause/resume, maintenance modes, policy precedence, and StateTick causality;
+- composite-Monitor cycle prevention and dependency rollup tests;
+- push observation idempotency and pull/push parity;
 - maintenance and retention behavior;
 - token scope, secret redaction, and SSRF policy tests;
 - retry and idempotency invariants.
@@ -1109,8 +1269,9 @@ dependent, end-to-end milestones:
 
 1. **Foundation and first observation:** repository modules, OpenAPI 3.1
    contract, generated server and SDK, SQLite schema, local administrator,
-   Monitor/Location/Agent APIs, enrollment, leased HTTP work, result ingestion,
-   health projection, Incident transition, and contract/conformance tests.
+   observable Monitor/Location/Agent APIs, MonitorLocation activation and policy
+   resolution, enrollment, leased HTTP work, Observation ingestion, health and
+   StateTick projections, Incident transition, and contract/conformance tests.
 2. **Protocol and persistence breadth:** TCP/DNS/TLS behavior, batched uploads,
    scheduler recovery, PostgreSQL, local Turso, managed Turso, migrations,
    backup/restore, and multi-replica tests.
@@ -1118,10 +1279,11 @@ dependent, end-to-end milestones:
    application services, infrastructure ports, and adapter contracts into
    stable importable packages before additional milestone-3 ports are added.
 3. **Reliable notification and operations:** transactional outbox workers,
-   Shoutrrr, Alertmanager, routing, maintenance, retention, metrics, tracing,
-   readiness, and graceful shutdown.
-4. **Human clients:** CLI, Goshtoso UI BFF, single public status page, discovery
-   catalog workflow, and browser end-to-end tests.
+   Shoutrrr, Alertmanager, routing, pause/resume and maintenance modes,
+   retention, metrics, tracing, readiness, and graceful shutdown.
+4. **Human clients:** CLI, Goshtoso UI BFF, observable/composite Monitor views,
+   single public status page, discovery catalog workflow, and browser
+   end-to-end tests.
 5. **Kubernetes edge:** CRDs, operator, agent Secret materialization, read-only
    discovery, promotion, Helm edge chart, and kind tests.
 6. **Distribution and hardening:** control-plane Helm chart, Compose, raw
@@ -1149,9 +1311,13 @@ follow semantic-versioning compatibility discipline.
   PostgreSQL is available for write-heavy self-managed installations.
 - **Managed Turso and local Turso have different engines and semantics.** They
   are separate runtime profiles even though they share SQL generation.
-- **Long-poll is less push-oriented than a streaming protocol.** It is simpler
-  through proxies, firewalls, raw deployments, and Kubernetes, and is
-  sufficient for v1 probe intervals.
+- **Pull and push transports have different failure signals.** The common
+  Observation contract, independent Agent heartbeat, idempotency keys, and
+  explicit `unknown` projection keep transport failures from becoming fake
+  target failures.
+- **Composite Monitors can form an opaque graph.** Explicit typed edges,
+  cycle prevention, causal StateTicks, and bounded traversal keep health
+  propagation explainable.
 - **Agent retry queues are not indefinitely durable.** Idempotency and lease
   expiry preserve correctness; a durable offline spool can be added if field
   experience requires it.

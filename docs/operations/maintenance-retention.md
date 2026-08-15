@@ -1,5 +1,11 @@
 # Maintenance and retention operations
 
+This runbook documents the currently implemented notification-only maintenance
+endpoint (`suppress_notifications`). The canonical monitoring design also
+defines an explicit `pause` mode, which stops observation and projects
+dependent Monitors to `unknown`; its API migration is a separate contract
+checkpoint.
+
 Maintenance suppresses notification deliveries, not monitoring. Agents keep
 probing, health and Incidents keep changing, IncidentEvents and audits remain
 durable, and each matching outbox row is recorded as `suppressed`. This keeps a

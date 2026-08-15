@@ -13,9 +13,11 @@ namespace, name, and Kubernetes UID. Reconciliation is an idempotent apply
 through the public control-plane boundary. A recreated CR therefore cannot
 take ownership of the previous CR's remote object.
 
-`Monitor` owns only its one remote Monitor. `Agent` owns one remote Agent
-identity, its namespaced credential Secret, and its Deployment. The Helm chart
-owns the operator and discovery ServiceAccounts plus their RBAC. This keeps the
+`Monitor` owns its remote Monitor and MonitorLocation associations. `Agent` owns
+one remote Agent identity, its Location assignment, its namespaced credential
+Secret, and its Deployment; it may also own an optional heartbeat Monitor. The
+Helm chart owns the operator and discovery ServiceAccounts plus their RBAC. This
+keeps the
 discovery workload's read-only identity separate from the operator identity
 that can materialize its owned Secrets.
 
@@ -27,15 +29,16 @@ the remote object rather than attempting an unsafe deletion.
 
 ## CRD surface
 
-`Monitor.spec` carries supported HTTP, TCP, or DNS probe configuration and a
-control-plane Location ID. `Monitor.status` contains observed generation,
-external ID, current aggregate health, its transition time, and `Ready`,
-`Synced`, and `Degraded` conditions. There is deliberately no Alert or Incident
-CRD.
+`Monitor.spec` carries direct or composite probe configuration, Location
+associations, lifecycle, and per-association policy overrides. `Monitor.status`
+contains observed generation, external ID, current aggregate health, its
+transition time and reason, and `Ready`, `Synced`, and `Degraded` conditions.
+There is deliberately no Alert or Incident CRD.
 
-`Agent.spec` carries Location ID, capabilities, discovery scope, an
-operator-owned Secret destination, explicit requested credential generation,
-and workload settings. `Agent.status` contains only safe identifiers,
+`Agent.spec` carries Location ID, transport, capabilities, discovery scope, an
+optional heartbeat-Monitor request, an operator-owned Secret destination,
+explicit requested credential generation, and workload settings. `Agent.status`
+contains only safe identifiers,
 credential generation numbers, current rotation phase, last heartbeat and
 discovery timestamps, and bounded conditions. Credential bytes never enter
 status.
