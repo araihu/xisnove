@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,65 @@ var (
 	ErrUnauthorized       = errors.New("control-plane session is unauthorized")
 )
 
+const (
+	// StateHistoryLookback is the maximum window exposed by the UI BFF.
+	StateHistoryLookback = 3 * time.Hour
+	// StateHistoryMaxRecords is the maximum number of state ticks retained by
+	// the BFF adapter when an upstream response is truncated or over-sized.
+	StateHistoryMaxRecords int32 = 10000
+)
+
+// StateHistoryWindow returns the bounded half-open UTC window used by the UI.
+func StateHistoryWindow(now time.Time) (startsAt, endsAt time.Time) {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	endsAt = now.UTC()
+	return endsAt.Add(-StateHistoryLookback), endsAt
+}
+
+// BoundStateHistory defensively adapts an SDK response to the UI's bounded,
+// monitor-scoped history contract. The control plane remains authoritative;
+// this only filters malformed/out-of-window records and never reconstructs
+// provenance fields.
+func BoundStateHistory(history sdk.MonitorStateHistory, monitorID openapi_types.UUID, startsAt, endsAt time.Time, limit int32) sdk.MonitorStateHistory {
+	if startsAt.IsZero() || endsAt.IsZero() || !endsAt.After(startsAt) {
+		startsAt, endsAt = StateHistoryWindow(endsAt)
+	}
+	if limit <= 0 || limit > StateHistoryMaxRecords {
+		limit = StateHistoryMaxRecords
+	}
+	bounded := history
+	bounded.MonitorId = monitorID
+	bounded.StartsAt = startsAt.UTC()
+	bounded.EndsAt = endsAt.UTC()
+
+	ticks := make([]sdk.MonitorStateTick, 0, len(history.Ticks))
+	for _, tick := range history.Ticks {
+		if tick.MonitorId != monitorID {
+			continue
+		}
+		occurredAt := tick.OccurredAt.UTC()
+		if occurredAt.Before(bounded.StartsAt) || !occurredAt.Before(bounded.EndsAt) {
+			continue
+		}
+		tick.OccurredAt = occurredAt
+		ticks = append(ticks, tick)
+	}
+	sort.SliceStable(ticks, func(i, j int) bool {
+		if ticks[i].OccurredAt.Equal(ticks[j].OccurredAt) {
+			return ticks[i].Id.String() < ticks[j].Id.String()
+		}
+		return ticks[i].OccurredAt.Before(ticks[j].OccurredAt)
+	})
+	if int32(len(ticks)) > limit {
+		bounded.Truncated = true
+		ticks = ticks[len(ticks)-int(limit):]
+	}
+	bounded.Ticks = ticks
+	return bounded
+}
+
 // Client is the UI-facing subset of the public generated SDK.
 type Client interface {
 	ExchangeAdministratorCredentials(ctx context.Context, email, password string) (opaqueCredential string, err error)
@@ -29,6 +89,7 @@ type Client interface {
 	ListMonitors(ctx context.Context, opaqueCredential, cursor string, limit int32) (sdk.Page[sdk.Monitor], error)
 	GetMonitorHealth(ctx context.Context, opaqueCredential string, monitorID openapi_types.UUID) (sdk.MonitorHealth, error)
 	GetMonitorAvailabilityHistory(ctx context.Context, opaqueCredential string, monitorID openapi_types.UUID, startsAt, endsAt time.Time, limit int32) (sdk.MonitorAvailabilityHistory, error)
+	GetMonitorStateHistory(ctx context.Context, opaqueCredential string, monitorID openapi_types.UUID, startsAt, endsAt time.Time, limit int32) (sdk.MonitorStateHistory, error)
 }
 
 // SDKClient uses only the public generated client and its SDK helpers.
@@ -138,6 +199,22 @@ func (c *SDKClient) GetMonitorAvailabilityHistory(ctx context.Context, credentia
 	return sdk.MonitorAvailabilityHistory{}, responseError(response.HTTPResponse, response.Body, "get monitor availability history")
 }
 
+func (c *SDKClient) GetMonitorStateHistory(ctx context.Context, credential string, monitorID openapi_types.UUID, startsAt, endsAt time.Time, limit int32) (sdk.MonitorStateHistory, error) {
+	response, err := c.client.GetMonitorStateHistoryWithResponse(ctx, monitorID, &sdk.GetMonitorStateHistoryParams{
+		StartsAt: &startsAt, EndsAt: &endsAt, Limit: &limit,
+	}, sdk.WithBearerToken(credential))
+	if err != nil {
+		return sdk.MonitorStateHistory{}, err
+	}
+	if response.JSON200 != nil {
+		return *response.JSON200, nil
+	}
+	if response.StatusCode() == http.StatusUnauthorized {
+		return sdk.MonitorStateHistory{}, ErrUnauthorized
+	}
+	return sdk.MonitorStateHistory{}, responseError(response.HTTPResponse, response.Body, "get monitor state history")
+}
+
 func responseError(response *http.Response, body []byte, operation string) error {
 	err := sdk.ErrorFromResponse(response, body)
 	if err == nil {
@@ -152,16 +229,18 @@ type Fake struct {
 	password   string
 	credential string
 
-	mu            sync.RWMutex
-	PublicStatus  sdk.PublicStatusPage
-	Monitors      []sdk.Monitor
-	Health        map[openapi_types.UUID]sdk.MonitorHealth
-	History       map[openapi_types.UUID]sdk.MonitorAvailabilityHistory
-	PublicError   error
-	MonitorError  error
-	SearchError   error
-	HealthErrors  map[openapi_types.UUID]error
-	HistoryErrors map[openapi_types.UUID]error
+	mu                 sync.RWMutex
+	PublicStatus       sdk.PublicStatusPage
+	Monitors           []sdk.Monitor
+	Health             map[openapi_types.UUID]sdk.MonitorHealth
+	History            map[openapi_types.UUID]sdk.MonitorAvailabilityHistory
+	StateHistory       map[openapi_types.UUID]sdk.MonitorStateHistory
+	PublicError        error
+	MonitorError       error
+	SearchError        error
+	HealthErrors       map[openapi_types.UUID]error
+	HistoryErrors      map[openapi_types.UUID]error
+	StateHistoryErrors map[openapi_types.UUID]error
 }
 
 func (f *Fake) SearchResources(ctx context.Context, credential, query string, limit int32) ([]sdk.SearchResult, error) {
@@ -193,11 +272,13 @@ func (f *Fake) SearchResources(ctx context.Context, credential, query string, li
 func NewFake(username, password, credential string) *Fake {
 	return &Fake{
 		username: username, password: password, credential: credential,
-		PublicStatus:  sdk.PublicStatusPage{State: sdk.Unknown},
-		Health:        map[openapi_types.UUID]sdk.MonitorHealth{},
-		History:       map[openapi_types.UUID]sdk.MonitorAvailabilityHistory{},
-		HealthErrors:  map[openapi_types.UUID]error{},
-		HistoryErrors: map[openapi_types.UUID]error{},
+		PublicStatus:       sdk.PublicStatusPage{State: sdk.Unknown},
+		Health:             map[openapi_types.UUID]sdk.MonitorHealth{},
+		History:            map[openapi_types.UUID]sdk.MonitorAvailabilityHistory{},
+		StateHistory:       map[openapi_types.UUID]sdk.MonitorStateHistory{},
+		HealthErrors:       map[openapi_types.UUID]error{},
+		HistoryErrors:      map[openapi_types.UUID]error{},
+		StateHistoryErrors: map[openapi_types.UUID]error{},
 	}
 }
 
@@ -293,6 +374,24 @@ func (f *Fake) GetMonitorAvailabilityHistory(ctx context.Context, credential str
 		return history, nil
 	}
 	return sdk.MonitorAvailabilityHistory{MonitorId: monitorID, StartsAt: startsAt, EndsAt: endsAt, GeneratedAt: time.Now().UTC()}, nil
+}
+
+func (f *Fake) GetMonitorStateHistory(ctx context.Context, credential string, monitorID openapi_types.UUID, startsAt, endsAt time.Time, limit int32) (sdk.MonitorStateHistory, error) {
+	if err := ctx.Err(); err != nil {
+		return sdk.MonitorStateHistory{}, err
+	}
+	if subtle.ConstantTimeCompare([]byte(credential), []byte(f.credential)) != 1 {
+		return sdk.MonitorStateHistory{}, ErrUnauthorized
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if err := f.StateHistoryErrors[monitorID]; err != nil {
+		return sdk.MonitorStateHistory{}, err
+	}
+	if history, ok := f.StateHistory[monitorID]; ok {
+		return history, nil
+	}
+	return sdk.MonitorStateHistory{MonitorId: monitorID, StartsAt: startsAt, EndsAt: endsAt, GeneratedAt: endsAt.UTC(), Ticks: []sdk.MonitorStateTick{}}, nil
 }
 
 var _ Client = (*SDKClient)(nil)

@@ -88,6 +88,110 @@ func TestSDKClientUsesGeneratedOperationsAndBearerEditor(t *testing.T) {
 	}
 }
 
+func TestSDKClientGetsBoundedMonitorStateHistoryWithBearer(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000099")
+	startsAt := time.Date(2026, time.August, 15, 9, 0, 0, 0, time.UTC)
+	endsAt := startsAt.Add(3 * time.Hour)
+	stateTick := sdk.MonitorStateTick{
+		Id:         uuid.MustParse("20000000-0000-4000-8000-000000000099"),
+		MonitorId:  monitorID,
+		Lifecycle:  sdk.Active,
+		Health:     sdk.Degraded,
+		ReasonCode: sdk.StateTickReasonCodeProbeFailure,
+		Actor:      sdk.StateTickActor{Kind: sdk.StateTickActorKindAgent},
+		OccurredAt: startsAt.Add(time.Minute),
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/monitors/"+monitorID.String()+"/state-ticks" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		assertBearer(t, r)
+		if got, want := r.URL.Query().Get("startsAt"), startsAt.Format(time.RFC3339); got != want {
+			t.Errorf("startsAt = %q, want %q", got, want)
+		}
+		if got, want := r.URL.Query().Get("endsAt"), endsAt.Format(time.RFC3339); got != want {
+			t.Errorf("endsAt = %q, want %q", got, want)
+		}
+		if got, want := r.URL.Query().Get("limit"), "10000"; got != want {
+			t.Errorf("limit = %q, want %q", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sdk.MonitorStateHistory{
+			MonitorId:   monitorID,
+			StartsAt:    startsAt,
+			EndsAt:      endsAt,
+			GeneratedAt: endsAt,
+			Ticks:       []sdk.MonitorStateTick{stateTick},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewSDKClient(server.URL, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := client.GetMonitorStateHistory(t.Context(), "bearer-token", monitorID, startsAt, endsAt, 10000)
+	if err != nil {
+		t.Fatalf("get monitor state history: %v", err)
+	}
+	if history.MonitorId != monitorID || len(history.Ticks) != 1 || history.Ticks[0].ReasonCode != sdk.StateTickReasonCodeProbeFailure {
+		t.Fatalf("history = %#v", history)
+	}
+}
+
+func TestBoundStateHistoryKeepsHalfOpenWindowAndNewestRecords(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000099")
+	otherMonitorID := uuid.MustParse("10000000-0000-4000-8000-000000000098")
+	startsAt := time.Date(2026, time.August, 15, 9, 0, 0, 0, time.UTC)
+	endsAt := startsAt.Add(3 * time.Hour)
+	tick := func(id uuid.UUID, monitorID uuid.UUID, occurredAt time.Time) sdk.MonitorStateTick {
+		return sdk.MonitorStateTick{Id: id, MonitorId: monitorID, Lifecycle: sdk.Active, Health: sdk.Up, OccurredAt: occurredAt}
+	}
+	history := sdk.MonitorStateHistory{
+		MonitorId: monitorID,
+		StartsAt:  startsAt.Add(-time.Hour),
+		EndsAt:    endsAt.Add(time.Hour),
+		Ticks: []sdk.MonitorStateTick{
+			tick(uuid.MustParse("20000000-0000-0000-0000-000000000004"), monitorID, startsAt.Add(2*time.Hour)),
+			tick(uuid.MustParse("20000000-0000-0000-0000-000000000001"), monitorID, startsAt.Add(-time.Minute)),
+			tick(uuid.MustParse("20000000-0000-0000-0000-000000000003"), monitorID, endsAt),
+			tick(uuid.MustParse("20000000-0000-0000-0000-000000000002"), monitorID, startsAt.Add(time.Hour)),
+			tick(uuid.MustParse("20000000-0000-0000-0000-000000000006"), monitorID, startsAt.Add(30*time.Minute)),
+			tick(uuid.MustParse("20000000-0000-0000-0000-000000000005"), otherMonitorID, startsAt.Add(90*time.Minute)),
+		},
+	}
+	bounded := BoundStateHistory(history, monitorID, startsAt, endsAt, 2)
+	if !bounded.StartsAt.Equal(startsAt) || !bounded.EndsAt.Equal(endsAt) {
+		t.Fatalf("window = %s..%s, want %s..%s", bounded.StartsAt, bounded.EndsAt, startsAt, endsAt)
+	}
+	if !bounded.Truncated || len(bounded.Ticks) != 2 {
+		t.Fatalf("truncated=%v ticks=%d, want true/2", bounded.Truncated, len(bounded.Ticks))
+	}
+	if got, want := bounded.Ticks[0].Id.String(), "20000000-0000-0000-0000-000000000002"; got != want {
+		t.Fatalf("first tick = %s, want %s", got, want)
+	}
+	if got, want := bounded.Ticks[1].Id.String(), "20000000-0000-0000-0000-000000000004"; got != want {
+		t.Fatalf("last tick = %s, want %s", got, want)
+	}
+}
+
+func TestSDKClientMapsStateHistoryUnauthorizedToSessionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"type":"about:blank","title":"denied","status":401,"code":"unauthorized","detail":"secret diagnostic"}`))
+	}))
+	defer server.Close()
+	client, err := NewSDKClient(server.URL, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.GetMonitorStateHistory(t.Context(), "expired-token", uuid.New(), time.Now().Add(-time.Hour), time.Now(), 100)
+	if !errors.Is(err, ErrUnauthorized) || strings.Contains(err.Error(), "secret diagnostic") {
+		t.Fatalf("state history error = %v", err)
+	}
+}
+
 func TestSDKClientMapsSessionUnauthorizedWithoutRetainingBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/problem+json")

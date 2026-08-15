@@ -123,6 +123,111 @@ func TestMonitorAvailabilityEventsStreamsCompleteChartSnapshot(t *testing.T) {
 	cancel()
 }
 
+func TestMonitorAvailabilityEventsStreamsStateTickProvenanceSnapshot(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000098")
+	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+	client.StateHistory[monitorID] = sdk.MonitorStateHistory{
+		MonitorId: monitorID,
+		Ticks: []sdk.MonitorStateTick{{
+			Id:         uuid.MustParse("20000000-0000-0000-0000-000000000098"),
+			MonitorId:  monitorID,
+			Lifecycle:  sdk.Active,
+			Health:     sdk.Degraded,
+			ReasonCode: sdk.StateTickReasonCodeDependencyUnknown,
+			Actor:      sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem},
+			OccurredAt: time.Now().UTC().Add(-time.Minute),
+		}},
+	}
+	handler, _ := newTestHandlerWithModes(t, client, time.Second, []AuthMode{AuthModeNone})
+	testServer := httptest.NewServer(handler)
+	defer testServer.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := testServer.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	reader := bufio.NewReader(response.Body)
+	if event, err := readSSEEvent(reader); err != nil || event.Name != "chart" {
+		t.Fatalf("first SSE event = %#v, err=%v", event, err)
+	}
+	event, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("state SSE event: %v", err)
+	}
+	if event.Name != "state-ticks" {
+		t.Fatalf("second SSE event = %#v, want state-ticks", event)
+	}
+	var history sdk.MonitorStateHistory
+	if err := json.Unmarshal([]byte(event.Data), &history); err != nil {
+		t.Fatalf("decode state history event: %v", err)
+	}
+	if len(history.Ticks) != 1 || history.Ticks[0].ReasonCode != sdk.StateTickReasonCodeDependencyUnknown {
+		t.Fatalf("state history event = %#v", history)
+	}
+}
+
+func TestMonitorAvailabilityEventsSignalsStateHistoryAuthFailureWithoutCredential(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000097")
+	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+	client.StateHistoryErrors[monitorID] = controlplane.ErrUnauthorized
+	handler, _ := newTestHandlerWithModes(t, client, time.Second, []AuthMode{AuthModeNone})
+	testServer := httptest.NewServer(handler)
+	defer testServer.Close()
+
+	request := httptest.NewRequest(http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events", nil)
+	response, err := testServer.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	reader := bufio.NewReader(response.Body)
+	if event, err := readSSEEvent(reader); err != nil || event.Name != "chart" {
+		t.Fatalf("first SSE event = %#v, err=%v", event, err)
+	}
+	event, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("auth SSE event: %v", err)
+	}
+	if event.Name != "auth-error" || event.Data != `{"status":401,"code":"unauthorized"}` {
+		t.Fatalf("auth SSE event = %#v", event)
+	}
+	if strings.Contains(event.Data, DevelopmentNoneCredential) {
+		t.Fatal("auth SSE event exposed server-side credential")
+	}
+}
+
+type sseEvent struct {
+	Name string
+	Data string
+}
+
+func readSSEEvent(reader *bufio.Reader) (sseEvent, error) {
+	var event sseEvent
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return event, err
+		}
+		line = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
+		if line == "" {
+			return event, nil
+		}
+		switch {
+		case strings.HasPrefix(line, "event: "):
+			event.Name = strings.TrimPrefix(line, "event: ")
+		case strings.HasPrefix(line, "data: "):
+			event.Data = strings.TrimPrefix(line, "data: ")
+		}
+	}
+}
+
 var csrfValuePattern = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
 func TestHandlerMountsEveryGoshtosoAndSeasonalRuntimeAssetDirectly(t *testing.T) {
@@ -895,4 +1000,8 @@ func (blockingClient) GetMonitorHealth(ctx context.Context, _ string, _ openapi_
 func (blockingClient) GetMonitorAvailabilityHistory(ctx context.Context, _ string, _ openapi_types.UUID, _ time.Time, _ time.Time, _ int32) (sdk.MonitorAvailabilityHistory, error) {
 	<-ctx.Done()
 	return sdk.MonitorAvailabilityHistory{}, ctx.Err()
+}
+func (blockingClient) GetMonitorStateHistory(ctx context.Context, _ string, _ openapi_types.UUID, _ time.Time, _ time.Time, _ int32) (sdk.MonitorStateHistory, error) {
+	<-ctx.Done()
+	return sdk.MonitorStateHistory{}, ctx.Err()
 }
