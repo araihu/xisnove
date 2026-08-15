@@ -150,8 +150,8 @@ templ AppStyles() {
 		.xis-availability-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 		.xis-availability-heading h3 { margin: 0; }
 		.xis-availability-heading p { margin: .25rem 0 0; }
-		.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted); }
-		.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted); }
+		.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted) !important; }
+		.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted) !important; }
 		.xis-password { width: 100%; }
 		.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }

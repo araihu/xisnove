@@ -77,8 +77,8 @@ func TestAvailabilityChartUsesNeutralUnknownSeries(t *testing.T) {
 	}
 	body := rendered.String()
 	for _, want := range []string{
-		`.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted); }`,
-		`.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted); }`,
+		`.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted) !important; }`,
+		`.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted) !important; }`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("availability chart style missing %q", want)
