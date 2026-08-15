@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/araihu/goshtoso v0.1.14
+	github.com/araihu/goshtoso-app-shells v0.1.4
 	github.com/araihu/xisnove v0.0.0-20260815003007-4a5bbf6e2100
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f

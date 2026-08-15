@@ -19,6 +19,15 @@ immutable guidance checkpoint `5d2e74e4c693ffb17a7443b8b77ed195f815cd05`,
 and is now verified against the tagged v0.1.14 API and updated global consumer
 skill.
 
+The authenticated monitor console additionally consumes the released
+`github.com/araihu/goshtoso-app-shells v0.1.4` `consoleshell` module. Its
+same-origin shell assets are mounted at `/consoleshell/assets/`; the shell owns
+the frame, responsive navigation, and HTMX lifecycle while Xisnove owns the
+monitor content, remote search, appearance controls, and session actions.
+Authenticated fragments are rendered through `consoleshell.Fragment`; the
+single current monitor destination does not request a navigation OOB update,
+avoiding a sidebar swap when a full-page public route is active.
+
 ## Component inventory
 
 The foundation uses the public APIs for `head.Dependencies`,

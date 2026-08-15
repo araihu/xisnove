@@ -63,7 +63,7 @@ var csrfValuePattern = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
 func TestHandlerMountsEveryGoshtosoRuntimeAssetDirectly(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	for _, path := range []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL} {
+	for _, path := range []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", "/consoleshell/assets/shell.css", "/consoleshell/assets/shell.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL} {
 		request := httptest.NewRequest(http.MethodGet, "https://ui.example.test"+path, nil)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
@@ -230,10 +230,20 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 		t.Fatalf("dashboard status = %d", dashboardRecorder.Code)
 	}
 	dashboard := dashboardRecorder.Body.String()
-	for _, want := range []string{"<nav", `id="main-content"`, `action="/logout"`, `name="_csrf"`, "No monitors yet"} {
+	for _, want := range []string{"<nav", `class="console-shell-root"`, `id="main-content"`, `action="/logout"`, `name="_csrf"`, `href="/status"`, `/consoleshell/assets/shell.css`, "No monitors yet"} {
 		if !strings.Contains(dashboard, want) {
 			t.Errorf("dashboard missing %q", want)
 		}
+	}
+	appearanceNonce := regexp.MustCompile(`<script nonce="([^"]+)">\(function\(o\)`).FindStringSubmatch(dashboard)
+	if len(appearanceNonce) != 2 {
+		t.Fatalf("console shell appearance bootstrap is missing a request nonce: %s", dashboard)
+	}
+	if shellNonce := regexp.MustCompile(`<script defer nonce="([^"]+)" src="/consoleshell/assets/shell\.js`).FindStringSubmatch(dashboard); len(shellNonce) != 2 || shellNonce[1] != appearanceNonce[1] {
+		t.Fatalf("console shell runtime does not share the request nonce: %s", dashboard)
+	}
+	if csp := dashboardRecorder.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "'nonce-"+appearanceNonce[1]+"'") {
+		t.Fatalf("console shell appearance nonce is not authorized by CSP: %q", csp)
 	}
 	if strings.Contains(dashboard, testCredential) || strings.Contains(dashboard, sessionCookie.Value) {
 		t.Fatal("dashboard exposed the control-plane session credential")

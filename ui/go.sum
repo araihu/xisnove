@@ -11,6 +11,8 @@ github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7D
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/araihu/goshtoso v0.1.14 h1:u2xAwbnBqr4SVl1maz7jD372omPBd+3ux8/S0SbUmOk=
 github.com/araihu/goshtoso v0.1.14/go.mod h1:II6TL6BzW9OS2ux/7CkhcYEJcLdH97Kwkwe2qUOugNo=
+github.com/araihu/goshtoso-app-shells v0.1.4 h1:cTAxtm6oLsry8AAqFTgikWOuPrjA937mOqntIAjWjVk=
+github.com/araihu/goshtoso-app-shells v0.1.4/go.mod h1:P7CRRVDOMMbGs+clvddEmH+x2Jd35uk991WbU86nw84=
 github.com/araihu/xisnove v0.0.0-20260815003007-4a5bbf6e2100 h1:uvf5zYxaZsf/TvqRV7/E9yyfJ8hGH7Rd0WkK/9HzSW4=
 github.com/araihu/xisnove v0.0.0-20260815003007-4a5bbf6e2100/go.mod h1:7UzmdKrItZtm/8rGuJlu5s8BrxTaH8Whc2qBb/3kaLo=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
@@ -29,6 +31,7 @@ github.com/cli/browser v1.3.0/go.mod h1:HH8s+fOAxjhQoBUAsKuPCbqUuxZDhQ2/aD+SzsEf
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/dlclark/regexp2 v1.12.0 h1:0j4c5qQmnC6XOWNjP3PIXURXN2gWx76rd3KvgdPkCz8=
 github.com/dlclark/regexp2/v2 v2.2.1 h1:mf4KkFUj0gJuarK8P+LgiS+Lit7m9N1yAwEfPbee7R0=
 github.com/dlclark/regexp2/v2 v2.2.1/go.mod h1:avUrQvPaLz2DrFNHJF0taWAFFX2C1GMSSoeiqFjcBmU=
 github.com/fatih/color v1.16.0 h1:zmkK9Ngbjj+K0yRhTVONQh1p/HknKYSlNT+vZCzyokM=

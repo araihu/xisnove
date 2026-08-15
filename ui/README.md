@@ -12,6 +12,12 @@ served by `assets.Handler()`; it deliberately does not use local-only runtime
 mode because Xisnove is a networked BFF. See
 [`../docs/ui/goshtoso-snags.md`](../docs/ui/goshtoso-snags.md).
 
+Authenticated monitor pages use `github.com/araihu/goshtoso-app-shells`
+`v0.1.4` and its `consoleshell` layout. Shell assets are mounted at
+`/consoleshell/assets/`; full pages use `consoleshell.Layout`, HTMX responses use
+`consoleshell.Fragment`, and Xisnove supplies the monitor content, search,
+appearance controls, and session actions through the shell slots.
+
 The default theme is the organization-owned Arai Hû theme, pinned from
 `araihu/assets` commit `f841fe90b967b16ab2ad9efaee5aa636468e1afd` and served
 same-origin as `/ui/araihu-f841fe90.css` after Goshtoso's stylesheet. The

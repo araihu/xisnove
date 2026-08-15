@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/araihu/goshtoso/components/alert"
-	"github.com/araihu/goshtoso/components/appshell"
 	"github.com/araihu/goshtoso/components/badge"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/card"
@@ -17,7 +16,6 @@ import (
 	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/navbar"
 	"github.com/araihu/goshtoso/components/pageheader"
-	"github.com/araihu/goshtoso/components/sidebar"
 	"github.com/araihu/goshtoso/components/skeleton"
 	"github.com/araihu/goshtoso/components/table"
 	"github.com/araihu/goshtoso/components/textinput"
@@ -60,111 +58,146 @@ templ Document(title string, content templ.Component) {
 			<link rel="icon" type="image/svg+xml" href="/ui/xisnove-ab01f1a.svg"/>
 			@head.Dependencies()
 			<link rel="stylesheet" href="/ui/araihu-f841fe90.css"/>
-			<script src="/ui/app.js" defer nonce={ templ.GetNonce(ctx) }></script>
-			<style>
-				:root { --xis-gap: 1rem; --xis-action-bg: var(--color-primary); --xis-action-fg: var(--color-on-primary); --xis-link: var(--color-primary); --xis-control-outline: var(--color-outline-strong, var(--color-outline)); }
-				.dark { --xis-action-bg: var(--color-primary-dark); --xis-action-fg: var(--color-on-primary-dark); --xis-link: var(--color-primary-dark); --xis-control-outline: var(--color-outline-dark-strong); }
-				body { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }
-				.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }
-				.xis-brand { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; color: var(--color-on-surface-strong); }
-				.dark .xis-brand { color: var(--color-on-surface-dark-strong); }
-				.xis-brand-logo { display: block; width: 7.5rem; height: 2rem; }
-				.xis-brand-mark, .xis-brand-mark-reverse { display: none; width: 2.25rem; height: 2.25rem; }
-				.dark .xis-brand-logo, .dark .xis-brand-mark { display: none; }
-				.dark .xis-brand-mark-reverse { display: block; }
-				.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; }
-				.xis-stack { display: grid; gap: var(--xis-gap); }
-				.xis-theme-controls { display: flex; align-items: end; gap: .5rem; min-width: 0; }
-				.xis-field { display: grid; gap: .25rem; font-size: .875rem; }
-				.xis-monitor-search-field { min-width: 19rem; }
-				.xis-select, .xis-input { min-height: 3rem; min-width: 0; max-width: 100%; border: 1px solid var(--xis-control-outline); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }
-				.xis-login-form input:not([type="hidden"]) { min-height: 3rem; }
-				.dark .xis-select, .dark .xis-input { background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }
-				.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
-				a[href]:focus-visible { outline: 3px solid currentColor !important; outline-offset: 2px !important; }
-				button:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; }
-				.dark button:focus-visible { outline-color: var(--color-primary-dark) !important; }
-				.xis-native-link, .xis-action-link { color: var(--xis-link); display: inline-flex; align-items: center; min-width: 2.75rem; min-height: 2.75rem; }
-				.xis-action-link { justify-content: center; }
-				.xis-visual-test *, .xis-visual-test *::before, .xis-visual-test *::after { transition: none; animation: none; }
-				.xis-public-nav a:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; box-shadow: 0 0 0 3px var(--color-surface); }
-				.dark .xis-public-nav a:focus-visible { outline-color: var(--color-primary-dark); box-shadow: 0 0 0 3px var(--color-surface-dark); }
-				.xis-primary-action { background: var(--xis-action-bg); border-color: var(--xis-action-bg); color: var(--xis-action-fg); }
-				button.xis-primary-action:focus, button.xis-primary-action:focus-visible, a.xis-primary-action:focus, a.xis-primary-action:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; box-shadow: 0 0 0 3px var(--color-primary) !important; }
-				.dark button.xis-primary-action:focus, .dark button.xis-primary-action:focus-visible, .dark a.xis-primary-action:focus, .dark a.xis-primary-action:focus-visible { outline-color: var(--color-primary-dark) !important; box-shadow: 0 0 0 3px var(--color-primary-dark) !important; }
-				.xis-primary-action, .xis-mobile-nav button[aria-controls] { min-width: 2.75rem; min-height: 2.75rem; }
-				button { min-width: 2.75rem; min-height: 2.75rem; }
-				.xis-recovery-action { border: 1px solid var(--xis-action-bg); border-radius: .5rem; padding: .5rem .75rem; font: inherit; cursor: pointer; }
-				.xis-results { display: grid; gap: 1rem; min-width: 0; min-height: 16rem; }
-				.xis-results-surface { width: 100%; min-width: 0; min-height: 16rem; }
-				.xis-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
-				.xis-table-scroll table { min-width: 48rem; }
-				.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }
-				.dark .xis-meta { color: var(--color-on-surface-dark-muted); }
-				.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }
-				.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
-				.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-				.xis-status-results { align-content: start; align-items: start; min-height: 0; }
-				.xis-monitor-drawer-panel { top: var(--xis-shell-header-bottom, 4rem) !important; }
-				.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
-				.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
-				.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
-				.xis-detail-identity { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-				.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }
-				.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
-				.xis-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }
-				.xis-detail-facts dt { color: var(--color-on-surface-muted); }
-				.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }
-				.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
-				.xis-password { width: 100%; }
-				.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
-				.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
-				#monitor-loading.htmx-request ~ .xis-results, #status-loading.htmx-request ~ .xis-status-results { display: none; }
-				.xis-state-info { color: var(--color-info-text); }
-				.xis-state-warning { color: var(--color-warning-text); }
-				.xis-state-success { color: var(--color-success-text); }
-				.xis-state-danger { color: var(--color-danger-text); }
-				.xis-state-info *, .xis-state-warning *, .xis-state-success *, .xis-state-danger * { color: inherit; }
-				.dark .xis-state-info { color: var(--color-info-text-dark); }
-				.dark .xis-state-warning { color: var(--color-warning-text-dark); }
-				.dark .xis-state-success { color: var(--color-success-text-dark); }
-				.dark .xis-state-danger { color: var(--color-danger-text-dark); }
-				.xis-mobile-nav { display: none; }
-				.xis-mobile-nav-backdrop { position: fixed; top: var(--xis-shell-header-bottom, 4rem); right: 0; bottom: 0; left: 0; }
-				#mobile-monitoring-panel { position: fixed; top: var(--xis-shell-header-bottom, 4rem); bottom: 0; left: 0; max-height: calc(100vh - var(--xis-shell-header-bottom, 4rem)); }
-				tr[aria-selected="true"] { background: var(--color-surface-alt); box-shadow: inset .25rem 0 0 var(--color-primary); }
-				.dark tr[aria-selected="true"] { background: var(--color-surface-dark-alt); box-shadow: inset .25rem 0 0 var(--color-primary-dark); }
-				.xis-topbar { min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-bottom: 1px solid var(--color-outline); background: var(--color-surface); }
-				.dark .xis-topbar { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark); }
-				.xis-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
-				.xis-global-search-trigger { flex: 0 1 28rem; min-width: 12rem; margin-left: clamp(.25rem, 3vw, 3rem); }
-				.xis-global-search-trigger > div { width: 100%; }
-				.xis-global-search-trigger button { width: 100%; display: flex; align-items: center; gap: .5rem; border: 2px solid var(--xis-control-outline); }
-				.xis-global-search-trigger kbd { margin-left: auto; }
-				.xis-global-search-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: min(38rem, calc(100vh - 5rem)); margin: 4.5rem auto auto; padding: 0; border: 0; border-radius: .75rem; color: var(--color-on-surface); background: var(--color-surface); box-shadow: 0 .75rem 2.5rem rgba(0, 0, 0, .28); overflow: hidden; }
-				.xis-global-search-dialog::backdrop { background: rgba(2, 6, 23, .62); }
-				.dark .xis-global-search-dialog { color: var(--color-on-surface-dark); background: var(--color-surface-dark-alt); }
-				.xis-global-search-panel { display: grid; min-height: 18rem; grid-template-rows: auto minmax(0, 1fr) auto; }
-				.xis-global-search-input-row { display: flex; align-items: center; gap: .75rem; padding: .875rem 1rem; border-bottom: 1px solid var(--color-outline); }
-				.dark .xis-global-search-input-row { border-color: var(--color-outline-dark-strong); }
-				.xis-global-search-input { flex: 1; min-width: 0; min-height: 2.75rem; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.05rem; }
-				.xis-global-search-input:focus { outline: 0; }
-				.xis-global-search-results { overflow-y: auto; padding: .5rem; }
-				.xis-global-search-result { display: grid; gap: .2rem; padding: .75rem; border-radius: .5rem; color: inherit; text-decoration: none; }
-				.xis-global-search-result:hover, .xis-global-search-result[aria-selected="true"] { background: var(--color-surface-alt); }
-				.dark .xis-global-search-result:hover, .dark .xis-global-search-result[aria-selected="true"] { background: var(--color-surface-dark); }
-				.xis-global-search-result-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-				.xis-global-search-state { display: grid; place-content: center; min-height: 12rem; padding: 1.5rem; text-align: center; color: var(--color-on-surface-muted); }
-				.dark .xis-global-search-state { color: var(--color-on-surface-dark-muted); }
-				.xis-global-search-footer { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 1rem; border-top: 1px solid var(--color-outline); font-size: .75rem; color: var(--color-on-surface-muted); }
-				.dark .xis-global-search-footer { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); }
-				@media (max-width: 640px) { .xis-content { padding: 1.25rem .75rem 3rem; } .xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; } .xis-topbar { min-height: 4rem; gap: .35rem; padding: .35rem .5rem; } .xis-brand-logo { display: none; } .xis-brand-mark { display: block; } .dark .xis-brand-mark { display: none; } .xis-global-search-trigger { flex: 1 1 auto; min-width: 2.75rem; margin-left: 0; } .xis-global-search-trigger span { display: none; } .xis-global-search-trigger kbd { display: none; } .xis-topbar-actions { gap: .25rem; min-width: 0; } .xis-topbar .xis-theme-controls { width: auto; align-items: end; flex-direction: row; gap: .2rem; } .xis-topbar .xis-field { font-size: .6875rem; } .xis-topbar .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; } .xis-topbar #theme-choice { width: 5.75rem; } .xis-topbar #mode-choice { width: 4.75rem; } .xis-topbar form button { padding-inline: .45rem; font-size: .75rem; } .xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; } .xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; } .xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; } .xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; } .dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); } .xis-mobile-nav { display: block; } }
-			</style>
+			@ApplicationScript()
+			@AppStyles()
 		</head>
 		<body>
 			@content
 		</body>
 	</html>
+}
+
+templ ApplicationScript() {
+	<script src="/ui/app.js" defer nonce={ templ.GetNonce(ctx) }></script>
+}
+
+templ AppStyles() {
+	<style>
+		:root { --xis-gap: 1rem; --xis-action-bg: var(--color-primary); --xis-action-fg: var(--color-on-primary); --xis-link: var(--color-primary); --xis-control-outline: var(--color-outline-strong, var(--color-outline)); }
+		.dark { --xis-action-bg: var(--color-primary-dark); --xis-action-fg: var(--color-on-primary-dark); --xis-link: var(--color-primary-dark); --xis-control-outline: var(--color-outline-dark-strong); }
+		body { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }
+		html.console-shell-root { overflow-x: hidden; }
+		body.console-shell { overflow-x: hidden; }
+		main.console-shell__main { overflow-x: hidden; }
+		.console-shell__content { overflow-x: clip; }
+		.console-shell-root.js .console-shell__sidebar:not(.is-open) { visibility: hidden; pointer-events: none; }
+		.console-shell-root.js .console-shell__sidebar.is-open { visibility: visible; pointer-events: auto; }
+		html.dark .console-shell__sidebar [data-consoleshell-nav-id][aria-current="page"] { color: var(--color-primary-dark); }
+		@media (min-width: 720px) { .console-shell-root.js .console-shell__sidebar { visibility: visible; pointer-events: auto; } }
+		.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }
+		.xis-brand { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; color: var(--color-on-surface-strong); }
+		.dark .xis-brand { color: var(--color-on-surface-dark-strong); }
+		.xis-brand-logo { display: block; width: 7.5rem; height: 2rem; }
+		.xis-brand-mark, .xis-brand-mark-reverse { display: none; width: 2.25rem; height: 2.25rem; }
+		.dark .xis-brand-logo, .dark .xis-brand-mark { display: none; }
+		.dark .xis-brand-mark-reverse { display: block; }
+		.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; overflow-x: clip; }
+		.xis-stack { display: grid; gap: var(--xis-gap); }
+		.xis-theme-controls { display: flex; align-items: end; gap: .5rem; min-width: 0; }
+		.xis-field { display: grid; gap: .25rem; font-size: .875rem; }
+		.xis-monitor-search-field { min-width: 19rem; }
+		.xis-select, .xis-input { min-height: 3rem; min-width: 0; max-width: 100%; border: 1px solid var(--xis-control-outline); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }
+		.xis-login-form input:not([type="hidden"]) { min-height: 3rem; }
+		.dark .xis-select, .dark .xis-input { background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }
+		.xis-select:focus-visible, .xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+		a[href]:focus-visible { outline: 3px solid currentColor !important; outline-offset: 2px !important; }
+		button:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; }
+		.dark button:focus-visible { outline-color: var(--color-primary-dark) !important; }
+		.xis-native-link, .xis-action-link { color: var(--xis-link); display: inline-flex; align-items: center; min-width: 2.75rem; min-height: 2.75rem; }
+		.xis-action-link { justify-content: center; }
+		.xis-visual-test *, .xis-visual-test *::before, .xis-visual-test *::after { transition: none; animation: none; }
+		.xis-public-nav a:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; box-shadow: 0 0 0 3px var(--color-surface); }
+		.dark .xis-public-nav a:focus-visible { outline-color: var(--color-primary-dark); box-shadow: 0 0 0 3px var(--color-surface-dark); }
+		.xis-primary-action { background: var(--xis-action-bg); border-color: var(--xis-action-bg); color: var(--xis-action-fg); }
+		button.xis-primary-action:focus, button.xis-primary-action:focus-visible, a.xis-primary-action:focus, a.xis-primary-action:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; box-shadow: 0 0 0 3px var(--color-primary) !important; }
+		.dark button.xis-primary-action:focus, .dark button.xis-primary-action:focus-visible, .dark a.xis-primary-action:focus, .dark a.xis-primary-action:focus-visible { outline-color: var(--color-primary-dark) !important; box-shadow: 0 0 0 3px var(--color-primary-dark) !important; }
+		.xis-primary-action { min-width: 2.75rem; min-height: 2.75rem; }
+		button { min-width: 2.75rem; min-height: 2.75rem; }
+		.xis-recovery-action { border: 1px solid var(--xis-action-bg); border-radius: .5rem; padding: .5rem .75rem; font: inherit; cursor: pointer; }
+		.xis-results { display: grid; gap: 1rem; min-width: 0; max-width: 100%; min-height: 16rem; }
+		.xis-results-surface { width: 100%; min-width: 0; min-height: 16rem; }
+		.xis-results.xis-results-surface { width: min(100%, calc(100vw - 4.5rem)); max-width: 100%; }
+		.xis-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; contain: paint; }
+		.xis-table-scroll table { min-width: 48rem; }
+		.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }
+		.dark .xis-meta { color: var(--color-on-surface-dark-muted); }
+		.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }
+		.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
+		.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+		.xis-status-results { align-content: start; align-items: start; min-height: 0; }
+		.xis-monitor-drawer-panel { top: 4rem !important; }
+		.xis-monitor-drawer > div > div:first-child { z-index: 55 !important; }
+		.xis-monitor-drawer-panel { z-index: 60 !important; }
+		.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
+		.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
+		.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
+		.xis-detail-identity { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+		.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }
+		.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
+		.xis-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }
+		.xis-detail-facts dt { color: var(--color-on-surface-muted); }
+		.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }
+		.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
+		.xis-password { width: 100%; }
+		.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
+		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
+		#monitor-loading.htmx-request ~ .xis-results, #status-loading.htmx-request ~ .xis-status-results { display: none; }
+		.xis-state-info { color: var(--color-info-text); }
+		.xis-state-warning { color: var(--color-warning-text); }
+		.xis-state-success { color: var(--color-success-text); }
+		.xis-state-danger { color: var(--color-danger-text); }
+		.xis-state-info *, .xis-state-warning *, .xis-state-success *, .xis-state-danger * { color: inherit; }
+		.dark .xis-state-info { color: var(--color-info-text-dark); }
+		.dark .xis-state-warning { color: var(--color-warning-text-dark); }
+		.dark .xis-state-success { color: var(--color-success-text-dark); }
+		.dark .xis-state-danger { color: var(--color-danger-text-dark); }
+		tr[aria-selected="true"] { background: var(--color-surface-alt); box-shadow: inset .25rem 0 0 var(--color-primary); }
+		.dark tr[aria-selected="true"] { background: var(--color-surface-dark-alt); box-shadow: inset .25rem 0 0 var(--color-primary-dark); }
+		.console-shell__actions { gap: .75rem; }
+		.console-shell__actions .xis-global-search-trigger { margin-left: 0; }
+		.console-shell__actions .xis-theme-controls { align-items: end; }
+		.xis-global-search-trigger { flex: 0 1 28rem; min-width: 12rem; margin-left: clamp(.25rem, 3vw, 3rem); }
+		.xis-global-search-trigger > div { width: 100%; }
+		.xis-global-search-trigger button { width: 100%; display: flex; align-items: center; gap: .5rem; border: 2px solid var(--xis-control-outline); }
+		.xis-global-search-trigger kbd { margin-left: auto; }
+		.xis-global-search-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: min(38rem, calc(100vh - 5rem)); margin: 4.5rem auto auto; padding: 0; border: 0; border-radius: .75rem; color: var(--color-on-surface); background: var(--color-surface); box-shadow: 0 .75rem 2.5rem rgba(0, 0, 0, .28); overflow: hidden; }
+		.xis-global-search-dialog::backdrop { background: rgba(2, 6, 23, .62); }
+		.dark .xis-global-search-dialog { color: var(--color-on-surface-dark); background: var(--color-surface-dark-alt); }
+		.xis-global-search-panel { display: grid; min-height: 18rem; grid-template-rows: auto minmax(0, 1fr) auto; }
+		.xis-global-search-input-row { display: flex; align-items: center; gap: .75rem; padding: .875rem 1rem; border-bottom: 1px solid var(--color-outline); }
+		.dark .xis-global-search-input-row { border-color: var(--color-outline-dark-strong); }
+		.xis-global-search-input { flex: 1; min-width: 0; min-height: 2.75rem; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.05rem; }
+		.xis-global-search-input:focus { outline: 0; }
+		.xis-global-search-results { overflow-y: auto; padding: .5rem; }
+		.xis-global-search-result { display: grid; gap: .2rem; padding: .75rem; border-radius: .5rem; color: inherit; text-decoration: none; }
+		.xis-global-search-result:hover, .xis-global-search-result[aria-selected="true"] { background: var(--color-surface-alt); }
+		.dark .xis-global-search-result:hover, .dark .xis-global-search-result[aria-selected="true"] { background: var(--color-surface-dark); }
+		.xis-global-search-result-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+		.xis-global-search-state { display: grid; place-content: center; min-height: 12rem; padding: 1.5rem; text-align: center; color: var(--color-on-surface-muted); }
+		.dark .xis-global-search-state { color: var(--color-on-surface-dark-muted); }
+		.xis-global-search-footer { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 1rem; border-top: 1px solid var(--color-outline); font-size: .75rem; color: var(--color-on-surface-muted); }
+		.dark .xis-global-search-footer { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); }
+		@media (max-width: 719px) {
+			.xis-content { padding: 1.25rem .75rem 3rem; }
+			.console-shell__actions { gap: .25rem; min-width: 0; }
+			.console-shell__actions .xis-theme-controls { align-items: end; flex-direction: row; gap: .2rem; }
+			.console-shell__actions .xis-field { font-size: .6875rem; }
+			.console-shell__actions .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; }
+			.console-shell__actions #theme-choice { width: 4.25rem; }
+			.console-shell__actions #mode-choice { width: 3.25rem; }
+			.console-shell__actions form button { padding-inline: .45rem; font-size: .75rem; }
+			form.xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; }
+			form.xis-theme-controls .xis-monitor-search-field { min-width: 0; }
+			.xis-content [role="toolbar"] > .ml-auto { width: 100%; margin-left: 0; justify-content: flex-start; }
+			.xis-global-search-trigger { flex: 1 1 auto; min-width: 2.75rem; margin-left: 0; }
+			.xis-global-search-trigger span, .xis-global-search-trigger kbd { display: none; }
+			.xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; }
+			.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; }
+			.xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; }
+			.xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; }
+			.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
+		}
+	</style>
 }
 
 templ Brand() {
@@ -177,16 +210,16 @@ templ Brand() {
 }
 
 templ ThemeControls() {
-	<div class="xis-theme-controls" aria-label="Appearance controls">
+	<div class="xis-theme-controls" aria-label="Appearance controls" x-data="{ theme: localStorage.getItem('goshtoso-theme') || localStorage.getItem('xisnove-theme') || document.documentElement.dataset.theme || 'araihu', dark: localStorage.getItem('goshtoso-dark') === 'true' || (localStorage.getItem('goshtoso-dark') === null && localStorage.getItem('xisnove-mode') === 'dark') }" x-init="document.documentElement.dataset.theme = theme; document.documentElement.classList.toggle('dark', dark)">
 		<label class="xis-field" for="theme-choice">Theme
-			<select id="theme-choice" class="xis-select" x-model="theme" x-on:change="$root.dataset.theme = theme; localStorage.setItem('xisnove-theme', theme)">
+			<select id="theme-choice" class="xis-select" x-model="theme" x-on:change="document.documentElement.dataset.theme = theme; localStorage.setItem('goshtoso-theme', theme); localStorage.setItem('xisnove-theme', theme)">
 				<option value="araihu">Arai Hû</option>
 				<option value="goshtoso">Goshtoso</option>
 				<option value="minimal">Minimal</option>
 			</select>
 		</label>
 		<label class="xis-field" for="mode-choice">Mode
-			<select id="mode-choice" class="xis-select" x-bind:value="dark ? 'dark' : 'light'" x-on:change="dark = $event.target.value === 'dark'; $root.classList.toggle('dark', dark); localStorage.setItem('xisnove-mode', dark ? 'dark' : 'light')">
+			<select id="mode-choice" class="xis-select" x-bind:value="dark ? 'dark' : 'light'" x-on:change="dark = $event.target.value === 'dark'; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('goshtoso-dark', String(dark)); localStorage.setItem('xisnove-mode', dark ? 'dark' : 'light')">
 				<option value="light">Light</option>
 				<option value="dark">Dark</option>
 			</select>
@@ -227,34 +260,16 @@ templ LogoutForm(csrfToken string) {
 	</form>
 }
 
-templ ShellPage(title, csrfToken string, content templ.Component) { @Document(title, Shell(csrfToken, content)) }
+templ ShellPage(title, csrfToken string, content templ.Component) { @ConsolePage(title, csrfToken, content) }
 
-templ Shell(csrfToken string, content templ.Component) {
-	@appshell.AppShell(appshell.Config{
-		Header: TopBar(csrfToken),
-		Sidebar: sidebar.Sidebar(sidebar.Config{
-			DisableSkipLink: true,
-			SectionsTitle: "Monitoring",
-			Sections: []sidebar.Section{{Items: []sidebar.Item{
-				{ID: "nav-monitors", Label: "Monitors", Href: "/monitors", Active: true, LinkAttrs: templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"}},
-				{ID: "nav-incidents", Label: "Incidents", Disabled: true, Badge: "Soon"},
-				{ID: "nav-agents", Label: "Agents", Disabled: true, Badge: "Soon"},
-			}}},
-		}),
-		Content: content,
-		MainID: "main-content",
-		MainAttrs: templ.Attributes{"aria-live": "polite"},
-	})
-	@GlobalSearchModal()
+templ ConsoleSidebarHeader() {
+	<a class="xis-native-link console-shell__status-link" href="/status">Public status</a>
 }
 
-templ TopBar(csrfToken string) {
-	<div class="xis-topbar">
-		@MobileNavigation()
-		<a class="xis-native-link" href="/monitors" aria-label="Xisnove home">@Brand()</a>
-		@GlobalSearchTrigger()
-		<div class="xis-topbar-actions">@ThemeControls() @LogoutForm(csrfToken)</div>
-	</div>
+templ ConsoleHeaderActions(csrfToken string) {
+	@GlobalSearchTrigger()
+	@ThemeControls()
+	@LogoutForm(csrfToken)
 }
 
 templ GlobalSearchTrigger() {
@@ -298,25 +313,12 @@ templ GlobalSearchResults(data GlobalSearchData) {
 		<div class="xis-global-search-state" data-search-state="empty"><p>No control-plane resources match <strong>{ data.Query }</strong>.</p><p>Edit the query or close search.</p></div>
 	} else {
 		for _, item := range data.Items {
-			<a id={ "global-search-result-" + item.ResourceId.String() } class="xis-global-search-result" role="option" aria-selected="false" tabindex="0" href={ templ.SafeURL(searchResultURL(item)) } hx-get={ searchResultURL(item) } hx-target="#main-content" hx-push-url="true">
+			<a id={ "global-search-result-" + item.ResourceId.String() } class="xis-global-search-result" role="option" aria-selected="false" tabindex="0" href={ templ.SafeURL(searchResultURL(item)) } hx-get={ searchResultURL(item) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">
 				<span class="xis-global-search-result-line"><strong>{ item.Title }</strong><span class="xis-meta">{ item.Context }</span></span>
 				<span class="xis-meta">{ item.Description }</span>
 			</a>
 		}
 	}
-}
-
-templ MobileNavigation() {
-	<div class="xis-mobile-nav">
-		@sidebar.Overlay(sidebar.OverlayConfig{ID: "mobile-monitoring", TriggerLabel: "Open monitoring navigation", PanelPositionClass: "fixed bottom-0 left-0", BackdropPositionClass: "fixed bottom-0 inset-x-0", BackdropClass: "xis-mobile-nav-backdrop", Sidebar: sidebar.Config{
-			DisableSkipLink: true,
-			SectionsTitle: "Monitoring",
-			Sections: []sidebar.Section{{Items: []sidebar.Item{
-				{ID: "mobile-nav-monitors", Label: "Monitors", Href: "/monitors", Active: true, LinkAttrs: templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"}},
-				{ID: "mobile-nav-status", Label: "Public status", Href: "/status"},
-			}}},
-		}})
-	</div>
 }
 
 templ MonitorPage(csrfToken string, data MonitorList) { @ShellPage("Monitors", csrfToken, MonitorContent(data)) }
@@ -327,7 +329,7 @@ templ MonitorErrorContent(problem Problem) {
 	<section id="monitor-content" class="xis-content xis-stack" aria-labelledby="monitor-heading">
 		@pageheader.PageHeader(pageheader.Config{Title: "Monitors", Description: "Monitor inventory and current health.", TitleAttrs: templ.Attributes{"id": "monitor-heading"}})
 		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
-		<a class="xis-native-link" href={ templ.SafeURL(problem.RetryURL) } hx-get={ problem.RetryURL } hx-target="#main-content" hx-push-url="true">Retry</a>
+		<a class="xis-native-link" href={ templ.SafeURL(problem.RetryURL) } hx-get={ problem.RetryURL } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Retry</a>
 	</section>
 }
 
@@ -422,13 +424,13 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 				<dt>Required</dt><dd>{ enabledLabel(monitor.RequiredLocation) }</dd>
 				<dt>Updated</dt><dd>{ formattedTime(monitor.UpdatedAt) }</dd>
 			</dl>
-			<a id="monitor-detail-close" class="xis-native-link" data-monitor-drawer-close data-monitor-id={ monitor.Id.String() } href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-push-url="true">Close detail</a>
+			<a id="monitor-detail-close" class="xis-native-link" data-monitor-drawer-close data-monitor-id={ monitor.Id.String() } href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Close detail</a>
 		</aside>
 	</section>
 }
 
 templ MonitorSearch(query string) {
-	<form method="get" action="/monitors" hx-get="/monitors" hx-target="#main-content" hx-push-url="true" hx-indicator=".xis-search-indicator" hx-disabled-elt="find button[type='submit']" data-preserve-focus class="xis-theme-controls xis-search-indicator">
+	<form method="get" action="/monitors" hx-get="/monitors" hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true" hx-indicator=".xis-search-indicator" hx-disabled-elt="find button[type='submit']" data-preserve-focus class="xis-theme-controls xis-search-indicator">
 		<label class="xis-field xis-monitor-search-field" for="monitor-search">Search monitors
 			<input class="xis-input" id="monitor-search" type="search" name="q" value={ query } placeholder="Name, kind, or description"/>
 		</label>
@@ -437,17 +439,17 @@ templ MonitorSearch(query string) {
 }
 
 templ MonitorRefresh(data MonitorList) {
-	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.Cursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Refresh</a>
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.Cursor, data.Selected) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#monitor-loading">Refresh</a>
 }
 
-templ ClearSearch() { @link.Link("/monitors", link.WithAppearance(link.AppearanceButton), link.WithRootClass("xis-primary-action"), link.WithAttrs(templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-push-url": "true"})) { Clear search } }
+templ ClearSearch() { @link.Link("/monitors", link.WithAppearance(link.AppearanceButton), link.WithRootClass("xis-primary-action"), link.WithAttrs(templ.Attributes{"hx-get": "/monitors", "hx-target": "#main-content", "hx-swap": "outerHTML", "hx-push-url": "true"})) { Clear search } }
 
 templ NextPage(data MonitorList) {
-	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.NextCursor, data.Selected) } hx-target="#main-content" hx-push-url="true" hx-indicator="#monitor-loading">Next page</a>
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)) } hx-get={ monitorURL(data.Query, data.NextCursor, data.Selected) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#monitor-loading">Next page</a>
 }
 
 templ MonitorActions(data MonitorList, id string) {
-	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, id)) } aria-label={ "Select monitor " + id } hx-get={ monitorURL(data.Query, data.Cursor, id) } hx-target="#main-content" hx-push-url="true">Select</a>
+	<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, id)) } aria-label={ "Select monitor " + id } hx-get={ monitorURL(data.Query, data.Cursor, id) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Select</a>
 }
 
 templ StatusPage(data sdk.PublicStatusPage) { @Document("Public status", PublicStatusShell(data)) }
@@ -506,7 +508,7 @@ templ ShellProblemContent(problem Problem) {
 		@pageheader.PageHeader(pageheader.Config{Title: problem.Title, Description: "The requested workspace is not available.", TitleAttrs: templ.Attributes{"id": "problem-heading"}})
 		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
 		<div class="xis-meta"><p>Error code: <code>{ problem.Code }</code></p><p>Correlation ID: <code>{ problem.CorrelationID }</code></p></div>
-		<a class="xis-native-link" href="/monitors" hx-get="/monitors" hx-target="#main-content" hx-push-url="true">Return to monitors</a>
+		<a class="xis-native-link" href="/monitors" hx-get="/monitors" hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Return to monitors</a>
 	</section>
 }
 templ ProblemContent(problem Problem) {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+	shellassets "github.com/araihu/goshtoso-app-shells/consoleshell/assets"
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
@@ -103,6 +104,7 @@ func New(cfg Config) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
+	mux.Handle("GET /consoleshell/assets/", shellassets.Handler())
 	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
 	mux.HandleFunc("GET /ui/xisnove-ab01f1a.svg", serveXisnoveFavicon)
 	mux.HandleFunc("GET /ui/xisnove-logo-ab01f1a.svg", serveXisnoveLogo)
@@ -180,6 +182,8 @@ func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
 }
 
 const applicationJS = `(() => {
+  if (window.__xisnoveApplicationScriptInstalled) return;
+  window.__xisnoveApplicationScriptInstalled = true;
   let pendingFocus = null;
   let pendingDrawerReturnFocus = null;
   let refreshGeneration = 0;
@@ -261,12 +265,31 @@ const applicationJS = `(() => {
         showAuthoritativeRecovery("The server returned " + response.status + " while refreshing this monitor view.");
         return false;
       }
-      const body = await response.text();
-      if (!ownsRefresh()) return false;
-      main.innerHTML = body;
-      window.htmx?.process(main);
-      openMonitorDrawer();
-      focusMain();
+		const body = await response.text();
+		if (!ownsRefresh()) return false;
+		const template = document.createElement("template");
+		template.innerHTML = body;
+		const replacement = template.content.querySelector("main#main-content");
+		if (!replacement) {
+			if (template.content.querySelector("section")) {
+				main.replaceChildren(...Array.from(template.content.childNodes));
+				window.htmx?.process(main);
+				openMonitorDrawer();
+				focusMain();
+				return true;
+			}
+			showAuthoritativeRecovery("The server returned an incomplete monitor view while refreshing.");
+			return false;
+		}
+		const sidebar = template.content.querySelector('[hx-swap-oob="outerHTML:#consoleshell-sidebar-content"]');
+		main.replaceWith(replacement);
+		if (sidebar) document.querySelector("#consoleshell-sidebar-content")?.replaceWith(sidebar);
+		const nextMain = document.getElementById("main-content");
+		window.htmx?.process(nextMain || replacement);
+		window.consoleShell?.reconcileNavigation?.(nextMain || replacement);
+		window.dispatchEvent(new CustomEvent("consoleshell:navigated"));
+		openMonitorDrawer();
+		focusMain();
       return true;
     } catch (error) {
       if (!ownsRefresh() || error?.name === "AbortError") return false;
@@ -299,28 +322,6 @@ const applicationJS = `(() => {
     main.replaceChildren(section);
     main.scrollTop = 0;
     heading.focus({preventScroll: true});
-  }
-
-  function configureMobileNavigation() {
-    const trigger = document.querySelector("#mobile-monitoring-panel")?.parentElement?.querySelector("button[aria-controls='mobile-monitoring-panel']");
-    if (!trigger || trigger.dataset.xisConfigured) return;
-    trigger.dataset.xisConfigured = "true";
-    const reflect = () => trigger.setAttribute("aria-label", trigger.getAttribute("aria-expanded") === "true" ? "Close monitoring navigation" : "Open monitoring navigation");
-    const header = trigger.closest("header");
-    const updateOffset = () => {
-      if (!header) return;
-      document.documentElement.style.setProperty("--xis-shell-header-bottom", Math.ceil(header.getBoundingClientRect().bottom) + "px");
-    };
-    new MutationObserver(reflect).observe(trigger, {attributes: true, attributeFilter: ["aria-expanded"]});
-    if (header && window.ResizeObserver) new ResizeObserver(updateOffset).observe(header);
-    window.addEventListener("resize", updateOffset);
-    reflect();
-    updateOffset();
-    window.addEventListener("keydown", event => {
-      if (event.key !== "Escape" || trigger.getAttribute("aria-expanded") !== "true") return;
-      trigger.focus({preventScroll: true});
-      setTimeout(() => { reflect(); trigger.focus({preventScroll: true}); }, 0);
-    }, true);
   }
 
   function openMonitorDrawer(attempt = 0) {
@@ -435,9 +436,12 @@ const applicationJS = `(() => {
       state("prompt", "Type at least 2 characters to search the control plane.");
 	  trigger?.setAttribute("aria-expanded", "false");
       window.dispatchEvent(new CustomEvent("goshtoso-search-close", {detail: {id: "global-search"}}));
-      if (restoreFocus) trigger?.focus({preventScroll: true});
+	  if (restoreFocus) requestAnimationFrame(() => trigger?.focus({preventScroll: true}));
       restoreFocus = true;
     });
+	dialog.addEventListener("keydown", event => {
+		if (event.key === "Escape") event.stopPropagation();
+	}, true);
     dialog.addEventListener("click", event => { if (event.target === dialog) close(true); });
     dialog.querySelector("[data-search-close]")?.addEventListener("click", () => close(true));
     input.addEventListener("input", () => {
@@ -486,17 +490,28 @@ const applicationJS = `(() => {
   document.addEventListener("alpine:initialized", openMonitorDrawer);
   window.addEventListener("popstate", invalidateAuthoritativeRefresh);
   window.addEventListener("pageshow", event => { if (event.persisted) refreshAuthoritative(); });
+	configureGlobalSearch();
+	openMonitorDrawer();
   window.goshtosoDependencies?.ready.then(() => {
-    configureMobileNavigation();
 	configureGlobalSearch();
     openMonitorDrawer();
     if (document.querySelector("#main-content [data-autofocus]")) focusMain();
   }).catch(() => {});
   document.addEventListener("htmx:afterSettle", () => {
-	configureMobileNavigation();
 	configureGlobalSearch();
 	openMonitorDrawer();
   });
+	document.addEventListener("keydown", event => {
+		if (event.key !== "Escape" || document.querySelector("#global-search-dialog")?.open) return;
+		const trigger = document.querySelector('button[aria-controls="consoleshell-sidebar"]');
+		if (trigger?.getAttribute("aria-expanded") !== "true") return;
+		requestAnimationFrame(() => trigger.focus({preventScroll: true}));
+	}, true);
+	document.addEventListener("keyup", event => {
+		if (event.key !== "Escape" || document.querySelector("#global-search-dialog")?.open) return;
+		const trigger = document.querySelector('button[aria-controls="consoleshell-sidebar"]');
+		if (trigger?.getAttribute("aria-expanded") === "false") trigger.focus({preventScroll: true});
+	});
 })();
 `
 
@@ -683,7 +698,7 @@ func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 	}
 	csrfToken := s.cookies.SessionCSRF(credential)
 	data := view.MonitorList{Monitors: page.Items, Health: health, Cursor: currentCursor, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures, SearchPages: searchedPages}
-	s.renderAdaptive(w, r, http.StatusOK, view.MonitorPage(csrfToken, data), view.MonitorContent(data))
+	s.renderAdaptive(w, r, http.StatusOK, view.MonitorPage(csrfToken, data), view.ConsoleFragment("Monitors", csrfToken, view.MonitorContent(data)))
 }
 
 // listMonitorMatches walks a bounded number of control-plane pages without
@@ -782,7 +797,7 @@ func (s *server) monitorFailure(w http.ResponseWriter, r *http.Request, credenti
 		problem.Title = "Monitor request timed out"
 	}
 	csrfToken := s.cookies.SessionCSRF(credential)
-	s.renderStateFailure(w, r, code, view.MonitorErrorPage(csrfToken, problem), view.MonitorErrorContent(problem))
+	s.renderStateFailure(w, r, code, view.MonitorErrorPage(csrfToken, problem), view.ConsoleFragment("Monitors", csrfToken, view.MonitorErrorContent(problem)))
 }
 
 func (s *server) renderStateFailure(w http.ResponseWriter, r *http.Request, status int, full, fragment templ.Component) {
@@ -935,7 +950,7 @@ func (s *server) writeProblem(w http.ResponseWriter, r *http.Request, p problem)
 	v := view.Problem{Title: p.Title, Detail: p.Detail, Code: p.Code, CorrelationID: p.CorrelationID}
 	if credential, ok := s.authCredential(r); ok && r.URL.Path != "/login" && r.URL.Path != "/status" {
 		csrfToken := s.cookies.SessionCSRF(credential)
-		s.renderAdaptive(w, r, p.Status, view.ShellProblemPage(csrfToken, v), view.ShellProblemContent(v))
+		s.renderAdaptive(w, r, p.Status, view.ShellProblemPage(csrfToken, v), view.ConsoleFragment(p.Title, csrfToken, view.ShellProblemContent(v)))
 		return
 	}
 	s.renderAdaptive(w, r, p.Status, view.ProblemPage(v), view.ProblemContent(v))

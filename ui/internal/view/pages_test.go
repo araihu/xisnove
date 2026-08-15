@@ -61,6 +61,52 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 	}
 }
 
+func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
+	var rendered strings.Builder
+	if err := ConsolePage("Monitors", "csrf-token", MonitorContent(MonitorList{})).Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render console page: %v", err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`class="console-shell-root"`,
+		`/consoleshell/assets/shell.css`,
+		`/consoleshell/assets/shell.js`,
+		`/assets/styles.css`,
+		`/ui/araihu-f841fe90.css`,
+		`data-consoleshell-nav-id="nav-monitors"`,
+		`id="global-search-dialog"`,
+		`src="/ui/app.js"`,
+		`id="main-content"`,
+		`href="/status"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("console shell missing %q", want)
+		}
+	}
+	if strings.Contains(body, "mobile-monitoring-panel") || strings.Contains(body, "xis-mobile-nav-backdrop") {
+		t.Fatal("console shell retained the superseded application-owned mobile navigation")
+	}
+}
+
+func TestConsoleFragmentUsesAppShellMainWithoutASecondDocument(t *testing.T) {
+	var rendered strings.Builder
+	if err := ConsoleFragment("Monitors", "csrf-token", MonitorContent(MonitorList{})).Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render console fragment: %v", err)
+	}
+	body := rendered.String()
+	if strings.Contains(body, "<html") {
+		t.Fatalf("console fragment rendered a full document: %s", body)
+	}
+	for _, want := range []string{`<main id="main-content"`, `id="console-content"`, `id="monitor-content"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("console fragment missing %q", want)
+		}
+	}
+	if strings.Contains(body, "hx-swap-oob") {
+		t.Fatal("console fragment emitted an OOB sidebar update without a route that changes navigation")
+	}
+}
+
 func TestLoginContentNamesItsMainRegionAndKeepsPasswordSafeWithoutJavaScript(t *testing.T) {
 	var rendered strings.Builder
 	if err := LoginContent("csrf-token", "").Render(t.Context(), &rendered); err != nil {
