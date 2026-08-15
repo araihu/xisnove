@@ -41,6 +41,7 @@ type Repositories struct {
 	Agents               AgentRepository
 	Runs                 RunRepository
 	Results              ResultRepository
+	StateTicks           StateTickRepository
 	Incidents            IncidentRepository
 	NotificationChannels NotificationChannelRepository
 	NotificationRoutes   NotificationRouteRepository
@@ -262,6 +263,13 @@ type ResultRepository interface {
 	// chronological order, bounded by limit. Implementations must not return
 	// diagnostics, payloads, or rows outside the requested monitor/window.
 	ListMonitorHistory(context.Context, domain.MonitorID, time.Time, time.Time, int) ([]ProbeHistoryRecord, error)
+}
+
+// StateTickRepository reads immutable lifecycle/health evaluations. The
+// implementation owns storage-specific ordering and must return at most the
+// requested limit, using the UTC half-open interval [start,end).
+type StateTickRepository interface {
+	ListStateTicks(context.Context, domain.MonitorID, time.Time, time.Time, int) ([]domain.StateTick, error)
 }
 
 type IncidentRepository interface {
