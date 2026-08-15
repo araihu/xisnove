@@ -95,7 +95,7 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.0 // indirect
-	github.com/oasdiff/oasdiff v1.26.0 // indirect
+	github.com/oasdiff/oasdiff v1.28.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/pb33f/doctor v0.0.79 // indirect
@@ -139,13 +139,13 @@ require (
 	github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
-	github.com/yuin/goldmark v1.8.4 // indirect
+	github.com/yuin/goldmark v1.8.5 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/mod v0.38.0 // indirect
