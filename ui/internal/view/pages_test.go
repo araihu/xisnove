@@ -233,7 +233,7 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 		`data-monitor-drawer-close-url="/monitors?cursor=opaque%2Fpage&amp;q=dns"`,
 		`id="monitor-detail"`, `aria-labelledby="monitor-detail-drawerTitle"`,
 		`data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors?cursor=opaque%2Fpage&amp;q=dns&amp;selected=` + monitorID.String() + `"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `aria-selected="true"`,
-		`id="monitor-detail-drawerTitle"`, `Home DNS · DEGRADED`, `id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus`, "Home DNS", "DEGRADED",
+		`id="monitor-detail-drawerTitle"`, `Home DNS`, `data-monitor-state="DEGRADED"`, `id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus`, "Home DNS", "DEGRADED",
 		"Current health", "Configuration", "Live availability",
 		`data-goshtoso-charts-live-event="chart"`,
 		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events"`,

@@ -129,6 +129,12 @@ templ AppStyles() {
 		.xis-monitor-drawer-panel { top: 4rem !important; }
 		.xis-monitor-drawer > div > div:first-child { z-index: 55 !important; }
 		.xis-monitor-drawer-panel { z-index: 60 !important; }
+		.xis-monitor-drawer-panel #monitor-detail-drawerTitle { display: flex; align-items: center; gap: .625rem; min-width: 0; overflow: visible; white-space: normal; }
+		.xis-monitor-drawer[data-monitor-state] #monitor-detail-drawerTitle::after { display: inline-flex; flex: 0 0 auto; align-items: center; border: 1px solid var(--color-outline-strong); border-radius: 9999px; padding: .2rem .55rem; color: var(--color-on-surface-muted); background: var(--color-surface); font-size: .7rem; line-height: 1; letter-spacing: .04em; }
+		.xis-monitor-drawer[data-monitor-state="UP"] #monitor-detail-drawerTitle::after { content: "UP"; border-color: var(--color-success); color: var(--color-on-success); background: var(--color-success); }
+		.xis-monitor-drawer[data-monitor-state="DEGRADED"] #monitor-detail-drawerTitle::after { content: "DEGRADED"; border-color: var(--color-warning); color: var(--color-on-warning); background: var(--color-warning); }
+		.xis-monitor-drawer[data-monitor-state="DOWN"] #monitor-detail-drawerTitle::after { content: "DOWN"; border-color: var(--color-danger); color: var(--color-on-danger); background: var(--color-danger); }
+		.xis-monitor-drawer[data-monitor-state="PENDING"] #monitor-detail-drawerTitle::after, .xis-monitor-drawer[data-monitor-state="UNKNOWN"] #monitor-detail-drawerTitle::after { content: "UNKNOWN"; }
 		.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
 		.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
 		.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
@@ -410,15 +416,16 @@ templ MonitorContent(data MonitorList) {
 }
 
 templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
-	<div
-		class="xis-monitor-drawer"
-		data-monitor-id={ monitor.Id.String() }
-		data-monitor-drawer-close-url={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) }
+		<div
+			class="xis-monitor-drawer"
+			data-monitor-id={ monitor.Id.String() }
+			data-monitor-state={ monitorDetailState(health) }
+			data-monitor-drawer-close-url={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) }
 		x-data="{}"
 		x-init="const close = $el.querySelector('aside[aria-labelledby=monitor-detail-drawerTitle] header button[aria-label=Close]'); if (close) { close.dataset.monitorDrawerClose = 'true'; close.dataset.monitorId = $el.dataset.monitorId }"
 		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer' && !$event.defaultPrevented) { const closeURL = $el.dataset.monitorDrawerCloseUrl; if (closeURL && window.htmx) { window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', pushURL: true}) } }"
 	>
-		@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: monitorDetailTitle(monitor, health), Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
+			@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: monitorDetailTitle(monitor), Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
 			@MonitorDetail(data, monitor, health)
 		}
 	</div>
@@ -584,12 +591,16 @@ func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {
 	return sdk.Monitor{}, sdk.MonitorHealth{}, false
 }
 
-func monitorDetailTitle(monitor sdk.Monitor, health sdk.MonitorHealth) string {
+func monitorDetailTitle(monitor sdk.Monitor) string {
+	return monitor.Name
+}
+
+func monitorDetailState(health sdk.MonitorHealth) string {
 	state := health.State
 	if state == "" {
 		state = sdk.Unknown
 	}
-	return fmt.Sprintf("%s · %s", monitor.Name, strings.ToUpper(string(state)))
+	return strings.ToUpper(string(state))
 }
 
 func enabledLabel(enabled bool) string { if enabled { return "Yes" }; return "No" }
