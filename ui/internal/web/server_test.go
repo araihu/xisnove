@@ -181,7 +181,10 @@ func TestMonitorAvailabilityEventsSignalsStateHistoryAuthFailureWithoutCredentia
 	testServer := httptest.NewServer(handler)
 	defer testServer.Close()
 
-	request := httptest.NewRequest(http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events", nil)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	response, err := testServer.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
