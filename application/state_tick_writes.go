@@ -169,9 +169,20 @@ func appendLocationAdministrativeStateTicks(
 		if record.LocationID != locationID {
 			continue
 		}
+		effectiveLifecycle := lifecycle
+		if reason == domain.StateTickReasonLocationPaused {
+			if !record.Monitor.Enabled {
+				effectiveLifecycle = domain.MonitorLifecycleDisabled
+			} else {
+				effectiveLifecycle = domain.MonitorLifecyclePaused
+			}
+		}
+		if reason == domain.StateTickReasonResumedByUser && !record.Monitor.Enabled {
+			effectiveLifecycle = domain.MonitorLifecycleDisabled
+		}
 		assignedLocationID := record.LocationID
 		if err := appendAdministrativeStateTick(
-			ctx, repositories, record.Monitor, &assignedLocationID, lifecycle, reason,
+			ctx, repositories, record.Monitor, &assignedLocationID, effectiveLifecycle, reason,
 			actor, userActionID, at, newID,
 		); err != nil {
 			return err
