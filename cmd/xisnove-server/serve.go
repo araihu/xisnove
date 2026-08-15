@@ -177,8 +177,9 @@ func serveCommand(parent context.Context, args []string) (returnErr error) {
 				ObserveResult:            resultObserver(metrics),
 				ObserveMonitorTransition: transitionObserver(metrics),
 			}),
-			Health:  application.NewHealthService(store),
-			History: application.NewMonitorHistoryServiceWithClock(store, xisclock.Now),
+			Health:       application.NewHealthService(store),
+			History:      application.NewMonitorHistoryServiceWithClock(store, xisclock.Now),
+			StateHistory: application.NewStateTickHistoryServiceWithClock(store, xisclock.Now),
 			Notifications: application.NewNotificationAdminService(
 				application.NotificationAdminServiceConfig{
 					Store: store, Sealer: sealer, Now: xisclock.Now, NewID: ids.NewUUID,
