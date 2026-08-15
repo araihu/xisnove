@@ -73,6 +73,93 @@ func TestMaintenanceAdminLifecycleRejectsHistoryRewritesAndAuditsAtomically(t *t
 	}
 }
 
+func TestMaintenanceStartTickPreservesUserPrincipalAndAction(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	service := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return fixture.now }, NewID: concurrentIDs(),
+	})
+	principal := Principal{Kind: PrincipalAdmin, SubjectID: "admin-1"}
+	if _, err := service.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: fixture.now.Add(-time.Minute),
+		Reason: "user requested", Principal: principal,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, fixture.now.Add(-time.Minute), fixture.now.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 1 {
+		t.Fatalf("maintenance ticks = %#v", ticks)
+	}
+	tick := ticks[0]
+	if tick.ReasonCode != domain.StateTickReasonMaintenance ||
+		tick.Actor != (domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID}) ||
+		tick.UserActionID == nil || tick.Lifecycle != domain.MonitorLifecyclePaused {
+		t.Fatalf("maintenance tick provenance = %#v", tick)
+	}
+}
+
+func TestFutureMaintenanceRecordsStartTickAtActivation(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	service := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return fixture.now }, NewID: concurrentIDs(),
+	})
+	startsAt := fixture.now.Add(time.Hour)
+	if _, err := service.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: startsAt, Reason: "future user request",
+		Principal: Principal{Kind: PrincipalAdmin, SubjectID: "admin-1"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, fixture.now, startsAt.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 1 || !ticks[0].OccurredAt.Equal(startsAt) || ticks[0].Lifecycle != domain.MonitorLifecyclePaused {
+		t.Fatalf("future maintenance ticks = %#v", ticks)
+	}
+}
+
+func TestMaintenanceEndTickPreservesUserPrincipalAndAction(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	service := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return fixture.now }, NewID: concurrentIDs(),
+	})
+	principal := Principal{Kind: PrincipalAdmin, SubjectID: "admin-1"}
+	record, err := service.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: fixture.now.Add(-time.Minute), Reason: "user requested",
+		Principal: principal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EndMaintenance(ctx, record.Interval.ID, principal); err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, fixture.now.Add(-time.Minute), fixture.now.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 2 {
+		t.Fatalf("maintenance lifecycle ticks = %#v", ticks)
+	}
+	for _, tick := range ticks {
+		if tick.Actor != (domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID}) || tick.UserActionID == nil {
+			t.Fatalf("maintenance lifecycle provenance = %#v", ticks)
+		}
+	}
+}
+
 func isMaintenanceStartValidation(err error) bool {
 	var validation *ValidationError
 	return errors.As(err, &validation) && strings.Contains(validation.Fields["maintenance.startsAt"], "before it starts")
@@ -177,6 +264,40 @@ func TestMaintenanceWorkerMarksRecoveredIntervalWithoutNotification(t *testing.T
 	stored, err := fixture.repositories.Maintenance.Get(ctx, interval.ID)
 	if err != nil || !stored.Interval.EndedNotificationSent {
 		t.Fatalf("processed healthy maintenance = %#v, %v", stored, err)
+	}
+}
+
+func TestMaintenanceWorkerRecordsNaturalExpiryTick(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	end := fixture.now.Add(-time.Minute)
+	interval, err := domain.NewMaintenanceInterval(
+		"maintenance-expiry-tick", fixture.monitor.ID, fixture.now.Add(-time.Hour), &end, "expired",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interval.CreatedAt = fixture.now.Add(-time.Hour)
+	if err := fixture.repositories.Maintenance.Create(ctx, port.MaintenanceRecord{Interval: interval, UpdatedAt: fixture.now}); err != nil {
+		t.Fatal(err)
+	}
+	worker := newMaintenanceWorker(t, fixture.store, "maintenance-worker", concurrentIDs())
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("RunOnce() = %d, %v", count, err)
+	}
+	workerNow, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, workerNow.Add(-time.Hour), workerNow.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 1 || ticks[0].ReasonCode != domain.StateTickReasonMaintenance ||
+		ticks[0].Actor.Kind != domain.StateTickActorSystem || ticks[0].Lifecycle != domain.MonitorLifecycleActive {
+		t.Fatalf("expiry tick = %#v", ticks)
 	}
 }
 

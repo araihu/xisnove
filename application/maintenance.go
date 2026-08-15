@@ -119,6 +119,10 @@ func (w *MaintenanceWorker) process(ctx context.Context, record port.Maintenance
 		if err != nil {
 			return err
 		}
+		monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
+		if err != nil {
+			return err
+		}
 		if domain.ShouldNotifyAfterMaintenance(health.State, record.Interval.EndedNotificationSent) {
 			incident, err := repositories.Incidents.GetActive(ctx, record.Interval.MonitorID)
 			if err != nil {
@@ -126,10 +130,6 @@ func (w *MaintenanceWorker) process(ctx context.Context, record port.Maintenance
 			}
 			if incident == nil {
 				return errors.New("unhealthy monitor has no active incident after maintenance")
-			}
-			monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
-			if err != nil {
-				return err
 			}
 			event := domain.IncidentEvent{
 				ID: w.config.NewID(), IncidentID: incident.ID,
@@ -140,6 +140,16 @@ func (w *MaintenanceWorker) process(ctx context.Context, record port.Maintenance
 			if err := recordIncidentEvent(ctx, repositories, *incident, monitor, event, now, w.config.NewID); err != nil {
 				return err
 			}
+		}
+		lifecycle := domain.MonitorLifecycleActive
+		if !monitor.Enabled {
+			lifecycle = domain.MonitorLifecycleDisabled
+		}
+		if err := appendMaintenanceStateTick(
+			ctx, repositories, monitor, lifecycle,
+			domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil, now, w.config.NewID,
+		); err != nil {
+			return err
 		}
 		changed, err := repositories.Maintenance.MarkEndedProcessed(ctx, record.Interval.ID, tokenHash, now)
 		if err != nil {

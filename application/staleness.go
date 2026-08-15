@@ -56,12 +56,20 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 		transitioned := false
 		var transition MonitorTransitionObservation
 		err := s.store.Transact(ctx, func(ctx context.Context, repositories Repositories) error {
+			at, err := repositories.Runs.DatabaseNow(ctx)
+			if err != nil {
+				return fmt.Errorf("read claim database time: %w", err)
+			}
+			eligible, err := staleCandidateEligible(ctx, repositories, candidate, at)
+			if err != nil || !eligible {
+				return err
+			}
 			changed, err = repositories.Health.ClaimStale(
 				ctx,
 				candidate.MonitorID,
 				candidate.LocationID,
 				candidate.StaleAt,
-				now,
+				at,
 			)
 			if err != nil || !changed {
 				return err
@@ -70,7 +78,7 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 				ctx,
 				repositories,
 				candidate.MonitorID,
-				now,
+				at,
 				s.newID,
 				true,
 			)
@@ -78,7 +86,7 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 				return err
 			}
 			return appendStaleStateTick(
-				ctx, repositories, candidate, transition.To, now, s.newID,
+				ctx, repositories, candidate, transition.To, at, s.newID,
 			)
 		})
 		if err != nil {
@@ -97,4 +105,35 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 		}
 	}
 	return marked, nil
+}
+
+// staleCandidateEligible revalidates administrative state inside the claim
+// transaction. The initial ListStale read may race a disable, location pause,
+// or maintenance start; none of those candidates may be claimed or projected
+// as an unknown observation.
+func staleCandidateEligible(
+	ctx context.Context,
+	repositories Repositories,
+	candidate domain.LocationHealth,
+	now time.Time,
+) (bool, error) {
+	monitor, err := repositories.Monitors.Get(ctx, candidate.MonitorID)
+	if err != nil {
+		return false, err
+	}
+	if !monitor.Enabled {
+		return false, nil
+	}
+	location, err := repositories.Locations.Get(ctx, candidate.LocationID)
+	if err != nil {
+		return false, err
+	}
+	if !location.Enabled {
+		return false, nil
+	}
+	activeMaintenance, err := repositories.Maintenance.ListActive(ctx, candidate.MonitorID, now)
+	if err != nil {
+		return false, err
+	}
+	return len(activeMaintenance) == 0, nil
 }

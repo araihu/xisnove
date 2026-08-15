@@ -48,6 +48,7 @@ type CreateMaintenanceCommand struct {
 	StartsAt  time.Time
 	EndsAt    *time.Time
 	Reason    string
+	Principal Principal
 }
 
 type NotificationDeliveryDetail struct {
@@ -390,13 +391,14 @@ func (s *NotificationAdminService) CreateMaintenance(ctx context.Context, comman
 		if err := appendMaintenanceAudit(ctx, repositories.Audit, s.newID(), "maintenance.created", record, now); err != nil {
 			return err
 		}
+		actor, userActionID := stateTickProvenance(command.Principal, s.newID)
+		effectiveAt := now
 		if now.Before(interval.StartsAt) {
-			return nil
+			effectiveAt = interval.StartsAt
 		}
-		return appendAdministrativeStateTick(
-			ctx, repositories, monitor, nil, domain.MonitorLifecyclePaused,
-			domain.StateTickReasonMaintenance,
-			domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil, now, s.newID,
+		return appendMaintenanceStateTick(
+			ctx, repositories, monitor, domain.MonitorLifecyclePaused,
+			actor, userActionID, effectiveAt, s.newID,
 		)
 	})
 	return record, err
@@ -423,11 +425,15 @@ func (s *NotificationAdminService) ListMaintenance(ctx context.Context, limit, o
 	return records, err
 }
 
-func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain.MaintenanceID) (port.MaintenanceRecord, error) {
+func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain.MaintenanceID, principals ...Principal) (port.MaintenanceRecord, error) {
 	if s.newID == nil {
 		return port.MaintenanceRecord{}, errors.New("end maintenance: identifier generator is required")
 	}
 	now := s.now().UTC()
+	var principal Principal
+	if len(principals) > 0 {
+		principal = principals[0]
+	}
 	var record port.MaintenanceRecord
 	err := s.store.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
 		existing, err := repositories.Maintenance.Get(ctx, id)
@@ -463,10 +469,10 @@ func (s *NotificationAdminService) EndMaintenance(ctx context.Context, id domain
 		if monitor.Enabled {
 			lifecycle = domain.MonitorLifecycleActive
 		}
-		return appendAdministrativeStateTick(
-			ctx, repositories, monitor, nil, lifecycle,
-			domain.StateTickReasonMaintenance,
-			domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil, now, s.newID,
+		actor, userActionID := stateTickProvenance(principal, s.newID)
+		return appendMaintenanceStateTick(
+			ctx, repositories, monitor, lifecycle,
+			actor, userActionID, now, s.newID,
 		)
 	})
 	return record, err

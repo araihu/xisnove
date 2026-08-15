@@ -33,6 +33,17 @@ func stateTickUserActionID(newID func() string) *string {
 	return &id
 }
 
+// stateTickProvenance maps an authenticated management principal to the
+// immutable actor fields carried by lifecycle ticks. Legacy callers may omit
+// a principal; those records intentionally retain the system actor and no
+// user-action ID.
+func stateTickProvenance(principal Principal, newID func() string) (domain.StateTickActor, *string) {
+	if (principal.Kind == PrincipalAdmin || principal.Kind == PrincipalAPIToken) && principal.SubjectID != "" {
+		return domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID}, stateTickUserActionID(newID)
+	}
+	return domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil
+}
+
 func appendProbeStateTick(
 	ctx context.Context,
 	repositories Repositories,
@@ -140,6 +151,22 @@ func appendAdministrativeStateTick(
 		return err
 	}
 	return appendStateTick(ctx, repositories, tick)
+}
+
+func appendMaintenanceStateTick(
+	ctx context.Context,
+	repositories Repositories,
+	monitor domain.Monitor,
+	lifecycle domain.MonitorLifecycle,
+	actor domain.StateTickActor,
+	userActionID *string,
+	at time.Time,
+	newID func() string,
+) error {
+	return appendAdministrativeStateTick(
+		ctx, repositories, monitor, nil, lifecycle,
+		domain.StateTickReasonMaintenance, actor, userActionID, at, newID,
+	)
 }
 
 // appendLocationAdministrativeStateTicks fans a location lifecycle action

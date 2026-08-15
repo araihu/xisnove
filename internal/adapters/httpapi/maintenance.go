@@ -16,9 +16,17 @@ func (s *Server) CreateMaintenance(ctx context.Context, request CreateMaintenanc
 		response, _ := notificationProblem(requiredBody())
 		return CreateMaintenancedefaultApplicationProblemPlusJSONResponse(response), nil
 	}
+	principal, err := managementPrincipal(ctx)
+	if err != nil {
+		if response, ok := notificationProblem(err); ok {
+			return CreateMaintenancedefaultApplicationProblemPlusJSONResponse(response), nil
+		}
+		return nil, err
+	}
 	record, err := s.notifications.CreateMaintenance(ctx, application.CreateMaintenanceCommand{
 		MonitorID: domain.MonitorID(request.Body.MonitorId.String()),
 		StartsAt:  request.Body.StartsAt, EndsAt: request.Body.EndsAt, Reason: request.Body.Reason,
+		Principal: principal,
 	})
 	if err != nil {
 		if response, ok := notificationProblem(err); ok {
@@ -70,7 +78,14 @@ func (s *Server) GetMaintenance(ctx context.Context, request GetMaintenanceReque
 }
 
 func (s *Server) EndMaintenance(ctx context.Context, request EndMaintenanceRequestObject) (EndMaintenanceResponseObject, error) {
-	record, err := s.notifications.EndMaintenance(ctx, domain.MaintenanceID(request.MaintenanceId.String()))
+	principal, err := managementPrincipal(ctx)
+	if err != nil {
+		if response, ok := notificationProblem(err); ok {
+			return EndMaintenancedefaultApplicationProblemPlusJSONResponse(response), nil
+		}
+		return nil, err
+	}
+	record, err := s.notifications.EndMaintenance(ctx, domain.MaintenanceID(request.MaintenanceId.String()), principal)
 	if err != nil {
 		if response, ok := notificationProblem(err); ok {
 			return EndMaintenancedefaultApplicationProblemPlusJSONResponse(response), nil
