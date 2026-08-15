@@ -63,6 +63,80 @@ func TestNoneAuthServesProtectedRoutesWithoutSession(t *testing.T) {
 	}
 }
 
+func TestLocationsCRUDWithNoneAuth(t *testing.T) {
+	locationID := uuid.MustParse("10000000-0000-4000-8000-000000000010")
+	now := time.Now().UTC().Truncate(time.Second)
+	enabled := true
+	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+	client.Locations = []sdk.Location{{
+		Id: locationID, Name: "home-lab", Enabled: &enabled, CreatedAt: now, UpdatedAt: &now,
+	}}
+	handler, _ := newTestHandlerWithModes(t, client, time.Second, []AuthMode{AuthModeNone})
+
+	getLocations := func(selected string) (*httptest.ResponseRecorder, string) {
+		path := "/locations"
+		if selected != "" {
+			path += "?selected=" + url.QueryEscape(selected)
+		}
+		request := httptest.NewRequest(http.MethodGet, "https://ui.example.test"+path, nil)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d: %s", path, recorder.Code, recorder.Body.String())
+		}
+		return recorder, csrfFromBody(t, recorder.Body.String())
+	}
+
+	recorder, csrf := getLocations(locationID.String())
+	body := recorder.Body.String()
+	for _, want := range []string{"Locations", "home-lab", "Edit location", `data-consoleshell-nav-id="nav-locations"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("location page missing %q", want)
+		}
+	}
+	if strings.Contains(body, ">"+locationID.String()+"<") {
+		t.Fatal("location page rendered the opaque location id as visible text")
+	}
+
+	createForm := url.Values{"_csrf": {csrf}, "name": {"edge"}}
+	createRequest := httptest.NewRequest(http.MethodPost, "https://ui.example.test/locations", strings.NewReader(createForm.Encode()))
+	createRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	createRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(createRecorder, createRequest)
+	if createRecorder.Code != http.StatusSeeOther || createRecorder.Header().Get("Location") != "/locations" {
+		t.Fatalf("create location = %d Location %q: %s", createRecorder.Code, createRecorder.Header().Get("Location"), createRecorder.Body.String())
+	}
+	if len(client.Locations) != 2 || client.Locations[1].Name != "edge" {
+		t.Fatalf("created locations = %#v", client.Locations)
+	}
+
+	_, csrf = getLocations(locationID.String())
+	updateForm := url.Values{"_csrf": {csrf}, "name": {"home-lab-renamed"}, "enabled": {"true"}}
+	updateRequest := httptest.NewRequest(http.MethodPost, "https://ui.example.test/locations/"+locationID.String(), strings.NewReader(updateForm.Encode()))
+	updateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	updateRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(updateRecorder, updateRequest)
+	if updateRecorder.Code != http.StatusSeeOther || updateRecorder.Header().Get("Location") != "/locations" {
+		t.Fatalf("update location = %d Location %q: %s", updateRecorder.Code, updateRecorder.Header().Get("Location"), updateRecorder.Body.String())
+	}
+	if client.Locations[0].Name != "home-lab-renamed" || client.Locations[0].Enabled == nil || !*client.Locations[0].Enabled {
+		t.Fatalf("updated location = %#v", client.Locations[0])
+	}
+
+	_, csrf = getLocations(locationID.String())
+	disableForm := url.Values{"_csrf": {csrf}}
+	disableRequest := httptest.NewRequest(http.MethodPost, "https://ui.example.test/locations/"+locationID.String()+"/disable", strings.NewReader(disableForm.Encode()))
+	disableRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	disableRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(disableRecorder, disableRequest)
+	if disableRecorder.Code != http.StatusSeeOther || disableRecorder.Header().Get("Location") != "/locations" {
+		t.Fatalf("disable location = %d Location %q: %s", disableRecorder.Code, disableRecorder.Header().Get("Location"), disableRecorder.Body.String())
+	}
+	if client.Locations[0].Enabled == nil || *client.Locations[0].Enabled {
+		t.Fatalf("disabled location = %#v", client.Locations[0])
+	}
+}
+
 func TestMonitorAvailabilityEventsStreamsCompleteChartSnapshot(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000099")
 	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)

@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,7 @@ import (
 const (
 	maxFormBytes             = 64 << 10
 	monitorPageSize          = int32(25)
+	locationPageSize         = int32(50)
 	maxSearchPageWalk        = 4
 	availabilityPollInterval = 5 * time.Second
 	stateHistoryLimit        = controlplane.StateHistoryMaxRecords
@@ -566,6 +568,8 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.monitors(w, r)
+	case "/locations":
+		s.locations(w, r)
 	case "/search":
 		if r.Method != http.MethodGet {
 			s.methodNotAllowed(w, r, http.MethodGet)
@@ -587,6 +591,10 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 		}
 		s.publicStatus(w, r)
 	default:
+		if strings.HasPrefix(r.URL.Path, "/locations/") {
+			s.locationResource(w, r)
+			return
+		}
 		s.writeProblem(w, r, problem{
 			Type:   "urn:xisnove:ui:problem:not-found",
 			Title:  "Page not found",
@@ -852,6 +860,182 @@ func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 	csrfToken := s.cookies.SessionCSRF(credential)
 	data := view.MonitorList{Monitors: page.Items, Health: health, StateHistory: stateHistory, StateHistoryErrors: stateHistoryErrors, Cursor: currentCursor, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures, SearchPages: searchedPages}
 	s.renderAdaptive(w, r, http.StatusOK, view.MonitorPage(csrfToken, data), view.ConsoleFragment("Monitors", csrfToken, view.MonitorContent(data)))
+}
+
+func (s *server) locations(w http.ResponseWriter, r *http.Request) {
+	credential, ok := s.authCredential(r)
+	if !ok {
+		s.redirectLogin(w, r)
+		return
+	}
+	client, ok := s.controlPlane.(controlplane.LocationClient)
+	if !ok {
+		s.locationFailure(w, r, credential, errors.New("location management is unavailable"))
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		s.renderLocations(w, r, credential, client)
+	case http.MethodPost:
+		s.createLocation(w, r, credential, client)
+	default:
+		s.methodNotAllowed(w, r, http.MethodGet, http.MethodPost)
+	}
+}
+
+func (s *server) renderLocations(w http.ResponseWriter, r *http.Request, credential string, client controlplane.LocationClient) {
+	cursor := r.URL.Query().Get("cursor")
+	page, err := client.ListLocations(r.Context(), credential, cursor, locationPageSize)
+	if err != nil {
+		s.locationFailure(w, r, credential, err)
+		return
+	}
+	csrfToken := s.cookies.SessionCSRF(credential)
+	data := view.LocationList{Locations: page.Items, Cursor: cursor, NextCursor: page.NextCursor, Selected: strings.TrimSpace(r.URL.Query().Get("selected"))}
+	s.renderAdaptive(w, r, http.StatusOK, view.LocationPage(csrfToken, data), view.ConsoleFragment("Locations", csrfToken, view.LocationContent(csrfToken, data)))
+}
+
+func (s *server) locationResource(w http.ResponseWriter, r *http.Request) {
+	credential, ok := s.authCredential(r)
+	if !ok {
+		s.redirectLogin(w, r)
+		return
+	}
+	client, ok := s.controlPlane.(controlplane.LocationClient)
+	if !ok {
+		s.locationFailure(w, r, credential, errors.New("location management is unavailable"))
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/locations/")
+	if strings.HasSuffix(path, "/disable") {
+		idValue := strings.TrimSuffix(path, "/disable")
+		locationID, err := uuid.Parse(strings.TrimSuffix(idValue, "/"))
+		if err != nil {
+			s.writeProblem(w, r, invalidRequestProblem())
+			return
+		}
+		if r.Method != http.MethodPost {
+			s.methodNotAllowed(w, r, http.MethodPost)
+			return
+		}
+		s.disableLocation(w, r, credential, client, locationID)
+		return
+	}
+	locationID, err := uuid.Parse(strings.TrimSuffix(path, "/"))
+	if err != nil {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	if r.Method == http.MethodGet {
+		http.Redirect(w, r, "/locations?selected="+url.QueryEscape(locationID.String()), http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		s.methodNotAllowed(w, r, http.MethodPost)
+		return
+	}
+	s.updateLocation(w, r, credential, client, locationID)
+}
+
+func (s *server) createLocation(w http.ResponseWriter, r *http.Request, credential string, client controlplane.LocationClient) {
+	if err := parseForm(w, r); err != nil {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	if !s.cookies.ValidateSessionCSRF(credential, r.PostForm.Get("_csrf")) {
+		s.writeProblem(w, r, csrfProblem())
+		return
+	}
+	name := strings.TrimSpace(r.PostForm.Get("name"))
+	if name == "" {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	if _, err := client.CreateLocation(r.Context(), credential, name); err != nil {
+		s.locationMutationFailure(w, r, err)
+		return
+	}
+	s.redirectLocations(w, r)
+}
+
+func (s *server) updateLocation(w http.ResponseWriter, r *http.Request, credential string, client controlplane.LocationClient, locationID uuid.UUID) {
+	if err := parseForm(w, r); err != nil {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	if !s.cookies.ValidateSessionCSRF(credential, r.PostForm.Get("_csrf")) {
+		s.writeProblem(w, r, csrfProblem())
+		return
+	}
+	name := strings.TrimSpace(r.PostForm.Get("name"))
+	if name == "" {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	enabled := r.PostForm.Get("enabled") == "true"
+	if _, err := client.UpdateLocation(r.Context(), credential, locationID, name, enabled); err != nil {
+		s.locationMutationFailure(w, r, err)
+		return
+	}
+	s.redirectLocations(w, r)
+}
+
+func (s *server) disableLocation(w http.ResponseWriter, r *http.Request, credential string, client controlplane.LocationClient, locationID uuid.UUID) {
+	if err := parseForm(w, r); err != nil {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	if !s.cookies.ValidateSessionCSRF(credential, r.PostForm.Get("_csrf")) {
+		s.writeProblem(w, r, csrfProblem())
+		return
+	}
+	if err := client.DisableLocation(r.Context(), credential, locationID); err != nil {
+		s.locationMutationFailure(w, r, err)
+		return
+	}
+	s.redirectLocations(w, r)
+}
+
+func (s *server) redirectLocations(w http.ResponseWriter, r *http.Request) {
+	if isHTMX(r) {
+		w.Header().Set("HX-Redirect", "/locations")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, "/locations", http.StatusSeeOther)
+}
+
+func (s *server) locationFailure(w http.ResponseWriter, r *http.Request, credential string, err error) {
+	if errors.Is(err, controlplane.ErrUnauthorized) || isAPIStatus(err, http.StatusUnauthorized) {
+		s.cookies.ClearSession(w)
+		s.redirectLogin(w, r)
+		return
+	}
+	problem := view.Problem{Title: "Locations unavailable", Detail: "The location list could not be loaded. Retry shortly.", Code: "locations_unavailable", CorrelationID: correlationID(r.Context()), RetryURL: r.URL.RequestURI()}
+	code := http.StatusBadGateway
+	if errors.Is(err, context.DeadlineExceeded) {
+		code = http.StatusGatewayTimeout
+		problem.Title = "Location request timed out"
+	}
+	csrfToken := s.cookies.SessionCSRF(credential)
+	s.renderStateFailure(w, r, code, view.LocationErrorPage(csrfToken, problem), view.ConsoleFragment("Locations", csrfToken, view.LocationErrorContent(problem)))
+}
+
+func (s *server) locationMutationFailure(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, controlplane.ErrUnauthorized) || isAPIStatus(err, http.StatusUnauthorized) {
+		s.cookies.ClearSession(w)
+		s.redirectLogin(w, r)
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		s.writeProblem(w, r, gatewayTimeoutProblem())
+		return
+	}
+	if isAPIStatus(err, http.StatusBadRequest) || isAPIStatus(err, http.StatusUnprocessableEntity) {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	s.writeProblem(w, r, upstreamProblem())
 }
 
 // selectedMonitorStateHistory fetches history only for the selected monitor;

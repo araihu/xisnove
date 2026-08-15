@@ -40,6 +40,13 @@ type MonitorList struct {
 	SearchPages int
 }
 
+type LocationList struct {
+	Locations  []sdk.Location
+	Cursor     string
+	NextCursor string
+	Selected   string
+}
+
 type Problem struct {
 	Title string
 	Detail string
@@ -133,6 +140,15 @@ templ AppStyles() {
 		.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }
 		.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 		.xis-status-results { align-content: start; align-items: start; min-height: 0; }
+		.xis-location-layout { display: grid; grid-template-columns: minmax(16rem, .8fr) minmax(0, 1.6fr); gap: 1.5rem; align-items: start; }
+		.xis-location-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }
+		.dark .xis-location-panel { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }
+		.xis-location-panel h2, .xis-location-panel h3 { margin: 0; }
+		.xis-location-form { display: grid; gap: .75rem; }
+		.xis-location-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+		.xis-location-actions form { display: inline-flex; }
+		.xis-location-danger-action { color: var(--color-danger-text); }
+		.dark .xis-location-danger-action { color: var(--color-danger-text-dark); }
 		.xis-monitor-drawer-panel { top: 4rem !important; }
 		.xis-monitor-drawer > div > div:first-child { z-index: 55 !important; }
 		.xis-monitor-drawer-panel { z-index: 60 !important; }
@@ -259,6 +275,7 @@ templ AppStyles() {
 			.xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; }
 			.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; }
 			.xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; }
+			.xis-location-layout { grid-template-columns: 1fr; }
 			.xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; }
 			.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
 		}
@@ -398,6 +415,80 @@ templ GlobalSearchResults(data GlobalSearchData) {
 templ MonitorPage(csrfToken string, data MonitorList) { @ShellPage("Monitors", csrfToken, MonitorContent(data)) }
 
 templ MonitorErrorPage(csrfToken string, problem Problem) { @ShellPage("Monitors", csrfToken, MonitorErrorContent(problem)) }
+
+templ LocationPage(csrfToken string, data LocationList) { @ShellPage("Locations", csrfToken, LocationContent(csrfToken, data)) }
+
+templ LocationErrorPage(csrfToken string, problem Problem) { @ShellPage("Locations", csrfToken, LocationErrorContent(problem)) }
+
+templ LocationErrorContent(problem Problem) {
+	<section id="location-content" class="xis-content xis-stack" aria-labelledby="location-heading">
+		@pageheader.PageHeader(pageheader.Config{Title: "Locations", Description: "Reusable monitoring locations and lifecycle.", TitleAttrs: templ.Attributes{"id": "location-heading"}})
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+		<a class="xis-native-link" href={ templ.SafeURL(problem.RetryURL) } hx-get={ problem.RetryURL } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Retry</a>
+	</section>
+}
+
+templ LocationContent(csrfToken string, data LocationList) {
+	<section id="location-content" class="xis-content xis-stack" aria-labelledby="location-heading">
+		@pageheader.PageHeader(pageheader.Config{Title: "Locations", Description: "Reusable descriptors that can be assigned to monitors.", TitleAttrs: templ.Attributes{"id": "location-heading"}})
+		<div class="xis-location-layout">
+			<section class="xis-location-panel" aria-labelledby="location-create-heading">
+				<h2 id="location-create-heading">Create location</h2>
+				<p class="xis-meta">A location is inert until a monitor uses it.</p>
+				<form method="post" action="/locations" class="xis-location-form">
+					<input type="hidden" name="_csrf" value={ csrfToken }/>
+					<label class="xis-field" for="location-create-name">Name
+						<input id="location-create-name" name="name" type="text" class="xis-input" maxlength="120" required autocomplete="off"/>
+					</label>
+					@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithRootClass("xis-primary-action")) { Create location }
+				</form>
+			</section>
+			<section class="xis-location-panel" aria-labelledby="location-list-heading">
+				<h2 id="location-list-heading">Configured locations</h2>
+				if len(data.Locations) == 0 {
+					@emptystate.EmptyState(emptystate.Config{Title: "No locations yet", Description: "Create a location before assigning it to a monitor."})
+				} else {
+					<div class="xis-table-scroll">@table.Table(locationTable(data))</div>
+				}
+				if data.NextCursor != "" {
+					<a class="xis-native-link" href={ templ.SafeURL(locationPageURL(data.NextCursor, data.Selected)) } hx-get={ locationPageURL(data.NextCursor, data.Selected) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Next page</a>
+				}
+			</section>
+		</div>
+		if location, ok := selectedLocation(data); ok {
+			@LocationEditor(csrfToken, location)
+		}
+	</section>
+}
+
+templ LocationEditor(csrfToken string, location sdk.Location) {
+	<section class="xis-location-panel" aria-labelledby="location-edit-heading">
+		<h2 id="location-edit-heading">Edit location</h2>
+		<p class="xis-meta">Update the descriptor or pause it for all assigned monitors.</p>
+		<form method="post" action={ templ.SafeURL(locationUpdateURL(location.Id.String())) } class="xis-location-form">
+			<input type="hidden" name="_csrf" value={ csrfToken }/>
+			<label class="xis-field" for="location-edit-name">Name
+				<input id="location-edit-name" name="name" type="text" class="xis-input" maxlength="120" required value={ location.Name } autocomplete="off"/>
+			</label>
+			<label class="xis-field" for="location-edit-enabled">Lifecycle
+				if locationEnabled(location) {
+					<span><input id="location-edit-enabled" name="enabled" type="checkbox" value="true" checked/> Enabled</span>
+				} else {
+					<span><input id="location-edit-enabled" name="enabled" type="checkbox" value="true"/> Enabled</span>
+				}
+			</label>
+			<div class="xis-location-actions">
+				@button.Button(button.WithType("submit"), button.WithTone(button.TonePrimary), button.WithRootClass("xis-primary-action")) { Save changes }
+			</div>
+		</form>
+		if locationEnabled(location) {
+			<form method="post" action={ templ.SafeURL(locationDisableURL(location.Id.String())) } class="xis-location-actions">
+				<input type="hidden" name="_csrf" value={ csrfToken }/>
+				@button.Button(button.WithType("submit"), button.WithTone(button.ToneDanger), button.WithRootClass("xis-location-danger-action")) { Disable location }
+			</form>
+		}
+	</section>
+}
 
 templ MonitorErrorContent(problem Problem) {
 	<section id="monitor-content" class="xis-content xis-stack" aria-labelledby="monitor-heading">
@@ -718,6 +809,76 @@ templ ProblemContent(problem Problem) {
 		<div class="xis-meta"><p>Error code: <code>{ problem.Code }</code></p><p>Correlation ID: <code>{ problem.CorrelationID }</code></p></div>
 		<a class="xis-native-link" href="/login">Return to sign in</a>
 	</main>
+}
+
+func locationPageURL(cursor, selected string) string {
+	values := url.Values{}
+	if cursor != "" {
+		values.Set("cursor", cursor)
+	}
+	if selected != "" {
+		values.Set("selected", selected)
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return "/locations?" + encoded
+	}
+	return "/locations"
+}
+
+func locationUpdateURL(id string) string { return "/locations/" + url.PathEscape(id) }
+
+func locationDisableURL(id string) string { return "/locations/" + url.PathEscape(id) + "/disable" }
+
+func selectedLocation(data LocationList) (sdk.Location, bool) {
+	for _, location := range data.Locations {
+		if location.Id.String() == data.Selected {
+			return location, true
+		}
+	}
+	return sdk.Location{}, false
+}
+
+func locationEnabled(location sdk.Location) bool {
+	return location.Enabled != nil && *location.Enabled
+}
+
+func locationStatusBadge(location sdk.Location) templ.Component {
+	if locationEnabled(location) {
+		return badge.Badge(badge.Config{Label: "Enabled", Tone: badge.ToneSuccess, Appearance: badge.AppearanceSoft, Indicator: true})
+	}
+	return badge.Badge(badge.Config{Label: "Disabled", Tone: badge.ToneDefault, Appearance: badge.AppearanceSoft, Indicator: true})
+}
+
+func locationTable(data LocationList) table.Config {
+	rows := make([]table.Row, 0, len(data.Locations))
+	for _, location := range data.Locations {
+		id := location.Id.String()
+		selected := data.Selected == id
+		attrs := map[string]string{"data-location-id": id, "aria-selected": fmt.Sprint(selected)}
+		rows = append(rows, table.Row{
+			ID: id,
+			HTMX: &table.RowHTMXConfig{Get: locationPageURL("", id), Target: "#main-content", Swap: "outerHTML", PushURL: true},
+			AlpineAttrs: attrs,
+			Cells: map[string]table.Cell{
+				"name": {Text: location.Name},
+				"status": {Component: locationStatusBadge(location)},
+				"updated": {Text: formattedTime(pointerTime(location.UpdatedAt))},
+			},
+		})
+	}
+	return table.Config{
+		ID: "location-table",
+		Caption: "Configured monitoring locations",
+		Columns: []table.Column{{Key: "name", Label: "Location"}, {Key: "status", Label: "Status"}, {Key: "updated", Label: "Updated"}},
+		Rows: rows,
+	}
+}
+
+func pointerTime(value *time.Time) time.Time {
+	if value == nil {
+		return time.Time{}
+	}
+	return *value
 }
 
 func monitorURL(query, cursor, selected string) string {

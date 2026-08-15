@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/araihu/xisnove/sdk"
+	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -92,6 +93,16 @@ type Client interface {
 	GetMonitorStateHistory(ctx context.Context, opaqueCredential string, monitorID openapi_types.UUID, startsAt, endsAt time.Time, limit int32) (sdk.MonitorStateHistory, error)
 }
 
+// LocationClient is the optional UI-facing management surface for locations.
+// Keeping it separate from Client lets monitor-only test doubles and read-only
+// deployments continue to satisfy the control-plane contract.
+type LocationClient interface {
+	ListLocations(ctx context.Context, opaqueCredential, cursor string, limit int32) (sdk.Page[sdk.Location], error)
+	CreateLocation(ctx context.Context, opaqueCredential, name string) (sdk.Location, error)
+	UpdateLocation(ctx context.Context, opaqueCredential string, locationID openapi_types.UUID, name string, enabled bool) (sdk.Location, error)
+	DisableLocation(ctx context.Context, opaqueCredential string, locationID openapi_types.UUID) error
+}
+
 // SDKClient uses only the public generated client and its SDK helpers.
 type SDKClient struct {
 	client *sdk.ClientWithResponses
@@ -169,6 +180,55 @@ func (c *SDKClient) ListMonitors(ctx context.Context, credential, cursor string,
 	return c.client.MonitorsPageFetcher(params, sdk.WithBearerToken(credential))(ctx, cursor)
 }
 
+func (c *SDKClient) ListLocations(ctx context.Context, credential, cursor string, limit int32) (sdk.Page[sdk.Location], error) {
+	params := sdk.ListLocationsParams{Limit: &limit}
+	return c.client.LocationsPageFetcher(params, sdk.WithBearerToken(credential))(ctx, cursor)
+}
+
+func (c *SDKClient) CreateLocation(ctx context.Context, credential, name string) (sdk.Location, error) {
+	key := sdk.IdempotencyKey(uuid.NewString())
+	response, err := c.client.CreateLocationWithResponse(ctx, &sdk.CreateLocationParams{IdempotencyKey: &key}, sdk.CreateLocationRequest{Name: name}, sdk.WithBearerToken(credential))
+	if err != nil {
+		return sdk.Location{}, err
+	}
+	if response.JSON201 != nil {
+		return *response.JSON201, nil
+	}
+	if response.StatusCode() == http.StatusUnauthorized {
+		return sdk.Location{}, ErrUnauthorized
+	}
+	return sdk.Location{}, responseError(response.HTTPResponse, response.Body, "create location")
+}
+
+func (c *SDKClient) UpdateLocation(ctx context.Context, credential string, locationID openapi_types.UUID, name string, enabled bool) (sdk.Location, error) {
+	key := sdk.IdempotencyKey(uuid.NewString())
+	response, err := c.client.UpdateLocationWithResponse(ctx, locationID, &sdk.UpdateLocationParams{IdempotencyKey: &key}, sdk.UpdateLocationRequest{Name: &name, Enabled: &enabled}, sdk.WithBearerToken(credential))
+	if err != nil {
+		return sdk.Location{}, err
+	}
+	if response.JSON200 != nil {
+		return *response.JSON200, nil
+	}
+	if response.StatusCode() == http.StatusUnauthorized {
+		return sdk.Location{}, ErrUnauthorized
+	}
+	return sdk.Location{}, responseError(response.HTTPResponse, response.Body, "update location")
+}
+
+func (c *SDKClient) DisableLocation(ctx context.Context, credential string, locationID openapi_types.UUID) error {
+	response, err := c.client.DisableLocationWithResponse(ctx, locationID, sdk.WithBearerToken(credential))
+	if err != nil {
+		return err
+	}
+	if response.StatusCode() == http.StatusNoContent {
+		return nil
+	}
+	if response.StatusCode() == http.StatusUnauthorized {
+		return ErrUnauthorized
+	}
+	return responseError(response.HTTPResponse, response.Body, "disable location")
+}
+
 func (c *SDKClient) GetMonitorHealth(ctx context.Context, credential string, monitorID openapi_types.UUID) (sdk.MonitorHealth, error) {
 	response, err := c.client.GetMonitorHealthWithResponse(ctx, monitorID, sdk.WithBearerToken(credential))
 	if err != nil {
@@ -232,15 +292,18 @@ type Fake struct {
 	mu                 sync.RWMutex
 	PublicStatus       sdk.PublicStatusPage
 	Monitors           []sdk.Monitor
+	Locations          []sdk.Location
 	Health             map[openapi_types.UUID]sdk.MonitorHealth
 	History            map[openapi_types.UUID]sdk.MonitorAvailabilityHistory
 	StateHistory       map[openapi_types.UUID]sdk.MonitorStateHistory
 	PublicError        error
 	MonitorError       error
+	LocationError      error
 	SearchError        error
 	HealthErrors       map[openapi_types.UUID]error
 	HistoryErrors      map[openapi_types.UUID]error
 	StateHistoryErrors map[openapi_types.UUID]error
+	LocationErrors     map[openapi_types.UUID]error
 }
 
 func (f *Fake) SearchResources(ctx context.Context, credential, query string, limit int32) ([]sdk.SearchResult, error) {
@@ -279,6 +342,7 @@ func NewFake(username, password, credential string) *Fake {
 		HealthErrors:       map[openapi_types.UUID]error{},
 		HistoryErrors:      map[openapi_types.UUID]error{},
 		StateHistoryErrors: map[openapi_types.UUID]error{},
+		LocationErrors:     map[openapi_types.UUID]error{},
 	}
 }
 
@@ -340,6 +404,106 @@ func (f *Fake) ListMonitors(ctx context.Context, credential, cursor string, limi
 	return sdk.Page[sdk.Monitor]{Items: append([]sdk.Monitor(nil), f.Monitors[start:end]...), NextCursor: next}, nil
 }
 
+func (f *Fake) ListLocations(ctx context.Context, credential, cursor string, limit int32) (sdk.Page[sdk.Location], error) {
+	if err := ctx.Err(); err != nil {
+		return sdk.Page[sdk.Location]{}, err
+	}
+	if subtle.ConstantTimeCompare([]byte(credential), []byte(f.credential)) != 1 {
+		return sdk.Page[sdk.Location]{}, ErrUnauthorized
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.LocationError != nil {
+		return sdk.Page[sdk.Location]{}, f.LocationError
+	}
+	start := 0
+	if cursor != "" {
+		_, _ = fmt.Sscanf(cursor, "offset:%d", &start)
+	}
+	if start < 0 || start > len(f.Locations) {
+		start = len(f.Locations)
+	}
+	end := start + int(limit)
+	if end > len(f.Locations) {
+		end = len(f.Locations)
+	}
+	next := ""
+	if end < len(f.Locations) {
+		next = fmt.Sprintf("offset:%d", end)
+	}
+	return sdk.Page[sdk.Location]{Items: append([]sdk.Location(nil), f.Locations[start:end]...), NextCursor: next}, nil
+}
+
+func (f *Fake) CreateLocation(ctx context.Context, credential, name string) (sdk.Location, error) {
+	if err := ctx.Err(); err != nil {
+		return sdk.Location{}, err
+	}
+	if subtle.ConstantTimeCompare([]byte(credential), []byte(f.credential)) != 1 {
+		return sdk.Location{}, ErrUnauthorized
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.LocationError != nil {
+		return sdk.Location{}, f.LocationError
+	}
+	now := time.Now().UTC()
+	enabled := true
+	location := sdk.Location{Id: uuid.New(), Name: strings.TrimSpace(name), Enabled: &enabled, CreatedAt: now, UpdatedAt: &now}
+	f.Locations = append(f.Locations, location)
+	return location, nil
+}
+
+func (f *Fake) UpdateLocation(ctx context.Context, credential string, locationID openapi_types.UUID, name string, enabled bool) (sdk.Location, error) {
+	if err := ctx.Err(); err != nil {
+		return sdk.Location{}, err
+	}
+	if subtle.ConstantTimeCompare([]byte(credential), []byte(f.credential)) != 1 {
+		return sdk.Location{}, ErrUnauthorized
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.LocationErrors[locationID]; err != nil {
+		return sdk.Location{}, err
+	}
+	for index := range f.Locations {
+		if f.Locations[index].Id != locationID {
+			continue
+		}
+		f.Locations[index].Name = strings.TrimSpace(name)
+		f.Locations[index].Enabled = boolPointer(enabled)
+		now := time.Now().UTC()
+		f.Locations[index].UpdatedAt = &now
+		return f.Locations[index], nil
+	}
+	return sdk.Location{}, &sdk.APIError{StatusCode: http.StatusNotFound}
+}
+
+func (f *Fake) DisableLocation(ctx context.Context, credential string, locationID openapi_types.UUID) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if subtle.ConstantTimeCompare([]byte(credential), []byte(f.credential)) != 1 {
+		return ErrUnauthorized
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.LocationErrors[locationID]; err != nil {
+		return err
+	}
+	for index := range f.Locations {
+		if f.Locations[index].Id != locationID {
+			continue
+		}
+		f.Locations[index].Enabled = boolPointer(false)
+		now := time.Now().UTC()
+		f.Locations[index].UpdatedAt = &now
+		return nil
+	}
+	return &sdk.APIError{StatusCode: http.StatusNotFound}
+}
+
+func boolPointer(value bool) *bool { return &value }
+
 func (f *Fake) GetMonitorHealth(ctx context.Context, credential string, monitorID openapi_types.UUID) (sdk.MonitorHealth, error) {
 	if err := ctx.Err(); err != nil {
 		return sdk.MonitorHealth{}, err
@@ -396,3 +560,5 @@ func (f *Fake) GetMonitorStateHistory(ctx context.Context, credential string, mo
 
 var _ Client = (*SDKClient)(nil)
 var _ Client = (*Fake)(nil)
+var _ LocationClient = (*SDKClient)(nil)
+var _ LocationClient = (*Fake)(nil)

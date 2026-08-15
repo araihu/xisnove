@@ -139,6 +139,81 @@ func TestSDKClientGetsBoundedMonitorStateHistoryWithBearer(t *testing.T) {
 	}
 }
 
+func TestSDKClientManagesLocationsWithBearer(t *testing.T) {
+	locationID := uuid.MustParse("10000000-0000-0000-0000-000000000201")
+	updatedAt := time.Now().UTC()
+	enabled := true
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.RequestURI())
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/locations":
+			assertBearer(t, r)
+			if r.URL.Query().Get("limit") != "12" || r.URL.Query().Get("cursor") != "opaque/cursor" {
+				t.Errorf("location query = %q", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(sdk.LocationPage{Items: []sdk.Location{{Id: locationID, Name: "home-lab", Enabled: &enabled, CreatedAt: updatedAt, UpdatedAt: &updatedAt}}})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/locations":
+			assertBearer(t, r)
+			if r.Header.Get("Idempotency-Key") == "" {
+				t.Error("create location missing idempotency key")
+			}
+			var request sdk.CreateLocationRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatal(err)
+			}
+			if request.Name != "edge" {
+				t.Errorf("create location body = %#v", request)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(sdk.Location{Id: locationID, Name: request.Name, Enabled: &enabled, CreatedAt: updatedAt, UpdatedAt: &updatedAt})
+		case r.Method == http.MethodPatch && r.URL.Path == "/v1/locations/"+locationID.String():
+			assertBearer(t, r)
+			if r.Header.Get("Idempotency-Key") == "" {
+				t.Error("update location missing idempotency key")
+			}
+			var request sdk.UpdateLocationRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatal(err)
+			}
+			if request.Name == nil || *request.Name != "edge-renamed" || request.Enabled == nil || *request.Enabled {
+				t.Errorf("update location body = %#v", request)
+			}
+			_ = json.NewEncoder(w).Encode(sdk.Location{Id: locationID, Name: *request.Name, Enabled: request.Enabled, CreatedAt: updatedAt, UpdatedAt: &updatedAt})
+		case r.Method == http.MethodDelete && r.URL.Path == "/v1/locations/"+locationID.String():
+			assertBearer(t, r)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewSDKClient(server.URL, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := client.ListLocations(t.Context(), "bearer-token", "opaque/cursor", 12)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Name != "home-lab" {
+		t.Fatalf("locations page = %#v, %v", page, err)
+	}
+	created, err := client.CreateLocation(t.Context(), "bearer-token", "edge")
+	if err != nil || created.Name != "edge" {
+		t.Fatalf("created location = %#v, %v", created, err)
+	}
+	updated, err := client.UpdateLocation(t.Context(), "bearer-token", locationID, "edge-renamed", false)
+	if err != nil || updated.Name != "edge-renamed" || updated.Enabled == nil || *updated.Enabled {
+		t.Fatalf("updated location = %#v, %v", updated, err)
+	}
+	if err := client.DisableLocation(t.Context(), "bearer-token", locationID); err != nil {
+		t.Fatalf("disable location: %v", err)
+	}
+	if len(calls) != 4 {
+		t.Fatalf("location calls = %#v", calls)
+	}
+}
+
 func TestBoundStateHistoryKeepsHalfOpenWindowAndNewestRecords(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000099")
 	otherMonitorID := uuid.MustParse("10000000-0000-4000-8000-000000000098")

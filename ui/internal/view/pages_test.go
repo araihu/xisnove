@@ -119,6 +119,37 @@ func TestConsolePageEmitsSocialMetadataWithoutHeadTagDuplication(t *testing.T) {
 	}
 }
 
+func TestLocationContentUsesLocationNavigationAndHidesOpaqueIDs(t *testing.T) {
+	locationID := uuid.MustParse("10000000-0000-4000-8000-000000000010")
+	now := time.Now().UTC()
+	enabled := true
+	data := LocationList{
+		Locations: []sdk.Location{{Id: locationID, Name: "home-lab", Enabled: &enabled, CreatedAt: now, UpdatedAt: &now}},
+		Selected:  locationID.String(),
+	}
+	var rendered strings.Builder
+	if err := ConsolePage("Locations", "csrf-token", LocationContent("csrf-token", data)).Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render locations page: %v", err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		`<title>Locations · X-9</title>`,
+		`<link rel="canonical" href="https://x9.araihu.com/locations">`,
+		`data-consoleshell-nav-id="nav-locations"`,
+		"Create location",
+		"Edit location",
+		"home-lab",
+		`name="name"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("location page missing %q", want)
+		}
+	}
+	if strings.Contains(body, ">"+locationID.String()+"<") {
+		t.Fatal("location id is rendered as visible table/detail text")
+	}
+}
+
 func TestConsolePageIncludesChartDependenciesWithRequestNonce(t *testing.T) {
 	var rendered strings.Builder
 	ctx := templ.WithNonce(t.Context(), "console-chart-nonce")

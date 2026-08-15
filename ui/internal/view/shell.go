@@ -23,7 +23,7 @@ func ConsolePage(title, csrfToken string, content templ.Component) templ.Compone
 		DocumentTitle: metadata.Title,
 		Description:   metadata.Description,
 		CanonicalURL:  metadata.CanonicalURL,
-		Active:        "nav-monitors",
+		Active:        consoleActive(title),
 		Content:       content,
 		Head:          consoleHead(metadata),
 	}
@@ -62,17 +62,31 @@ func consoleSocialMetadata(metadata head.MetadataConfig) templ.Component {
 }
 
 func consoleRoute(title string) string {
-	if strings.EqualFold(strings.TrimSpace(title), "monitors") {
+	switch strings.ToLower(strings.TrimSpace(title)) {
+	case "monitors":
 		return "/monitors"
+	case "locations":
+		return "/locations"
+	default:
+		return "/problem"
 	}
-	return "/problem"
 }
 
 func consoleDescription(title string) string {
-	if strings.EqualFold(strings.TrimSpace(title), "monitors") {
+	switch strings.ToLower(strings.TrimSpace(title)) {
+	case "monitors":
 		return "Inspect Xisnove monitor health, lifecycle, provenance, and bounded state history."
+	case "locations":
+		return "Manage reusable monitoring locations and their lifecycle."
 	}
 	return "Xisnove operator workspace."
+}
+
+func consoleActive(title string) string {
+	if strings.EqualFold(strings.TrimSpace(title), "locations") {
+		return "nav-locations"
+	}
+	return "nav-monitors"
 }
 
 func consoleHead(metadata head.MetadataConfig) templ.Component {
@@ -91,7 +105,7 @@ func ConsoleFragment(title, csrfToken string, content templ.Component) templ.Com
 	page := consoleshell.Page{
 		Title:         title,
 		DocumentTitle: title + " · X-9",
-		Active:        "nav-monitors",
+		Active:        consoleActive(title),
 		Content:       content,
 	}
 	return nonceConsole(consoleshell.Fragment(consoleConfig(csrfToken), page))
@@ -115,6 +129,7 @@ func consoleConfig(csrfToken string) consoleshell.Config {
 			SectionsTitle: "Monitoring",
 			Sections: []sidebar.Section{{Items: []sidebar.Item{
 				{ID: "nav-monitors", Label: "Monitors", Href: "/monitors"},
+				{ID: "nav-locations", Label: "Locations", Href: "/locations"},
 				{ID: "nav-incidents", Label: "Incidents", Disabled: true, Badge: "Soon"},
 				{ID: "nav-agents", Label: "Agents", Disabled: true, Badge: "Soon"},
 			}}},
