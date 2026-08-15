@@ -9,6 +9,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/araihu/goshtoso-app-shells/consoleshell"
 	"github.com/araihu/goshtoso/components/sidebar"
+	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 )
 
 func ConsolePage(title, csrfToken string, content templ.Component) templ.Component {
@@ -38,7 +39,7 @@ func consoleConfig(csrfToken string) consoleshell.Config {
 			Name:       "Xisnove",
 			HomeURL:    "/monitors",
 			Logo:       BrandMark(),
-			FaviconURL: "/ui/xisnove-ab01f1a.svg",
+			FaviconURL: seasonalassets.FaviconPath,
 		},
 		Navigation: consoleshell.Navigation{
 			DisableSearch: true,

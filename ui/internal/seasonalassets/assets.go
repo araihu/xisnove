@@ -1,6 +1,6 @@
 // Package seasonalassets owns the frozen Arai Hu Assets v0.1.1 campaign
-// runtime and X-9 baseline assets. It is deliberately not wired into the UI
-// server; integration remains a separate, parent-owned phase.
+// runtime and X-9 baseline assets served by the UI's explicit immutable
+// seasonal routes.
 package seasonalassets
 
 import (
@@ -44,9 +44,8 @@ var reverseMark []byte
 //go:embed static/x9-favicon.svg
 var favicon []byte
 
-// Descriptor records the immutable upstream identity and future same-origin
-// route for one staged asset. Body bytes remain private and cannot be mutated
-// by callers.
+// Descriptor records the immutable upstream identity and same-origin route for
+// one staged asset. Body bytes remain private and cannot be mutated by callers.
 type Descriptor struct {
 	Path         string
 	SourcePath   string
@@ -113,8 +112,8 @@ var staged = []stagedAsset{
 	},
 }
 
-// Descriptors returns the stable route and provenance plan for the integration
-// phase. Returned values contain no mutable asset bytes.
+// Descriptors returns the stable route and provenance plan. Returned values
+// contain no mutable asset bytes.
 func Descriptors() []Descriptor {
 	descriptors := make([]Descriptor, len(staged))
 	for index := range staged {
@@ -128,8 +127,8 @@ func Runtime() []byte {
 	return bytes.Clone(runtime)
 }
 
-// Handler serves only the staged Phase A routes. The UI server must mount it
-// explicitly during the later integration phase.
+// Handler serves only the staged seasonal routes. The UI server mounts it
+// explicitly so the asset namespace remains easy to audit.
 func Handler() http.Handler {
 	return http.HandlerFunc(serve)
 }

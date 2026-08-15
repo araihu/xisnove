@@ -22,6 +22,7 @@ import (
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
+	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/araihu/xisnove/ui/internal/security"
 	"github.com/araihu/xisnove/ui/internal/view"
 )
@@ -104,7 +105,9 @@ func New(cfg Config) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
+	mux.Handle("GET /assets/campaign/", seasonalassets.Handler())
 	mux.Handle("GET /consoleshell/assets/", shellassets.Handler())
+	mux.Handle("GET /ui/seasonal/", seasonalassets.Handler())
 	mux.HandleFunc("GET /ui/araihu-f841fe90.css", serveAraiHuThemeCSS)
 	mux.HandleFunc("GET /ui/xisnove-ab01f1a.svg", serveXisnoveFavicon)
 	mux.HandleFunc("GET /ui/xisnove-logo-ab01f1a.svg", serveXisnoveLogo)

@@ -20,6 +20,7 @@ import (
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
+	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -61,14 +62,36 @@ func TestNoneAuthServesProtectedRoutesWithoutSession(t *testing.T) {
 
 var csrfValuePattern = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
-func TestHandlerMountsEveryGoshtosoRuntimeAssetDirectly(t *testing.T) {
+func TestHandlerMountsEveryGoshtosoAndSeasonalRuntimeAssetDirectly(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	for _, path := range []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", "/consoleshell/assets/shell.css", "/consoleshell/assets/shell.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL} {
+	paths := []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", "/consoleshell/assets/shell.css", "/consoleshell/assets/shell.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL}
+	for _, descriptor := range seasonalassets.Descriptors() {
+		paths = append(paths, descriptor.Path)
+	}
+	for _, path := range paths {
 		request := httptest.NewRequest(http.MethodGet, "https://ui.example.test"+path, nil)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusOK || recorder.Body.Len() == 0 {
 			t.Errorf("GET %s = %d, %d bytes", path, recorder.Code, recorder.Body.Len())
+		}
+	}
+}
+
+func TestHandlerServesPinnedSeasonalX9Assets(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	for _, descriptor := range seasonalassets.Descriptors() {
+		request := httptest.NewRequest(http.MethodGet, "https://ui.example.test"+descriptor.Path, nil)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != descriptor.ContentType {
+			t.Errorf("GET %s = %d content-type=%q", descriptor.Path, recorder.Code, recorder.Header().Get("Content-Type"))
+		}
+		if got := recorder.Header().Get("Cache-Control"); got != descriptor.CacheControl {
+			t.Errorf("GET %s cache=%q, want %q", descriptor.Path, got, descriptor.CacheControl)
+		}
+		if got := fmt.Sprintf("%x", sha256.Sum256(recorder.Body.Bytes())); got != descriptor.SHA256 {
+			t.Errorf("GET %s SHA-256 = %s, want %s", descriptor.Path, got, descriptor.SHA256)
 		}
 	}
 }
@@ -230,7 +253,7 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 		t.Fatalf("dashboard status = %d", dashboardRecorder.Code)
 	}
 	dashboard := dashboardRecorder.Body.String()
-	for _, want := range []string{"<nav", `class="console-shell-root"`, `id="main-content"`, `action="/logout"`, `name="_csrf"`, `href="/status"`, `/consoleshell/assets/shell.css`, "No monitors yet"} {
+	for _, want := range []string{"<nav", `class="console-shell-root"`, `id="main-content"`, `action="/logout"`, `name="_csrf"`, `href="/status"`, `/consoleshell/assets/shell.css`, seasonalassets.MarkPath, seasonalassets.FaviconPath, `id="account-menu"`, "Sign out", "No monitors yet"} {
 		if !strings.Contains(dashboard, want) {
 			t.Errorf("dashboard missing %q", want)
 		}
@@ -247,6 +270,11 @@ func TestLoginShellAndLogoutJourneyKeepsOpaqueCredentialOutOfMarkup(t *testing.T
 	}
 	if strings.Contains(dashboard, testCredential) || strings.Contains(dashboard, sessionCookie.Value) {
 		t.Fatal("dashboard exposed the control-plane session credential")
+	}
+	for _, absent := range []string{`id="theme-choice"`, `id="mode-choice"`, `Monitor tools`, `id="monitor-search"`, "bounded control-plane requests"} {
+		if strings.Contains(dashboard, absent) {
+			t.Errorf("dashboard retained removed control %q", absent)
+		}
 	}
 
 	logoutCSRF := csrfFromBody(t, dashboard)
@@ -452,7 +480,7 @@ func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{`id="monitor-content"`, `value="dns"`, `aria-selected="true"`, `data-monitor-id="` + monitorID.String() + `"`, `id="monitor-detail"`, `data-autofocus`, "UNKNOWN", "Some health is unavailable", `hx-target="#main-content"`} {
+	for _, want := range []string{`id="monitor-content"`, `aria-selected="true"`, `data-monitor-id="` + monitorID.String() + `"`, `id="monitor-detail"`, `data-autofocus`, "UNKNOWN", "Some health is unavailable", `hx-target="#main-content"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("monitor fragment missing %q", want)
 		}
@@ -481,7 +509,7 @@ func TestMonitorSearchWalksPastEmptyPageAndPreservesOpaqueState(t *testing.T) {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"Remote DNS", "across 2 API page(s)", "bounded to 4 pages", "q=dns", "selected=" + matchID.String()} {
+	for _, want := range []string{"Remote DNS", "q=dns", "selected=" + matchID.String()} {
 		if !strings.Contains(body, want) {
 			t.Errorf("search response missing %q", want)
 		}
@@ -508,7 +536,6 @@ func TestMonitorSearchEmptyWindowStillOffersOpaqueContinuation(t *testing.T) {
 	for _, want := range []string{
 		"Remote DNS",
 		"Next page",
-		`href="/monitors?cursor=offset%3A25&amp;q=dns&amp;selected=kept"`,
 		`href="/monitors?cursor=offset%3A125&amp;q=dns&amp;selected=kept"`,
 		`href="/monitors?cursor=offset%3A25&amp;q=dns&amp;selected=` + matchID.String() + `"`,
 	} {

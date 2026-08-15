@@ -215,7 +215,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		t.Fatalf("timeout login evidence: %v", err)
 	}
 	captureState(t, ctx, screenshotDir, "login-timeout", "#problem-content")
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`localStorage.removeItem('xisnove-theme')`, nil), chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`localStorage.removeItem('xisnove-theme');localStorage.removeItem('goshtoso-theme');localStorage.removeItem('xisnove-mode');localStorage.removeItem('goshtoso-dark')`, nil), chromedp.Navigate(ui.URL+"/login"), chromedp.WaitVisible("#email")); err != nil {
 		t.Fatal(err)
 	}
 	if err := chromedp.Run(ctx,
@@ -226,9 +226,9 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	var defaultSelector bool
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('#theme-choice')?.value === 'araihu'`, &defaultSelector)); err != nil || !defaultSelector {
-		t.Fatalf("Arai Hû selector default did not survive login: selected=%t err=%v", defaultSelector, err)
+	var loginTheme bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.documentElement.dataset.theme === 'araihu' && localStorage.getItem('xisnove-theme') === 'araihu'`, &loginTheme)); err != nil || !loginTheme {
+		t.Fatalf("Arai Hû default did not survive login: applied=%t err=%v", loginTheme, err)
 	}
 	t.Log("awaiting Goshtoso dependency readiness before global search")
 	awaitGoshtosoDependencies(t, ctx)
@@ -240,15 +240,31 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if len(earlyConsoleProblems) > 0 {
 		t.Fatalf("browser console problems through global search: %v", earlyConsoleProblems)
 	}
+	var accountMenu struct {
+		Expanded string   `json:"expanded"`
+		Items    []string `json:"items"`
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`#account-menu > button[aria-haspopup="true"]`),
+		chromedp.Poll(`document.querySelector('#account-menu [role="menu"]')?.getClientRects().length > 0`, nil, chromedp.WithPollingTimeout(5*time.Second)),
+		chromedp.Evaluate(`(()=>{const menu=document.querySelector('#account-menu [role="menu"]'),items=[...menu.querySelectorAll('[role="menuitem"]')].filter(e=>e.getClientRects().length);return {expanded:document.querySelector('#account-menu > button')?.getAttribute('aria-expanded'),items:items.map(e=>e.textContent.trim())}})()`, &accountMenu),
+		chromedp.KeyEvent("\u001b"),
+		chromedp.Poll(`document.querySelector('#account-menu > button')?.getAttribute('aria-expanded') === 'false'`, nil),
+	); err != nil {
+		t.Fatalf("account menu: %v", err)
+	}
+	if accountMenu.Expanded != "true" || len(accountMenu.Items) != 1 || accountMenu.Items[0] != "Sign out" {
+		t.Fatalf("account menu contents = %#v", accountMenu)
+	}
 	for _, theme := range []string{"goshtoso", "minimal", "araihu"} {
 		var persisted bool
-		script := fmt.Sprintf(`(()=>{const select=document.querySelector('#theme-choice');select.value=%q;select.dispatchEvent(new Event('change',{bubbles:true}));})()`, theme)
+		script := fmt.Sprintf(`(()=>{document.documentElement.dataset.theme=%q;localStorage.setItem('xisnove-theme',%q);localStorage.setItem('goshtoso-theme',%q);})()`, theme, theme, theme)
 		if err := chromedp.Run(ctx,
 			chromedp.Evaluate(script, nil),
 			chromedp.Poll(fmt.Sprintf(`localStorage.getItem('xisnove-theme')===%q`, theme), nil),
 			chromedp.Reload(),
 			chromedp.WaitVisible("#monitor-content"),
-			chromedp.Evaluate(fmt.Sprintf(`document.documentElement.dataset.theme===%q && localStorage.getItem('xisnove-theme')===%q && document.querySelector('#theme-choice')?.value===%q`, theme, theme, theme), &persisted),
+			chromedp.Evaluate(fmt.Sprintf(`document.documentElement.dataset.theme===%q && localStorage.getItem('xisnove-theme')===%q`, theme, theme), &persisted),
 		); err != nil || !persisted {
 			t.Fatalf("theme selector did not persist %s through reload: persisted=%t err=%v", theme, persisted, err)
 		}
@@ -339,7 +355,6 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	assertShellGeometry(t, ctx)
 	assertMobileNavigation(t, ctx)
-	captureHeldSearchLoading(t, ctx, ui.URL, screenshotDir, &scenario, &monitorRequests)
 	var monitorHTML string
 	if err := chromedp.Run(ctx, chromedp.OuterHTML("html", &monitorHTML)); err != nil {
 		t.Fatal(err)
@@ -347,28 +362,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if !strings.Contains(monitorHTML, "Home DNS") || strings.Contains(monitorHTML, "browser-bearer") {
 		t.Fatal("HTMX result missing monitor or leaked bearer")
 	}
-	var afterSwapOK bool
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement?.id==='monitor-search' && document.querySelector('#monitor-search')?.selectionStart===1 && document.querySelector('#monitor-search')?.selectionEnd===2 && document.title==='Monitors · X-9'`, &afterSwapOK), chromedp.Evaluate(`(()=>{const spacer=document.createElement('div');spacer.style.height='2000px';spacer.id='history-scroll-fixture';document.querySelector('#monitor-results').append(spacer);document.querySelector('#main-content').scrollTop=200})()`, nil)); err != nil {
-		t.Fatal(err)
-	}
-	if !afterSwapOK {
-		t.Error("HTMX search did not preserve search focus and caret")
-	}
 	assertInteractiveActions(t, ctx)
-	requestsBeforeBack := monitorRequests.Load()
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`location.search === ""`, nil)); err != nil {
-		t.Fatalf("history back: %v", err)
-	}
-	var backOK bool
-	if err := chromedp.Run(ctx, chromedp.Poll(`document.activeElement?.id==='main-content'`, nil), chromedp.Evaluate(`document.title==='Monitors · X-9' && document.querySelector('#monitor-search')?.value==='' && document.querySelector('#main-content')?.scrollTop===0`, &backOK)); err != nil {
-		t.Fatal(err)
-	}
-	if !backOK {
-		t.Error("Back did not restore monitor content, title, focus, and scroll")
-	}
-	if monitorRequests.Load() <= requestsBeforeBack {
-		t.Error("Back restored cached markup without an authoritative no-store monitor read")
-	}
 
 	if err := chromedp.Run(ctx, chromedp.Navigate(ui.URL+"/unknown-workspace"), chromedp.WaitVisible("#problem-content")); err != nil {
 		t.Fatalf("unknown route recovery: %v", err)
@@ -416,7 +410,9 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	expectedArtifacts := 216
 	if os.Getenv("XISNOVE_UI_BROWSER_FAST") == "1" {
-		expectedArtifacts = 18
+		expectedArtifacts = 17
+	} else {
+		expectedArtifacts = 204
 	}
 	assertPNGArtifacts(t, screenshotDir, expectedArtifacts)
 	t.Logf("browser matrix and integrated SDK routes passed; screenshots: %s", screenshotDir)
@@ -563,7 +559,7 @@ func acceptanceAxes() ([]int64, []string, []string) {
 }
 
 func themeModeScript(theme, mode string) string {
-	return fmt.Sprintf(`(()=>{const root=document.documentElement,state=window.Alpine?.$data(root);root.classList.add('xis-visual-test');if(state){state.theme=%q;state.dark=%t}root.dataset.theme=%q;root.classList.toggle("dark",%t);localStorage.setItem('xisnove-theme',%q);localStorage.setItem('xisnove-mode',%q);const themeControl=document.querySelector('#theme-choice');if(themeControl)themeControl.value=%q;const modeControl=document.querySelector('#mode-choice');if(modeControl)modeControl.value=%q;})()`, theme, mode == "dark", theme, mode == "dark", theme, mode, theme, mode)
+	return fmt.Sprintf(`(()=>{const root=document.documentElement,state=window.Alpine?.$data(root);root.classList.add('xis-visual-test');if(state){state.theme=%q;state.dark=%t}root.dataset.theme=%q;root.classList.toggle("dark",%t);localStorage.setItem('xisnove-theme',%q);localStorage.setItem('xisnove-mode',%q);localStorage.setItem('goshtoso-theme',%q);localStorage.setItem('goshtoso-dark',String(%t));})()`, theme, mode == "dark", theme, mode == "dark", theme, mode, theme, mode == "dark")
 }
 
 var pngSignature = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
@@ -932,16 +928,15 @@ func assertKeyboardActivation(t *testing.T, ctx context.Context, selector, ready
 func assertShellGeometry(t *testing.T, ctx context.Context) {
 	t.Helper()
 	var desktop struct {
-		PageOverflow    bool   `json:"pageOverflow"`
-		MainOverflow    string `json:"mainOverflow"`
-		IdleDisplay     string `json:"idleDisplay"`
-		IdleHeight      int    `json:"idleHeight"`
-		PlaceholderFits bool   `json:"placeholderFits"`
+		PageOverflow bool   `json:"pageOverflow"`
+		MainOverflow string `json:"mainOverflow"`
+		IdleDisplay  string `json:"idleDisplay"`
+		IdleHeight   int    `json:"idleHeight"`
 	}
-	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900), chromedp.Evaluate(`(()=>{const m=document.querySelector('#main-content'),l=document.querySelector('#monitor-loading'),input=document.querySelector('#monitor-search'),canvas=document.createElement('canvas'),c=canvas.getContext('2d'),style=getComputedStyle(input);c.font=style.font;const needed=c.measureText(input.placeholder).width+parseFloat(style.paddingLeft)+parseFloat(style.paddingRight)+8;return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,mainOverflow:getComputedStyle(m).overflowY,idleDisplay:getComputedStyle(l).display,idleHeight:l.getBoundingClientRect().height,placeholderFits:needed<=input.clientWidth}})()`, &desktop)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900), chromedp.Evaluate(`(()=>{const m=document.querySelector('#main-content'),l=document.querySelector('#monitor-loading');return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,mainOverflow:getComputedStyle(m).overflowY,idleDisplay:getComputedStyle(l).display,idleHeight:l.getBoundingClientRect().height}})()`, &desktop)); err != nil {
 		t.Fatal(err)
 	}
-	if desktop.PageOverflow || (desktop.MainOverflow != "auto" && desktop.MainOverflow != "scroll") || desktop.IdleDisplay != "none" || desktop.IdleHeight != 0 || !desktop.PlaceholderFits {
+	if desktop.PageOverflow || (desktop.MainOverflow != "auto" && desktop.MainOverflow != "scroll") || desktop.IdleDisplay != "none" || desktop.IdleHeight != 0 {
 		t.Errorf("desktop shell geometry = %#v", desktop)
 	}
 	var mobile struct {
@@ -1096,51 +1091,6 @@ func assertMobileNavigation(t *testing.T, ctx context.Context) {
 	if !returned {
 		t.Error("mobile navigation did not return focus to its trigger")
 	}
-}
-
-func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir string, scenario *atomic.Value, monitorRequests *atomic.Int32) {
-	t.Helper()
-	widths, themes, modes := acceptanceAxes()
-	for _, width := range widths {
-		for _, theme := range themes {
-			for _, mode := range modes {
-				scenario.Store("success")
-				if err := chromedp.Run(ctx, chromedp.Navigate(baseURL+"/monitors"), chromedp.WaitVisible("#monitor-results"), chromedp.EmulateViewport(width, 900), chromedp.Evaluate(themeModeScript(theme, mode), nil)); err != nil {
-					t.Fatalf("prepare held search at %dpx/%s/%s: %v", width, theme, mode, err)
-				}
-				scenario.Store("monitors-loading")
-				before := monitorRequests.Load()
-				var pending struct {
-					Loading, ResultsHidden, Disabled, PendingCopy bool
-				}
-				var screenshot []byte
-				if err := chromedp.Run(ctx,
-					chromedp.Evaluate(`(()=>{const input=document.querySelector('#monitor-search'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]');input.value='dns';input.focus();input.setSelectionRange(1,2);button.click();button.click();return true})()`, nil),
-					chromedp.Poll(`document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === true`, nil, chromedp.WithPollingInterval(10*time.Millisecond)),
-					chromedp.Evaluate(`(()=>{const loading=document.querySelector('#monitor-loading'),results=document.querySelector('#monitor-results'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]'),lr=loading?.getBoundingClientRect(),rr=results?.getBoundingClientRect();return {loading:!!lr&&lr.height>0,resultsHidden:!!rr&&rr.height===0,disabled:button?.disabled===true,pendingCopy:button?.innerText.includes('Searching…')===true}})()`, &pending),
-				); err != nil {
-					t.Fatalf("held search at %dpx/%s/%s: %v", width, theme, mode, err)
-				}
-				assertP1Accessibility(t, ctx)
-				if err := chromedp.Run(ctx,
-					chromedp.FullScreenshot(&screenshot, 100),
-					chromedp.Poll(`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false && document.activeElement?.id === 'monitor-search' && document.querySelector('#monitor-search')?.selectionStart === 1 && document.querySelector('#monitor-search')?.selectionEnd === 2 && document.title === 'Monitors · X-9'`, nil, chromedp.WithPollingTimeout(5*time.Second)),
-				); err != nil {
-					var diagnostic map[string]any
-					_ = chromedp.Run(ctx, chromedp.Evaluate(`(()=>{const input=document.querySelector('#monitor-search'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]');return {url:location.href,disabled:button?.disabled??null,active:document.activeElement?.id||'',selectionStart:input?.selectionStart??null,selectionEnd:input?.selectionEnd??null,title:document.title,results:document.querySelectorAll('#monitor-results tbody tr').length}})()`, &diagnostic))
-					t.Fatalf("finish held search at %dpx/%s/%s: %v diagnostic=%v requests=%d", width, theme, mode, err, diagnostic, monitorRequests.Load()-before)
-				}
-				if !pending.Loading || !pending.ResultsHidden || !pending.Disabled || !pending.PendingCopy {
-					t.Fatalf("held search state at %dpx/%s/%s = %#v", width, theme, mode, pending)
-				}
-				if delta := monitorRequests.Load() - before; delta != 1 {
-					t.Fatalf("double-click search issued %d control-plane reads, want 1", delta)
-				}
-				writePNGArtifact(t, filepath.Join(dir, fmt.Sprintf("state-monitors-loading-%d-%s-%s.png", width, theme, mode)), screenshot)
-			}
-		}
-	}
-	scenario.Store("success")
 }
 
 func assertSelectedMonitorIdentity(t *testing.T, ctx context.Context, id string) {

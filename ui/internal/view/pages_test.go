@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/araihu/xisnove/sdk"
+	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/google/uuid"
 )
 
@@ -46,19 +47,6 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 		}
 	}
 
-	rendered.Reset()
-	if err := ThemeControls().Render(t.Context(), &rendered); err != nil {
-		t.Fatalf("render theme controls: %v", err)
-	}
-	for _, want := range []string{
-		`<option value="araihu">Arai Hû</option>`,
-		`<option value="goshtoso">Goshtoso</option>`,
-		`<option value="minimal">Minimal</option>`,
-	} {
-		if !strings.Contains(rendered.String(), want) {
-			t.Errorf("theme controls contract missing %q", want)
-		}
-	}
 }
 
 func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
@@ -73,7 +61,8 @@ func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 		`/consoleshell/assets/shell.js`,
 		`/assets/styles.css`,
 		`/ui/araihu-f841fe90.css`,
-		`/ui/xisnove-mark-ab01f1a.svg`,
+		seasonalassets.MarkPath,
+		seasonalassets.FaviconPath,
 		`/assets/icons/heroicons.svg#hi-16-solid-magnifying-glass`,
 		`data-consoleshell-nav-id="nav-monitors"`,
 		`id="global-search-dialog"`,
@@ -84,6 +73,8 @@ func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 		`src="/ui/app.js"`,
 		`id="main-content"`,
 		`href="/status"`,
+		`id="account-menu"`,
+		`Sign out`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("console shell missing %q", want)
@@ -91,6 +82,11 @@ func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 	}
 	if strings.Contains(body, "mobile-monitoring-panel") || strings.Contains(body, "xis-mobile-nav-backdrop") {
 		t.Fatal("console shell retained the superseded application-owned mobile navigation")
+	}
+	for _, absent := range []string{`id="theme-choice"`, `id="mode-choice"`, `Monitor tools`, `id="monitor-search"`, "bounded control-plane requests"} {
+		if strings.Contains(body, absent) {
+			t.Errorf("console shell retained removed monitor control %q", absent)
+		}
 	}
 }
 
@@ -156,9 +152,9 @@ func TestLoadingSurfacesPrecedeAndReplaceResults(t *testing.T) {
 			t.Errorf("missing %q", want)
 		}
 	}
-	for _, want := range []string{`data-preserve-focus`, `hx-disabled-elt="find button[type='submit']"`, `data-goshtoso-loading`, "Searching…"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("real search loading contract missing %q", want)
+	for _, absent := range []string{`role="toolbar"`, `id="monitor-search"`, "Monitor tools", "bounded control-plane requests"} {
+		if strings.Contains(body, absent) {
+			t.Errorf("monitor content retained removed control %q", absent)
 		}
 	}
 }
@@ -170,7 +166,7 @@ func TestMonitorContentDistinguishesEmptyFilteredAndPartialStates(t *testing.T) 
 		want []string
 	}{
 		{name: "empty", data: MonitorList{}, want: []string{"No monitors yet", `id="monitor-loading"`}},
-		{name: "filtered", data: MonitorList{Query: "dns"}, want: []string{"No matching monitors", "Clear search", `value="dns"`}},
+		{name: "filtered", data: MonitorList{Query: "dns"}, want: []string{"No matching monitors", "Clear search"}},
 		{name: "partial", data: MonitorList{HealthFailures: 1}, want: []string{"Some health is unavailable", "No monitors yet"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
