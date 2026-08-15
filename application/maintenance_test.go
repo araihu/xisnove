@@ -103,7 +103,7 @@ func TestMaintenanceStartTickPreservesUserPrincipalAndAction(t *testing.T) {
 	}
 }
 
-func TestFutureMaintenanceRecordsStartTickAtActivation(t *testing.T) {
+func TestFutureMaintenanceDoesNotRecordBeforeActivation(t *testing.T) {
 	ctx := context.Background()
 	fixture := newProjectionFixture(t, ctx)
 	service := NewNotificationAdminService(NotificationAdminServiceConfig{
@@ -122,8 +122,43 @@ func TestFutureMaintenanceRecordsStartTickAtActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ticks) != 1 || !ticks[0].OccurredAt.Equal(startsAt) || ticks[0].Lifecycle != domain.MonitorLifecyclePaused {
+	if len(ticks) != 0 {
 		t.Fatalf("future maintenance ticks = %#v", ticks)
+	}
+}
+
+func TestCancelledFutureMaintenanceDoesNotActivate(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	now, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return now }, NewID: concurrentIDs(),
+	})
+	record, err := service.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: now.Add(time.Hour), Reason: "cancelled future",
+		Principal: Principal{Kind: PrincipalAdmin, SubjectID: "admin-1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.DeleteMaintenance(ctx, record.Interval.ID); err != nil {
+		t.Fatal(err)
+	}
+	worker := newMaintenanceWorker(t, fixture.store, "maintenance-worker", concurrentIDs())
+	if count, err := worker.RunOnce(ctx); err != nil || count != 0 {
+		t.Fatalf("cancelled future RunOnce() = %d, %v", count, err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, now.Add(-time.Minute), now.Add(2*time.Hour), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 0 {
+		t.Fatalf("cancelled future ticks = %#v", ticks)
 	}
 }
 
@@ -298,6 +333,157 @@ func TestMaintenanceWorkerRecordsNaturalExpiryTick(t *testing.T) {
 	if len(ticks) != 1 || ticks[0].ReasonCode != domain.StateTickReasonMaintenance ||
 		ticks[0].Actor.Kind != domain.StateTickActorSystem || ticks[0].Lifecycle != domain.MonitorLifecycleActive {
 		t.Fatalf("expiry tick = %#v", ticks)
+	}
+}
+
+func TestMaintenanceWorkerActivatesDueMaintenanceAtEffectiveTime(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	now, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endsAt := now.Add(time.Hour)
+	interval, err := domain.NewMaintenanceInterval(
+		"maintenance-activation-tick", fixture.monitor.ID, now.Add(-time.Minute), &endsAt, "activated",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interval.CreatedAt = now.Add(-time.Minute)
+	if err := fixture.repositories.Maintenance.Create(ctx, port.MaintenanceRecord{Interval: interval, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	worker := newMaintenanceWorker(t, fixture.store, "maintenance-worker", concurrentIDs())
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("activation RunOnce() = %d, %v", count, err)
+	}
+	workerNow, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, now.Add(-time.Minute), workerNow.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 1 || ticks[0].ReasonCode != domain.StateTickReasonMaintenance ||
+		ticks[0].Lifecycle != domain.MonitorLifecyclePaused || ticks[0].Actor.Kind != domain.StateTickActorSystem ||
+		ticks[0].OccurredAt.Before(now) || ticks[0].OccurredAt.After(workerNow) {
+		t.Fatalf("activation tick = %#v", ticks)
+	}
+	if count, err := worker.RunOnce(ctx); err != nil || count != 0 {
+		t.Fatalf("idempotent activation RunOnce() = %d, %v", count, err)
+	}
+}
+
+func TestEndingOverlappingMaintenanceStaysPausedUntilLastEnd(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	service := NewNotificationAdminService(NotificationAdminServiceConfig{
+		Store: fixture.store, Now: func() time.Time { return fixture.now }, NewID: concurrentIDs(),
+	})
+	first, err := service.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: fixture.now.Add(-2 * time.Minute), Reason: "first",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.CreateMaintenance(ctx, CreateMaintenanceCommand{
+		MonitorID: fixture.monitor.ID, StartsAt: fixture.now.Add(-time.Minute), Reason: "second",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EndMaintenance(ctx, first.Interval.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EndMaintenance(ctx, second.Interval.ID); err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, fixture.now.Add(-3*time.Minute), fixture.now.Add(time.Minute), 10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticks) != 4 {
+		t.Fatalf("overlap ticks = %#v", ticks)
+	}
+	paused, active := 0, 0
+	for _, tick := range ticks {
+		switch tick.Lifecycle {
+		case domain.MonitorLifecyclePaused:
+			paused++
+		case domain.MonitorLifecycleActive:
+			active++
+		}
+	}
+	if paused != 3 || active != 1 {
+		t.Fatalf("overlap lifecycle counts paused=%d active=%d ticks=%#v", paused, active, ticks)
+	}
+}
+
+func TestMaintenanceWorkerExpiryStaysPausedUntilLastOverlapEnds(t *testing.T) {
+	ctx := context.Background()
+	fixture := newProjectionFixture(t, ctx)
+	now, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstEnd := now.Add(-time.Minute)
+	first, err := domain.NewMaintenanceInterval(
+		"maintenance-overlap-first", fixture.monitor.ID, now.Add(-2*time.Minute), &firstEnd, "first",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondEnd := now.Add(time.Hour)
+	second, err := domain.NewMaintenanceInterval(
+		"maintenance-overlap-second", fixture.monitor.ID, now.Add(-time.Minute), &secondEnd, "second",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.CreatedAt, second.CreatedAt = now.Add(-2*time.Minute), now.Add(-time.Minute)
+	if err := fixture.repositories.Maintenance.Create(ctx, port.MaintenanceRecord{Interval: first, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.repositories.Maintenance.Create(ctx, port.MaintenanceRecord{Interval: second, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	worker := newMaintenanceWorker(t, fixture.store, "maintenance-worker", concurrentIDs())
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("first expiry RunOnce() = %d, %v", count, err)
+	}
+	if _, err := fixture.repositories.Maintenance.End(ctx, second.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("last expiry RunOnce() = %d, %v", count, err)
+	}
+	workerNow, err := fixture.repositories.Runs.DatabaseNow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticks, err := fixture.repositories.StateTicks.ListStateTicks(
+		ctx, fixture.monitor.ID, now.Add(-3*time.Minute), workerNow.Add(time.Minute), 20,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paused, active := 0, 0
+	for _, tick := range ticks {
+		switch tick.Lifecycle {
+		case domain.MonitorLifecyclePaused:
+			paused++
+		case domain.MonitorLifecycleActive:
+			active++
+		}
+	}
+	if paused != 1 || active != 1 {
+		t.Fatalf("expiry overlap lifecycle counts paused=%d active=%d ticks=%#v", paused, active, ticks)
 	}
 }
 

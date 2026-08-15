@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/domain"
 )
@@ -169,6 +171,50 @@ func appendMaintenanceStateTick(
 	)
 }
 
+func maintenanceStartStateTickIDs(maintenanceID domain.MaintenanceID) (string, string) {
+	seed := []byte("xisnove:maintenance:start:" + string(maintenanceID))
+	tickID := uuid.NewMD5(uuid.Nil, seed).String()
+	actionID := uuid.NewMD5(uuid.Nil, append(seed, 0)).String()
+	return tickID, actionID
+}
+
+// appendMaintenanceActivationStateTick is deterministic so multiple workers
+// observing the same active interval converge on one immutable start tick.
+// The tick is only created once the interval is active; future creation and
+// cancellation therefore cannot leave a false historical transition.
+func appendMaintenanceActivationStateTick(
+	ctx context.Context,
+	repositories Repositories,
+	monitor domain.Monitor,
+	maintenanceID domain.MaintenanceID,
+	lifecycle domain.MonitorLifecycle,
+	actor domain.StateTickActor,
+	userActionID *string,
+	at time.Time,
+) (bool, error) {
+	tickID, actionID := maintenanceStartStateTickIDs(maintenanceID)
+	tick, err := domain.NewStateTick(domain.NewStateTickParams{
+		ID: tickID, MonitorID: monitor.ID, Lifecycle: lifecycle,
+		Health: domain.HealthUnknown, ReasonCode: domain.StateTickReasonMaintenance,
+		ActionID: actionID, Actor: actor, UserActionID: userActionID,
+		OccurredAt: at.UTC(),
+	})
+	if err != nil {
+		return false, err
+	}
+	return appendStateTickResult(ctx, repositories, tick)
+}
+
+func maintenanceLifecycle(monitor domain.Monitor, active bool) domain.MonitorLifecycle {
+	if !monitor.Enabled {
+		return domain.MonitorLifecycleDisabled
+	}
+	if active {
+		return domain.MonitorLifecyclePaused
+	}
+	return domain.MonitorLifecycleActive
+}
+
 // appendLocationAdministrativeStateTicks fans a location lifecycle action
 // out to the monitors assigned to that location. StateTick is monitor-scoped,
 // so a location mutation is represented by one immutable tick per affected
@@ -232,8 +278,17 @@ func appendStateTick(
 	repositories Repositories,
 	tick domain.StateTick,
 ) error {
+	_, err := appendStateTickResult(ctx, repositories, tick)
+	return err
+}
+
+func appendStateTickResult(
+	ctx context.Context,
+	repositories Repositories,
+	tick domain.StateTick,
+) (bool, error) {
 	if err := tick.Validate(); err != nil {
-		return fmt.Errorf("validate state tick: %w", err)
+		return false, fmt.Errorf("validate state tick: %w", err)
 	}
 
 	writer := repositories.StateTickWriter
@@ -241,16 +296,17 @@ func appendStateTick(
 		var ok bool
 		writer, ok = repositories.StateTicks.(port.StateTickWriter)
 		if !ok {
-			return ErrStateTickWriterUnavailable
+			return false, ErrStateTickWriterUnavailable
 		}
 	}
 	if writer == nil {
 		// Compatibility path for pre-history stores. New store composition roots
 		// should always provide StateTickWriter.
-		return nil
+		return false, nil
 	}
-	if _, err := writer.AppendStateTick(ctx, tick.Clone()); err != nil {
-		return fmt.Errorf("append state tick %s: %w", tick.ID, err)
+	inserted, err := writer.AppendStateTick(ctx, tick.Clone())
+	if err != nil {
+		return false, fmt.Errorf("append state tick %s: %w", tick.ID, err)
 	}
-	return nil
+	return inserted, nil
 }

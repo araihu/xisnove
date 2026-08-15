@@ -15,6 +15,11 @@ import (
 // ErrMaintenanceLeaseLost means another worker processed an ended interval.
 var ErrMaintenanceLeaseLost = errors.New("maintenance end lease lost")
 
+const (
+	maintenanceActivationPageSize  = 1000
+	maintenanceActivationScanLimit = 10000
+)
+
 // MaintenanceWorkerConfig defines bounded post-maintenance projection behavior.
 type MaintenanceWorkerConfig struct {
 	Store         port.UnitOfWork
@@ -69,9 +74,13 @@ func (w *MaintenanceWorker) Run(ctx context.Context) error {
 	}
 }
 
-// RunOnce claims and processes at most BatchSize ended intervals.
+// RunOnce activates due intervals and claims/processes at most BatchSize total
+// lifecycle transitions.
 func (w *MaintenanceWorker) RunOnce(ctx context.Context) (int, error) {
-	processed := 0
+	processed, err := w.activateDue(ctx)
+	if err != nil {
+		return processed, err
+	}
 	for processed < w.config.BatchSize {
 		record, tokenHash, err := w.claim(ctx)
 		if errors.Is(err, port.ErrNotFound) {
@@ -87,6 +96,57 @@ func (w *MaintenanceWorker) RunOnce(ctx context.Context) (int, error) {
 		processed++
 	}
 	return processed, nil
+}
+
+// activateDue records scheduled maintenance starts at their effective
+// transition. The deterministic tick identity makes this safe when multiple
+// workers observe the same interval concurrently.
+func (w *MaintenanceWorker) activateDue(ctx context.Context) (int, error) {
+	activated := 0
+	err := w.config.Store.Transact(ctx, func(ctx context.Context, repositories port.Repositories) error {
+		now, err := repositories.Runs.DatabaseNow(ctx)
+		if err != nil {
+			return err
+		}
+		for offset := 0; offset < maintenanceActivationScanLimit && activated < w.config.BatchSize; {
+			records, err := repositories.Maintenance.List(ctx, maintenanceActivationPageSize, offset)
+			if err != nil {
+				return err
+			}
+			for _, record := range records {
+				if !record.Interval.ActiveAt(now) {
+					continue
+				}
+				monitor, err := repositories.Monitors.Get(ctx, record.Interval.MonitorID)
+				if err != nil {
+					return err
+				}
+				inserted, err := appendMaintenanceActivationStateTick(
+					ctx, repositories, monitor, record.Interval.ID,
+					maintenanceLifecycle(monitor, true),
+					domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil,
+					// The worker owns the effective transition, so delayed discovery
+					// is recorded at the observation time rather than scheduled time.
+					now,
+				)
+				if err != nil {
+					return err
+				}
+				if inserted {
+					activated++
+				}
+				if activated >= w.config.BatchSize {
+					break
+				}
+			}
+			if len(records) < maintenanceActivationPageSize {
+				break
+			}
+			offset += len(records)
+		}
+		return nil
+	})
+	return activated, err
 }
 
 func (w *MaintenanceWorker) claim(ctx context.Context) (port.MaintenanceRecord, []byte, error) {
@@ -141,10 +201,11 @@ func (w *MaintenanceWorker) process(ctx context.Context, record port.Maintenance
 				return err
 			}
 		}
-		lifecycle := domain.MonitorLifecycleActive
-		if !monitor.Enabled {
-			lifecycle = domain.MonitorLifecycleDisabled
+		activeMaintenance, err := repositories.Maintenance.ListActive(ctx, monitor.ID, now)
+		if err != nil {
+			return err
 		}
+		lifecycle := maintenanceLifecycle(monitor, len(activeMaintenance) != 0)
 		if err := appendMaintenanceStateTick(
 			ctx, repositories, monitor, lifecycle,
 			domain.StateTickActor{Kind: domain.StateTickActorSystem}, nil, now, w.config.NewID,
