@@ -6,7 +6,7 @@ by the public generated Go SDK. No root database,
 sqlc, domain, application, or server-internal package is imported.
 
 The SDK dependency is pinned to frozen Xisnove commit `07467ccf39e67c5cd7a68878db8c2023318e6189`.
-Goshtoso is pinned exactly to the released `v0.0.13`. The UI uses the default
+Goshtoso is pinned exactly to the released `v0.1.14`. The UI uses the default
 CDN-first `head.Dependencies()` contract with version-matched embedded fallback
 served by `assets.Handler()`; it deliberately does not use local-only runtime
 mode because Xisnove is a networked BFF. See

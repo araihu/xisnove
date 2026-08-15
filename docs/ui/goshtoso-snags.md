@@ -1,16 +1,23 @@
-# Goshtoso v0.0.13 consumer notes and snags
+# Goshtoso v0.1.14 consumer notes and historical snags
 
-The consumer now uses exact `github.com/araihu/goshtoso v0.0.13` (tag target
-`6e1b94a473d3e6903347c75955b126b980abde32`). Its default
+The consumer now uses exact `github.com/araihu/goshtoso v0.1.14` (tag target
+`dfb1b392371048247ddda07786c6f197c08b0ca6`). Its default
 `head.Dependencies()` loader is exercised under five ordered CDN failures and
 the embedded fallbacks, with SRI, CSP nonce propagation, Mask, Alpine plugins,
 HTMX, combobox, ready/fallback/error events, and terminal rejection asserted in
-Chromium. Xisnove remains CDN-first; `WithLocalRuntime` is not justified for
-this networked application.
+Chromium. The v0.1.14 manifest also emits the first-party Goshtoso bundle as a
+same-origin dependency before Alpine and HTMX. Xisnove remains CDN-first for
+third-party runtimes; `WithLocalRuntime` is not justified for this networked
+application.
+
+The v0.1.14 release does not require a Go API or runtime migration for this
+consumer. The notes below retain the earlier v0.0.13 findings as history while
+the module pin and verification target move forward.
 
 The foundation started on `github.com/araihu/goshtoso v0.0.12`, followed the
 immutable guidance checkpoint `5d2e74e4c693ffb17a7443b8b77ed195f815cd05`,
-and is now migrated to the tagged v0.0.13 API and updated global consumer skill.
+and is now verified against the tagged v0.1.14 API and updated global consumer
+skill.
 
 ## Component inventory
 
@@ -25,7 +32,7 @@ consumer CSS artifact to regenerate.
 The integrated slice additionally uses `appshell.AppShell`,
 `pageheader.PageHeader`, `toolbar.Toolbar`, `table.Table`,
 `emptystate.EmptyState`, and `skeleton.Skeleton`. They are now available from
-the exact v0.0.13 tag. No Goshtoso source, generated component, or removed
+the released v0.1.14 tag. No Goshtoso source, generated component, or removed
 internal helper is copied or patched in Xisnove.
 
 ## Snags
@@ -201,7 +208,7 @@ consumer that expects password semantics to remain safe without Alpine.
     `RemoteSource` contract on branch `codex/server-backed-search` at
     `24c23c340a04e0d8892bad9cf5e2ca94dd2dd262`; Xisnove can remove this adapter
     after that work is reviewed, merged and released. Until then it remains on
-    the latest tagged v0.0.13 and does not depend on an unreleased commit.
+    the released v0.1.14 pin and does not depend on an unreleased commit.
 26. **Product identity remains application-owned and version-pinned.** The
     Goshtoso shell correctly accepts consumer content rather than prescribing a
     logo. Xisnove now renders the canonical independent V10 logo/marks from

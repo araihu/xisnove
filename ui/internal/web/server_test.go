@@ -396,7 +396,7 @@ func TestLoginPageUsesOrderedCDNFirstDependenciesWithNonceAndFallback(t *testing
 	if err := json.Unmarshal([]byte(html.UnescapeString(match[1])), &config); err != nil {
 		t.Fatalf("decode dependency config: %v", err)
 	}
-	wantNames := []string{"alpine-collapse", "alpine-focus", "alpine-mask", "alpine", "htmx", "combobox"}
+	wantNames := []string{"alpine-collapse", "alpine-focus", "alpine-mask", "first-party", "alpine", "htmx"}
 	if len(config.Dependencies) != len(wantNames) {
 		t.Fatalf("dependency count = %d, want %d", len(config.Dependencies), len(wantNames))
 	}
@@ -404,12 +404,15 @@ func TestLoginPageUsesOrderedCDNFirstDependenciesWithNonceAndFallback(t *testing
 		if dependency.Name != wantNames[index] {
 			t.Errorf("dependency[%d] = %q, want %q", index, dependency.Name, wantNames[index])
 		}
-		if index < 5 {
+		switch dependency.Name {
+		case "first-party":
+			if dependency.PrimaryURL != "/assets/js/goshtoso.min.js" || dependency.FallbackURL != "" || dependency.Integrity != "" {
+				t.Errorf("first-party source = %#v", dependency)
+			}
+		default:
 			if !strings.HasPrefix(dependency.PrimaryURL, "https://unpkg.com/") || !strings.HasPrefix(dependency.FallbackURL, "/assets/") || !strings.HasPrefix(dependency.Integrity, "sha384-") {
 				t.Errorf("dependency[%d] is not pinned CDN-first with SRI and fallback: %#v", index, dependency)
 			}
-		} else if dependency.PrimaryURL != "/assets/js/combobox.js" || dependency.FallbackURL != "" {
-			t.Errorf("combobox source = %#v", dependency)
 		}
 	}
 	nonceMatch := regexp.MustCompile(`src="/assets/js/dependency-loader.js"[^>]* nonce="([^"]+)"`).FindStringSubmatch(body)

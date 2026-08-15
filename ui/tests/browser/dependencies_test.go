@@ -45,7 +45,7 @@ func TestDefaultDependenciesCDNFailureUsesOrderedEmbeddedFallback(t *testing.T) 
 		ready: window.__xisDependencies.readyEvents,
 		errors: window.__xisDependencies.errors,
 		nonces: [...document.querySelectorAll('script[data-goshtoso-dependency]')].map(script => script.nonce),
-		sri: [...document.querySelectorAll('script[data-goshtoso-dependency]:not([data-goshtoso-dependency="combobox"])')].every(script => script.integrity.startsWith('sha384-')),
+		sri: [...document.querySelectorAll('script[data-goshtoso-dependency]')].filter(script => !['first-party','combobox'].includes(script.dataset.goshtosoDependency)).every(script => script.integrity.startsWith('sha384-')),
 	}))()`, &result)); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestDefaultDependenciesCDNFailureUsesOrderedEmbeddedFallback(t *testing.T) 
 			t.Errorf("%s source = %q, want fallback", name, result.Sources[name])
 		}
 	}
-	if result.Sources["combobox"] != "primary" || result.Ready != 1 || result.Errors != 0 || !result.SRI {
+	if result.Sources["first-party"] != "primary" || result.Ready != 1 || result.Errors != 0 || !result.SRI {
 		t.Fatalf("dependency ledger = %#v", result)
 	}
 	if len(result.Nonces) != 6 {
