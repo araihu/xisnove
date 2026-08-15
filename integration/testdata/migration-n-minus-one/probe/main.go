@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	minimumSchemaVersion int64 = 10
-	maximumSchemaVersion int64 = 11
+	minimumSchemaVersion int64 = 11
+	maximumSchemaVersion int64 = 12
 )
 
 func main() {

@@ -3,12 +3,12 @@
   "runtime_version": "m6.1-future-n-minus-one-baseline",
   "source": "probe/main.go",
   "schema": {
-    "baseline": 10,
-    "expand": 11,
-    "minimum": 10,
-    "maximum": 11
+    "baseline": 11,
+    "expand": 12,
+    "minimum": 11,
+    "maximum": 12
   },
   "sha256": {
-    "probe/main.go": "13b3d26beef9e27add9af76c6a4a15f24fb46b6b638325751871f28a2b77111c"
+    "probe/main.go": "ff0efef1cf18613f3d404b367181faa690a6cc922044d030c52427bb701788f5"
   }
 }

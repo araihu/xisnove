@@ -19,7 +19,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-const frozenNMinusOneManifestSHA256 = "0e64e6797a305abce6c14f1eabfbafc2586edd4ebbf2983c7c1673a206fdf74c"
+const frozenNMinusOneManifestSHA256 = "838d8e00407f50f327d695f1340774dd3ea2f3b82ce04fd03fd7b87ae2e3ec9a"
 
 type frozenNMinusOneManifest struct {
 	FormatVersion  int               `json:"format_version"`
@@ -44,7 +44,7 @@ func TestNMinusOneBinaryRemainsReadyAfterExpandMigration(t *testing.T) {
 	if manifest.FormatVersion != 1 || manifest.RuntimeVersion != "m6.1-future-n-minus-one-baseline" {
 		t.Fatalf("unexpected frozen fixture identity: format=%d runtime=%q", manifest.FormatVersion, manifest.RuntimeVersion)
 	}
-	if manifest.Schema != (frozenSchemaRange{Baseline: 10, Expand: 11, Minimum: 10, Maximum: 11}) {
+	if manifest.Schema != (frozenSchemaRange{Baseline: 11, Expand: 12, Minimum: 11, Maximum: 12}) {
 		t.Fatalf("frozen schema range = %+v", manifest.Schema)
 	}
 	if sqlitemigrations.LatestVersion != manifest.Schema.Expand {
@@ -184,7 +184,7 @@ func assertFrozenNMinusOneReady(t *testing.T, probe string, schemaVersion int64)
 	if err != nil {
 		t.Fatalf("frozen N-1 probe rejected schema %d: %v\n%s", schemaVersion, err, combined)
 	}
-	want := fmt.Sprintf("ready schema=%d interval=[10,11]", schemaVersion)
+	want := fmt.Sprintf("ready schema=%d interval=[11,12]", schemaVersion)
 	if got := strings.TrimSpace(string(combined)); got != want {
 		t.Fatalf("frozen N-1 output = %q, want %q", got, want)
 	}
@@ -201,7 +201,7 @@ func assertFrozenNMinusOneNotReady(t *testing.T, probe string, schemaVersion int
 	if !ok || exitError.ExitCode() != 1 {
 		t.Fatalf("frozen N-1 rejection exit = %v, want 1", err)
 	}
-	want := fmt.Sprintf("not ready schema=%d interval=[10,11]", schemaVersion)
+	want := fmt.Sprintf("not ready schema=%d interval=[11,12]", schemaVersion)
 	if got := strings.TrimSpace(string(combined)); got != want {
 		t.Fatalf("frozen N-1 rejection = %q, want %q", got, want)
 	}
