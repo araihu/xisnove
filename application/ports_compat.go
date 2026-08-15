@@ -66,6 +66,7 @@ type AgentRepository = port.AgentRepository
 type RunRepository = port.RunRepository
 type ResultRepository = port.ResultRepository
 type StateTickRepository = port.StateTickRepository
+type StateTickWriter = port.StateTickWriter
 type IncidentRepository = port.IncidentRepository
 type NotificationChannelRepository = port.NotificationChannelRepository
 type NotificationRouteRepository = port.NotificationRouteRepository

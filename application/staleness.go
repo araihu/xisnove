@@ -74,7 +74,12 @@ func (s *StalenessService) MarkDue(ctx context.Context, limit int) (int, error) 
 				s.newID,
 				true,
 			)
-			return err
+			if err != nil {
+				return err
+			}
+			return appendStaleStateTick(
+				ctx, repositories, candidate, transition.To, now, s.newID,
+			)
 		})
 		if err != nil {
 			return marked, fmt.Errorf(

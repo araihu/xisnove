@@ -31,17 +31,22 @@ type Store interface {
 }
 
 type Repositories struct {
-	Admins               AdminRepository
-	Sessions             SessionRepository
-	APITokens            APITokenRepository
-	Idempotency          IdempotencyRepository
-	Locations            LocationRepository
-	Monitors             MonitorRepository
-	Health               HealthRepository
-	Agents               AgentRepository
-	Runs                 RunRepository
-	Results              ResultRepository
-	StateTicks           StateTickRepository
+	Admins      AdminRepository
+	Sessions    SessionRepository
+	APITokens   APITokenRepository
+	Idempotency IdempotencyRepository
+	Locations   LocationRepository
+	Monitors    MonitorRepository
+	Health      HealthRepository
+	Agents      AgentRepository
+	Runs        RunRepository
+	Results     ResultRepository
+	StateTicks  StateTickRepository
+	// StateTickWriter is optional while stores migrate from the read-only
+	// history contract. New stores should provide the same implementation as
+	// StateTicks so state transitions are appended in the surrounding unit of
+	// work; legacy stores may leave it nil.
+	StateTickWriter      StateTickWriter
 	Incidents            IncidentRepository
 	NotificationChannels NotificationChannelRepository
 	NotificationRoutes   NotificationRouteRepository
@@ -270,6 +275,16 @@ type ResultRepository interface {
 // requested limit, using the UTC half-open interval [start,end).
 type StateTickRepository interface {
 	ListStateTicks(context.Context, domain.MonitorID, time.Time, time.Time, int) ([]domain.StateTick, error)
+}
+
+// StateTickWriter appends immutable state evaluations. The boolean is false
+// when the tick already exists, which makes retries idempotent.
+//
+// This is deliberately separate from StateTickRepository so read-only store
+// implementations continue to satisfy the existing history contract while
+// persistence adapters add the write path.
+type StateTickWriter interface {
+	AppendStateTick(context.Context, domain.StateTick) (inserted bool, err error)
 }
 
 type IncidentRepository interface {

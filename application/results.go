@@ -226,9 +226,18 @@ func (s *ResultService) ingest(
 	if err := repositories.Health.UpsertLocation(ctx, locationHealth); err != nil {
 		return MonitorTransitionObservation{}, false, err
 	}
-	return projectAggregateAndIncidentObserved(
+	transition, transitioned, err := projectAggregateAndIncidentObserved(
 		ctx, repositories, run.MonitorID, command.FinishedAt, s.newID, false,
 	)
+	if err != nil {
+		return MonitorTransitionObservation{}, false, err
+	}
+	if err := appendProbeStateTick(
+		ctx, repositories, monitor, run, command, transition, agentID, s.newID,
+	); err != nil {
+		return MonitorTransitionObservation{}, false, err
+	}
+	return transition, transitioned, nil
 }
 
 func validateResult(
