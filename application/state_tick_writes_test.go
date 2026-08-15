@@ -17,6 +17,15 @@ type recordingStateTickWriter struct {
 	err       error
 }
 
+type stateTickManagementQuery struct {
+	port.ManagementQueryRepository
+	records []port.MonitorRecord
+}
+
+func (q stateTickManagementQuery) ListMonitors(context.Context, port.IntKeysetRequest) ([]port.MonitorRecord, error) {
+	return q.records, nil
+}
+
 func (w *recordingStateTickWriter) AppendStateTick(_ context.Context, tick domain.StateTick) (bool, error) {
 	w.calls++
 	if w.err != nil {
@@ -134,6 +143,65 @@ func TestAppendStaleStateTickRecordsSystemCause(t *testing.T) {
 	}
 	if tick.ObservationID != nil {
 		t.Fatalf("stale observation id = %#v, want nil", tick.ObservationID)
+	}
+}
+
+func TestAppendAdministrativeStateTickCarriesUserAction(t *testing.T) {
+	writer := &recordingStateTickWriter{}
+	monitorID := domain.MonitorID("00000000-0000-4000-8000-000000000031")
+	locationID := domain.LocationID("00000000-0000-4000-8000-000000000032")
+	userActionID := "00000000-0000-4000-8000-000000000033"
+	err := appendAdministrativeStateTick(
+		context.Background(), Repositories{StateTickWriter: writer},
+		domain.Monitor{ID: monitorID}, &locationID,
+		domain.MonitorLifecycleDisabled, domain.StateTickReasonPausedByUser,
+		domain.StateTickActor{Kind: domain.StateTickActorUser, ID: "admin-1"},
+		&userActionID, time.Date(2026, 8, 15, 12, 3, 0, 0, time.UTC), monotonicIDs(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(writer.ticks) != 1 {
+		t.Fatalf("ticks = %d, want 1", len(writer.ticks))
+	}
+	tick := writer.ticks[0]
+	if tick.Lifecycle != domain.MonitorLifecycleDisabled || tick.ReasonCode != domain.StateTickReasonPausedByUser {
+		t.Fatalf("tick = %#v", tick)
+	}
+	if tick.UserActionID == nil || *tick.UserActionID != userActionID {
+		t.Fatalf("user action id = %#v", tick.UserActionID)
+	}
+	if tick.Actor.Kind != domain.StateTickActorUser || tick.Actor.ID != "admin-1" {
+		t.Fatalf("actor = %#v", tick.Actor)
+	}
+	if tick.LocationID == nil || *tick.LocationID != locationID {
+		t.Fatalf("location id = %#v", tick.LocationID)
+	}
+}
+
+func TestAppendLocationAdministrativeStateTicksFansOutToAssignedMonitors(t *testing.T) {
+	writer := &recordingStateTickWriter{}
+	locationID := domain.LocationID("00000000-0000-4000-8000-000000000041")
+	monitorID := domain.MonitorID("00000000-0000-4000-8000-000000000042")
+	query := stateTickManagementQuery{records: []port.MonitorRecord{
+		{Monitor: domain.Monitor{ID: monitorID}, LocationID: locationID},
+		{Monitor: domain.Monitor{ID: "00000000-0000-4000-8000-000000000043"}, LocationID: "other"},
+	}}
+	userActionID := "00000000-0000-4000-8000-000000000044"
+	err := appendLocationAdministrativeStateTicks(
+		context.Background(), Repositories{StateTickWriter: writer, Management: query}, locationID,
+		domain.MonitorLifecycleDisabled, domain.StateTickReasonLocationPaused,
+		domain.StateTickActor{Kind: domain.StateTickActorUser, ID: "admin-1"}, &userActionID,
+		time.Date(2026, 8, 15, 12, 4, 0, 0, time.UTC), monotonicIDs(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(writer.ticks) != 1 || writer.ticks[0].MonitorID != monitorID {
+		t.Fatalf("ticks = %#v", writer.ticks)
+	}
+	if writer.ticks[0].ReasonCode != domain.StateTickReasonLocationPaused {
+		t.Fatalf("reason = %s", writer.ticks[0].ReasonCode)
 	}
 }
 

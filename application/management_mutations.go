@@ -100,6 +100,21 @@ func (s *ManagementService) UpdateLocation(
 		if err := s.appendManagementAudit(ctx, repositories, "location.updated", "location", string(id), changed, now); err != nil {
 			return "", domain.Location{}, err
 		}
+		if current.Enabled != updated.Enabled {
+			reason := domain.StateTickReasonPausedByUser
+			lifecycle := domain.MonitorLifecycleDisabled
+			if updated.Enabled {
+				reason = domain.StateTickReasonResumedByUser
+				lifecycle = domain.MonitorLifecycleActive
+			}
+			if err := appendLocationAdministrativeStateTicks(
+				ctx, repositories, updated.ID, lifecycle, reason,
+				domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID},
+				stateTickUserActionID(s.newID), now, s.newID,
+			); err != nil {
+				return "", domain.Location{}, err
+			}
+		}
 		return string(id), updated, nil
 	}, func(ctx context.Context, repositories Repositories, resourceID string) (domain.Location, error) {
 		return repositories.Management.GetLocation(ctx, domain.LocationID(resourceID))
@@ -135,7 +150,15 @@ func (s *ManagementService) DisableLocation(ctx context.Context, principal Princ
 		if !disabled {
 			return ErrConflict
 		}
-		return s.appendManagementAudit(ctx, repositories, "location.disabled", "location", string(id), []string{"enabled"}, now)
+		if err := s.appendManagementAudit(ctx, repositories, "location.disabled", "location", string(id), []string{"enabled"}, now); err != nil {
+			return err
+		}
+		return appendLocationAdministrativeStateTicks(
+			ctx, repositories, id, domain.MonitorLifecycleDisabled,
+			domain.StateTickReasonLocationPaused,
+			domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID},
+			stateTickUserActionID(s.newID), now, s.newID,
+		)
 	})
 }
 
@@ -194,6 +217,22 @@ func (s *ManagementService) UpdateMonitor(
 		if err := s.appendManagementAudit(ctx, repositories, "monitor.updated", "monitor", string(id), []string{"configuration"}, now); err != nil {
 			return "", ConfiguredMonitor{}, err
 		}
+		if current.Monitor.Enabled != candidate.Monitor.Enabled {
+			locationID := candidate.LocationID
+			reason := domain.StateTickReasonPausedByUser
+			lifecycle := domain.MonitorLifecycleDisabled
+			if candidate.Monitor.Enabled {
+				reason = domain.StateTickReasonResumedByUser
+				lifecycle = domain.MonitorLifecycleActive
+			}
+			if err := appendAdministrativeStateTick(
+				ctx, repositories, candidate.Monitor, &locationID, lifecycle, reason,
+				domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID},
+				stateTickUserActionID(s.newID), now, s.newID,
+			); err != nil {
+				return "", ConfiguredMonitor{}, err
+			}
+		}
 		return string(id), configuredMonitor(candidate), nil
 	}, func(ctx context.Context, repositories Repositories, resourceID string) (ConfiguredMonitor, error) {
 		record, err := repositories.Management.GetMonitor(ctx, domain.MonitorID(resourceID))
@@ -230,7 +269,16 @@ func (s *ManagementService) DisableMonitor(ctx context.Context, principal Princi
 		if !disabled {
 			return ErrConflict
 		}
-		return s.appendManagementAudit(ctx, repositories, "monitor.disabled", "monitor", string(id), []string{"enabled"}, now)
+		if err := s.appendManagementAudit(ctx, repositories, "monitor.disabled", "monitor", string(id), []string{"enabled"}, now); err != nil {
+			return err
+		}
+		locationID := current.LocationID
+		return appendAdministrativeStateTick(
+			ctx, repositories, current.Monitor, &locationID,
+			domain.MonitorLifecycleDisabled, domain.StateTickReasonPausedByUser,
+			domain.StateTickActor{Kind: domain.StateTickActorUser, ID: principal.SubjectID},
+			stateTickUserActionID(s.newID), now, s.newID,
+		)
 	})
 }
 

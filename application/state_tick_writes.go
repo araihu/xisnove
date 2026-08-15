@@ -14,11 +14,23 @@ import (
 // has not yet wired the append side of the immutable state contract.
 var ErrStateTickWriterUnavailable = errors.New("state tick writer unavailable")
 
+func stateTickPersistenceConfigured(repositories Repositories) bool {
+	return repositories.StateTickWriter != nil || repositories.StateTicks != nil
+}
+
 func stateTickIDs(newID func() string) (string, string, error) {
 	if newID == nil {
 		return "", "", errors.New("state tick id generator is nil")
 	}
 	return newID(), newID(), nil
+}
+
+func stateTickUserActionID(newID func() string) *string {
+	if newID == nil {
+		return nil
+	}
+	id := newID()
+	return &id
 }
 
 func appendProbeStateTick(
@@ -128,6 +140,44 @@ func appendAdministrativeStateTick(
 		return err
 	}
 	return appendStateTick(ctx, repositories, tick)
+}
+
+// appendLocationAdministrativeStateTicks fans a location lifecycle action
+// out to the monitors assigned to that location. StateTick is monitor-scoped,
+// so a location mutation is represented by one immutable tick per affected
+// monitor. The read is intentionally skipped for legacy stores that have not
+// enabled history persistence yet.
+func appendLocationAdministrativeStateTicks(
+	ctx context.Context,
+	repositories Repositories,
+	locationID domain.LocationID,
+	lifecycle domain.MonitorLifecycle,
+	reason domain.StateTickReasonCode,
+	actor domain.StateTickActor,
+	userActionID *string,
+	at time.Time,
+	newID func() string,
+) error {
+	if !stateTickPersistenceConfigured(repositories) {
+		return nil
+	}
+	monitors, err := repositories.Management.ListMonitors(ctx, port.IntKeysetRequest{Limit: 10000})
+	if err != nil {
+		return fmt.Errorf("list monitors for location state tick: %w", err)
+	}
+	for _, record := range monitors {
+		if record.LocationID != locationID {
+			continue
+		}
+		assignedLocationID := record.LocationID
+		if err := appendAdministrativeStateTick(
+			ctx, repositories, record.Monitor, &assignedLocationID, lifecycle, reason,
+			actor, userActionID, at, newID,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // appendStateTick is the single application seam for immutable lifecycle and
