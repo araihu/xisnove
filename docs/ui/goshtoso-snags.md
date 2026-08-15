@@ -28,6 +28,16 @@ Authenticated fragments are rendered through `consoleshell.Fragment`; the
 single current monitor destination does not request a navigation OOB update,
 avoiding a sidebar swap when a full-page public route is active.
 
+The public Manja documentation shell is the visual reference for this
+composition: a compact top bar with a square menu trigger, one brand mark, an
+outlined global search trigger with a keyboard hint, and a mode toggle. Xisnove
+keeps that composition application-owned while reusing the public Goshtoso
+shell slots; the responsive drawer contains the theme selectors and status
+link. The shell uses the immutable canonical Xisnove light/reverse marks from
+`docs/ui/identity-assets.md`; the staged seasonal X-9 asset set remains
+available under its explicit `/ui/seasonal/v0.1.1/` routes and is not silently
+substituted into the authenticated shell.
+
 ## Component inventory
 
 The foundation uses the public APIs for `head.Dependencies`,

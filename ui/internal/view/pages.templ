@@ -13,6 +13,8 @@ import (
 	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/emptystate"
 	"github.com/araihu/goshtoso/components/head"
+	"github.com/araihu/goshtoso/components/icon"
+	"github.com/araihu/goshtoso/components/icon/heroicons"
 	"github.com/araihu/goshtoso/components/link"
 	"github.com/araihu/goshtoso/components/navbar"
 	"github.com/araihu/goshtoso/components/pageheader"
@@ -153,21 +155,52 @@ templ AppStyles() {
 		.dark .xis-state-danger { color: var(--color-danger-text-dark); }
 		tr[aria-selected="true"] { background: var(--color-surface-alt); box-shadow: inset .25rem 0 0 var(--color-primary); }
 		.dark tr[aria-selected="true"] { background: var(--color-surface-dark-alt); box-shadow: inset .25rem 0 0 var(--color-primary-dark); }
-		.console-shell__actions { gap: .75rem; }
-		.console-shell__actions .xis-global-search-trigger { margin-left: 0; }
-		.console-shell__actions .xis-theme-controls { align-items: end; }
-		.xis-global-search-trigger { flex: 0 1 28rem; min-width: 12rem; margin-left: clamp(.25rem, 3vw, 3rem); }
-		.xis-global-search-trigger > div { width: 100%; }
-		.xis-global-search-trigger button { width: 100%; display: flex; align-items: center; gap: .5rem; border: 2px solid var(--xis-control-outline); }
-		.xis-global-search-trigger kbd { margin-left: auto; }
+		.console-shell__header-inner { min-width: 0; }
+		.console-shell-root .console-shell__menu { display: inline-flex; width: 3.25rem; height: 3.25rem; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface-strong); font-size: 0; line-height: 0; padding: 0; background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor); background-position: center 34%, center 50%, center 66%; background-repeat: no-repeat; background-size: 1.35rem 2px; }
+		.console-shell-root .console-shell__menu:hover { background-color: var(--color-surface-alt); }
+		html.dark .console-shell__menu { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-strong); }
+		html.dark .console-shell__menu:hover { background-color: var(--color-surface-dark-alt); }
+		.console-shell-root .console-shell__menu:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }
+		.console-shell__brand { min-width: 0; }
+		.xis-brand-mark-slot { display: inline-flex; width: 2.25rem; height: 2.25rem; flex: 0 0 auto; align-items: center; justify-content: center; }
+		.xis-brand-mark-slot img { display: none; width: 100%; height: 100%; }
+		.xis-brand-mark-slot img:first-child { display: block; }
+		.dark .xis-brand-mark-slot img:first-child { display: none; }
+		.dark .xis-brand-mark-slot img:last-child { display: block; }
+		.console-shell__actions { min-width: 0; gap: .75rem; }
+		.xis-global-search-trigger { flex: 1 1 28rem; min-width: 10rem; margin-left: 0; }
+		.xis-global-search-trigger > div { width: 100%; min-width: 0; }
+		.xis-global-search-trigger button.xis-search-trigger-button { width: 100%; min-width: 0; min-height: 3.25rem; display: flex; align-items: center; justify-content: flex-start; gap: .625rem; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface); box-shadow: none; padding: .5rem .75rem; text-align: left; }
+		.xis-global-search-trigger button.xis-search-trigger-button:hover { background: var(--color-surface-alt); border-color: var(--color-outline-strong); }
+		.dark .xis-global-search-trigger button.xis-search-trigger-button { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark); }
+		.dark .xis-global-search-trigger button.xis-search-trigger-button:hover { background: var(--color-surface-dark-alt); border-color: var(--color-outline-dark-strong); }
+		.xis-global-search-trigger button.xis-search-trigger-button > span { display: inline-flex; min-width: 0; align-items: center; }
+		.xis-global-search-trigger kbd { margin-left: auto; border: 1px solid var(--color-outline-strong); border-radius: .375rem; padding: .25rem .5rem; font-size: .8rem; line-height: 1; white-space: nowrap; }
+		.dark .xis-global-search-trigger kbd { border-color: var(--color-outline-dark-strong); }
+		.xis-dark-mode-toggle { display: inline-flex; width: 3rem; height: 3rem; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface-strong); cursor: pointer; }
+		.xis-dark-mode-toggle:hover { background: var(--color-surface-alt); }
+		.dark .xis-dark-mode-toggle { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-strong); }
+		.dark .xis-dark-mode-toggle:hover { background: var(--color-surface-dark-alt); }
+		.xis-console-sidebar-header { display: grid; gap: .75rem; padding: 1rem; border-bottom: 1px solid var(--color-outline); }
+		.dark .xis-console-sidebar-header { border-color: var(--color-outline-dark); }
+		.xis-console-sidebar-header .xis-theme-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; align-items: end; }
+		.xis-console-sidebar-header .xis-field { min-width: 0; }
+		.xis-console-sidebar-header .xis-select { width: 100%; }
+		.xis-console-sidebar-header .console-shell__status-link { min-height: 2.75rem; }
 		.xis-global-search-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: min(38rem, calc(100vh - 5rem)); margin: 4.5rem auto auto; padding: 0; border: 0; border-radius: .75rem; color: var(--color-on-surface); background: var(--color-surface); box-shadow: 0 .75rem 2.5rem rgba(0, 0, 0, .28); overflow: hidden; }
 		.xis-global-search-dialog::backdrop { background: rgba(2, 6, 23, .62); }
 		.dark .xis-global-search-dialog { color: var(--color-on-surface-dark); background: var(--color-surface-dark-alt); }
 		.xis-global-search-panel { display: grid; min-height: 18rem; grid-template-rows: auto minmax(0, 1fr) auto; }
 		.xis-global-search-input-row { display: flex; align-items: center; gap: .75rem; padding: .875rem 1rem; border-bottom: 1px solid var(--color-outline); }
 		.dark .xis-global-search-input-row { border-color: var(--color-outline-dark-strong); }
+		.xis-global-search-input-row > svg { color: var(--color-on-surface-muted); }
+		.dark .xis-global-search-input-row > svg { color: var(--color-on-surface-dark-muted); }
 		.xis-global-search-input { flex: 1; min-width: 0; min-height: 2.75rem; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.05rem; }
 		.xis-global-search-input:focus { outline: 0; }
+		.xis-global-search-close { display: inline-flex; min-width: 3.25rem; min-height: 2.75rem; align-items: center; justify-content: center; gap: .35rem; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+		.xis-global-search-close > span { font-size: 1.5rem; line-height: 1; }
+		.xis-global-search-close kbd { border: 1px solid var(--color-outline-strong); border-radius: .375rem; padding: .25rem .45rem; font-size: .75rem; line-height: 1; }
+		.dark .xis-global-search-close kbd { border-color: var(--color-outline-dark-strong); }
 		.xis-global-search-results { overflow-y: auto; padding: .5rem; }
 		.xis-global-search-result { display: grid; gap: .2rem; padding: .75rem; border-radius: .5rem; color: inherit; text-decoration: none; }
 		.xis-global-search-result:hover, .xis-global-search-result[aria-selected="true"] { background: var(--color-surface-alt); }
@@ -177,26 +210,27 @@ templ AppStyles() {
 		.dark .xis-global-search-state { color: var(--color-on-surface-dark-muted); }
 		.xis-global-search-footer { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 1rem; border-top: 1px solid var(--color-outline); font-size: .75rem; color: var(--color-on-surface-muted); }
 		.dark .xis-global-search-footer { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); }
+		@media (min-width: 720px) { .console-shell-root .console-shell__menu { display: none; } }
 		@media (max-width: 719px) {
 			.xis-content { padding: 1.25rem .75rem 3rem; }
-			.console-shell__actions { gap: .25rem; min-width: 0; }
-			.console-shell__actions .xis-theme-controls { align-items: end; flex-direction: row; gap: .2rem; }
-			.console-shell__actions .xis-field { font-size: .6875rem; }
-			.console-shell__actions .xis-select { min-height: 2.75rem; padding: .25rem; font-size: .75rem; }
-			.console-shell__actions #theme-choice { width: 4.25rem; }
-			.console-shell__actions #mode-choice { width: 3.25rem; }
+			.console-shell__header-inner { gap: .5rem; padding-inline: .75rem; }
+			.console-shell__brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+			.console-shell__actions { flex: 1 1 auto; gap: .35rem; margin-left: 0; }
 			.console-shell__actions form button { padding-inline: .45rem; font-size: .75rem; }
 			form.xis-theme-controls { width: 100%; align-items: stretch; flex-direction: column; }
 			form.xis-theme-controls .xis-monitor-search-field { min-width: 0; }
 			.xis-content [role="toolbar"] > .ml-auto { width: 100%; margin-left: 0; justify-content: flex-start; }
-			.xis-global-search-trigger { flex: 1 1 auto; min-width: 2.75rem; margin-left: 0; }
-			.xis-global-search-trigger span, .xis-global-search-trigger kbd { display: none; }
+			.xis-global-search-trigger { flex: 1 1 auto; min-width: 0; }
+			.xis-global-search-trigger button.xis-search-trigger-button { min-height: 2.75rem; padding: .5rem .625rem; gap: .35rem; }
+			.xis-global-search-trigger button.xis-search-trigger-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+			.xis-global-search-trigger kbd { display: none; }
 			.xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; }
 			.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; }
 			.xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; }
 			.xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; }
 			.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }
 		}
+		@media (max-width: 479px) { .console-shell__brand-name { display: none; } }
 	</style>
 }
 
@@ -209,8 +243,15 @@ templ Brand() {
 	</span>
 }
 
+templ BrandMark() {
+	<span class="xis-brand-mark-slot" aria-hidden="true">
+		<img src="/ui/xisnove-mark-ab01f1a.svg" alt="" width="36" height="36"/>
+		<img src="/ui/xisnove-mark-reverse-ab01f1a.svg" alt="" width="36" height="36"/>
+	</span>
+}
+
 templ ThemeControls() {
-	<div class="xis-theme-controls" aria-label="Appearance controls" x-data="{ theme: localStorage.getItem('goshtoso-theme') || localStorage.getItem('xisnove-theme') || document.documentElement.dataset.theme || 'araihu', dark: localStorage.getItem('goshtoso-dark') === 'true' || (localStorage.getItem('goshtoso-dark') === null && localStorage.getItem('xisnove-mode') === 'dark') }" x-init="document.documentElement.dataset.theme = theme; document.documentElement.classList.toggle('dark', dark)">
+	<div class="xis-theme-controls" aria-label="Appearance controls" x-data="{ theme: localStorage.getItem('goshtoso-theme') || localStorage.getItem('xisnove-theme') || document.documentElement.dataset.theme || 'araihu', dark: localStorage.getItem('goshtoso-dark') === 'true' || (localStorage.getItem('goshtoso-dark') === null && localStorage.getItem('xisnove-mode') === 'dark') }" x-init="document.documentElement.dataset.theme = theme; document.documentElement.classList.toggle('dark', dark)" x-on:xisnove-mode-change.window="dark = $event.detail.dark">
 		<label class="xis-field" for="theme-choice">Theme
 			<select id="theme-choice" class="xis-select" x-model="theme" x-on:change="document.documentElement.dataset.theme = theme; localStorage.setItem('goshtoso-theme', theme); localStorage.setItem('xisnove-theme', theme)">
 				<option value="araihu">Arai Hû</option>
@@ -219,12 +260,19 @@ templ ThemeControls() {
 			</select>
 		</label>
 		<label class="xis-field" for="mode-choice">Mode
-			<select id="mode-choice" class="xis-select" x-bind:value="dark ? 'dark' : 'light'" x-on:change="dark = $event.target.value === 'dark'; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('goshtoso-dark', String(dark)); localStorage.setItem('xisnove-mode', dark ? 'dark' : 'light')">
+			<select id="mode-choice" class="xis-select" x-bind:value="dark ? 'dark' : 'light'" x-on:change="dark = $event.target.value === 'dark'; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('goshtoso-dark', String(dark)); localStorage.setItem('xisnove-mode', dark ? 'dark' : 'light'); window.dispatchEvent(new CustomEvent('xisnove-mode-change', { detail: { dark } }))">
 				<option value="light">Light</option>
 				<option value="dark">Dark</option>
 			</select>
 		</label>
 	</div>
+}
+
+templ DarkModeToggle() {
+	<button type="button" class="xis-dark-mode-toggle" aria-label="Switch to dark mode" aria-pressed="false" x-data="{ dark: document.documentElement.classList.contains('dark') }" x-bind:aria-label="dark ? 'Switch to light mode' : 'Switch to dark mode'" x-bind:aria-pressed="dark" x-init="$watch('dark', value => { document.documentElement.classList.toggle('dark', value); localStorage.setItem('goshtoso-dark', String(value)); localStorage.setItem('xisnove-mode', value ? 'dark' : 'light'); window.dispatchEvent(new CustomEvent('xisnove-mode-change', { detail: { dark: value } })) })" x-on:click="dark = !dark">
+		<span x-show="!dark">@icon.Icon(icon.Config{SpriteURL: heroicons.SpriteURL, Symbol: heroicons.Icon16SolidSun, Size: icon.SizeLG, Decorative: true})</span>
+		<span x-show="dark">@icon.Icon(icon.Config{SpriteURL: heroicons.SpriteURL, Symbol: heroicons.Icon16SolidMoon, Size: icon.SizeLG, Decorative: true})</span>
+	</button>
 }
 
 templ LoginPage(csrfToken, errorMessage string) { @Document("Sign in", LoginContent(csrfToken, errorMessage)) }
@@ -263,12 +311,15 @@ templ LogoutForm(csrfToken string) {
 templ ShellPage(title, csrfToken string, content templ.Component) { @ConsolePage(title, csrfToken, content) }
 
 templ ConsoleSidebarHeader() {
-	<a class="xis-native-link console-shell__status-link" href="/status">Public status</a>
+	<div class="xis-console-sidebar-header">
+		@ThemeControls()
+		<a class="xis-native-link console-shell__status-link" href="/status">Public status</a>
+	</div>
 }
 
 templ ConsoleHeaderActions(csrfToken string) {
 	@GlobalSearchTrigger()
-	@ThemeControls()
+	@DarkModeToggle()
 	@LogoutForm(csrfToken)
 }
 
@@ -277,9 +328,11 @@ templ GlobalSearchTrigger() {
 		<div id="global-search">
 			@button.Button(
 				button.WithType("button"),
-				button.WithRootClass("min-h-11"),
+				button.WithTone(button.ToneAlternate),
+				button.WithRootClass("min-h-11 xis-search-trigger-button"),
 				button.WithAttrs(templ.Attributes{"aria-haspopup": "dialog", "aria-controls": "global-search-dialog", "aria-expanded": "false"}),
 			) {
+				@icon.Icon(icon.Config{SpriteURL: heroicons.SpriteURL, Symbol: heroicons.Icon16SolidMagnifyingGlass, Size: icon.SizeLG, Decorative: true, RootClass: "shrink-0"})
 				<span>Search X-9</span><kbd>⌘ K</kbd>
 			}
 		</div>
@@ -291,8 +344,9 @@ templ GlobalSearchModal() {
 		<div class="xis-global-search-panel">
 			<div class="xis-global-search-input-row">
 				<label id="global-search-label" class="sr-only" for="global-search-input">Search X-9</label>
+				@icon.Icon(icon.Config{SpriteURL: heroicons.SpriteURL, Symbol: heroicons.Icon16SolidMagnifyingGlass, Size: icon.SizeLG, Decorative: true, RootClass: "shrink-0"})
 				<input id="global-search-input" class="xis-global-search-input" type="search" placeholder="Search monitors" autocomplete="off" spellcheck="false" minlength="2" maxlength="120" aria-controls="global-search-results" aria-autocomplete="list"/>
-				<button type="button" data-search-close aria-label="Close search">Close</button>
+				<button type="button" class="xis-global-search-close" data-search-close aria-label="Close search"><span aria-hidden="true">×</span><kbd>Esc</kbd></button>
 			</div>
 			<div id="global-search-results" class="xis-global-search-results" role="listbox" aria-label="Search X-9 results" aria-live="polite">
 				@GlobalSearchPrompt()

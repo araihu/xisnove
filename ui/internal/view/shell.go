@@ -37,7 +37,7 @@ func consoleConfig(csrfToken string) consoleshell.Config {
 		Brand: consoleshell.Brand{
 			Name:       "Xisnove",
 			HomeURL:    "/monitors",
-			Logo:       Brand(),
+			Logo:       BrandMark(),
 			FaviconURL: "/ui/xisnove-ab01f1a.svg",
 		},
 		Navigation: consoleshell.Navigation{
