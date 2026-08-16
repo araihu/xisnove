@@ -23,6 +23,18 @@ const (
 )
 
 func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
+	return renderAvailabilityChart(monitor, health, "168px", "xis-availability-chart", true, true, "4px")
+}
+
+// monitorAvailabilityMiniChart renders the same live snapshot as the detail
+// chart, compressed for the monitor inventory table. The SSE source remains
+// monitor-scoped, so each row replaces its seed with the complete bounded
+// availability window without a second page-level history contract.
+func monitorAvailabilityMiniChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
+	return renderAvailabilityChart(monitor, health, "48px", "xis-availability-chart xis-availability-mini-chart", false, false, "3px")
+}
+
+func renderAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth, height, class string, showLegend, showTooltip bool, barWidth string) templ.Component {
 	snapshot := availabilitySeedSnapshot(health.State, time.Now().UTC())
 
 	series := make([]interactive.BarSeries, 0, len(snapshot.Series))
@@ -36,7 +48,7 @@ func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) tem
 			Data: data,
 			Options: interactive.SeriesOptions{
 				Stack:    "availability",
-				BarWidth: "4px",
+				BarWidth: barWidth,
 				BarGap:   "-100%",
 			},
 		})
@@ -47,17 +59,17 @@ func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) tem
 		XAxis:  snapshot.Categories,
 		Series: series,
 		Width:  "100%",
-		Height: "168px",
+		Height: height,
 		Options: interactive.ChartOptions{
-			Legend:    &interactive.LegendOptions{Show: interactive.Bool(true), Orient: "horizontal", Bottom: "0"},
-			Tooltip:   &interactive.TooltipOptions{Show: interactive.Bool(true), Trigger: "axis"},
+			Legend:    &interactive.LegendOptions{Show: interactive.Bool(showLegend), Orient: "horizontal", Bottom: "0"},
+			Tooltip:   &interactive.TooltipOptions{Show: interactive.Bool(showTooltip), Trigger: "axis"},
 			XAxis:     &interactive.AxisOptions{Show: interactive.Bool(false), ShowFirstLabel: interactive.Bool(false), ShowLastLabel: interactive.Bool(false)},
 			YAxis:     &interactive.AxisOptions{Show: interactive.Bool(false), Min: interactive.Float(0), Max: interactive.Float(1)},
 			Animation: interactive.Bool(false),
 			Controls:  chartcontrol.Options{Expand: interactive.Bool(false)},
 			Export:    &chartcontrol.ExportOptions{Disabled: true},
 		},
-		Style: charttheme.Style{Palette: charttheme.PaletteStatus, Class: "xis-availability-chart"},
+		Style: charttheme.Style{Palette: charttheme.PaletteStatus, Class: class},
 		Live: &interactive.LiveData{
 			URL:   "/monitors/" + monitor.Id.String() + "/availability/events",
 			Event: "chart",

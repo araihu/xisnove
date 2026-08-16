@@ -193,6 +193,8 @@ templ AppStyles() {
 		.xis-availability-heading p { margin: .25rem 0 0; }
 		.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted) !important; }
 		.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted) !important; }
+		.xis-availability-mini-chart { margin: 0 auto; min-width: 11rem; max-width: 14rem; }
+		.xis-availability-mini-chart figcaption { display: none; }
 		.xis-password { width: 100%; }
 		.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
@@ -978,10 +980,10 @@ func monitorTable(data MonitorList) table.Config {
 		selected := data.Selected == id
 		attrs := map[string]string{"data-monitor-id": id, "aria-selected": fmt.Sprint(selected)}
 		rows = append(rows, table.Row{ID: id, HTMX: &table.RowHTMXConfig{Get: monitorURL(data.Query, data.Cursor, id), Target: "#main-content", Swap: "outerHTML", PushURL: true}, AlpineAttrs: attrs, Cells: map[string]table.Cell{
-			"name": {Text: name}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
+			"name": {Text: name}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "availability": {Component: monitorAvailabilityMiniChart(monitor, health)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
 		}})
 	}
-	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
+	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "availability", Label: "Availability", Width: "w-56", Align: "center"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
 }
 
 func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {

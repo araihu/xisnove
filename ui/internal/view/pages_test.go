@@ -356,6 +356,30 @@ func TestMonitorContentDistinguishesEmptyFilteredAndPartialStates(t *testing.T) 
 	}
 }
 
+func TestMonitorTableIncludesCompactLiveAvailabilityColumn(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000021")
+	data := MonitorList{
+		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Table monitor", Kind: sdk.MonitorKindHttp, Enabled: true}},
+		Health:   map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
+	}
+
+	var rendered strings.Builder
+	if err := MonitorContent(data).Render(t.Context(), &rendered); err != nil {
+		t.Fatal(err)
+	}
+	body := rendered.String()
+	for _, want := range []string{
+		">Availability</th>",
+		`xis-availability-chart xis-availability-mini-chart`,
+		`style="width:100%;height:48px;"`,
+		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("monitor table compact availability chart missing %q", want)
+		}
+	}
+}
+
 func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000001")
 	locationID := uuid.MustParse("20000000-0000-4000-8000-000000000001")

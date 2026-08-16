@@ -226,7 +226,7 @@ func AppStyles() templ.Component {
 			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<style>\n\t\t:root { --xis-gap: 1rem; --xis-action-bg: var(--color-primary); --xis-action-fg: var(--color-on-primary); --xis-link: var(--color-primary); --xis-control-outline: var(--color-outline-strong, var(--color-outline)); }\n\t\t.dark { --xis-action-bg: var(--color-primary-dark); --xis-action-fg: var(--color-on-primary-dark); --xis-link: var(--color-primary-dark); --xis-control-outline: var(--color-outline-dark-strong); }\n\t\tbody { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }\n\t\thtml.console-shell-root { overflow-x: hidden; }\n\t\tbody.console-shell { overflow-x: hidden; }\n\t\tmain.console-shell__main { overflow-x: hidden; }\n\t\t.console-shell__content { overflow-x: clip; }\n\t\t@media (max-width: 719px) {\n\t\t\t.console-shell-root.js .console-shell__sidebar:not(.is-open) { visibility: hidden; pointer-events: none; }\n\t\t\t.console-shell-root.js .console-shell__sidebar.is-open { visibility: visible; pointer-events: auto; }\n\t\t}\n\t\thtml.dark .console-shell__sidebar [data-consoleshell-nav-id][aria-current=\"page\"] { color: var(--color-primary-dark); }\n\t\t@media (min-width: 720px) { html.console-shell-root.js .console-shell__sidebar { visibility: visible; pointer-events: auto; transform: none; } }\n\t\t.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }\n\t\t.xis-brand { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; color: var(--color-on-surface-strong); }\n\t\t.dark .xis-brand { color: var(--color-on-surface-dark-strong); }\n\t\t.xis-brand-logo { display: block; width: 7.5rem; height: 2rem; }\n\t\t.xis-brand-mark, .xis-brand-mark-reverse { display: none; width: 2.25rem; height: 2.25rem; }\n\t\t.dark .xis-brand-logo, .dark .xis-brand-mark { display: none; }\n\t\t.dark .xis-brand-mark-reverse { display: block; }\n\t\t.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; overflow-x: clip; }\n\t\t.xis-stack { display: grid; gap: var(--xis-gap); }\n\t\t.xis-field { display: grid; gap: .25rem; font-size: .875rem; }\n\t\t.xis-input { min-height: 3rem; min-width: 0; max-width: 100%; border: 1px solid var(--xis-control-outline); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }\n\t\t.xis-login-form input:not([type=\"hidden\"]) { min-height: 3rem; }\n\t\t.dark .xis-input { background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }\n\t\t.xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }\n\t\ta[href]:focus-visible { outline: 3px solid currentColor !important; outline-offset: 2px !important; }\n\t\tbutton:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; }\n\t\t.dark button:focus-visible { outline-color: var(--color-primary-dark) !important; }\n\t\t.xis-native-link, .xis-action-link { color: var(--xis-link); display: inline-flex; align-items: center; min-width: 2.75rem; min-height: 2.75rem; }\n\t\t.xis-action-link { justify-content: center; }\n\t\t.xis-visual-test *, .xis-visual-test *::before, .xis-visual-test *::after { transition: none; animation: none; }\n\t\t.xis-public-nav a:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; box-shadow: 0 0 0 3px var(--color-surface); }\n\t\t.dark .xis-public-nav a:focus-visible { outline-color: var(--color-primary-dark); box-shadow: 0 0 0 3px var(--color-surface-dark); }\n\t\t.xis-primary-action { background: var(--xis-action-bg); border-color: var(--xis-action-bg); color: var(--xis-action-fg); }\n\t\tbutton.xis-primary-action:focus, button.xis-primary-action:focus-visible, a.xis-primary-action:focus, a.xis-primary-action:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; box-shadow: 0 0 0 3px var(--color-primary) !important; }\n\t\t.dark button.xis-primary-action:focus, .dark button.xis-primary-action:focus-visible, .dark a.xis-primary-action:focus, .dark a.xis-primary-action:focus-visible { outline-color: var(--color-primary-dark) !important; box-shadow: 0 0 0 3px var(--color-primary-dark) !important; }\n\t\t.xis-primary-action { min-width: 2.75rem; min-height: 2.75rem; }\n\t\tbutton { min-width: 2.75rem; min-height: 2.75rem; }\n\t\t.xis-recovery-action { border: 1px solid var(--xis-action-bg); border-radius: .5rem; padding: .5rem .75rem; font: inherit; cursor: pointer; }\n\t\t.xis-results { display: grid; gap: 1rem; min-width: 0; max-width: 100%; min-height: 16rem; }\n\t\t.xis-results-surface { width: 100%; min-width: 0; min-height: 16rem; }\n\t\t.xis-results.xis-results-surface { width: min(100%, calc(100vw - 4.5rem)); max-width: 100%; }\n\t\t.xis-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; contain: paint; }\n\t\t.xis-table-scroll table { min-width: 48rem; }\n\t\t.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }\n\t\t.dark .xis-meta { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }\n\t\t.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t.xis-status-results { align-content: start; align-items: start; min-height: 0; }\n\t\t.xis-location-layout { display: grid; grid-template-columns: minmax(16rem, .8fr) minmax(0, 1.6fr); gap: 1.5rem; align-items: start; }\n\t\t.xis-location-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }\n\t\t.dark .xis-location-panel { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }\n\t\t.xis-location-panel h2, .xis-location-panel h3 { margin: 0; }\n\t\t.xis-location-form { display: grid; gap: .75rem; }\n\t\t.xis-location-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }\n\t\t.xis-location-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }\n\t\t.xis-location-actions form { display: inline-flex; }\n\t\t.xis-location-danger-action { color: var(--color-danger-text); }\n\t\t.dark .xis-location-danger-action { color: var(--color-danger-text-dark); }\n\t\t.xis-monitor-drawer-panel { top: 4rem !important; }\n\t\t.xis-monitor-drawer > div > div:first-child { z-index: 55 !important; }\n\t\t.xis-monitor-drawer-panel { z-index: 60 !important; }\n\t\t.xis-monitor-drawer-panel #monitor-detail-drawerTitle { display: block; min-width: 0; overflow: visible; white-space: normal; }\n\t\t.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }\n\t\t.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }\n\t\t.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }\n\t\t.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }\n\t\t.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }\n\t\t.xis-detail-facts dt { color: var(--color-on-surface-muted); }\n\t\t.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }\n\t\t.xis-detail-section-heading { margin: 0; font-weight: 700; }\n\t\t.xis-state-history { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }\n\t\t.dark .xis-state-history { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }\n\t\t.xis-state-history-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t.xis-state-history-heading h3 { margin: 0; }\n\t\t.xis-state-history-heading p { margin: .25rem 0 0; }\n\t\t.xis-state-ticks { display: grid; gap: .625rem; list-style: none; margin: .75rem 0 0; padding: 0; }\n\t\t.xis-state-tick { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 1rem; border-top: 1px solid var(--color-outline); padding: .75rem 0 0; }\n\t\t.dark .xis-state-tick { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-state-tick:first-child { border-top: 0; padding-top: 0; }\n\t\t.xis-state-tick-main { display: grid; gap: .35rem; min-width: 0; }\n\t\t.xis-state-tick-summary, .xis-state-tick-provenance { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem .65rem; min-width: 0; }\n\t\t.xis-state-tick-summary { font-weight: 600; }\n\t\t.xis-state-tick-reason { margin: 0; color: var(--color-on-surface-muted); font-size: .875rem; }\n\t\t.dark .xis-state-tick-reason { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-state-tick-provenance { margin: 0; color: var(--color-on-surface-muted); font-size: .8rem; overflow-wrap: anywhere; }\n\t\t.dark .xis-state-tick-provenance { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-state-tick-time { min-width: 9.5rem; color: var(--color-on-surface-muted); font-size: .8rem; text-align: right; white-space: nowrap; }\n\t\t.dark .xis-state-tick-time { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-state-history-gap { margin-top: .75rem; border: 1px dashed var(--color-outline-strong); border-radius: .5rem; padding: .875rem; color: var(--color-on-surface-muted); background: var(--color-surface); }\n\t\t.dark .xis-state-history-gap { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); background: var(--color-surface-dark); }\n\t\t.xis-availability { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }\n\t\t.dark .xis-availability { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }\n\t\t.xis-availability-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t.xis-availability-heading h3 { margin: 0; }\n\t\t.xis-availability-heading p { margin: .25rem 0 0; }\n\t\t.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted) !important; }\n\t\t.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted) !important; }\n\t\t.xis-password { width: 100%; }\n\t\t.xis-skeleton { display: none; width: 100%; min-height: 16rem; }\n\t\t.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }\n\t\t#monitor-loading.htmx-request ~ .xis-results, #status-loading.htmx-request ~ .xis-status-results { display: none; }\n\t\t.xis-state-info { color: var(--color-info-text); }\n\t\t.xis-state-unknown { color: var(--color-on-surface-muted); }\n\t\t.xis-state-warning { color: var(--color-warning-text); }\n\t\t.xis-state-success { color: var(--color-success-text); }\n\t\t.xis-state-danger { color: var(--color-danger-text); }\n\t\t.xis-state-info *, .xis-state-unknown *, .xis-state-warning *, .xis-state-success *, .xis-state-danger * { color: inherit; }\n\t\t.dark .xis-state-info { color: var(--color-info-text-dark); }\n\t\t.dark .xis-state-unknown { color: var(--color-on-surface-dark-muted); }\n\t\t.dark .xis-state-warning { color: var(--color-warning-text-dark); }\n\t\t.dark .xis-state-success { color: var(--color-success-text-dark); }\n\t\t.dark .xis-state-danger { color: var(--color-danger-text-dark); }\n\t\ttr[aria-selected=\"true\"] { background: var(--color-surface-alt); box-shadow: inset .25rem 0 0 var(--color-primary); }\n\t\t.dark tr[aria-selected=\"true\"] { background: var(--color-surface-dark-alt); box-shadow: inset .25rem 0 0 var(--color-primary-dark); }\n\t\t.console-shell__header-inner { min-width: 0; }\n\t\t.console-shell-root .console-shell__menu { display: inline-flex; width: 3.25rem; height: 3.25rem; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface-strong); font-size: 0; line-height: 0; padding: 0; background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor); background-position: center 34%, center 50%, center 66%; background-repeat: no-repeat; background-size: 1.35rem 2px; }\n\t\t.console-shell-root .console-shell__menu:hover { background-color: var(--color-surface-alt); }\n\t\thtml.dark .console-shell__menu { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-strong); }\n\t\thtml.dark .console-shell__menu:hover { background-color: var(--color-surface-dark-alt); }\n\t\t.console-shell-root .console-shell__menu:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }\n\t\t.console-shell__brand { min-width: 0; }\n\t\t.console-shell__brand-name { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }\n\t\t.console-shell__actions { min-width: 0; gap: .75rem; }\n\t\t.xis-global-search-trigger { flex: 1 1 28rem; min-width: 10rem; margin-left: 0; }\n\t\t.xis-global-search-trigger > div { width: 100%; min-width: 0; }\n\t\t.xis-global-search-trigger button.xis-search-trigger-button { width: 100%; min-width: 0; min-height: 3.25rem; display: flex; align-items: center; justify-content: flex-start; gap: .625rem; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface); box-shadow: none; padding: .5rem .75rem; text-align: left; }\n\t\t.xis-global-search-trigger button.xis-search-trigger-button:hover { background: var(--color-surface-alt); border-color: var(--color-outline-strong); }\n\t\t.dark .xis-global-search-trigger button.xis-search-trigger-button { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark); }\n\t\t.dark .xis-global-search-trigger button.xis-search-trigger-button:hover { background: var(--color-surface-dark-alt); border-color: var(--color-outline-dark-strong); }\n\t\t.xis-global-search-trigger button.xis-search-trigger-button > span { display: inline-flex; min-width: 0; align-items: center; }\n\t\t.xis-global-search-trigger kbd { margin-left: auto; border: 1px solid var(--color-outline-strong); border-radius: .375rem; padding: .25rem .5rem; font-size: .8rem; line-height: 1; white-space: nowrap; }\n\t\t.dark .xis-global-search-trigger kbd { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-dark-mode-toggle { display: inline-flex; width: 3rem; height: 3rem; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface-strong); cursor: pointer; }\n\t\t.xis-dark-mode-toggle:hover { background: var(--color-surface-alt); }\n\t\t.dark .xis-dark-mode-toggle { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-strong); }\n\t\t.dark .xis-dark-mode-toggle:hover { background: var(--color-surface-dark-alt); }\n\t\t.xis-console-sidebar-header { display: grid; gap: .75rem; padding: 1rem; border-bottom: 1px solid var(--color-outline); }\n\t\t.dark .xis-console-sidebar-header { border-color: var(--color-outline-dark); }\n\t\t.xis-console-sidebar-header .console-shell__status-link { min-height: 2.75rem; }\n\t\t.xis-account-menu { flex: 0 0 auto; }\n\t\t.xis-account-menu > div > button[aria-haspopup=\"true\"], .dark .xis-account-menu > div > button[aria-haspopup=\"true\"] { min-width: 2.75rem; min-height: 2.75rem; padding: 0; border: 0; border-radius: 9999px; background: transparent; box-shadow: none; }\n\t\t.xis-account-menu > div > button[aria-haspopup=\"true\"]:hover, .dark .xis-account-menu > div > button[aria-haspopup=\"true\"]:hover { background: transparent; opacity: 1; }\n\t\t.xis-account-avatar { border-color: var(--color-on-surface-strong); background: var(--color-surface); color: var(--color-on-surface-strong); }\n\t\t.dark .xis-account-avatar { border-color: var(--color-on-surface-dark-strong); background: var(--color-surface-dark); color: var(--color-on-surface-dark-strong); }\n\t\t.xis-account-menu [role=\"menu\"] { z-index: 70; }\n\t\t.xis-account-logout-form { display: none; }\n\t\t.xis-global-search-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: min(38rem, calc(100vh - 5rem)); margin: 4.5rem auto auto; padding: 0; border: 0; border-radius: .75rem; color: var(--color-on-surface); background: var(--color-surface); box-shadow: 0 .75rem 2.5rem rgba(0, 0, 0, .28); overflow: hidden; }\n\t\t.xis-global-search-dialog::backdrop { background: rgba(2, 6, 23, .62); }\n\t\t.dark .xis-global-search-dialog { color: var(--color-on-surface-dark); background: var(--color-surface-dark-alt); }\n\t\t.xis-global-search-panel { display: grid; min-height: 18rem; grid-template-rows: auto minmax(0, 1fr) auto; }\n\t\t.xis-global-search-input-row { display: flex; align-items: center; gap: .75rem; padding: .875rem 1rem; border-bottom: 1px solid var(--color-outline); }\n\t\t.dark .xis-global-search-input-row { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-global-search-input-row > svg { color: var(--color-on-surface-muted); }\n\t\t.dark .xis-global-search-input-row > svg { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-global-search-input { flex: 1; min-width: 0; min-height: 2.75rem; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.05rem; }\n\t\t.xis-global-search-input:focus { outline: 0; }\n\t\t.xis-global-search-close { display: inline-flex; min-width: 3.25rem; min-height: 2.75rem; align-items: center; justify-content: center; gap: .35rem; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }\n\t\t.xis-global-search-close > span { font-size: 1.5rem; line-height: 1; }\n\t\t.xis-global-search-close kbd { border: 1px solid var(--color-outline-strong); border-radius: .375rem; padding: .25rem .45rem; font-size: .75rem; line-height: 1; }\n\t\t.dark .xis-global-search-close kbd { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-global-search-results { overflow-y: auto; padding: .5rem; }\n\t\t.xis-global-search-result { display: grid; gap: .2rem; padding: .75rem; border-radius: .5rem; color: inherit; text-decoration: none; }\n\t\t.xis-global-search-result:hover, .xis-global-search-result[aria-selected=\"true\"] { background: var(--color-surface-alt); }\n\t\t.dark .xis-global-search-result:hover, .dark .xis-global-search-result[aria-selected=\"true\"] { background: var(--color-surface-dark); }\n\t\t.xis-global-search-result-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }\n\t\t.xis-global-search-state { display: grid; place-content: center; min-height: 12rem; padding: 1.5rem; text-align: center; color: var(--color-on-surface-muted); }\n\t\t.dark .xis-global-search-state { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-global-search-footer { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 1rem; border-top: 1px solid var(--color-outline); font-size: .75rem; color: var(--color-on-surface-muted); }\n\t\t.dark .xis-global-search-footer { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); }\n\t\t@media (min-width: 720px) { .console-shell-root .console-shell__menu { display: none; } }\n\t\t@media (max-width: 719px) {\n\t\t\t.xis-location-policy-grid { grid-template-columns: 1fr; }\n\t\t\t.xis-content { padding: 1.25rem .75rem 3rem; }\n\t\t\t.console-shell__header-inner { gap: .5rem; padding-inline: .75rem; }\n\t\t\t.console-shell__brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n\t\t\t.console-shell__actions { flex: 1 1 auto; gap: .35rem; margin-left: 0; }\n\t\t\t.xis-global-search-trigger { flex: 1 1 auto; min-width: 0; }\n\t\t\t.xis-global-search-trigger button.xis-search-trigger-button { min-height: 2.75rem; padding: .5rem .625rem; gap: .35rem; }\n\t\t\t.xis-global-search-trigger button.xis-search-trigger-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n\t\t\t.xis-global-search-trigger kbd { padding: .2rem .35rem; font-size: .7rem; }\n\t\t\t.xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; }\n\t\t\t.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; }\n\t\t\t.xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; }\n\t\t\t.xis-location-layout { grid-template-columns: 1fr; }\n\t\t\t.xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; }\n\t\t\t.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }\n\t\t}\n\t\t@media (max-width: 479px) { .console-shell__brand-name { display: none; } }\n\t</style>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<style>\n\t\t:root { --xis-gap: 1rem; --xis-action-bg: var(--color-primary); --xis-action-fg: var(--color-on-primary); --xis-link: var(--color-primary); --xis-control-outline: var(--color-outline-strong, var(--color-outline)); }\n\t\t.dark { --xis-action-bg: var(--color-primary-dark); --xis-action-fg: var(--color-on-primary-dark); --xis-link: var(--color-primary-dark); --xis-control-outline: var(--color-outline-dark-strong); }\n\t\tbody { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }\n\t\thtml.console-shell-root { overflow-x: hidden; }\n\t\tbody.console-shell { overflow-x: hidden; }\n\t\tmain.console-shell__main { overflow-x: hidden; }\n\t\t.console-shell__content { overflow-x: clip; }\n\t\t@media (max-width: 719px) {\n\t\t\t.console-shell-root.js .console-shell__sidebar:not(.is-open) { visibility: hidden; pointer-events: none; }\n\t\t\t.console-shell-root.js .console-shell__sidebar.is-open { visibility: visible; pointer-events: auto; }\n\t\t}\n\t\thtml.dark .console-shell__sidebar [data-consoleshell-nav-id][aria-current=\"page\"] { color: var(--color-primary-dark); }\n\t\t@media (min-width: 720px) { html.console-shell-root.js .console-shell__sidebar { visibility: visible; pointer-events: auto; transform: none; } }\n\t\t.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }\n\t\t.xis-brand { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; color: var(--color-on-surface-strong); }\n\t\t.dark .xis-brand { color: var(--color-on-surface-dark-strong); }\n\t\t.xis-brand-logo { display: block; width: 7.5rem; height: 2rem; }\n\t\t.xis-brand-mark, .xis-brand-mark-reverse { display: none; width: 2.25rem; height: 2.25rem; }\n\t\t.dark .xis-brand-logo, .dark .xis-brand-mark { display: none; }\n\t\t.dark .xis-brand-mark-reverse { display: block; }\n\t\t.xis-content { width: 100%; max-width: 80rem; margin-inline: auto; padding: 2rem 1rem 4rem; overflow-x: clip; }\n\t\t.xis-stack { display: grid; gap: var(--xis-gap); }\n\t\t.xis-field { display: grid; gap: .25rem; font-size: .875rem; }\n\t\t.xis-input { min-height: 3rem; min-width: 0; max-width: 100%; border: 1px solid var(--xis-control-outline); border-radius: .5rem; background: var(--color-surface); color: var(--color-on-surface-strong); padding: .5rem .75rem; }\n\t\t.xis-login-form input:not([type=\"hidden\"]) { min-height: 3rem; }\n\t\t.dark .xis-input { background: var(--color-surface-dark-alt); color: var(--color-on-surface-dark-strong); }\n\t\t.xis-input:focus-visible, .xis-native-link:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }\n\t\ta[href]:focus-visible { outline: 3px solid currentColor !important; outline-offset: 2px !important; }\n\t\tbutton:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; }\n\t\t.dark button:focus-visible { outline-color: var(--color-primary-dark) !important; }\n\t\t.xis-native-link, .xis-action-link { color: var(--xis-link); display: inline-flex; align-items: center; min-width: 2.75rem; min-height: 2.75rem; }\n\t\t.xis-action-link { justify-content: center; }\n\t\t.xis-visual-test *, .xis-visual-test *::before, .xis-visual-test *::after { transition: none; animation: none; }\n\t\t.xis-public-nav a:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; box-shadow: 0 0 0 3px var(--color-surface); }\n\t\t.dark .xis-public-nav a:focus-visible { outline-color: var(--color-primary-dark); box-shadow: 0 0 0 3px var(--color-surface-dark); }\n\t\t.xis-primary-action { background: var(--xis-action-bg); border-color: var(--xis-action-bg); color: var(--xis-action-fg); }\n\t\tbutton.xis-primary-action:focus, button.xis-primary-action:focus-visible, a.xis-primary-action:focus, a.xis-primary-action:focus-visible { outline: 3px solid var(--color-primary) !important; outline-offset: 2px !important; box-shadow: 0 0 0 3px var(--color-primary) !important; }\n\t\t.dark button.xis-primary-action:focus, .dark button.xis-primary-action:focus-visible, .dark a.xis-primary-action:focus, .dark a.xis-primary-action:focus-visible { outline-color: var(--color-primary-dark) !important; box-shadow: 0 0 0 3px var(--color-primary-dark) !important; }\n\t\t.xis-primary-action { min-width: 2.75rem; min-height: 2.75rem; }\n\t\tbutton { min-width: 2.75rem; min-height: 2.75rem; }\n\t\t.xis-recovery-action { border: 1px solid var(--xis-action-bg); border-radius: .5rem; padding: .5rem .75rem; font: inherit; cursor: pointer; }\n\t\t.xis-results { display: grid; gap: 1rem; min-width: 0; max-width: 100%; min-height: 16rem; }\n\t\t.xis-results-surface { width: 100%; min-width: 0; min-height: 16rem; }\n\t\t.xis-results.xis-results-surface { width: min(100%, calc(100vw - 4.5rem)); max-width: 100%; }\n\t\t.xis-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; contain: paint; }\n\t\t.xis-table-scroll table { min-width: 48rem; }\n\t\t.xis-meta { color: var(--color-on-surface-muted); font-size: .875rem; }\n\t\t.dark .xis-meta { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-public-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--color-outline); }\n\t\t.dark .xis-public-row { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-status-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t.xis-status-results { align-content: start; align-items: start; min-height: 0; }\n\t\t.xis-location-layout { display: grid; grid-template-columns: minmax(16rem, .8fr) minmax(0, 1.6fr); gap: 1.5rem; align-items: start; }\n\t\t.xis-location-panel { display: grid; gap: .75rem; min-width: 0; border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }\n\t\t.dark .xis-location-panel { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }\n\t\t.xis-location-panel h2, .xis-location-panel h3 { margin: 0; }\n\t\t.xis-location-form { display: grid; gap: .75rem; }\n\t\t.xis-location-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }\n\t\t.xis-location-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }\n\t\t.xis-location-actions form { display: inline-flex; }\n\t\t.xis-location-danger-action { color: var(--color-danger-text); }\n\t\t.dark .xis-location-danger-action { color: var(--color-danger-text-dark); }\n\t\t.xis-monitor-drawer-panel { top: 4rem !important; }\n\t\t.xis-monitor-drawer > div > div:first-child { z-index: 55 !important; }\n\t\t.xis-monitor-drawer-panel { z-index: 60 !important; }\n\t\t.xis-monitor-drawer-panel #monitor-detail-drawerTitle { display: block; min-width: 0; overflow: visible; white-space: normal; }\n\t\t.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }\n\t\t.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }\n\t\t.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }\n\t\t.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }\n\t\t.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }\n\t\t.xis-detail-facts dt { color: var(--color-on-surface-muted); }\n\t\t.dark .xis-detail-facts dt { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-detail-facts dd { margin: 0; overflow-wrap: anywhere; }\n\t\t.xis-detail-section-heading { margin: 0; font-weight: 700; }\n\t\t.xis-state-history { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }\n\t\t.dark .xis-state-history { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }\n\t\t.xis-state-history-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t.xis-state-history-heading h3 { margin: 0; }\n\t\t.xis-state-history-heading p { margin: .25rem 0 0; }\n\t\t.xis-state-ticks { display: grid; gap: .625rem; list-style: none; margin: .75rem 0 0; padding: 0; }\n\t\t.xis-state-tick { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 1rem; border-top: 1px solid var(--color-outline); padding: .75rem 0 0; }\n\t\t.dark .xis-state-tick { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-state-tick:first-child { border-top: 0; padding-top: 0; }\n\t\t.xis-state-tick-main { display: grid; gap: .35rem; min-width: 0; }\n\t\t.xis-state-tick-summary, .xis-state-tick-provenance { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem .65rem; min-width: 0; }\n\t\t.xis-state-tick-summary { font-weight: 600; }\n\t\t.xis-state-tick-reason { margin: 0; color: var(--color-on-surface-muted); font-size: .875rem; }\n\t\t.dark .xis-state-tick-reason { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-state-tick-provenance { margin: 0; color: var(--color-on-surface-muted); font-size: .8rem; overflow-wrap: anywhere; }\n\t\t.dark .xis-state-tick-provenance { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-state-tick-time { min-width: 9.5rem; color: var(--color-on-surface-muted); font-size: .8rem; text-align: right; white-space: nowrap; }\n\t\t.dark .xis-state-tick-time { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-state-history-gap { margin-top: .75rem; border: 1px dashed var(--color-outline-strong); border-radius: .5rem; padding: .875rem; color: var(--color-on-surface-muted); background: var(--color-surface); }\n\t\t.dark .xis-state-history-gap { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); background: var(--color-surface-dark); }\n\t\t.xis-availability { border: 1px solid var(--color-outline); border-radius: .75rem; padding: 1rem; background: var(--color-surface-alt); }\n\t\t.dark .xis-availability { border-color: var(--color-outline-dark-strong); background: var(--color-surface-dark-alt); }\n\t\t.xis-availability-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }\n\t\t.xis-availability-heading h3 { margin: 0; }\n\t\t.xis-availability-heading p { margin: .25rem 0 0; }\n\t\t.xis-availability-chart { margin: .25rem 0 0; width: 100%; --color-chart-series-4: var(--color-on-surface-muted) !important; }\n\t\t.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted) !important; }\n\t\t.xis-availability-mini-chart { margin: 0 auto; min-width: 11rem; max-width: 14rem; }\n\t\t.xis-availability-mini-chart figcaption { display: none; }\n\t\t.xis-password { width: 100%; }\n\t\t.xis-skeleton { display: none; width: 100%; min-height: 16rem; }\n\t\t.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }\n\t\t#monitor-loading.htmx-request ~ .xis-results, #status-loading.htmx-request ~ .xis-status-results { display: none; }\n\t\t.xis-state-info { color: var(--color-info-text); }\n\t\t.xis-state-unknown { color: var(--color-on-surface-muted); }\n\t\t.xis-state-warning { color: var(--color-warning-text); }\n\t\t.xis-state-success { color: var(--color-success-text); }\n\t\t.xis-state-danger { color: var(--color-danger-text); }\n\t\t.xis-state-info *, .xis-state-unknown *, .xis-state-warning *, .xis-state-success *, .xis-state-danger * { color: inherit; }\n\t\t.dark .xis-state-info { color: var(--color-info-text-dark); }\n\t\t.dark .xis-state-unknown { color: var(--color-on-surface-dark-muted); }\n\t\t.dark .xis-state-warning { color: var(--color-warning-text-dark); }\n\t\t.dark .xis-state-success { color: var(--color-success-text-dark); }\n\t\t.dark .xis-state-danger { color: var(--color-danger-text-dark); }\n\t\ttr[aria-selected=\"true\"] { background: var(--color-surface-alt); box-shadow: inset .25rem 0 0 var(--color-primary); }\n\t\t.dark tr[aria-selected=\"true\"] { background: var(--color-surface-dark-alt); box-shadow: inset .25rem 0 0 var(--color-primary-dark); }\n\t\t.console-shell__header-inner { min-width: 0; }\n\t\t.console-shell-root .console-shell__menu { display: inline-flex; width: 3.25rem; height: 3.25rem; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface-strong); font-size: 0; line-height: 0; padding: 0; background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor); background-position: center 34%, center 50%, center 66%; background-repeat: no-repeat; background-size: 1.35rem 2px; }\n\t\t.console-shell-root .console-shell__menu:hover { background-color: var(--color-surface-alt); }\n\t\thtml.dark .console-shell__menu { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-strong); }\n\t\thtml.dark .console-shell__menu:hover { background-color: var(--color-surface-dark-alt); }\n\t\t.console-shell-root .console-shell__menu:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }\n\t\t.console-shell__brand { min-width: 0; }\n\t\t.console-shell__brand-name { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }\n\t\t.console-shell__actions { min-width: 0; gap: .75rem; }\n\t\t.xis-global-search-trigger { flex: 1 1 28rem; min-width: 10rem; margin-left: 0; }\n\t\t.xis-global-search-trigger > div { width: 100%; min-width: 0; }\n\t\t.xis-global-search-trigger button.xis-search-trigger-button { width: 100%; min-width: 0; min-height: 3.25rem; display: flex; align-items: center; justify-content: flex-start; gap: .625rem; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface); box-shadow: none; padding: .5rem .75rem; text-align: left; }\n\t\t.xis-global-search-trigger button.xis-search-trigger-button:hover { background: var(--color-surface-alt); border-color: var(--color-outline-strong); }\n\t\t.dark .xis-global-search-trigger button.xis-search-trigger-button { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark); }\n\t\t.dark .xis-global-search-trigger button.xis-search-trigger-button:hover { background: var(--color-surface-dark-alt); border-color: var(--color-outline-dark-strong); }\n\t\t.xis-global-search-trigger button.xis-search-trigger-button > span { display: inline-flex; min-width: 0; align-items: center; }\n\t\t.xis-global-search-trigger kbd { margin-left: auto; border: 1px solid var(--color-outline-strong); border-radius: .375rem; padding: .25rem .5rem; font-size: .8rem; line-height: 1; white-space: nowrap; }\n\t\t.dark .xis-global-search-trigger kbd { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-dark-mode-toggle { display: inline-flex; width: 3rem; height: 3rem; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--color-outline-strong); border-radius: var(--radius-radius, .5rem); background: transparent; color: var(--color-on-surface-strong); cursor: pointer; }\n\t\t.xis-dark-mode-toggle:hover { background: var(--color-surface-alt); }\n\t\t.dark .xis-dark-mode-toggle { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-strong); }\n\t\t.dark .xis-dark-mode-toggle:hover { background: var(--color-surface-dark-alt); }\n\t\t.xis-console-sidebar-header { display: grid; gap: .75rem; padding: 1rem; border-bottom: 1px solid var(--color-outline); }\n\t\t.dark .xis-console-sidebar-header { border-color: var(--color-outline-dark); }\n\t\t.xis-console-sidebar-header .console-shell__status-link { min-height: 2.75rem; }\n\t\t.xis-account-menu { flex: 0 0 auto; }\n\t\t.xis-account-menu > div > button[aria-haspopup=\"true\"], .dark .xis-account-menu > div > button[aria-haspopup=\"true\"] { min-width: 2.75rem; min-height: 2.75rem; padding: 0; border: 0; border-radius: 9999px; background: transparent; box-shadow: none; }\n\t\t.xis-account-menu > div > button[aria-haspopup=\"true\"]:hover, .dark .xis-account-menu > div > button[aria-haspopup=\"true\"]:hover { background: transparent; opacity: 1; }\n\t\t.xis-account-avatar { border-color: var(--color-on-surface-strong); background: var(--color-surface); color: var(--color-on-surface-strong); }\n\t\t.dark .xis-account-avatar { border-color: var(--color-on-surface-dark-strong); background: var(--color-surface-dark); color: var(--color-on-surface-dark-strong); }\n\t\t.xis-account-menu [role=\"menu\"] { z-index: 70; }\n\t\t.xis-account-logout-form { display: none; }\n\t\t.xis-global-search-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: min(38rem, calc(100vh - 5rem)); margin: 4.5rem auto auto; padding: 0; border: 0; border-radius: .75rem; color: var(--color-on-surface); background: var(--color-surface); box-shadow: 0 .75rem 2.5rem rgba(0, 0, 0, .28); overflow: hidden; }\n\t\t.xis-global-search-dialog::backdrop { background: rgba(2, 6, 23, .62); }\n\t\t.dark .xis-global-search-dialog { color: var(--color-on-surface-dark); background: var(--color-surface-dark-alt); }\n\t\t.xis-global-search-panel { display: grid; min-height: 18rem; grid-template-rows: auto minmax(0, 1fr) auto; }\n\t\t.xis-global-search-input-row { display: flex; align-items: center; gap: .75rem; padding: .875rem 1rem; border-bottom: 1px solid var(--color-outline); }\n\t\t.dark .xis-global-search-input-row { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-global-search-input-row > svg { color: var(--color-on-surface-muted); }\n\t\t.dark .xis-global-search-input-row > svg { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-global-search-input { flex: 1; min-width: 0; min-height: 2.75rem; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1.05rem; }\n\t\t.xis-global-search-input:focus { outline: 0; }\n\t\t.xis-global-search-close { display: inline-flex; min-width: 3.25rem; min-height: 2.75rem; align-items: center; justify-content: center; gap: .35rem; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }\n\t\t.xis-global-search-close > span { font-size: 1.5rem; line-height: 1; }\n\t\t.xis-global-search-close kbd { border: 1px solid var(--color-outline-strong); border-radius: .375rem; padding: .25rem .45rem; font-size: .75rem; line-height: 1; }\n\t\t.dark .xis-global-search-close kbd { border-color: var(--color-outline-dark-strong); }\n\t\t.xis-global-search-results { overflow-y: auto; padding: .5rem; }\n\t\t.xis-global-search-result { display: grid; gap: .2rem; padding: .75rem; border-radius: .5rem; color: inherit; text-decoration: none; }\n\t\t.xis-global-search-result:hover, .xis-global-search-result[aria-selected=\"true\"] { background: var(--color-surface-alt); }\n\t\t.dark .xis-global-search-result:hover, .dark .xis-global-search-result[aria-selected=\"true\"] { background: var(--color-surface-dark); }\n\t\t.xis-global-search-result-line { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }\n\t\t.xis-global-search-state { display: grid; place-content: center; min-height: 12rem; padding: 1.5rem; text-align: center; color: var(--color-on-surface-muted); }\n\t\t.dark .xis-global-search-state { color: var(--color-on-surface-dark-muted); }\n\t\t.xis-global-search-footer { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 1rem; border-top: 1px solid var(--color-outline); font-size: .75rem; color: var(--color-on-surface-muted); }\n\t\t.dark .xis-global-search-footer { border-color: var(--color-outline-dark-strong); color: var(--color-on-surface-dark-muted); }\n\t\t@media (min-width: 720px) { .console-shell-root .console-shell__menu { display: none; } }\n\t\t@media (max-width: 719px) {\n\t\t\t.xis-location-policy-grid { grid-template-columns: 1fr; }\n\t\t\t.xis-content { padding: 1.25rem .75rem 3rem; }\n\t\t\t.console-shell__header-inner { gap: .5rem; padding-inline: .75rem; }\n\t\t\t.console-shell__brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n\t\t\t.console-shell__actions { flex: 1 1 auto; gap: .35rem; margin-left: 0; }\n\t\t\t.xis-global-search-trigger { flex: 1 1 auto; min-width: 0; }\n\t\t\t.xis-global-search-trigger button.xis-search-trigger-button { min-height: 2.75rem; padding: .5rem .625rem; gap: .35rem; }\n\t\t\t.xis-global-search-trigger button.xis-search-trigger-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n\t\t\t.xis-global-search-trigger kbd { padding: .2rem .35rem; font-size: .7rem; }\n\t\t\t.xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; }\n\t\t\t.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; }\n\t\t\t.xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; }\n\t\t\t.xis-location-layout { grid-template-columns: 1fr; }\n\t\t\t.xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; }\n\t\t\t.dark .xis-detail-rail { border-color: var(--color-outline-dark-strong); }\n\t\t}\n\t\t@media (max-width: 479px) { .console-shell__brand-name { display: none; } }\n\t</style>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -408,7 +408,7 @@ func LoginForm(csrfToken string) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 323, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 325, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
@@ -484,7 +484,7 @@ func LogoutForm(csrfToken string) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 334, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 336, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
@@ -808,7 +808,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 406, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 408, Col: 97}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -826,7 +826,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(data.Query)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 408, Col: 121}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 410, Col: 121}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -845,7 +845,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue("global-search-result-" + item.ResourceId.String())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 411, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 413, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 				if templ_7745c5c3_Err != nil {
@@ -858,7 +858,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 				var templ_7745c5c3_Var27 templ.SafeURL
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(searchResultURL(item)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 411, Col: 189}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 413, Col: 189}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -871,7 +871,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(searchResultURL(item))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 411, Col: 222}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 413, Col: 222}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 				if templ_7745c5c3_Err != nil {
@@ -884,7 +884,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(item.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 412, Col: 68}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 414, Col: 68}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -897,7 +897,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(item.Context)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 412, Col: 116}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 414, Col: 116}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
@@ -910,7 +910,7 @@ func GlobalSearchResults(data GlobalSearchData) templ.Component {
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(item.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 413, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 415, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -1082,7 +1082,7 @@ func LocationErrorContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var37 templ.SafeURL
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(problem.RetryURL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 431, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 433, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 		if templ_7745c5c3_Err != nil {
@@ -1095,7 +1095,7 @@ func LocationErrorContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(problem.RetryURL)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 431, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 433, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -1145,7 +1145,7 @@ func LocationContent(csrfToken string, data LocationList) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 443, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 445, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -1208,7 +1208,7 @@ func LocationContent(csrfToken string, data LocationList) templ.Component {
 			var templ_7745c5c3_Var42 templ.SafeURL
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(locationPageURL(data.NextCursor, data.Selected)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 482, Col: 101}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 484, Col: 101}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
@@ -1221,7 +1221,7 @@ func LocationContent(csrfToken string, data LocationList) templ.Component {
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(locationPageURL(data.NextCursor, data.Selected))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 482, Col: 160}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 484, Col: 160}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 			if templ_7745c5c3_Err != nil {
@@ -1278,7 +1278,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var45 templ.SafeURL
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(locationUpdateURL(location.Id.String())))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 496, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 498, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
@@ -1291,7 +1291,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 497, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 499, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
@@ -1304,7 +1304,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(location.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 499, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 501, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 		if templ_7745c5c3_Err != nil {
@@ -1317,7 +1317,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(location.Address)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 502, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 504, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
@@ -1360,7 +1360,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", location.Policy.IntervalSeconds))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 513, Col: 173}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 515, Col: 173}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 		if templ_7745c5c3_Err != nil {
@@ -1373,7 +1373,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", location.Policy.TimeoutMillis))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 516, Col: 171}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 518, Col: 171}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {
@@ -1386,7 +1386,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", location.Policy.FailureThreshold))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 519, Col: 173}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 521, Col: 173}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 		if templ_7745c5c3_Err != nil {
@@ -1399,7 +1399,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", location.Policy.RecoveryThreshold))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 522, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 524, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
@@ -1458,7 +1458,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 			var templ_7745c5c3_Var54 templ.SafeURL
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(locationDisableURL(location.Id.String())))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 537, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 539, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 			if templ_7745c5c3_Err != nil {
@@ -1471,7 +1471,7 @@ func LocationEditor(csrfToken string, location sdk.Location) templ.Component {
 			var templ_7745c5c3_Var55 string
 			templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 538, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 540, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 			if templ_7745c5c3_Err != nil {
@@ -1556,7 +1556,7 @@ func MonitorErrorContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var58 templ.SafeURL
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(problem.RetryURL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 549, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 551, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
@@ -1569,7 +1569,7 @@ func MonitorErrorContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(problem.RetryURL)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 549, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 551, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {
@@ -1712,7 +1712,7 @@ func MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Monit
 		var templ_7745c5c3_Var62 string
 		templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitor.Id.String())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 590, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 592, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 		if templ_7745c5c3_Err != nil {
@@ -1725,7 +1725,7 @@ func MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Monit
 		var templ_7745c5c3_Var63 string
 		templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitorDetailState(health))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 591, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 593, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 		if templ_7745c5c3_Err != nil {
@@ -1738,7 +1738,7 @@ func MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.Monit
 		var templ_7745c5c3_Var64 string
 		templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.SafeURL(monitorURL(data.Query, data.Cursor, "")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 592, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 594, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 		if templ_7745c5c3_Err != nil {
@@ -1807,7 +1807,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitor.Id.String())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 605, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 607, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 		if templ_7745c5c3_Err != nil {
@@ -1820,7 +1820,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(healthStateValue(health.State)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 605, Col: 203}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 607, Col: 203}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 		if templ_7745c5c3_Err != nil {
@@ -1833,7 +1833,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitor.UpdatedAt.UTC().Format(time.RFC3339))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 605, Col: 273}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 607, Col: 273}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 		if templ_7745c5c3_Err != nil {
@@ -1846,7 +1846,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(monitor.Description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 609, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 611, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 		if templ_7745c5c3_Err != nil {
@@ -1859,7 +1859,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(lifecycleLabel(monitorLifecycle(monitor, history)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 611, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 613, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
@@ -1872,7 +1872,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(healthStateLabel(health.State))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 612, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 614, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 		if templ_7745c5c3_Err != nil {
@@ -1885,7 +1885,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var73 string
 		templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(formattedTime(health.LastTransitionAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 613, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 615, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 		if templ_7745c5c3_Err != nil {
@@ -1898,7 +1898,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var74 string
 		templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", len(health.Locations)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 614, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 616, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 		if templ_7745c5c3_Err != nil {
@@ -1919,7 +1919,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var75 string
 		templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(strings.ToUpper(string(monitor.Kind)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 621, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 623, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 		if templ_7745c5c3_Err != nil {
@@ -1932,7 +1932,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var76 string
 		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d seconds", monitor.IntervalSeconds))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 622, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 624, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 		if templ_7745c5c3_Err != nil {
@@ -1945,7 +1945,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var77 string
 		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d ms", monitor.TimeoutMillis))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 623, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 625, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 		if templ_7745c5c3_Err != nil {
@@ -1958,7 +1958,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var78 string
 		templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d failures", monitor.FailureThreshold))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 624, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 626, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 		if templ_7745c5c3_Err != nil {
@@ -1971,7 +1971,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var79 string
 		templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d successes", monitor.RecoveryThreshold))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 625, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 627, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 		if templ_7745c5c3_Err != nil {
@@ -1996,7 +1996,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var80 string
 		templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(enabledLabel(monitor.Enabled))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 642, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 644, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 		if templ_7745c5c3_Err != nil {
@@ -2009,7 +2009,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var81 string
 		templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(enabledLabel(monitor.Public))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 643, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 645, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 		if templ_7745c5c3_Err != nil {
@@ -2022,7 +2022,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var82 string
 		templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(enabledLabel(monitor.RequiredLocation))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 644, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 646, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 		if templ_7745c5c3_Err != nil {
@@ -2035,7 +2035,7 @@ func MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHeal
 		var templ_7745c5c3_Var83 string
 		templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(formattedTime(monitor.UpdatedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 645, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 647, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 		if templ_7745c5c3_Err != nil {
@@ -2077,7 +2077,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 		var templ_7745c5c3_Var85 string
 		templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateHistoryStatus(history, historyError))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 652, Col: 203}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 654, Col: 203}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var85)
 		if templ_7745c5c3_Err != nil {
@@ -2095,7 +2095,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 			var templ_7745c5c3_Var86 string
 			templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(historyError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 663, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 665, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 			if templ_7745c5c3_Err != nil {
@@ -2123,7 +2123,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var87 string
 				templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(stateTickHealth(tick.Health)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 111}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 111}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 				if templ_7745c5c3_Err != nil {
@@ -2136,7 +2136,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var88 string
 				templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickID(tick.ActionId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 163}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 163}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var88)
 				if templ_7745c5c3_Err != nil {
@@ -2149,7 +2149,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var89 string
 				templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.Actor.Id))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 222}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 222}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var89)
 				if templ_7745c5c3_Err != nil {
@@ -2162,7 +2162,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var90 string
 				templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(tick.Actor.Kind))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 272}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 272}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var90)
 				if templ_7745c5c3_Err != nil {
@@ -2175,7 +2175,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var91 string
 				templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.UserActionId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 341}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 341}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var91)
 				if templ_7745c5c3_Err != nil {
@@ -2188,7 +2188,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var92 string
 				templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.ObservationId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 411}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 411}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var92)
 				if templ_7745c5c3_Err != nil {
@@ -2201,7 +2201,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var93 string
 				templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.CausalTickId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 480}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 480}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var93)
 				if templ_7745c5c3_Err != nil {
@@ -2214,7 +2214,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var94 string
 				templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.ResolveAttributeValue(stateTickOptionalID(tick.CausalDependencyId))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 674, Col: 561}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 676, Col: 561}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var94)
 				if templ_7745c5c3_Err != nil {
@@ -2235,7 +2235,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var95 string
 				templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.JoinStringErrs(lifecycleLabel(tick.Lifecycle))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 678, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 680, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var95))
 				if templ_7745c5c3_Err != nil {
@@ -2248,7 +2248,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var96 string
 				templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinStringErrs(string(tick.ReasonCode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 680, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 682, Col: 95}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
 				if templ_7745c5c3_Err != nil {
@@ -2261,7 +2261,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var97 string
 				templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinStringErrs(stateTickProvenance(tick))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 681, Col: 105}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 683, Col: 105}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
 				if templ_7745c5c3_Err != nil {
@@ -2274,7 +2274,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var98 string
 				templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.ResolveAttributeValue(tick.OccurredAt.UTC().Format(time.RFC3339))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 683, Col: 93}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 685, Col: 93}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var98)
 				if templ_7745c5c3_Err != nil {
@@ -2287,7 +2287,7 @@ func MonitorStateHistory(history sdk.MonitorStateHistory, historyError string) t
 				var templ_7745c5c3_Var99 string
 				templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(stateTickTime(tick))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 683, Col: 117}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 685, Col: 117}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 				if templ_7745c5c3_Err != nil {
@@ -2339,7 +2339,7 @@ func StateTicksConsumer() templ.Component {
 		var templ_7745c5c3_Var101 string
 		templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 692, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 694, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var101)
 		if templ_7745c5c3_Err != nil {
@@ -2428,7 +2428,7 @@ func NextPage(data MonitorList) templ.Component {
 		var templ_7745c5c3_Var105 templ.SafeURL
 		templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(monitorURL(data.Query, data.NextCursor, data.Selected)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 796, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 798, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 		if templ_7745c5c3_Err != nil {
@@ -2441,7 +2441,7 @@ func NextPage(data MonitorList) templ.Component {
 		var templ_7745c5c3_Var106 string
 		templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.ResolveAttributeValue(monitorURL(data.Query, data.NextCursor, data.Selected))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 796, Col: 170}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 798, Col: 170}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var106)
 		if templ_7745c5c3_Err != nil {
@@ -2642,7 +2642,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				var templ_7745c5c3_Var112 string
 				templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.ResolveAttributeValue("monitor-" + monitor.Id.String())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 826, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 828, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var112)
 				if templ_7745c5c3_Err != nil {
@@ -2655,7 +2655,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				var templ_7745c5c3_Var113 string
 				templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(monitor.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 827, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 829, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 				if templ_7745c5c3_Err != nil {
@@ -2668,7 +2668,7 @@ func StatusContent(data sdk.PublicStatusPage) templ.Component {
 				var templ_7745c5c3_Var114 string
 				templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinStringErrs(monitor.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 827, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 829, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 				if templ_7745c5c3_Err != nil {
@@ -2845,7 +2845,7 @@ func ShellProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var119 string
 		templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(problem.Code)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 854, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 856, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 		if templ_7745c5c3_Err != nil {
@@ -2858,7 +2858,7 @@ func ShellProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var120 string
 		templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinStringErrs(problem.CorrelationID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 854, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 856, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
 		if templ_7745c5c3_Err != nil {
@@ -2908,7 +2908,7 @@ func ProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var122 string
 		templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(problem.Code)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 861, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 863, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
 		if templ_7745c5c3_Err != nil {
@@ -2921,7 +2921,7 @@ func ProblemContent(problem Problem) templ.Component {
 		var templ_7745c5c3_Var123 string
 		templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(problem.CorrelationID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 861, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 863, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 		if templ_7745c5c3_Err != nil {
@@ -3060,10 +3060,10 @@ func monitorTable(data MonitorList) table.Config {
 		selected := data.Selected == id
 		attrs := map[string]string{"data-monitor-id": id, "aria-selected": fmt.Sprint(selected)}
 		rows = append(rows, table.Row{ID: id, HTMX: &table.RowHTMXConfig{Get: monitorURL(data.Query, data.Cursor, id), Target: "#main-content", Swap: "outerHTML", PushURL: true}, AlpineAttrs: attrs, Cells: map[string]table.Cell{
-			"name": {Text: name}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
+			"name": {Text: name}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "availability": {Component: monitorAvailabilityMiniChart(monitor, health)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
 		}})
 	}
-	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
+	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "availability", Label: "Availability", Width: "w-56", Align: "center"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
 }
 
 func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {
