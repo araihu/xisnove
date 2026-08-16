@@ -11,7 +11,6 @@ import (
 	"github.com/araihu/goshtoso/components/badge"
 	"github.com/araihu/goshtoso/components/button"
 	"github.com/araihu/goshtoso/components/card"
-	"github.com/araihu/goshtoso/components/drawer"
 	"github.com/araihu/goshtoso/components/dropdown"
 	"github.com/araihu/goshtoso/components/emptystate"
 	"github.com/araihu/goshtoso/components/head"
@@ -25,6 +24,7 @@ import (
 	"github.com/araihu/goshtoso/components/textinput"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
+	"github.com/google/uuid"
 )
 
 type MonitorList struct {
@@ -152,11 +152,12 @@ templ AppStyles() {
 		.xis-location-actions form { display: inline-flex; }
 		.xis-location-danger-action { color: var(--color-danger-text); }
 		.dark .xis-location-danger-action { color: var(--color-danger-text-dark); }
-		.xis-monitor-drawer-panel { top: 4rem !important; }
-		.xis-monitor-drawer > div > div:first-child { z-index: 55 !important; }
-		.xis-monitor-drawer-panel { z-index: 60 !important; }
-		.xis-monitor-drawer-panel #monitor-detail-drawerTitle { display: block; min-width: 0; overflow: visible; white-space: normal; }
-		.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1.25rem 1.5rem 2rem; }
+		.xis-monitor-detail-header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid var(--color-outline); padding-bottom: 1rem; }
+		.dark .xis-monitor-detail-header { border-color: var(--color-outline-dark-strong); }
+		.xis-monitor-detail-heading { display: grid; gap: .35rem; min-width: 0; }
+		.xis-monitor-detail-heading h1 { margin: 0; overflow-wrap: anywhere; }
+		.xis-monitor-detail-heading p { margin: 0; }
+		.xis-monitor-detail-back { width: fit-content; }
 		.xis-detail-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); gap: 2rem; }
 		.xis-detail-main, .xis-detail-rail, .xis-detail-section { display: grid; align-content: start; gap: .75rem; min-width: 0; }
 		.xis-detail-rail { border-left: 1px solid var(--color-outline); padding-left: 1.5rem; }
@@ -279,7 +280,6 @@ templ AppStyles() {
 			.xis-global-search-trigger button.xis-search-trigger-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.xis-global-search-trigger kbd { padding: .2rem .35rem; font-size: .7rem; }
 			.xis-global-search-dialog { width: calc(100vw - 1rem); margin-top: 4.25rem; }
-			.xis-monitor-drawer-panel #monitor-detail-drawer-body { padding: 1rem .875rem 2rem; }
 			.xis-public-row, .xis-detail-workspace { grid-template-columns: 1fr; }
 			.xis-location-layout { grid-template-columns: 1fr; }
 			.xis-detail-rail { border-left: 0; border-top: 1px solid var(--color-outline); padding: 1.25rem 0 0; }
@@ -420,7 +420,13 @@ templ GlobalSearchResults(data GlobalSearchData) {
 
 templ MonitorPage(csrfToken string, data MonitorList) { @ShellPage("Monitors", csrfToken, MonitorContent(data)) }
 
+templ MonitorDetailPage(csrfToken string, data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	@ShellPage(monitor.Name, csrfToken, MonitorDetailContent(data, monitor, health))
+}
+
 templ MonitorErrorPage(csrfToken string, problem Problem) { @ShellPage("Monitors", csrfToken, MonitorErrorContent(problem)) }
+
+templ MonitorDetailErrorPage(csrfToken string, problem Problem) { @ShellPage(problem.Title, csrfToken, MonitorDetailErrorContent(problem)) }
 
 templ LocationPage(csrfToken string, data LocationList) { @ShellPage("Locations", csrfToken, LocationContent(csrfToken, data)) }
 
@@ -552,6 +558,15 @@ templ MonitorErrorContent(problem Problem) {
 	</section>
 }
 
+templ MonitorDetailErrorContent(problem Problem) {
+	<section id="monitor-detail-content" class="xis-content xis-stack" aria-labelledby="monitor-detail-title">
+		<a class="xis-native-link xis-monitor-detail-back" href={ templ.SafeURL(problem.RetryURL) } hx-get={ problem.RetryURL } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">← Back to monitors</a>
+		<h1 id="monitor-detail-title" tabindex="-1" data-autofocus>Monitor detail</h1>
+		@alert.Alert(alert.Config{Title: problem.Title, Description: problem.Detail, Tone: alert.ToneDanger, RootClass: "xis-state-danger"})
+		<a class="xis-native-link" href={ templ.SafeURL(problem.RetryURL) } hx-get={ problem.RetryURL } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Retry</a>
+	</section>
+}
+
 templ MonitorContent(data MonitorList) {
 	<section id="monitor-content" class="xis-content xis-stack" aria-labelledby="monitor-heading">
 		@pageheader.PageHeader(pageheader.Config{Title: "Monitors", TitleAttrs: templ.Attributes{"id": "monitor-heading"}})
@@ -576,35 +591,37 @@ templ MonitorContent(data MonitorList) {
 			}
 			if data.Selected != "" {
 				if monitor, health, ok := selectedMonitor(data); ok {
-					@MonitorDetailDrawer(data, monitor, health)
+					@MonitorDetailContent(data, monitor, health)
 				} else {
-					@alert.Alert(alert.Config{Title: "Selected monitor unavailable", Description: "The selected monitor is not present in this result page. The monitor list remains available; close the detail or select a visible row.", Tone: alert.ToneWarning, RootClass: "xis-state-warning", Link: &alert.LinkConfig{Label: "Close detail", Href: monitorURL(data.Query, data.Cursor, "")}})
+					@alert.Alert(alert.Config{Title: "Selected monitor unavailable", Description: "The selected monitor is not present in this result page. Return to the monitor list or select a visible row.", Tone: alert.ToneWarning, RootClass: "xis-state-warning", Link: &alert.LinkConfig{Label: "Back to monitors", Href: monitorURL(data.Query, data.Cursor, "")}})
 				}
 			}
 		</div>
 	</section>
 }
 
-templ MonitorDetailDrawer(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
-	{{ history := stateHistoryFor(data, monitor) }}
-		<div
-			class="xis-monitor-drawer"
-			data-monitor-id={ monitor.Id.String() }
-			data-monitor-state={ monitorDetailState(health) }
-			data-monitor-drawer-close-url={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) }
-		x-data="{}"
-		x-init="const close = $el.querySelector('aside[aria-labelledby=monitor-detail-drawerTitle] header button[aria-label=Close]'); if (close) { close.dataset.monitorDrawerClose = 'true'; close.dataset.monitorId = $el.dataset.monitorId }"
-		x-on:drawer:close-request.window="if ($event.detail && $event.detail.id === 'monitor-detail-drawer' && !$event.defaultPrevented) { const closeURL = $el.dataset.monitorDrawerCloseUrl; if (closeURL && window.htmx) { window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', push: true}) } }"
-	>
-			@drawer.Drawer(drawer.Config{ID: "monitor-detail-drawer", Title: monitorDetailTitle(monitor, health, history), Side: drawer.SideRight, Width: drawer.WidthXL, BodyID: "monitor-detail-drawer-body", PanelClass: "xis-monitor-drawer-panel"}) {
-			@MonitorDetail(data, monitor, health)
+templ MonitorDetailContent(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	<section id="monitor-detail-content" class="xis-content xis-stack" aria-labelledby="monitor-detail-title">
+		<header class="xis-monitor-detail-header">
+			<div class="xis-monitor-detail-heading">
+				<a class="xis-native-link xis-monitor-detail-back" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, "")) } hx-get={ monitorURL(data.Query, data.Cursor, "") } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">← Back to monitors</a>
+				<h1 id="monitor-detail-title" tabindex="-1" data-autofocus>{ monitor.Name }</h1>
+				if monitor.Description != "" {
+					<p class="xis-meta">{ monitor.Description }</p>
+				}
+			</div>
+			@healthBadge(health.State)
+		</header>
+		if data.HealthFailures > 0 {
+			@alert.Alert(alert.Config{Title: "Some health is unavailable", Description: "The latest health result could not be loaded. The monitor remains usable and its state is shown as unknown.", Tone: alert.ToneWarning, RootClass: "xis-state-warning"})
 		}
-	</div>
+		@MonitorDetail(data, monitor, health)
+	</section>
 }
 
 templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
 	{{ history := stateHistoryFor(data, monitor) }}
-	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-drawerTitle" data-monitor-id={ monitor.Id.String() } data-monitor-state={ string(healthStateValue(health.State)) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) } data-state-ticks-owner="true">
+	<section id="monitor-detail" class="xis-detail-workspace" aria-labelledby="monitor-detail-title" data-monitor-id={ monitor.Id.String() } data-monitor-state={ monitorDetailState(health) } data-monitor-updated={ monitor.UpdatedAt.UTC().Format(time.RFC3339) } data-state-ticks-owner="true">
 		<div class="xis-detail-main">
 			<section class="xis-detail-section" aria-labelledby="monitor-detail-heading">
 				<h3 id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus>Current health</h3>
@@ -957,7 +974,16 @@ func monitorURL(query, cursor, selected string) string {
 	values := url.Values{}
 	if query != "" { values.Set("q", query) }
 	if cursor != "" { values.Set("cursor", cursor) }
-	if selected != "" { values.Set("selected", selected) }
+	if selected != "" {
+		if _, err := uuid.Parse(selected); err != nil {
+			values.Set("selected", selected)
+			if encoded := values.Encode(); encoded != "" { return "/monitors?" + encoded }
+			return "/monitors"
+		}
+		path := "/monitors/" + url.PathEscape(selected)
+		if encoded := values.Encode(); encoded != "" { return path + "?" + encoded }
+		return path
+	}
 	if encoded := values.Encode(); encoded != "" { return "/monitors?" + encoded }
 	return "/monitors"
 }

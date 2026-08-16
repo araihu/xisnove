@@ -668,7 +668,7 @@ func TestGlobalSearchBFFReturnsBoundedCanonicalMonitorResultsAndRecovery(t *test
 		t.Fatalf("search status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{`role="option"`, `aria-selected="false"`, "Kubernetes API LAN", `/monitors?selected=00000000-0000-4000-8000-000000000091`, `hx-target="#main-content"`} {
+	for _, want := range []string{`role="option"`, `aria-selected="false"`, "Kubernetes API LAN", `/monitors/00000000-0000-4000-8000-000000000091`, `hx-target="#main-content"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("search body missing %q: %s", want, body)
 		}
@@ -737,18 +737,14 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
 		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
 	}
-	for _, want := range []string{`event.metaKey || event.ctrlKey`, `event.key.toLowerCase() !== "k"`, `goshtoso-search-open`, `row?.querySelector("a[href]") || row`} {
+	for _, want := range []string{`event.metaKey || event.ctrlKey`, `event.key.toLowerCase() !== "k"`, `goshtoso-search-open`} {
 		if strings.Count(recorder.Body.String(), want) == 0 {
 			t.Errorf("application search shortcut missing %q", want)
 		}
 	}
-	for _, want := range []string{
-		`document.addEventListener("drawer:close-request", event => {`,
-		`if (event.detail?.id !== "monitor-detail-drawer" || event.defaultPrevented) return;`,
-		`pendingDrawerReturnFocus = owner.dataset.monitorId;`,
-	} {
-		if !strings.Contains(recorder.Body.String(), want) {
-			t.Errorf("drawer close focus listener missing %q", want)
+	for _, absent := range []string{"openMonitorDrawer", "monitor-detail-drawer", `drawer:close-request`, "pendingDrawerReturnFocus"} {
+		if strings.Contains(recorder.Body.String(), absent) {
+			t.Errorf("application script retained removed drawer behavior %q", absent)
 		}
 	}
 	for _, want := range []string{"script-src 'nonce-", "'strict-dynamic'", "'unsafe-eval'", "https://unpkg.com", "'self'", "connect-src 'self'"} {
@@ -826,7 +822,7 @@ func TestMonitorOperationsListPreservesFiltersAndPartialHealth(t *testing.T) {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{`id="monitor-content"`, `aria-selected="true"`, `data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors?q=dns&amp;selected=` + monitorID.String() + `"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `id="monitor-detail"`, `data-autofocus`, "UNKNOWN", "Some health is unavailable"} {
+	for _, want := range []string{`id="monitor-detail-content"`, `aria-labelledby="monitor-detail-title"`, `data-monitor-id="` + monitorID.String() + `"`, `id="monitor-detail-title"`, `href="/monitors?q=dns"`, `hx-get="/monitors?q=dns"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `id="monitor-detail"`, `data-autofocus`, "UNKNOWN", "Some health is unavailable"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("monitor fragment missing %q", want)
 		}
@@ -860,7 +856,7 @@ func TestMonitorSearchWalksPastEmptyPageAndPreservesOpaqueState(t *testing.T) {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"Remote DNS", "q=dns", "selected=" + matchID.String()} {
+	for _, want := range []string{"Remote DNS", "q=dns", "/monitors/" + matchID.String() + "?q=dns"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("search response missing %q", want)
 		}
@@ -888,7 +884,7 @@ func TestMonitorSearchEmptyWindowStillOffersOpaqueContinuation(t *testing.T) {
 		"Remote DNS",
 		"Next page",
 		`href="/monitors?cursor=offset%3A125&amp;q=dns&amp;selected=kept"`,
-		`hx-get="/monitors?cursor=offset%3A25&amp;q=dns&amp;selected=` + matchID.String() + `"`,
+		`hx-get="/monitors/` + matchID.String() + `?cursor=offset%3A25&amp;q=dns"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("stateful continuation response missing %q", want)

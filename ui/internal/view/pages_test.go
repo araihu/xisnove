@@ -404,12 +404,10 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 	}
 	body := rendered.String()
 	for _, want := range []string{
-		`id="monitor-detail-drawer-body"`, `role="dialog"`, `aria-labelledby="monitor-detail-drawerTitle"`,
-		`x-trap.noscroll="monitorDetailDrawerIsOpen"`, `xis-monitor-drawer-panel`,
-		`data-monitor-drawer-close-url="/monitors?cursor=opaque%2Fpage&amp;q=dns"`,
-		`id="monitor-detail"`, `aria-labelledby="monitor-detail-drawerTitle"`,
-		`data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors?cursor=opaque%2Fpage&amp;q=dns&amp;selected=` + monitorID.String() + `"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `aria-selected="true"`,
-		`id="monitor-detail-drawerTitle"`, `Home DNS`, `data-monitor-state="DEGRADED"`, `id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus`, "Home DNS", "DEGRADED",
+		`id="monitor-detail-content"`, `aria-labelledby="monitor-detail-title"`, `href="/monitors?cursor=opaque%2Fpage&amp;q=dns"`,
+		`id="monitor-detail"`, `aria-labelledby="monitor-detail-title"`,
+		`data-monitor-id="` + monitorID.String() + `"`, `hx-get="/monitors/` + monitorID.String() + `?cursor=opaque%2Fpage&amp;q=dns"`, `hx-target="#main-content"`, `hx-swap="outerHTML"`, `hx-push-url="true"`, `role="button"`, `tabindex="0"`, `aria-selected="true"`,
+		`id="monitor-detail-title"`, `Home DNS`, `data-monitor-state="DEGRADED"`, `id="monitor-detail-heading" class="xis-detail-section-heading" tabindex="-1" data-autofocus`, "Home DNS", "DEGRADED",
 		"Current health", "Configuration", "Live availability",
 		`data-goshtoso-charts-live-event="chart"`,
 		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events"`,
@@ -420,7 +418,7 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 			t.Errorf("selected monitor workspace missing %q", want)
 		}
 	}
-	for _, absent := range []string{`aria-label="Select monitor `, `>Select</a>`} {
+	for _, absent := range []string{`aria-label="Select monitor `, `>Select</a>`, `xis-monitor-drawer`, `monitor-detail-drawerTitle`, `x-trap.noscroll`} {
 		if strings.Contains(body, absent) {
 			t.Errorf("selected monitor workspace retained removed row action/detail %q", absent)
 		}
@@ -434,12 +432,12 @@ func TestMonitorContentRendersSelectedMonitorDetailWorkspace(t *testing.T) {
 			t.Errorf("selected monitor workspace retained technical identifier %q", absent)
 		}
 	}
-	if strings.Count(body, "<h1") != 1 {
+	if strings.Count(body, "<h1") != 2 {
 		t.Errorf("selected monitor workspace changed page heading count: %s", body)
 	}
 }
 
-func TestMonitorDrawerCloseUsesHTMXPushOption(t *testing.T) {
+func TestMonitorDetailUsesCanonicalBackLink(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000016")
 	data := MonitorList{
 		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Live monitor", Enabled: true}},
@@ -452,11 +450,13 @@ func TestMonitorDrawerCloseUsesHTMXPushOption(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := rendered.String()
-	if !strings.Contains(body, `window.htmx.ajax('GET', closeURL, {target: '#main-content', swap: 'outerHTML', push: true})`) {
-		t.Fatalf("drawer close does not request an HTMX URL push: %s", body)
+	if !strings.Contains(body, `href="/monitors"`) || !strings.Contains(body, `hx-get="/monitors"`) {
+		t.Fatalf("monitor detail does not offer a canonical back link: %s", body)
 	}
-	if strings.Contains(body, "pushURL") {
-		t.Fatal("drawer close uses the unsupported htmx.ajax pushURL option")
+	for _, absent := range []string{"xis-monitor-drawer", "drawer:close-request", "pushURL"} {
+		if strings.Contains(body, absent) {
+			t.Fatalf("monitor detail retained drawer behavior %q", absent)
+		}
 	}
 }
 
@@ -517,7 +517,7 @@ func TestMonitorContentNamesUnavailableSelectionWithoutReplacingTheList(t *testi
 		t.Fatal(err)
 	}
 	body := rendered.String()
-	for _, want := range []string{"No monitors yet", "Selected monitor unavailable", "Close detail"} {
+	for _, want := range []string{"No monitors yet", "Selected monitor unavailable", "Back to monitors"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("unavailable selection missing %q", want)
 		}
@@ -676,7 +676,7 @@ func TestMonitorContentRendersGapForStateHistoryThatCanBecomeEmpty(t *testing.T)
 	}
 }
 
-func TestMonitorDrawerTitleNamesMonitorLifecycleAndHealthAccessibly(t *testing.T) {
+func TestMonitorDetailNamesMonitorLifecycleAndHealthAccessibly(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000014")
 	base := time.Date(2026, time.August, 15, 11, 0, 0, 0, time.UTC)
 	data := MonitorList{
@@ -700,22 +700,25 @@ func TestMonitorDrawerTitleNamesMonitorLifecycleAndHealthAccessibly(t *testing.T
 		t.Fatal(err)
 	}
 	body := rendered.String()
-	titleStart := strings.Index(body, `id="monitor-detail-drawerTitle"`)
+	titleStart := strings.Index(body, `id="monitor-detail-title"`)
 	if titleStart < 0 {
-		t.Fatalf("drawer title missing: %s", body)
+		t.Fatalf("monitor detail title missing: %s", body)
 	}
 	titleEnd := strings.Index(body[titleStart:], "</")
 	if titleEnd < 0 {
 		t.Fatalf("drawer title is not closed: %s", body)
 	}
 	title := body[titleStart : titleStart+titleEnd]
-	for _, want := range []string{"Paused monitor", "Paused", "UNKNOWN"} {
-		if !strings.Contains(title, want) {
-			t.Errorf("accessible drawer title missing %q: %s", want, title)
+	if !strings.Contains(title, "Paused monitor") {
+		t.Errorf("monitor detail heading missing monitor name: %s", title)
+	}
+	for _, want := range []string{"Paused", "UNKNOWN"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("monitor detail missing status %q: %s", want, body)
 		}
 	}
 	if strings.Contains(title, "::after") {
-		t.Fatal("drawer title relies on a CSS pseudo-element for status")
+		t.Fatal("monitor detail title relies on a CSS pseudo-element for status")
 	}
 }
 

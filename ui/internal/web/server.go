@@ -129,6 +129,7 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("GET /ui/xisnove-81300f5.svg", servePreviousXisnoveFavicon)
 	mux.HandleFunc("GET /ui/app.js", serveApplicationJS)
 	mux.HandleFunc("GET /monitors/{monitorID}/availability/events", s.monitorAvailabilityEvents)
+	mux.HandleFunc("GET /monitors/{monitorID}", s.monitorDetail)
 	mux.HandleFunc("/", s.route)
 
 	var handler http.Handler = mux
@@ -212,8 +213,7 @@ const applicationJS = `(() => {
   if (window.__xisnoveApplicationScriptInstalled) return;
   window.__xisnoveApplicationScriptInstalled = true;
   let pendingFocus = null;
-  let pendingDrawerReturnFocus = null;
-  let refreshGeneration = 0;
+	let refreshGeneration = 0;
   let refreshController = null;
 
   function focusMain() {
@@ -239,16 +239,6 @@ const applicationJS = `(() => {
   }
 
   function settle(event) {
-	if (pendingDrawerReturnFocus) {
-	  const id = pendingDrawerReturnFocus;
-	  pendingDrawerReturnFocus = null;
-	  const row = Array.from(document.querySelectorAll("#main-content tr[data-monitor-id]")).find(candidate => candidate.dataset.monitorId === id);
-	  const target = row?.querySelector("a[href]") || row;
-	  if (target) {
-		target.focus({preventScroll: true});
-		return;
-	  }
-	}
     if (pendingFocus) {
       const target = document.getElementById(pendingFocus.id);
       if (target) {
@@ -301,7 +291,6 @@ const applicationJS = `(() => {
 			if (template.content.querySelector("section")) {
 				main.replaceChildren(...Array.from(template.content.childNodes));
 				window.htmx?.process(main);
-				openMonitorDrawer();
 				focusMain();
 				return true;
 			}
@@ -315,7 +304,6 @@ const applicationJS = `(() => {
 		window.htmx?.process(nextMain || replacement);
 		window.consoleShell?.reconcileNavigation?.(nextMain || replacement);
 		window.dispatchEvent(new CustomEvent("consoleshell:navigated"));
-		openMonitorDrawer();
 		focusMain();
       return true;
     } catch (error) {
@@ -349,16 +337,6 @@ const applicationJS = `(() => {
     main.replaceChildren(section);
     main.scrollTop = 0;
     heading.focus({preventScroll: true});
-  }
-
-  function openMonitorDrawer(attempt = 0) {
-	const owner = document.querySelector(".xis-monitor-drawer[data-monitor-id]");
-	if (!owner) return;
-	const root = owner.firstElementChild;
-	const panel = owner.querySelector('aside[aria-labelledby="monitor-detail-drawerTitle"]');
-	if (root?._x_dataStack?.[0]?.monitorDetailDrawerIsOpen === true && panel?.getClientRects().length) return;
-	window.dispatchEvent(new CustomEvent("drawer:open", {detail: {id: "monitor-detail-drawer"}}));
-	if (attempt < 40) setTimeout(() => openMonitorDrawer(attempt + 1), 25);
   }
 
   function configureGlobalSearch() {
@@ -493,46 +471,23 @@ const applicationJS = `(() => {
     });
   }
 
-  window.addEventListener("drawer:open", event => {
-	if (event.detail?.id !== "monitor-detail-drawer") return;
-	requestAnimationFrame(() => requestAnimationFrame(() => {
-	  document.getElementById("monitor-detail-heading")?.focus({preventScroll: true});
-	}));
-  });
-
-  document.addEventListener("click", event => {
-	const close = event.target?.closest?.("[data-monitor-drawer-close]");
-	if (close?.dataset.monitorId) pendingDrawerReturnFocus = close.dataset.monitorId;
-  }, true);
-
-  document.addEventListener("drawer:close-request", event => {
-	if (event.detail?.id !== "monitor-detail-drawer" || event.defaultPrevented) return;
-	const owner = document.querySelector(".xis-monitor-drawer[data-monitor-id]");
-	if (owner?.dataset.monitorId) pendingDrawerReturnFocus = owner.dataset.monitorId;
-  }, true);
-
   document.addEventListener("htmx:beforeRequest", event => {
     invalidateAuthoritativeRefresh();
     rememberFocus(event);
   });
   document.addEventListener("htmx:afterSettle", settle);
   document.addEventListener("htmx:historyRestore", () => setTimeout(() => {
-	openMonitorDrawer();
 	refreshAuthoritative();
   }, 0));
-  document.addEventListener("alpine:initialized", openMonitorDrawer);
   window.addEventListener("popstate", invalidateAuthoritativeRefresh);
   window.addEventListener("pageshow", event => { if (event.persisted) refreshAuthoritative(); });
 	configureGlobalSearch();
-	openMonitorDrawer();
   window.goshtosoDependencies?.ready.then(() => {
 	configureGlobalSearch();
-    openMonitorDrawer();
     if (document.querySelector("#main-content [data-autofocus]")) focusMain();
   }).catch(() => {});
   document.addEventListener("htmx:afterSettle", () => {
 	configureGlobalSearch();
-	openMonitorDrawer();
   });
 	document.addEventListener("keydown", event => {
 		if (event.key !== "Escape" || document.querySelector("#global-search-dialog")?.open) return;
@@ -839,6 +794,12 @@ func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 		s.redirectLogin(w, r)
 		return
 	}
+	if selected := strings.TrimSpace(r.URL.Query().Get("selected")); selected != "" {
+		if monitorID, err := uuid.Parse(selected); err == nil {
+			s.renderMonitorDetail(w, r, credential, monitorID)
+			return
+		}
+	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	currentCursor := r.URL.Query().Get("cursor")
 	page, searchedPages, err := s.listMonitorMatches(r.Context(), credential, currentCursor, query)
@@ -861,6 +822,96 @@ func (s *server) monitors(w http.ResponseWriter, r *http.Request) {
 	csrfToken := s.cookies.SessionCSRF(credential)
 	data := view.MonitorList{Monitors: page.Items, Health: health, StateHistory: stateHistory, StateHistoryErrors: stateHistoryErrors, Cursor: currentCursor, NextCursor: page.NextCursor, Query: query, Selected: r.URL.Query().Get("selected"), HealthFailures: failures, SearchPages: searchedPages}
 	s.renderAdaptive(w, r, http.StatusOK, view.MonitorPage(csrfToken, data), view.ConsoleFragment("Monitors", csrfToken, view.MonitorContent(data)))
+}
+
+func (s *server) monitorDetail(w http.ResponseWriter, r *http.Request) {
+	credential, ok := s.authCredential(r)
+	if !ok {
+		s.redirectLogin(w, r)
+		return
+	}
+	monitorID, err := uuid.Parse(strings.TrimSpace(r.PathValue("monitorID")))
+	if err != nil {
+		s.writeProblem(w, r, invalidRequestProblem())
+		return
+	}
+	s.renderMonitorDetail(w, r, credential, monitorID)
+}
+
+func (s *server) renderMonitorDetail(w http.ResponseWriter, r *http.Request, credential string, monitorID uuid.UUID) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	cursor := r.URL.Query().Get("cursor")
+	page, _, err := s.listMonitorMatches(r.Context(), credential, cursor, monitorID.String())
+	if err != nil {
+		s.monitorDetailFailure(w, r, credential, query, cursor, err)
+		return
+	}
+	var monitor sdk.Monitor
+	found := false
+	for _, candidate := range page.Items {
+		if candidate.Id == monitorID {
+			monitor = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		s.monitorDetailFailure(w, r, credential, query, cursor, fmt.Errorf("monitor %s was not found", monitorID))
+		return
+	}
+	health, failures, unauthorized := s.enrichMonitorHealth(r.Context(), credential, []sdk.Monitor{monitor})
+	if unauthorized {
+		s.cookies.ClearSession(w)
+		s.redirectLogin(w, r)
+		return
+	}
+	stateHistory, stateHistoryErrors, stateHistoryUnauthorized := s.selectedMonitorStateHistory(r.Context(), credential, []sdk.Monitor{monitor}, monitorID.String())
+	if stateHistoryUnauthorized {
+		s.cookies.ClearSession(w)
+		s.redirectLogin(w, r)
+		return
+	}
+	value := health[monitorID.String()]
+	if value.State == "" {
+		value = sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Unknown}
+		health[monitorID.String()] = value
+	}
+	csrfToken := s.cookies.SessionCSRF(credential)
+	data := view.MonitorList{
+		Monitors: []sdk.Monitor{monitor}, Health: health, StateHistory: stateHistory, StateHistoryErrors: stateHistoryErrors,
+		Query: query, Cursor: cursor, Selected: monitorID.String(), HealthFailures: failures,
+	}
+	s.renderAdaptive(w, r, http.StatusOK, view.MonitorDetailPage(csrfToken, data, monitor, value), view.ConsoleFragment("Monitor detail", csrfToken, view.MonitorDetailContent(data, monitor, value)))
+}
+
+func (s *server) monitorDetailFailure(w http.ResponseWriter, r *http.Request, credential, query, cursor string, err error) {
+	if errors.Is(err, controlplane.ErrUnauthorized) || isAPIStatus(err, http.StatusUnauthorized) {
+		s.cookies.ClearSession(w)
+		s.redirectLogin(w, r)
+		return
+	}
+	problem := view.Problem{Title: "Monitor unavailable", Detail: "The selected monitor could not be loaded. Return to the monitor list and retry shortly.", Code: "monitor_unavailable", CorrelationID: correlationID(r.Context()), RetryURL: monitorListURL(query, cursor)}
+	status := http.StatusNotFound
+	if errors.Is(err, context.DeadlineExceeded) {
+		status = http.StatusGatewayTimeout
+		problem.Title = "Monitor request timed out"
+	}
+	csrfToken := s.cookies.SessionCSRF(credential)
+	s.renderStateFailure(w, r, status, view.MonitorDetailErrorPage(csrfToken, problem), view.MonitorDetailErrorContent(problem))
+}
+
+func monitorListURL(query, cursor string) string {
+	values := url.Values{}
+	if query != "" {
+		values.Set("q", query)
+	}
+	if cursor != "" {
+		values.Set("cursor", cursor)
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return "/monitors?" + encoded
+	}
+	return "/monitors"
 }
 
 func (s *server) locations(w http.ResponseWriter, r *http.Request) {
@@ -1263,7 +1314,7 @@ func filterMonitors(monitors []sdk.Monitor, query string) []sdk.Monitor {
 	needle := strings.ToLower(query)
 	filtered := make([]sdk.Monitor, 0, len(monitors))
 	for _, monitor := range monitors {
-		if strings.Contains(strings.ToLower(monitor.Name), needle) || strings.Contains(strings.ToLower(monitor.Description), needle) || strings.Contains(strings.ToLower(string(monitor.Kind)), needle) {
+		if strings.Contains(strings.ToLower(monitor.Id.String()), needle) || strings.Contains(strings.ToLower(monitor.Name), needle) || strings.Contains(strings.ToLower(monitor.Description), needle) || strings.Contains(strings.ToLower(string(monitor.Kind)), needle) {
 			filtered = append(filtered, monitor)
 		}
 	}
