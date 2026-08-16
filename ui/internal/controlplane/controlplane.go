@@ -364,6 +364,109 @@ func NewFake(username, password, credential string) *Fake {
 	}
 }
 
+// RecordDevelopmentProbe appends one immutable synthetic probe evaluation to
+// the in-memory development control plane. The real server persists these
+// records through the agent/result path; the local fake uses the same public
+// shape so the UI can exercise the historical tick stream without a private
+// control-plane image.
+func (f *Fake) RecordDevelopmentProbe(monitorID openapi_types.UUID, state sdk.HealthState, observedAt time.Time) {
+	if f == nil {
+		return
+	}
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.recordDevelopmentProbeLocked(monitorID, state, observedAt.UTC())
+}
+
+// RecordDevelopmentProbeForMonitors advances every configured monitor in the
+// development fake. It deliberately emits no availability sample for
+// Unknown, preserving the distinction between a missing observation and a
+// failed probe while still recording the state-tick reason.
+func (f *Fake) RecordDevelopmentProbeForMonitors(observedAt time.Time) {
+	if f == nil {
+		return
+	}
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	observedAt = observedAt.UTC()
+	for _, monitor := range f.Monitors {
+		state := sdk.Unknown
+		if health, ok := f.Health[monitor.Id]; ok && health.State != "" {
+			state = health.State
+		}
+		f.recordDevelopmentProbeLocked(monitor.Id, state, observedAt)
+	}
+}
+
+func (f *Fake) recordDevelopmentProbeLocked(monitorID openapi_types.UUID, state sdk.HealthState, observedAt time.Time) {
+	if f.Health == nil {
+		f.Health = make(map[openapi_types.UUID]sdk.MonitorHealth)
+	}
+	if f.History == nil {
+		f.History = make(map[openapi_types.UUID]sdk.MonitorAvailabilityHistory)
+	}
+	if f.StateHistory == nil {
+		f.StateHistory = make(map[openapi_types.UUID]sdk.MonitorStateHistory)
+	}
+	if state == "" {
+		state = sdk.Unknown
+	}
+	previous := f.Health[monitorID]
+	if previous.MonitorId == uuid.Nil {
+		previous.MonitorId = monitorID
+	}
+	if previous.State != state || previous.LastTransitionAt.IsZero() {
+		previous.LastTransitionAt = observedAt
+	}
+	previous.State = state
+	f.Health[monitorID] = previous
+
+	reason := sdk.StateTickReasonCodeProbeTimeout
+	sampleOutcome := sdk.MonitorAvailabilitySampleOutcome("")
+	switch state {
+	case sdk.Up:
+		reason = sdk.StateTickReasonCodeProbeSuccess
+		sampleOutcome = sdk.MonitorAvailabilitySampleOutcomePassed
+	case sdk.Down, sdk.Degraded:
+		reason = sdk.StateTickReasonCodeProbeFailure
+		sampleOutcome = sdk.MonitorAvailabilitySampleOutcomeFailed
+	}
+	history := f.StateHistory[monitorID]
+	history.MonitorId = monitorID
+	history.GeneratedAt = observedAt
+	history.Ticks = append(history.Ticks, sdk.MonitorStateTick{
+		ActionId:   uuid.New(),
+		Actor:      sdk.StateTickActor{Kind: sdk.StateTickActorKindSystem},
+		Health:     state,
+		Id:         uuid.New(),
+		Lifecycle:  sdk.Active,
+		MonitorId:  monitorID,
+		OccurredAt: observedAt,
+		ReasonCode: reason,
+	})
+	f.StateHistory[monitorID] = history
+	if sampleOutcome == "" {
+		return
+	}
+	availabilityHistory := f.History[monitorID]
+	availabilityHistory.MonitorId = monitorID
+	availabilityHistory.GeneratedAt = observedAt
+	availabilityHistory.Samples = append(availabilityHistory.Samples, sdk.MonitorAvailabilitySample{
+		Id:            uuid.New(),
+		LocationId:    uuid.NewSHA1(uuid.Nil, []byte("development-location:"+monitorID.String())),
+		LatencyMillis: 1,
+		ObservedAt:    observedAt,
+		Outcome:       sampleOutcome,
+	})
+	f.History[monitorID] = availabilityHistory
+}
+
 func (f *Fake) ExchangeAdministratorCredentials(ctx context.Context, username, password string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -591,6 +694,7 @@ func (f *Fake) GetMonitorAvailabilityHistory(ctx context.Context, credential str
 		return sdk.MonitorAvailabilityHistory{}, err
 	}
 	if history, ok := f.History[monitorID]; ok {
+		history.Samples = append([]sdk.MonitorAvailabilitySample(nil), history.Samples...)
 		return history, nil
 	}
 	return sdk.MonitorAvailabilityHistory{MonitorId: monitorID, StartsAt: startsAt, EndsAt: endsAt, GeneratedAt: time.Now().UTC()}, nil
@@ -609,6 +713,7 @@ func (f *Fake) GetMonitorStateHistory(ctx context.Context, credential string, mo
 		return sdk.MonitorStateHistory{}, err
 	}
 	if history, ok := f.StateHistory[monitorID]; ok {
+		history.Ticks = append([]sdk.MonitorStateTick(nil), history.Ticks...)
 		return history, nil
 	}
 	return sdk.MonitorStateHistory{MonitorId: monitorID, StartsAt: startsAt, EndsAt: endsAt, GeneratedAt: endsAt.UTC(), Ticks: []sdk.MonitorStateTick{}}, nil

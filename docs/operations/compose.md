@@ -54,9 +54,12 @@ ports can be changed with `XISNOVE_FIXTURE_HTTP_PORT`,
 
 The development fake control plane seeds matching non-public monitors named
 `Compose HTTP`, `Compose TCP`, and `Compose DNS`, including their HTTP, TCP,
-and DNS probe definitions. Their initial health is `UP` so the UI can exercise
-the monitor inventory without starting the production server and Agent;
-actual probe scheduling still requires the normal control-plane stack.
+and DNS probe definitions. It records an initial state tick and advances an
+in-memory historical state/availability stream every five seconds by default;
+override that cadence with `XISNOVE_UI_DEV_TICK_INTERVAL`. Unknown health emits
+a state tick but no availability sample, preserving the gap semantics. This is
+synthetic development data, not durable control-plane persistence; actual probe
+scheduling and durable history require the normal server + Agent stack.
 
 To run the fixture CLI directly, build `build/package/Dockerfile.service` and
 pass the type as the entrypoint's first argument, for example:

@@ -335,3 +335,39 @@ func TestFakeRevokesOnlyItsIssuedCredential(t *testing.T) {
 		t.Fatalf("revoke unknown credential error = %v, want ErrUnauthorized", err)
 	}
 }
+
+func TestFakeRecordsDevelopmentProbeInBothHistoricalStreams(t *testing.T) {
+	client := NewFake("local-admin", "correct horse", "opaque-control-plane-session")
+	monitorID := uuid.MustParse("10000000-0000-0000-0000-000000000001")
+	observedAt := time.Date(2026, time.August, 15, 14, 0, 0, 0, time.UTC)
+
+	client.RecordDevelopmentProbe(monitorID, sdk.Up, observedAt)
+	stateHistory, err := client.GetMonitorStateHistory(t.Context(), "opaque-control-plane-session", monitorID, observedAt.Add(-time.Hour), observedAt.Add(time.Hour), 100)
+	if err != nil {
+		t.Fatalf("get state history: %v", err)
+	}
+	if len(stateHistory.Ticks) != 1 {
+		t.Fatalf("state ticks = %#v, want one tick", stateHistory.Ticks)
+	}
+	tick := stateHistory.Ticks[0]
+	if tick.MonitorId != monitorID || tick.Health != sdk.Up || tick.Lifecycle != sdk.Active || tick.ReasonCode != sdk.StateTickReasonCodeProbeSuccess || tick.Actor.Kind != sdk.StateTickActorKindSystem || tick.ActionId == uuid.Nil || tick.Id == uuid.Nil || !tick.OccurredAt.Equal(observedAt) {
+		t.Fatalf("development state tick = %#v", tick)
+	}
+
+	availabilityHistory, err := client.GetMonitorAvailabilityHistory(t.Context(), "opaque-control-plane-session", monitorID, observedAt.Add(-time.Hour), observedAt.Add(time.Hour), 100)
+	if err != nil {
+		t.Fatalf("get availability history: %v", err)
+	}
+	if len(availabilityHistory.Samples) != 1 || availabilityHistory.Samples[0].Outcome != sdk.MonitorAvailabilitySampleOutcomePassed || !availabilityHistory.Samples[0].ObservedAt.Equal(observedAt) {
+		t.Fatalf("development availability history = %#v", availabilityHistory)
+	}
+
+	client.RecordDevelopmentProbe(monitorID, sdk.Unknown, observedAt.Add(time.Minute))
+	availabilityHistory, err = client.GetMonitorAvailabilityHistory(t.Context(), "opaque-control-plane-session", monitorID, observedAt.Add(-time.Hour), observedAt.Add(time.Hour), 100)
+	if err != nil {
+		t.Fatalf("get availability history after unknown: %v", err)
+	}
+	if len(availabilityHistory.Samples) != 1 {
+		t.Fatalf("unknown probe created availability sample = %#v", availabilityHistory.Samples)
+	}
+}

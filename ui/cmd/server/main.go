@@ -36,6 +36,7 @@ type environment struct {
 	DevAdminEmail    string        `env:"XISNOVE_UI_DEV_ADMIN_EMAIL"`
 	DevAdminPassword string        `env:"XISNOVE_UI_DEV_ADMIN_PASSWORD"`
 	DevSession       string        `env:"XISNOVE_UI_DEV_SESSION"`
+	DevTickInterval  time.Duration `env:"XISNOVE_UI_DEV_TICK_INTERVAL" envDefault:"5s"`
 	APIBaseURL       string        `env:"XISNOVE_UI_API_BASE_URL"`
 	AuthModes        []string      `env:"AUTH_MODES" envDefault:"basic"`
 }
@@ -46,6 +47,7 @@ type config struct {
 	cookieSecure    bool
 	requestTimeout  time.Duration
 	shutdownTimeout time.Duration
+	devTickInterval time.Duration
 	authModes       []web.AuthMode
 	controlPlane    controlplane.Client
 }
@@ -101,6 +103,7 @@ func loadConfig(getenv func(string) string) (config, error) {
 		cookieSecure:    environmentConfig.CookieSecure,
 		requestTimeout:  environmentConfig.RequestTimeout,
 		shutdownTimeout: environmentConfig.ShutdownTimeout,
+		devTickInterval: environmentConfig.DevTickInterval,
 		authModes:       authModes,
 	}
 	secret, err := loadCookieSecret(func(key string) string {
@@ -161,6 +164,7 @@ func parseEnvironment(getenv func(string) string) (environment, error) {
 		"XISNOVE_UI_DEV_ADMIN_EMAIL",
 		"XISNOVE_UI_DEV_ADMIN_PASSWORD",
 		"XISNOVE_UI_DEV_SESSION",
+		"XISNOVE_UI_DEV_TICK_INTERVAL",
 		"XISNOVE_UI_API_BASE_URL",
 		"AUTH_MODES",
 	} {
@@ -261,6 +265,9 @@ func developmentFake(email, password, session string) *controlplane.Fake {
 	for _, monitorID := range []uuid.UUID{httpFixtureID, tcpFixtureID, dnsFixtureID} {
 		fake.Health[monitorID] = sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up, LastTransitionAt: now}
 	}
+	// Seed one real-looking observation so the drawer is useful immediately;
+	// run() advances this stream on the configured development tick interval.
+	fake.RecordDevelopmentProbeForMonitors(now)
 	fake.PublicStatus = sdk.PublicStatusPage{GeneratedAt: time.Now().UTC(), State: sdk.Degraded, Monitors: []sdk.PublicStatusMonitor{
 		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability", State: sdk.Up},
 		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", State: sdk.Unknown},
@@ -371,6 +378,9 @@ func decodeSecret(value string) ([]byte, error) {
 }
 
 func run(ctx context.Context, cfg config, logger *slog.Logger) error {
+	if fake, ok := cfg.controlPlane.(*controlplane.Fake); ok {
+		go runDevelopmentTicker(ctx, fake, cfg.devTickInterval)
+	}
 	application, err := web.New(web.Config{
 		ControlPlane:   cfg.controlPlane,
 		CookieSecret:   cfg.cookieSecret,
@@ -421,6 +431,22 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		return nil
 	}
 	return err
+}
+
+func runDevelopmentTicker(ctx context.Context, fake *controlplane.Fake, interval time.Duration) {
+	if fake == nil || interval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case observedAt := <-ticker.C:
+			fake.RecordDevelopmentProbeForMonitors(observedAt)
+		}
+	}
 }
 
 func runtimeHandler(application http.Handler, lifecycle *atomic.Int32) http.Handler {

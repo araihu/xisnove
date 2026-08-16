@@ -50,6 +50,11 @@ export XISNOVE_UI_DEV_FAKE=true
 go run ./cmd/server
 ```
 
+The development fake records an initial state tick and advances synthetic
+state/availability history every five seconds. Set
+`XISNOVE_UI_DEV_TICK_INTERVAL` to change that cadence; this stream is in-memory
+and does not replace durable server/Agent persistence.
+
 `AUTH_MODES` is a comma-separated list. Supported values are `basic`, `none`,
 and `oidc`; `basic` is the default. `none` must be used alone and only with
 `XISNOVE_UI_DEV_FAKE=true`. OIDC is reserved and currently fails startup until

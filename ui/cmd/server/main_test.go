@@ -332,6 +332,37 @@ func TestLoadConfigAllowsExplicitInsecureCookieForLocalHTTP(t *testing.T) {
 	}
 }
 
+func TestLoadConfigParsesDevelopmentTickInterval(t *testing.T) {
+	base := map[string]string{
+		"XISNOVE_UI_COOKIE_SECRET":      base64.RawStdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+		"XISNOVE_UI_DEV_FAKE":           "true",
+		"XISNOVE_UI_DEV_ADMIN_EMAIL":    "local-admin@example.test",
+		"XISNOVE_UI_DEV_ADMIN_PASSWORD": "server-side-password",
+		"XISNOVE_UI_DEV_SESSION":        "server-side-session",
+	}
+	cfg, err := loadConfig(testEnv(base))
+	if err != nil {
+		t.Fatalf("load default development tick interval: %v", err)
+	}
+	if cfg.devTickInterval != 5*time.Second {
+		t.Fatalf("default development tick interval = %v, want 5s", cfg.devTickInterval)
+	}
+
+	base["XISNOVE_UI_DEV_TICK_INTERVAL"] = "750ms"
+	cfg, err = loadConfig(testEnv(base))
+	if err != nil {
+		t.Fatalf("load explicit development tick interval: %v", err)
+	}
+	if cfg.devTickInterval != 750*time.Millisecond {
+		t.Fatalf("explicit development tick interval = %v, want 750ms", cfg.devTickInterval)
+	}
+
+	base["XISNOVE_UI_DEV_TICK_INTERVAL"] = "not-a-duration"
+	if _, err := loadConfig(testEnv(base)); err == nil || !strings.Contains(err.Error(), "parse UI environment") {
+		t.Fatalf("invalid development tick interval error = %v", err)
+	}
+}
+
 func TestDevelopmentFakeSeedsComposeFixtureMonitors(t *testing.T) {
 	fake := developmentFake("admin@example.test", "password", "session")
 	if len(fake.Monitors) != 5 {
@@ -377,6 +408,12 @@ func TestDevelopmentFakeSeedsComposeFixtureMonitors(t *testing.T) {
 			if err != nil || probe.Resolver != expectation.detail || probe.Name != "service.test" || len(probe.ExpectedValues) != 1 || probe.ExpectedValues[0] != "192.0.2.10" {
 				t.Fatalf("DNS fixture probe = %#v, %v", probe, err)
 			}
+		}
+	}
+	for _, monitor := range fake.Monitors {
+		history := fake.StateHistory[monitor.Id]
+		if len(history.Ticks) != 1 || history.Ticks[0].ReasonCode == "" {
+			t.Fatalf("%s initial state history = %#v, want one persisted development tick", monitor.Name, history)
 		}
 	}
 }

@@ -70,6 +70,7 @@ services:
       XISNOVE_UI_DEV_ADMIN_EMAIL: ${XISNOVE_UI_DEV_ADMIN_EMAIL:-admin@example.test}
       XISNOVE_UI_DEV_ADMIN_PASSWORD: ${XISNOVE_UI_DEV_ADMIN_PASSWORD:-development-only}
       XISNOVE_UI_DEV_SESSION: ${XISNOVE_UI_DEV_SESSION:-development-session}
+      XISNOVE_UI_DEV_TICK_INTERVAL: ${XISNOVE_UI_DEV_TICK_INTERVAL:-5s}
       GOCACHE: /tmp/gocache
       GOMODCACHE: /tmp/gomodcache
       GOTOOLCHAIN: local
