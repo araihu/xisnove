@@ -196,6 +196,10 @@ templ AppStyles() {
 		.dark .xis-availability-chart { --color-chart-series-4: var(--color-on-surface-dark-muted) !important; }
 		.xis-availability-mini-chart { margin: 0 auto; min-width: 9rem; max-width: 11rem; }
 		.xis-availability-mini-chart figcaption { display: none; }
+		.xis-monitor-row-detail { display: grid; gap: .5rem; padding: .75rem 1rem 1rem; }
+		.xis-monitor-row-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+		.xis-monitor-row-detail-heading p { margin: 0; }
+		.xis-monitor-row-detail .xis-availability-mini-chart { width: min(100%, 24rem); min-width: 0; max-width: none; margin: 0; }
 		.xis-password { width: 100%; }
 		.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
@@ -1004,12 +1008,39 @@ func monitorTable(data MonitorList) table.Config {
 		if state == "" { state = sdk.Unknown }
 		name := monitor.Name
 		selected := data.Selected == id
-		attrs := map[string]string{"data-monitor-id": id, "aria-selected": fmt.Sprint(selected)}
-		rows = append(rows, table.Row{ID: id, HTMX: &table.RowHTMXConfig{Get: monitorURL(data.Query, data.Cursor, id), Target: "#main-content", Swap: "outerHTML", PushURL: true}, AlpineAttrs: attrs, Cells: map[string]table.Cell{
-			"name": {Text: name}, "kind": {Text: strings.ToUpper(string(monitor.Kind))}, "health": {Component: healthBadge(state)}, "availability": {Component: monitorAvailabilityMiniChart(monitor, health)}, "enabled": {Text: enabledLabel(monitor.Enabled)},
-		}})
+		attrs := map[string]string{
+			"data-monitor-id": id,
+			"aria-selected":   fmt.Sprint(selected),
+			"aria-expanded":   "false",
+			"x-bind:aria-expanded": fmt.Sprintf("openRows['%s'] ? 'true' : 'false'", id),
+			"role":            "button",
+			"tabindex":        "0",
+			"onkeydown":       "if((event.key==='Enter'||event.key===' ')&&!event.target.closest('input,textarea,select,button,a')){event.preventDefault();event.currentTarget.click();}",
+		}
+		rows = append(rows, table.Row{
+			ID:         id,
+			Expandable: true,
+			Detail:     monitorAvailabilityRowDetail(data, monitor, health),
+			AlpineAttrs: attrs,
+			Cells: map[string]table.Cell{
+				"name":    {Text: name},
+				"kind":    {Text: strings.ToUpper(string(monitor.Kind))},
+				"health":  {Component: healthBadge(state)},
+				"enabled": {Text: enabledLabel(monitor.Enabled)},
+			},
+		})
 	}
-	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "availability", Label: "Availability", Width: "w-56", Align: "center"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
+	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
+}
+
+templ monitorAvailabilityRowDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
+	<div class="xis-monitor-row-detail" aria-label={ "Recent availability for " + monitor.Name }>
+		<div class="xis-monitor-row-detail-heading">
+			<p class="xis-meta">Recent availability · latest 10 ticks</p>
+			<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, monitor.Id.String())) } hx-get={ monitorURL(data.Query, data.Cursor, monitor.Id.String()) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Open monitor details</a>
+		</div>
+		@monitorAvailabilityMiniChart(monitor, health)
+	</div>
 }
 
 func selectedMonitor(data MonitorList) (sdk.Monitor, sdk.MonitorHealth, bool) {

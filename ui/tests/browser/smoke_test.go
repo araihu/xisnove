@@ -352,9 +352,11 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	assertMonitorPageNavigation(t, ctx, monitorID.String())
 	if err := chromedp.Run(ctx,
 		chromedp.Click(`tr[data-monitor-id="`+unknownID.String()+`"] td:first-child`),
+		chromedp.Poll(`(()=>{const detail=document.querySelector('tr[data-monitor-id="`+unknownID.String()+`"] + tr');return !!detail&&detail.getClientRects().length>0&&!!detail.querySelector('[data-goshtoso-charts-live-url]')})()`, nil, chromedp.WithPollingTimeout(5*time.Second)),
+		chromedp.Click(`tr[data-monitor-id="`+unknownID.String()+`"] + tr a[href^='/monitors/']`),
 		chromedp.Poll(`location.pathname === '/monitors/`+unknownID.String()+`'`, nil),
 	); err != nil {
-		t.Fatalf("monitor row selection: %v", err)
+		t.Fatalf("monitor row accordion/detail navigation: %v", err)
 	}
 	assertSelectedMonitorIdentity(t, ctx, unknownID.String())
 	beforeHistoryRead := monitorRequests.Load()

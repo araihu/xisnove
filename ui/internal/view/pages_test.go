@@ -356,7 +356,7 @@ func TestMonitorContentDistinguishesEmptyFilteredAndPartialStates(t *testing.T) 
 	}
 }
 
-func TestMonitorTableIncludesCompactLiveAvailabilityColumn(t *testing.T) {
+func TestMonitorTableIncludesExpandableCompactLiveAvailability(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000021")
 	data := MonitorList{
 		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Table monitor", Kind: sdk.MonitorKindHttp, Enabled: true}},
@@ -369,7 +369,11 @@ func TestMonitorTableIncludesCompactLiveAvailabilityColumn(t *testing.T) {
 	}
 	body := rendered.String()
 	for _, want := range []string{
-		">Availability</th>",
+		`role="button"`,
+		`tabindex="0"`,
+		`x-show="openRows[&#39;` + monitorID.String() + `&#39;]"`,
+		`Recent availability · latest 10 ticks`,
+		`Open monitor details`,
 		`xis-availability-chart xis-availability-mini-chart`,
 		`style="width:100%;height:32px;"`,
 		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events?compact=1"`,
@@ -377,6 +381,9 @@ func TestMonitorTableIncludesCompactLiveAvailabilityColumn(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("monitor table compact availability chart missing %q", want)
 		}
+	}
+	if strings.Contains(body, ">Availability</th>") {
+		t.Fatal("monitor table still renders availability as a fixed column")
 	}
 }
 
