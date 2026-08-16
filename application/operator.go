@@ -154,6 +154,9 @@ func (s OperatorService) ApplyMonitor(ctx context.Context, request ApplyOperator
 			if healthErr := repositories.Health.UpsertMonitor(ctx, domain.MonitorHealth{MonitorID: id, State: domain.HealthPending, LastTransitionAt: now}); healthErr != nil {
 				return "", OperatorMonitorState{}, healthErr
 			}
+			if tickErr := appendInitialStateTick(ctx, repositories, monitor, request.Monitor.LocationID, now, uuid.NewString); tickErr != nil {
+				return "", OperatorMonitorState{}, tickErr
+			}
 		} else {
 			current, getErr := repositories.Management.GetMonitor(ctx, id)
 			if getErr != nil {

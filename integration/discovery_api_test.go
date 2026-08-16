@@ -9,6 +9,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/araihu/xisnove/application"
+	"github.com/araihu/xisnove/domain"
 	xiscrypto "github.com/araihu/xisnove/internal/adapters/crypto"
 	"github.com/araihu/xisnove/internal/adapters/database"
 	"github.com/araihu/xisnove/internal/adapters/httpapi"
@@ -175,6 +176,18 @@ func runDiscoveryAPIJourney(t *testing.T, harness *storageHarness) {
 	if promoted.JSON201.Candidate.PromotedMonitorId == nil || *promoted.JSON201.Candidate.PromotedMonitorId != monitorID ||
 		promoted.JSON201.Candidate.State != sdk.DiscoveryCandidateStatePromoted {
 		t.Fatalf("promotion did not link candidate and monitor: %#v", promoted.JSON201)
+	}
+	initialTicks, err := store.Repositories().StateTicks.ListStateTicks(
+		ctx, domain.MonitorID(monitorID.String()), now.Add(-time.Second), now.Add(time.Second), 10,
+	)
+	if err != nil || len(initialTicks) != 1 {
+		t.Fatalf("discovery monitor initial ticks = %#v, err=%v", initialTicks, err)
+	}
+	initialTick := initialTicks[0]
+	if initialTick.LocationID == nil || *initialTick.LocationID != domain.LocationID(location.JSON201.Id.String()) ||
+		initialTick.Lifecycle != domain.MonitorLifecycleActive || initialTick.Health != domain.HealthPending ||
+		initialTick.ReasonCode != domain.StateTickReasonInitial || initialTick.Actor.Kind != domain.StateTickActorSystem {
+		t.Fatalf("discovery monitor initial tick = %#v", initialTick)
 	}
 	replayed, err := client.PromoteDiscoveryCandidateWithResponse(ctx, candidate.Id,
 		&sdk.PromoteDiscoveryCandidateParams{IdempotencyKey: &promotionKey}, promotionRequest, adminAuth,

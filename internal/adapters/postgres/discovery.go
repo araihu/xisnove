@@ -26,7 +26,7 @@ func (s *store) DiscoveryTransact(ctx context.Context, fn func(context.Context, 
 }
 
 func discoveryRepositories(repositories port.Repositories, queries *dbpostgres.Queries) port.DiscoveryRepositories {
-	return port.DiscoveryRepositories{Discovery: &discoveryRepository{queries: queries}, Agents: repositories.Agents, Locations: repositories.Locations, Monitors: repositories.Monitors, Health: repositories.Health}
+	return port.DiscoveryRepositories{Discovery: &discoveryRepository{queries: queries}, Agents: repositories.Agents, Locations: repositories.Locations, Monitors: repositories.Monitors, Health: repositories.Health, StateTickWriter: repositories.StateTickWriter}
 }
 
 type discoveryRepository struct{ queries *dbpostgres.Queries }

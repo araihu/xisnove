@@ -59,11 +59,12 @@ type CompleteDiscoveryRepository interface {
 }
 
 type DiscoveryRepositories struct {
-	Discovery DiscoveryRepository
-	Agents    AgentRepository
-	Locations LocationRepository
-	Monitors  MonitorRepository
-	Health    HealthRepository
+	Discovery       DiscoveryRepository
+	Agents          AgentRepository
+	Locations       LocationRepository
+	Monitors        MonitorRepository
+	Health          HealthRepository
+	StateTickWriter StateTickWriter
 }
 
 type DiscoveryUnitOfWork interface {

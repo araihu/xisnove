@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/araihu/xisnove/application/port"
 	"github.com/araihu/xisnove/domain"
 )
@@ -270,6 +272,7 @@ func discoveryRepositories(repositories Repositories) port.DiscoveryRepositories
 	return port.DiscoveryRepositories{
 		Discovery: repositories.Discovery, Locations: repositories.Locations,
 		Monitors: repositories.Monitors, Health: repositories.Health,
+		StateTickWriter: repositories.StateTickWriter,
 	}
 }
 
@@ -324,6 +327,9 @@ func (s *DiscoveryService) promoteWithRepositories(
 		return DiscoveryPromotion{}, err
 	}
 	if err := repositories.Health.UpsertMonitor(ctx, domain.MonitorHealth{MonitorID: monitor.ID, State: domain.HealthPending, LastTransitionAt: now}); err != nil {
+		return DiscoveryPromotion{}, err
+	}
+	if err := appendInitialStateTick(ctx, Repositories{StateTickWriter: repositories.StateTickWriter}, monitor, command.LocationID, now, uuid.NewString); err != nil {
 		return DiscoveryPromotion{}, err
 	}
 	linked, err := repositories.Discovery.LinkPromotion(ctx, candidate.ID, monitor.ID, now)

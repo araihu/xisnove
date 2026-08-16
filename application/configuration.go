@@ -130,7 +130,7 @@ func (s *ConfigurationService) CreateMonitor(
 		}); err != nil {
 			return err
 		}
-		return nil
+		return appendInitialStateTick(ctx, repositories, monitor, command.LocationID, now, s.newID)
 	})
 	if err != nil {
 		return ConfiguredMonitor{}, fmt.Errorf("create monitor: %w", err)

@@ -55,6 +55,18 @@ func TestCreateHTTPMonitorPersistsAssignmentAndInitialHealth(t *testing.T) {
 	if got := store.locationHealth["m1/l1"].State; got != domain.HealthPending {
 		t.Fatalf("initial location health = %s", got)
 	}
+	if len(store.stateTicks) != 1 {
+		t.Fatalf("initial state ticks = %d, want 1", len(store.stateTicks))
+	}
+	initial := store.stateTicks[0]
+	if initial.MonitorID != "m1" || *initial.LocationID != "l1" ||
+		initial.Lifecycle != domain.MonitorLifecycleActive ||
+		initial.Health != domain.HealthPending ||
+		initial.ReasonCode != domain.StateTickReasonInitial ||
+		initial.Actor.Kind != domain.StateTickActorSystem ||
+		!initial.OccurredAt.Equal(now) {
+		t.Fatalf("initial state tick = %#v", initial)
+	}
 	if !monitor.NextRunAt.Equal(now) {
 		t.Fatalf("NextRunAt = %v", monitor.NextRunAt)
 	}
@@ -215,6 +227,7 @@ type configurationStore struct {
 	assignments    map[domain.MonitorID]application.MonitorLocation
 	locationHealth map[string]domain.LocationHealth
 	monitorHealth  map[domain.MonitorID]domain.MonitorHealth
+	stateTicks     []domain.StateTick
 }
 
 func newConfigurationStore() *configurationStore {
@@ -224,15 +237,29 @@ func newConfigurationStore() *configurationStore {
 		assignments:    map[domain.MonitorID]application.MonitorLocation{},
 		locationHealth: map[string]domain.LocationHealth{},
 		monitorHealth:  map[domain.MonitorID]domain.MonitorHealth{},
+		stateTicks:     []domain.StateTick{},
 	}
 }
 
 func (s *configurationStore) Repositories() application.Repositories {
 	return application.Repositories{
-		Locations: &configurationLocationRepository{store: s},
-		Monitors:  &configurationMonitorRepository{store: s},
-		Health:    &configurationHealthRepository{store: s},
+		Locations:       &configurationLocationRepository{store: s},
+		Monitors:        &configurationMonitorRepository{store: s},
+		Health:          &configurationHealthRepository{store: s},
+		StateTickWriter: &configurationStateTickWriter{store: s},
 	}
+}
+
+type configurationStateTickWriter struct {
+	store *configurationStore
+}
+
+func (w *configurationStateTickWriter) AppendStateTick(
+	_ context.Context,
+	tick domain.StateTick,
+) (bool, error) {
+	w.store.stateTicks = append(w.store.stateTicks, tick.Clone())
+	return true, nil
 }
 
 func (s *configurationStore) View(

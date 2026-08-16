@@ -216,6 +216,18 @@ func TestOperatorAPIOwnershipCredentialReplayAndScopeBoundaries(t *testing.T) {
 	if err != nil || monitor.JSON200 == nil || monitor.JSON200.ExternalId.String() == "" || len(monitor.Body) == 0 {
 		t.Fatalf("monitor apply = %#v, err = %v", monitor, err)
 	}
+	ticks, err := store.Repositories().StateTicks.ListStateTicks(
+		ctx, domain.MonitorID(monitor.JSON200.ExternalId.String()), now.Add(-time.Minute), now.Add(time.Minute), 10,
+	)
+	if err != nil || len(ticks) != 1 {
+		t.Fatalf("operator monitor initial ticks = %#v, err=%v", ticks, err)
+	}
+	initialTick := ticks[0]
+	if initialTick.LocationID == nil || *initialTick.LocationID != domain.LocationID(location.JSON201.Id.String()) ||
+		initialTick.Lifecycle != domain.MonitorLifecycleActive || initialTick.Health != domain.HealthPending ||
+		initialTick.ReasonCode != domain.StateTickReasonInitial || initialTick.Actor.Kind != domain.StateTickActorSystem {
+		t.Fatalf("operator monitor initial tick = %#v", initialTick)
+	}
 	monitorDelete, err := client.DeleteOperatorMonitorWithResponse(ctx,
 		&sdk.DeleteOperatorMonitorParams{IdempotencyKey: sdk.RequiredIdempotencyKey("operator-monitor-owner-only-delete")},
 		sdk.DeleteOperatorMonitorRequest{Owner: monitorOwner}, operatorAuth)

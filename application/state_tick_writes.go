@@ -121,6 +121,43 @@ func appendStaleStateTick(
 	return appendStateTick(ctx, repositories, tick)
 }
 
+// appendInitialStateTick records the first durable state of a monitor while
+// its configuration and pending health projections are created. Keeping this
+// in the same unit of work means a monitor can never become visible without a
+// corresponding historical starting point.
+func appendInitialStateTick(
+	ctx context.Context,
+	repositories Repositories,
+	monitor domain.Monitor,
+	locationID domain.LocationID,
+	at time.Time,
+	newID func() string,
+) error {
+	tickID, actionID, err := stateTickIDs(newID)
+	if err != nil {
+		return err
+	}
+	lifecycle := domain.MonitorLifecycleActive
+	if !monitor.Enabled {
+		lifecycle = domain.MonitorLifecycleDisabled
+	}
+	tick, err := domain.NewStateTick(domain.NewStateTickParams{
+		ID:         tickID,
+		MonitorID:  monitor.ID,
+		LocationID: &locationID,
+		Lifecycle:  lifecycle,
+		Health:     domain.HealthPending,
+		ReasonCode: domain.StateTickReasonInitial,
+		ActionID:   actionID,
+		Actor:      domain.StateTickActor{Kind: domain.StateTickActorSystem},
+		OccurredAt: at.UTC(),
+	})
+	if err != nil {
+		return err
+	}
+	return appendStateTick(ctx, repositories, tick)
+}
+
 func appendAdministrativeStateTick(
 	ctx context.Context,
 	repositories Repositories,
