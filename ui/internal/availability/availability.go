@@ -15,8 +15,8 @@ const (
 
 	DefaultWindow = 24
 	// CompactWindow is the bounded sample count used by inventory-row charts.
-	// It keeps the table readable while preserving a useful recent trend.
-	CompactWindow   = 12
+	// It keeps the table readable while preserving the ten latest ticks.
+	CompactWindow   = 10
 	HistoryWindow   = 4096
 	HistoryLookback = 3 * time.Hour
 	HistoryStep     = 5 * time.Minute
