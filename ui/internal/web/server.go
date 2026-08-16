@@ -586,10 +586,14 @@ func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Reques
 
 	send := func() bool {
 		windowEnd := time.Now().UTC()
-		history := availability.NewHistory(availability.HistoryWindow)
+		historyWindow := availability.HistoryWindow
+		if r.URL.Query().Get("compact") == "1" {
+			historyWindow = availability.CompactWindow
+		}
+		history := availability.NewHistory(historyWindow)
 		pollCtx, cancel := context.WithTimeout(r.Context(), s.timeout)
 		availabilityHistory, historyErr := s.controlPlane.GetMonitorAvailabilityHistory(
-			pollCtx, credential, monitorID, windowEnd.Add(-availability.HistoryLookback), windowEnd, availability.HistoryWindow,
+			pollCtx, credential, monitorID, windowEnd.Add(-availability.HistoryLookback), windowEnd, int32(historyWindow),
 		)
 		stateHistory, stateHistoryErr := s.controlPlane.GetMonitorStateHistory(
 			pollCtx, credential, monitorID, windowEnd.Add(-controlplane.StateHistoryLookback), windowEnd, stateHistoryLimit,

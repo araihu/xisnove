@@ -22,6 +22,7 @@ import (
 	chartassets "github.com/araihu/goshtoso-charts/assets"
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
+	"github.com/araihu/xisnove/ui/internal/availability"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/google/uuid"
@@ -198,6 +199,57 @@ func TestMonitorAvailabilityEventsStreamsCompleteChartSnapshot(t *testing.T) {
 		t.Fatalf("SSE down series = %#v", snapshot.Series[2])
 	}
 	cancel()
+}
+
+func TestMonitorAvailabilityEventsStreamsCompactChartSnapshot(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-0000-0000-000000000095")
+	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+	samples := make([]sdk.MonitorAvailabilitySample, 0, availability.CompactWindow+3)
+	for index := 0; index < availability.CompactWindow+3; index++ {
+		samples = append(samples, sdk.MonitorAvailabilitySample{
+			Id:         uuid.New(),
+			LocationId: uuid.New(),
+			ObservedAt: time.Date(2026, time.August, 15, 11, index, 0, 0, time.UTC),
+			Outcome:    sdk.MonitorAvailabilitySampleOutcomePassed,
+		})
+	}
+	client.History[monitorID] = sdk.MonitorAvailabilityHistory{MonitorId: monitorID, Samples: samples}
+	handler, _ := newTestHandlerWithModes(t, client, 10*time.Millisecond, []AuthMode{AuthModeNone})
+	testServer := httptest.NewServer(handler)
+	defer testServer.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events?compact=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := testServer.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	reader := bufio.NewReader(response.Body)
+	event, err := readSSEEvent(reader)
+	if err != nil || event.Name != "chart" {
+		t.Fatalf("compact SSE event = %#v, err=%v", event, err)
+	}
+	var snapshot struct {
+		Categories []string `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(event.Data), &snapshot); err != nil {
+		t.Fatalf("decode compact SSE snapshot: %v", err)
+	}
+	if got, want := len(snapshot.Categories), availability.CompactWindow; got != want {
+		t.Fatalf("compact SSE categories = %d, want %d", got, want)
+	}
+	event, err = readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("compact SSE follow-up: %v", err)
+	}
+	if event.Name != "state-ticks" {
+		t.Fatalf("compact SSE follow-up = %#v, want state-ticks", event)
+	}
 }
 
 func TestMonitorAvailabilityEventsStreamsStateTickProvenanceSnapshot(t *testing.T) {

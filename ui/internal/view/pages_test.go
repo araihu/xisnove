@@ -371,8 +371,8 @@ func TestMonitorTableIncludesCompactLiveAvailabilityColumn(t *testing.T) {
 	for _, want := range []string{
 		">Availability</th>",
 		`xis-availability-chart xis-availability-mini-chart`,
-		`style="width:100%;height:48px;"`,
-		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events"`,
+		`style="width:100%;height:32px;"`,
+		`data-goshtoso-charts-live-url="/monitors/` + monitorID.String() + `/availability/events?compact=1"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("monitor table compact availability chart missing %q", want)

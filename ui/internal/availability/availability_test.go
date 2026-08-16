@@ -50,6 +50,23 @@ func TestHistoryReplacesOldestSamplesAtBound(t *testing.T) {
 	}
 }
 
+func TestCompactWindowKeepsInventoryTrendBounded(t *testing.T) {
+	history := NewHistory(CompactWindow)
+	for index := 0; index < CompactWindow+5; index++ {
+		history.Add(sdk.Up, time.Date(2026, time.August, 15, 12, index, 0, 0, time.UTC))
+	}
+
+	snapshot := history.Snapshot()
+	if got, want := len(snapshot.Categories), CompactWindow; got != want {
+		t.Fatalf("compact categories = %d, want %d", got, want)
+	}
+	for _, series := range snapshot.Series {
+		if got, want := len(series.Values), CompactWindow; got != want {
+			t.Fatalf("%s values = %d, want %d", series.Name, got, want)
+		}
+	}
+}
+
 func TestHistoryUnknownWindowKeepsCurrentStateAtRightEdge(t *testing.T) {
 	history := NewHistory(int(HistoryLookback/HistoryStep) + 1)
 	end := time.Date(2026, time.August, 15, 11, 3, 42, 0, time.UTC)

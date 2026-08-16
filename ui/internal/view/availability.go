@@ -23,18 +23,17 @@ const (
 )
 
 func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
-	return renderAvailabilityChart(monitor, health, "168px", "xis-availability-chart", true, true, "4px")
+	return renderAvailabilityChart(monitor, health, "168px", "xis-availability-chart", true, true, "4px", "")
 }
 
-// monitorAvailabilityMiniChart renders the same live snapshot as the detail
-// chart, compressed for the monitor inventory table. The SSE source remains
-// monitor-scoped, so each row replaces its seed with the complete bounded
-// availability window without a second page-level history contract.
+// monitorAvailabilityMiniChart renders a compact recent trend for the monitor
+// inventory table. The compact SSE stream keeps the row readable while the
+// detail page continues to expose the complete three-hour history.
 func monitorAvailabilityMiniChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
-	return renderAvailabilityChart(monitor, health, "48px", "xis-availability-chart xis-availability-mini-chart", false, false, "3px")
+	return renderAvailabilityChart(monitor, health, "32px", "xis-availability-chart xis-availability-mini-chart", false, false, "2px", "?compact=1")
 }
 
-func renderAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth, height, class string, showLegend, showTooltip bool, barWidth string) templ.Component {
+func renderAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth, height, class string, showLegend, showTooltip bool, barWidth, streamQuery string) templ.Component {
 	snapshot := availabilitySeedSnapshot(health.State, time.Now().UTC())
 
 	series := make([]interactive.BarSeries, 0, len(snapshot.Series))
@@ -71,7 +70,7 @@ func renderAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth, heig
 		},
 		Style: charttheme.Style{Palette: charttheme.PaletteStatus, Class: class},
 		Live: &interactive.LiveData{
-			URL:   "/monitors/" + monitor.Id.String() + "/availability/events",
+			URL:   "/monitors/" + monitor.Id.String() + "/availability/events" + streamQuery,
 			Event: "chart",
 		},
 	})
