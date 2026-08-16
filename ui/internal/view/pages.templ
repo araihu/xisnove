@@ -97,10 +97,12 @@ templ AppStyles() {
 		body.console-shell { overflow-x: hidden; }
 		main.console-shell__main { overflow-x: hidden; }
 		.console-shell__content { overflow-x: clip; }
-		.console-shell-root.js .console-shell__sidebar:not(.is-open) { visibility: hidden; pointer-events: none; }
-		.console-shell-root.js .console-shell__sidebar.is-open { visibility: visible; pointer-events: auto; }
+		@media (max-width: 719px) {
+			.console-shell-root.js .console-shell__sidebar:not(.is-open) { visibility: hidden; pointer-events: none; }
+			.console-shell-root.js .console-shell__sidebar.is-open { visibility: visible; pointer-events: auto; }
+		}
 		html.dark .console-shell__sidebar [data-consoleshell-nav-id][aria-current="page"] { color: var(--color-primary-dark); }
-		@media (min-width: 720px) { .console-shell-root.js .console-shell__sidebar { visibility: visible; pointer-events: auto; } }
+		@media (min-width: 720px) { html.console-shell-root.js .console-shell__sidebar { visibility: visible; pointer-events: auto; transform: none; } }
 		.dark body { background: var(--color-surface-dark); color: var(--color-on-surface-dark); }
 		.xis-brand { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; color: var(--color-on-surface-strong); }
 		.dark .xis-brand { color: var(--color-on-surface-dark-strong); }

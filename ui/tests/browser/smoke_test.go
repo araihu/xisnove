@@ -1016,15 +1016,18 @@ func assertKeyboardActivation(t *testing.T, ctx context.Context, selector, ready
 func assertShellGeometry(t *testing.T, ctx context.Context) {
 	t.Helper()
 	var desktop struct {
-		PageOverflow bool   `json:"pageOverflow"`
-		MainOverflow string `json:"mainOverflow"`
-		IdleDisplay  string `json:"idleDisplay"`
-		IdleHeight   int    `json:"idleHeight"`
+		PageOverflow       bool    `json:"pageOverflow"`
+		MainOverflow       string  `json:"mainOverflow"`
+		IdleDisplay        string  `json:"idleDisplay"`
+		IdleHeight         int     `json:"idleHeight"`
+		SidebarVisible     bool    `json:"sidebarVisible"`
+		SidebarWidth       float64 `json:"sidebarWidth"`
+		SidebarPointer     string  `json:"sidebarPointer"`
 	}
-	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900), chromedp.Evaluate(`(()=>{const m=document.querySelector('#main-content'),l=document.querySelector('#monitor-loading');return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,mainOverflow:getComputedStyle(m).overflowY,idleDisplay:getComputedStyle(l).display,idleHeight:l.getBoundingClientRect().height}})()`, &desktop)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(1440, 900), chromedp.Sleep(250*time.Millisecond), chromedp.Evaluate(`(()=>{const m=document.querySelector('#main-content'),l=document.querySelector('#monitor-loading'),s=document.querySelector('#consoleshell-sidebar'),r=s?.getBoundingClientRect(),cs=s&&getComputedStyle(s),visible=!!r&&r.width>0&&r.height>0&&r.right>0&&cs?.display!=='none'&&cs?.visibility!=='hidden';return {pageOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,mainOverflow:getComputedStyle(m).overflowY,idleDisplay:getComputedStyle(l).display,idleHeight:l.getBoundingClientRect().height,sidebarVisible:visible,sidebarWidth:r?.width||0,sidebarPointer:cs?.pointerEvents||''}})()`, &desktop)); err != nil {
 		t.Fatal(err)
 	}
-	if desktop.PageOverflow || (desktop.MainOverflow != "auto" && desktop.MainOverflow != "scroll") || desktop.IdleDisplay != "none" || desktop.IdleHeight != 0 {
+	if desktop.PageOverflow || (desktop.MainOverflow != "auto" && desktop.MainOverflow != "scroll") || desktop.IdleDisplay != "none" || desktop.IdleHeight != 0 || !desktop.SidebarVisible || desktop.SidebarWidth <= 0 || desktop.SidebarPointer == "none" {
 		t.Errorf("desktop shell geometry = %#v", desktop)
 	}
 	var mobile struct {

@@ -186,6 +186,26 @@ func TestHeaderControlsKeepSearchShortcutAndCircleAccountTrigger(t *testing.T) {
 	}
 }
 
+func TestConsoleSidebarVisibilityRuleOnlyHidesMobileDrawer(t *testing.T) {
+	var rendered strings.Builder
+	if err := AppStyles().Render(t.Context(), &rendered); err != nil {
+		t.Fatalf("render app styles: %v", err)
+	}
+	body := rendered.String()
+	if !strings.Contains(body, `@media (max-width: 719px) {`) {
+		t.Fatal("sidebar drawer visibility rule is not scoped to mobile")
+	}
+	if !strings.Contains(body, `.console-shell-root.js .console-shell__sidebar:not(.is-open) { visibility: hidden; pointer-events: none; }`) {
+		t.Fatal("mobile sidebar closed state is not hidden")
+	}
+	if !strings.Contains(body, `.console-shell-root.js .console-shell__sidebar.is-open { visibility: visible; pointer-events: auto; }`) {
+		t.Fatal("mobile sidebar open state is not visible")
+	}
+	if !strings.Contains(body, `@media (min-width: 720px) { html.console-shell-root.js .console-shell__sidebar { visibility: visible; pointer-events: auto; transform: none; } }`) {
+		t.Fatal("desktop sidebar visibility override is missing")
+	}
+}
+
 func TestAvailabilityChartUsesNeutralUnknownSeries(t *testing.T) {
 	var rendered strings.Builder
 	if err := AppStyles().Render(t.Context(), &rendered); err != nil {
