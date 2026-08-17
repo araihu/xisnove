@@ -54,6 +54,24 @@ services:
       org.xisnove.fixture.kind: dns
       org.xisnove.monitor.target: monitor-dns:5353
 
+  monitor-flaky-http:
+    <<: *service-fixture
+    command: [http, --listen=0.0.0.0:8080, --flaky-every=2, --body=flaky service]
+    expose: ["8080"]
+    labels:
+      org.xisnove.fixture.kind: http
+      org.xisnove.fixture.profile: flaky
+      org.xisnove.monitor.target: http://monitor-flaky-http:8080/healthz
+
+  monitor-down-http:
+    <<: *service-fixture
+    command: [http, --listen=0.0.0.0:8080, --status=503, --body=service unavailable]
+    expose: ["8080"]
+    labels:
+      org.xisnove.fixture.kind: http
+      org.xisnove.fixture.profile: unavailable
+      org.xisnove.monitor.target: http://monitor-down-http:8080/healthz
+
   ui:
     image: xisnove-ui:watch
     pull_policy: build

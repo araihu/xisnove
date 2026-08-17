@@ -12,11 +12,11 @@ import (
 )
 
 func TestParseOptionsSupportsPositionalTypeBeforeFlags(t *testing.T) {
-	config, err := parseOptions([]string{"http", "--listen", "127.0.0.1:18080", "--body", "hello"})
+	config, err := parseOptions([]string{"http", "--listen", "127.0.0.1:18080", "--body", "hello", "--flaky-every", "3"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.kind != serviceHTTP || config.listen != "127.0.0.1:18080" || config.body != "hello" {
+	if config.kind != serviceHTTP || config.listen != "127.0.0.1:18080" || config.body != "hello" || config.status != http.StatusOK || config.flakyEvery != 3 {
 		t.Fatalf("config = %#v", config)
 	}
 }
@@ -58,6 +58,8 @@ func TestParseOptionsRejectsUnsupportedOrAmbiguousTypes(t *testing.T) {
 		{"smtp"},
 		{"http", "--type", "tcp"},
 		{"http", "extra"},
+		{"http", "--status", "99"},
+		{"http", "--flaky-every", "-1"},
 	} {
 		if _, err := parseOptions(args); err == nil {
 			t.Fatalf("parseOptions(%v) succeeded", args)
@@ -82,6 +84,25 @@ func TestHTTPHandlerServesHealthAndConfiguredBody(t *testing.T) {
 				t.Fatalf("status=%d body=%q", record.Code, record.Body.String())
 			}
 		})
+	}
+}
+
+func TestHTTPHandlerSupportsFixedAndFlakyStatuses(t *testing.T) {
+	handler := newHTTPHandlerWithOptions("fixture body\n", http.StatusOK, 2)
+	for index, wantStatus := range []int{http.StatusOK, http.StatusServiceUnavailable, http.StatusOK} {
+		record := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "http://service.test/healthz", nil)
+		handler.ServeHTTP(record, request)
+		if record.Code != wantStatus || record.Body.String() != "ok\n" {
+			t.Fatalf("request %d status=%d body=%q, want status=%d", index+1, record.Code, record.Body.String(), wantStatus)
+		}
+	}
+
+	down := newHTTPHandlerWithOptions("unavailable\n", http.StatusServiceUnavailable, 0)
+	record := httptest.NewRecorder()
+	down.ServeHTTP(record, httptest.NewRequest(http.MethodGet, "http://service.test/", nil))
+	if record.Code != http.StatusServiceUnavailable || record.Body.String() != "unavailable\n" {
+		t.Fatalf("fixed down response status=%d body=%q", record.Code, record.Body.String())
 	}
 }
 

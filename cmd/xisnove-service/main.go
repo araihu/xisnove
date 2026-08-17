@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -46,6 +47,8 @@ type options struct {
 	kind        string
 	listen      string
 	body        string
+	status      int
+	flakyEvery  int
 	response    string
 	name        string
 	recordType  string
@@ -88,6 +91,8 @@ func parseOptions(args []string) (options, error) {
 	set.StringVar(&typeFlag, "type", "", "service type when it is not the first positional argument")
 	set.StringVar(&result.listen, "listen", "", "listen address (defaults by service type)")
 	set.StringVar(&result.body, "body", "xisnove HTTP service\n", "HTTP response body")
+	set.IntVar(&result.status, "status", http.StatusOK, "HTTP response status")
+	set.IntVar(&result.flakyEvery, "flaky-every", 0, "return HTTP 503 on every Nth request (0 disables flakiness)")
 	set.StringVar(&result.response, "response", "PONG\n", "TCP response payload")
 	set.StringVar(&result.name, "name", defaultDNSName, "DNS record name")
 	set.StringVar(&result.recordType, "record-type", defaultDNSRecord, "DNS record type (A, AAAA, CNAME, MX, NS, SRV, or TXT)")
@@ -114,6 +119,12 @@ func parseOptions(args []string) (options, error) {
 	result.kind = strings.ToLower(strings.TrimSpace(positionalKind))
 	switch result.kind {
 	case serviceHTTP:
+		if result.status < 100 || result.status > 599 {
+			return options{}, fmt.Errorf("HTTP status must be between 100 and 599, got %d", result.status)
+		}
+		if result.flakyEvery < 0 {
+			return options{}, fmt.Errorf("flaky request interval cannot be negative, got %d", result.flakyEvery)
+		}
 		if result.listen == "" {
 			result.listen = defaultHTTPListen
 		}
@@ -157,7 +168,7 @@ func runHTTP(ctx context.Context, config options) error {
 		return fmt.Errorf("listen HTTP service on %q: %w", config.listen, err)
 	}
 	server := &http.Server{
-		Handler:           newHTTPHandler(config.body),
+		Handler:           newHTTPHandlerWithOptions(config.body, config.status, config.flakyEvery),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	result := make(chan error, 1)
@@ -187,8 +198,18 @@ func runHTTP(ctx context.Context, config options) error {
 }
 
 func newHTTPHandler(body string) http.Handler {
+	return newHTTPHandlerWithOptions(body, http.StatusOK, 0)
+}
+
+func newHTTPHandlerWithOptions(body string, status, flakyEvery int) http.Handler {
+	var requests atomic.Uint64
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		responseStatus := status
+		if flakyEvery > 0 && requests.Add(1)%uint64(flakyEvery) == 0 {
+			responseStatus = http.StatusServiceUnavailable
+		}
+		writer.WriteHeader(responseStatus)
 		if request.URL.Path == "/healthz" {
 			_, _ = writer.Write([]byte("ok\n"))
 			return

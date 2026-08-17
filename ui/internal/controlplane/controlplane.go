@@ -426,6 +426,15 @@ func (f *Fake) recordDevelopmentProbeLocked(monitorID openapi_types.UUID, state 
 	}
 	previous.State = state
 	f.Health[monitorID] = previous
+	var locationID *openapi_types.UUID
+	for _, monitor := range f.Monitors {
+		if monitor.Id != monitorID || monitor.LocationId == uuid.Nil {
+			continue
+		}
+		id := monitor.LocationId
+		locationID = &id
+		break
+	}
 
 	reason := sdk.StateTickReasonCodeProbeTimeout
 	sampleOutcome := sdk.MonitorAvailabilitySampleOutcome("")
@@ -446,6 +455,7 @@ func (f *Fake) recordDevelopmentProbeLocked(monitorID openapi_types.UUID, state 
 		Health:     state,
 		Id:         uuid.New(),
 		Lifecycle:  sdk.Active,
+		LocationId: locationID,
 		MonitorId:  monitorID,
 		OccurredAt: observedAt,
 		ReasonCode: reason,
@@ -457,9 +467,13 @@ func (f *Fake) recordDevelopmentProbeLocked(monitorID openapi_types.UUID, state 
 	availabilityHistory := f.History[monitorID]
 	availabilityHistory.MonitorId = monitorID
 	availabilityHistory.GeneratedAt = observedAt
+	if locationID == nil {
+		id := uuid.NewSHA1(uuid.Nil, []byte("development-location:"+monitorID.String()))
+		locationID = &id
+	}
 	availabilityHistory.Samples = append(availabilityHistory.Samples, sdk.MonitorAvailabilitySample{
 		Id:            uuid.New(),
-		LocationId:    uuid.NewSHA1(uuid.Nil, []byte("development-location:"+monitorID.String())),
+		LocationId:    *locationID,
 		LatencyMillis: 1,
 		ObservedAt:    observedAt,
 		Outcome:       sampleOutcome,

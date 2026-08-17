@@ -253,44 +253,60 @@ func developmentFake(email, password, session string) *controlplane.Fake {
 	httpFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000003")
 	tcpFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000004")
 	dnsFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000005")
+	flakyFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000006")
+	downFixtureID := uuid.MustParse("10000000-0000-4000-8000-000000000007")
+	homeLocationID := uuid.MustParse("20000000-0000-4000-8000-000000000001")
+	edgeLocationID := uuid.MustParse("20000000-0000-4000-8000-000000000002")
+	flakyLocationID := uuid.MustParse("20000000-0000-4000-8000-000000000003")
+	downLocationID := uuid.MustParse("20000000-0000-4000-8000-000000000004")
+	fake.Locations = []sdk.Location{
+		developmentLocation(homeLocationID, "Home resolver", "monitor-dns:5353", sdk.LocationProtocol("dns"), now),
+		developmentLocation(edgeLocationID, "Edge ingress", "198.51.100.10", sdk.LocationProtocol("http"), now),
+		developmentLocation(flakyLocationID, "Flaky API", "monitor-flaky-http:8080", sdk.LocationProtocol("http"), now),
+		developmentLocation(downLocationID, "Offline API", "monitor-down-http:8080", sdk.LocationProtocol("http"), now),
+	}
 	fake.Monitors = []sdk.Monitor{
-		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability from the control plane", Kind: sdk.MonitorKindDns, Enabled: true, Public: true},
-		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", Kind: sdk.MonitorKindHttp, Enabled: true, Public: true},
-		composeHTTPMonitor(httpFixtureID, now),
-		composeTCPMonitor(tcpFixtureID, now),
-		composeDNSMonitor(dnsFixtureID, now),
+		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability from the control plane", Kind: sdk.MonitorKindDns, Enabled: true, Public: true, LocationId: homeLocationID, RequiredLocation: true, IntervalSeconds: 30, TimeoutMillis: 2000, FailureThreshold: 3, RecoveryThreshold: 2, CreatedAt: now, UpdatedAt: now},
+		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", Kind: sdk.MonitorKindHttp, Enabled: true, Public: true, LocationId: edgeLocationID, IntervalSeconds: 30, TimeoutMillis: 2000, FailureThreshold: 3, RecoveryThreshold: 2, CreatedAt: now, UpdatedAt: now},
+		composeHTTPMonitor(httpFixtureID, edgeLocationID, now),
+		composeTCPMonitor(tcpFixtureID, edgeLocationID, now),
+		composeDNSMonitor(dnsFixtureID, homeLocationID, now),
+		composeFlakyHTTPMonitor(flakyFixtureID, flakyLocationID, now),
+		composeDownHTTPMonitor(downFixtureID, downLocationID, now),
 	}
 	fake.Health[dnsID] = sdk.MonitorHealth{MonitorId: dnsID, State: sdk.Up}
 	fake.Health[wanID] = sdk.MonitorHealth{MonitorId: wanID, State: sdk.Unknown}
 	for _, monitorID := range []uuid.UUID{httpFixtureID, tcpFixtureID, dnsFixtureID} {
 		fake.Health[monitorID] = sdk.MonitorHealth{MonitorId: monitorID, State: sdk.Up, LastTransitionAt: now}
 	}
+	fake.Health[flakyFixtureID] = sdk.MonitorHealth{MonitorId: flakyFixtureID, State: sdk.Degraded, LastTransitionAt: now}
+	fake.Health[downFixtureID] = sdk.MonitorHealth{MonitorId: downFixtureID, State: sdk.Down, LastTransitionAt: now}
 	// Seed one real-looking observation so the drawer is useful immediately;
 	// run() advances this stream on the configured development tick interval.
 	fake.RecordDevelopmentProbeForMonitors(now)
 	fake.PublicStatus = sdk.PublicStatusPage{GeneratedAt: time.Now().UTC(), State: sdk.Degraded, Monitors: []sdk.PublicStatusMonitor{
 		{Id: dnsID, Name: "Home DNS", Description: "Resolver reachability", State: sdk.Up},
 		{Id: wanID, Name: "VPS edge", Description: "External HTTP ingress", State: sdk.Unknown},
+		{Id: flakyFixtureID, Name: "Flaky API", Description: "Alternating HTTP responses", State: sdk.Degraded},
+		{Id: downFixtureID, Name: "Offline API", Description: "HTTP service unavailable", State: sdk.Down},
 	}}
 	return fake
 }
 
-func composeHTTPMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
+func developmentLocation(id uuid.UUID, name, address string, protocol sdk.LocationProtocol, now time.Time) sdk.Location {
+	enabled := true
+	return sdk.Location{
+		Id: id, Name: name, Address: address, Protocol: protocol, Enabled: &enabled,
+		Policy:    sdk.LocationPolicy{IntervalSeconds: 30, TimeoutMillis: 2000, FailureThreshold: 3, RecoveryThreshold: 2},
+		CreatedAt: now, UpdatedAt: &now,
+	}
+}
+
+func composeHTTPMonitor(id, locationID uuid.UUID, now time.Time) sdk.Monitor {
 	return sdk.Monitor{
-		Id:                id,
-		Name:              "Compose HTTP",
-		Description:       "Local HTTP fixture at monitor-http:8080/healthz",
-		Kind:              sdk.MonitorKindHttp,
-		Labels:            map[string]string{"environment": "compose-dev", "fixture": "monitor-http"},
-		Enabled:           true,
-		IntervalSeconds:   30,
-		TimeoutMillis:     2000,
-		FailureThreshold:  3,
-		RecoveryThreshold: 2,
-		Public:            false,
-		DisplayOrder:      10,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		Id: id, Name: "Compose HTTP", Description: "Local HTTP fixture at monitor-http:8080/healthz", Kind: sdk.MonitorKindHttp,
+		Labels: map[string]string{"environment": "compose-dev", "fixture": "monitor-http"}, Enabled: true, LocationId: locationID,
+		IntervalSeconds: 30, TimeoutMillis: 2000, FailureThreshold: 3, RecoveryThreshold: 2, Public: false, DisplayOrder: 10, CreatedAt: now, UpdatedAt: now,
 		Probe: mustDevelopmentProbe(func(probe *sdk.ProbeDefinition) error {
 			return probe.FromHTTPProbeDefinition(sdk.HTTPProbeDefinition{
 				Body: []byte{}, BodyContains: []string{"ok"}, BodyDoesNotContain: []string{},
@@ -302,7 +318,7 @@ func composeHTTPMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
 	}
 }
 
-func composeTCPMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
+func composeTCPMonitor(id, locationID uuid.UUID, now time.Time) sdk.Monitor {
 	return sdk.Monitor{
 		Id:                id,
 		Name:              "Compose TCP",
@@ -310,6 +326,7 @@ func composeTCPMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
 		Kind:              sdk.MonitorKindTcp,
 		Labels:            map[string]string{"environment": "compose-dev", "fixture": "monitor-tcp"},
 		Enabled:           true,
+		LocationId:        locationID,
 		IntervalSeconds:   30,
 		TimeoutMillis:     2000,
 		FailureThreshold:  3,
@@ -327,7 +344,7 @@ func composeTCPMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
 	}
 }
 
-func composeDNSMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
+func composeDNSMonitor(id, locationID uuid.UUID, now time.Time) sdk.Monitor {
 	return sdk.Monitor{
 		Id:                id,
 		Name:              "Compose DNS",
@@ -335,6 +352,7 @@ func composeDNSMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
 		Kind:              sdk.MonitorKindDns,
 		Labels:            map[string]string{"environment": "compose-dev", "fixture": "monitor-dns"},
 		Enabled:           true,
+		LocationId:        locationID,
 		IntervalSeconds:   30,
 		TimeoutMillis:     2000,
 		FailureThreshold:  3,
@@ -347,6 +365,30 @@ func composeDNSMonitor(id uuid.UUID, now time.Time) sdk.Monitor {
 			return probe.FromDNSProbeDefinition(sdk.DNSProbeDefinition{
 				ExpectedValues: []string{"192.0.2.10"}, Kind: sdk.DNSProbeDefinitionKindDns,
 				Name: "service.test", RecordType: sdk.A, Resolver: "monitor-dns:5353",
+			})
+		}),
+	}
+}
+
+func composeFlakyHTTPMonitor(id, locationID uuid.UUID, now time.Time) sdk.Monitor {
+	return developmentHTTPMonitor(id, locationID, "Flaky API", "Alternating HTTP fixture at monitor-flaky-http:8080/healthz", "monitor-flaky-http", "http://monitor-flaky-http:8080/healthz", 13, sdk.Degraded, now)
+}
+
+func composeDownHTTPMonitor(id, locationID uuid.UUID, now time.Time) sdk.Monitor {
+	return developmentHTTPMonitor(id, locationID, "Offline API", "Unavailable HTTP fixture at monitor-down-http:8080/healthz", "monitor-down-http", "http://monitor-down-http:8080/healthz", 14, sdk.Down, now)
+}
+
+func developmentHTTPMonitor(id, locationID uuid.UUID, name, description, fixture, target string, displayOrder int32, state sdk.HealthState, now time.Time) sdk.Monitor {
+	return sdk.Monitor{
+		Id: id, Name: name, Description: description, Kind: sdk.MonitorKindHttp,
+		Labels:  map[string]string{"environment": "compose-dev", "fixture": fixture, "expected-state": string(state)},
+		Enabled: true, LocationId: locationID, IntervalSeconds: 30, TimeoutMillis: 2000,
+		FailureThreshold: 3, RecoveryThreshold: 2, Public: false, DisplayOrder: displayOrder, CreatedAt: now, UpdatedAt: now,
+		Probe: mustDevelopmentProbe(func(probe *sdk.ProbeDefinition) error {
+			return probe.FromHTTPProbeDefinition(sdk.HTTPProbeDefinition{
+				Body: []byte{}, BodyContains: []string{"ok"}, BodyDoesNotContain: []string{},
+				ExpectedStatus: []sdk.StatusRange{{Minimum: 200, Maximum: 299}}, FollowRedirects: false,
+				Headers: map[string]string{}, Kind: sdk.HTTPProbeDefinitionKindHttp, Method: sdk.GET, Url: target,
 			})
 		}),
 	}

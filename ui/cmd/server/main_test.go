@@ -18,6 +18,7 @@ import (
 	"github.com/araihu/xisnove/ui/internal/buildinfo"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
 	"github.com/araihu/xisnove/ui/internal/web"
+	"github.com/google/uuid"
 )
 
 func TestExecuteVersionSkipsConfigurationAndServer(t *testing.T) {
@@ -363,19 +364,25 @@ func TestLoadConfigParsesDevelopmentTickInterval(t *testing.T) {
 	}
 }
 
-func TestDevelopmentFakeSeedsComposeFixtureMonitors(t *testing.T) {
+func TestDevelopmentFakeSeedsDevelopmentMonitorsAndLocations(t *testing.T) {
 	fake := developmentFake("admin@example.test", "password", "session")
-	if len(fake.Monitors) != 5 {
-		t.Fatalf("development monitor count = %d, want 5", len(fake.Monitors))
+	if len(fake.Monitors) != 7 {
+		t.Fatalf("development monitor count = %d, want 7", len(fake.Monitors))
+	}
+	if len(fake.Locations) != 4 {
+		t.Fatalf("development location count = %d, want 4", len(fake.Locations))
 	}
 
 	want := map[string]struct {
 		kind   string
 		detail string
+		state  sdk.HealthState
 	}{
-		"Compose HTTP": {kind: "http", detail: "http://monitor-http:8080/healthz"},
-		"Compose TCP":  {kind: "tcp", detail: "monitor-tcp:9090"},
-		"Compose DNS":  {kind: "dns", detail: "monitor-dns:5353"},
+		"Compose HTTP": {kind: "http", detail: "http://monitor-http:8080/healthz", state: sdk.Up},
+		"Compose TCP":  {kind: "tcp", detail: "monitor-tcp:9090", state: sdk.Up},
+		"Compose DNS":  {kind: "dns", detail: "monitor-dns:5353", state: sdk.Up},
+		"Flaky API":    {kind: "http", detail: "http://monitor-flaky-http:8080/healthz", state: sdk.Degraded},
+		"Offline API":  {kind: "http", detail: "http://monitor-down-http:8080/healthz", state: sdk.Down},
 	}
 	for _, monitor := range fake.Monitors[2:] {
 		expectation, ok := want[monitor.Name]
@@ -385,35 +392,46 @@ func TestDevelopmentFakeSeedsComposeFixtureMonitors(t *testing.T) {
 		if monitor.Public || !monitor.Enabled || monitor.Labels["environment"] != "compose-dev" {
 			t.Fatalf("compose monitor metadata = %#v", monitor)
 		}
-		if state := fake.Health[monitor.Id].State; state != sdk.Up {
-			t.Fatalf("%s health = %q, want %q", monitor.Name, state, sdk.Up)
+		if state := fake.Health[monitor.Id].State; state != expectation.state {
+			t.Fatalf("%s health = %q, want %q", monitor.Name, state, expectation.state)
 		}
 		kind, err := monitor.Probe.Discriminator()
 		if err != nil || kind != expectation.kind {
 			t.Fatalf("%s probe kind = %q, %v; want %q", monitor.Name, kind, err, expectation.kind)
 		}
-		switch monitor.Name {
-		case "Compose HTTP":
+		switch expectation.kind {
+		case "http":
 			probe, err := monitor.Probe.AsHTTPProbeDefinition()
 			if err != nil || probe.Url != expectation.detail || len(probe.BodyContains) != 1 || probe.BodyContains[0] != "ok" {
 				t.Fatalf("HTTP fixture probe = %#v, %v", probe, err)
 			}
-		case "Compose TCP":
+		case "tcp":
 			probe, err := monitor.Probe.AsTCPProbeDefinition()
 			if err != nil || probe.Host+":"+fmt.Sprint(probe.Port) != expectation.detail || string(probe.Send) != "PING" || string(probe.Expect) != "PONG" {
 				t.Fatalf("TCP fixture probe = %#v, %v", probe, err)
 			}
-		case "Compose DNS":
+		case "dns":
 			probe, err := monitor.Probe.AsDNSProbeDefinition()
 			if err != nil || probe.Resolver != expectation.detail || probe.Name != "service.test" || len(probe.ExpectedValues) != 1 || probe.ExpectedValues[0] != "192.0.2.10" {
 				t.Fatalf("DNS fixture probe = %#v, %v", probe, err)
 			}
 		}
 	}
+	for _, location := range fake.Locations {
+		if location.Address == "" || location.Protocol == "" || location.Enabled == nil || !*location.Enabled {
+			t.Fatalf("development location missing usable defaults = %#v", location)
+		}
+		if location.Policy.IntervalSeconds != 30 || location.Policy.TimeoutMillis != 2000 || location.Policy.FailureThreshold != 3 || location.Policy.RecoveryThreshold != 2 {
+			t.Fatalf("development location policy = %#v", location.Policy)
+		}
+	}
 	for _, monitor := range fake.Monitors {
 		history := fake.StateHistory[monitor.Id]
 		if len(history.Ticks) != 1 || history.Ticks[0].ReasonCode == "" {
 			t.Fatalf("%s initial state history = %#v, want one persisted development tick", monitor.Name, history)
+		}
+		if monitor.LocationId == uuid.Nil || history.Ticks[0].LocationId == nil || *history.Ticks[0].LocationId != monitor.LocationId {
+			t.Fatalf("%s initial tick location = %#v, want %s", monitor.Name, history.Ticks[0].LocationId, monitor.LocationId)
 		}
 	}
 }
