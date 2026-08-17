@@ -85,7 +85,7 @@ templ DocumentRoute(metadata head.MetadataConfig, content templ.Component) {
 }
 
 templ ApplicationScript() {
-	<script src="/ui/app.js" defer nonce={ templ.GetNonce(ctx) }></script>
+	@AccordionFallbackScript()<script src="/ui/app.js" defer nonce={ templ.GetNonce(ctx) }></script>
 }
 
 templ AppStyles() {
@@ -1118,4 +1118,48 @@ func documentMetadata(title, route, description string) head.MetadataConfig {
 		},
 		TwitterCard: head.TwitterCardSummaryLargeImage,
 	}
+}
+
+templ AccordionFallbackScript() {
+	<script nonce={ templ.GetNonce(ctx) } data-xisnove-accordion-fallback>
+		(() => {
+			if (window.__xisnoveAccordionFallbackInstalled) return;
+			window.__xisnoveAccordionFallbackInstalled = true;
+			const install = () => {
+				const rowFor = target => target?.closest?.('#monitor-table tbody tr[data-monitor-id]');
+				const alpineReady = row => Boolean(window.Alpine && row?.closest?.('#monitor-table')?.parentElement?._x_dataStack);
+				const setOpen = (row, open) => {
+					const detail = row?.nextElementSibling;
+					if (!detail || detail.tagName !== 'TR') return;
+					row.setAttribute('aria-expanded', String(open));
+					detail.style.display = open ? 'table-row' : 'none';
+					detail.querySelector('.xis-monitor-row-detail')?.toggleAttribute('x-cloak', !open);
+				};
+				const collapse = root => {
+					root.querySelectorAll?.('#monitor-table tbody tr[data-monitor-id]').forEach(row => {
+						if (row.getAttribute('aria-expanded') !== 'true') setOpen(row, false);
+					});
+				};
+
+				document.addEventListener('click', event => {
+					const row = rowFor(event.target);
+					if (!row || alpineReady(row) || event.target.closest?.('a,button,input,textarea,select')) return;
+					setOpen(row, row.getAttribute('aria-expanded') !== 'true');
+				});
+				document.addEventListener('keydown', event => {
+					if (event.key !== 'Enter' && event.key !== ' ') return;
+					const row = rowFor(event.target);
+					if (!row || alpineReady(row) || event.target.closest?.('a,button,input,textarea,select')) return;
+					event.preventDefault();
+					setOpen(row, row.getAttribute('aria-expanded') !== 'true');
+				});
+
+				collapse(document);
+				document.addEventListener('htmx:afterSettle', () => collapse(document));
+				new MutationObserver(() => collapse(document)).observe(document.body, {childList: true, subtree: true});
+			};
+			if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, {once: true});
+			else install();
+		})();
+	</script>
 }

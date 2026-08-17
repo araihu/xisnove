@@ -184,6 +184,10 @@ func ApplicationScript() templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = AccordionFallbackScript().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<script src=\"/ui/app.js\" defer nonce=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -191,7 +195,7 @@ func ApplicationScript() templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 88, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 88, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -3541,6 +3545,48 @@ func documentMetadata(title, route, description string) head.MetadataConfig {
 		},
 		TwitterCard: head.TwitterCardSummaryLargeImage,
 	}
+}
+
+func AccordionFallbackScript() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var142 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var142 == nil {
+			templ_7745c5c3_Var142 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "<script nonce=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var143 string
+		templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/pages.templ`, Line: 1124, Col: 36}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var143)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 194, "\" data-xisnove-accordion-fallback>\n\t\t(() => {\n\t\t\tif (window.__xisnoveAccordionFallbackInstalled) return;\n\t\t\twindow.__xisnoveAccordionFallbackInstalled = true;\n\t\t\tconst install = () => {\n\t\t\t\tconst rowFor = target => target?.closest?.('#monitor-table tbody tr[data-monitor-id]');\n\t\t\t\tconst alpineReady = row => Boolean(window.Alpine && row?.closest?.('#monitor-table')?.parentElement?._x_dataStack);\n\t\t\t\tconst setOpen = (row, open) => {\n\t\t\t\t\tconst detail = row?.nextElementSibling;\n\t\t\t\t\tif (!detail || detail.tagName !== 'TR') return;\n\t\t\t\t\trow.setAttribute('aria-expanded', String(open));\n\t\t\t\t\tdetail.style.display = open ? 'table-row' : 'none';\n\t\t\t\t\tdetail.querySelector('.xis-monitor-row-detail')?.toggleAttribute('x-cloak', !open);\n\t\t\t\t};\n\t\t\t\tconst collapse = root => {\n\t\t\t\t\troot.querySelectorAll?.('#monitor-table tbody tr[data-monitor-id]').forEach(row => {\n\t\t\t\t\t\tif (row.getAttribute('aria-expanded') !== 'true') setOpen(row, false);\n\t\t\t\t\t});\n\t\t\t\t};\n\n\t\t\t\tdocument.addEventListener('click', event => {\n\t\t\t\t\tconst row = rowFor(event.target);\n\t\t\t\t\tif (!row || alpineReady(row) || event.target.closest?.('a,button,input,textarea,select')) return;\n\t\t\t\t\tsetOpen(row, row.getAttribute('aria-expanded') !== 'true');\n\t\t\t\t});\n\t\t\t\tdocument.addEventListener('keydown', event => {\n\t\t\t\t\tif (event.key !== 'Enter' && event.key !== ' ') return;\n\t\t\t\t\tconst row = rowFor(event.target);\n\t\t\t\t\tif (!row || alpineReady(row) || event.target.closest?.('a,button,input,textarea,select')) return;\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tsetOpen(row, row.getAttribute('aria-expanded') !== 'true');\n\t\t\t\t});\n\n\t\t\t\tcollapse(document);\n\t\t\t\tdocument.addEventListener('htmx:afterSettle', () => collapse(document));\n\t\t\t\tnew MutationObserver(() => collapse(document)).observe(document.body, {childList: true, subtree: true});\n\t\t\t};\n\t\t\tif (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, {once: true});\n\t\t\telse install();\n\t\t})();\n\t</script>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
 }
 
 var _ = templruntime.GeneratedTemplate

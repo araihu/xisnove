@@ -244,6 +244,8 @@ func TestConsolePageUsesGoshtosoAppShellWithXisnoveSlots(t *testing.T) {
 		`class="xis-dark-mode-toggle"`,
 		`class="xis-console-sidebar-header"`,
 		`class="xis-global-search-close"`,
+		`data-xisnove-accordion-fallback`,
+		`__xisnoveAccordionFallbackInstalled`,
 		`src="/ui/app.js"`,
 		`id="main-content"`,
 		`href="/status"`,
