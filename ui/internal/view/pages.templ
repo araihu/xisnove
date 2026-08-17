@@ -93,6 +93,7 @@ templ AppStyles() {
 		:root { --xis-gap: 1rem; --xis-action-bg: var(--color-primary); --xis-action-fg: var(--color-on-primary); --xis-link: var(--color-primary); --xis-control-outline: var(--color-outline-strong, var(--color-outline)); }
 		.dark { --xis-action-bg: var(--color-primary-dark); --xis-action-fg: var(--color-on-primary-dark); --xis-link: var(--color-primary-dark); --xis-control-outline: var(--color-outline-dark-strong); }
 		body { margin: 0; background: var(--color-surface); color: var(--color-on-surface); }
+		[x-cloak] { display: none !important; }
 		html.console-shell-root { overflow-x: hidden; }
 		body.console-shell { overflow-x: hidden; }
 		main.console-shell__main { overflow-x: hidden; }
@@ -1036,7 +1037,7 @@ func monitorTable(data MonitorList) table.Config {
 }
 
 templ monitorRowDetail(data MonitorList, monitor sdk.Monitor) {
-	<div class="xis-monitor-row-detail" aria-label={ "Details for " + monitor.Name }>
+	<div class="xis-monitor-row-detail" x-cloak aria-label={ "Details for " + monitor.Name }>
 		<div class="xis-monitor-row-detail-heading">
 			<p class="xis-meta">Configuration</p>
 			<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, monitor.Id.String())) } hx-get={ monitorURL(data.Query, data.Cursor, monitor.Id.String()) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Open monitor details</a>

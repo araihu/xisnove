@@ -840,7 +840,7 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
 		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
 	}
-	for _, want := range []string{`event.metaKey || event.ctrlKey`, `event.key.toLowerCase() !== "k"`, `goshtoso-search-open`} {
+	for _, want := range []string{`event.metaKey || event.ctrlKey`, `event.key.toLowerCase() !== "k"`, `goshtoso-search-open`, `Alpine.initTree`} {
 		if strings.Count(recorder.Body.String(), want) == 0 {
 			t.Errorf("application search shortcut missing %q", want)
 		}

@@ -376,6 +376,7 @@ func TestMonitorTableIncludesExpandableCompactLiveAvailability(t *testing.T) {
 	for _, want := range []string{
 		`role="button"`,
 		`tabindex="0"`,
+		`class="xis-monitor-row-detail" x-cloak`,
 		`x-show="openRows[&#39;` + monitorID.String() + `&#39;]"`,
 		`>Monitor</th>`,
 		`>Availability</th>`,

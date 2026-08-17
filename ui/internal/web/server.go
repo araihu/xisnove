@@ -261,6 +261,11 @@ const applicationJS = `(() => {
     refreshController = null;
   }
 
+  function initializeAlpine(root) {
+    if (!root || !window.Alpine?.initTree) return;
+    window.Alpine.initTree(root);
+  }
+
   async function refreshAuthoritative() {
     const main = document.getElementById("main-content");
     if (!main || !location.pathname.startsWith("/monitors")) return focusMain();
@@ -291,6 +296,7 @@ const applicationJS = `(() => {
 			if (template.content.querySelector("section")) {
 				main.replaceChildren(...Array.from(template.content.childNodes));
 				window.htmx?.process(main);
+				initializeAlpine(main);
 				focusMain();
 				return true;
 			}
@@ -299,9 +305,14 @@ const applicationJS = `(() => {
 		}
 		const sidebar = template.content.querySelector('[hx-swap-oob="outerHTML:#consoleshell-sidebar-content"]');
 		main.replaceWith(replacement);
-		if (sidebar) document.querySelector("#consoleshell-sidebar-content")?.replaceWith(sidebar);
+		if (sidebar) {
+			document.querySelector("#consoleshell-sidebar-content")?.replaceWith(sidebar);
+			window.htmx?.process(sidebar);
+			initializeAlpine(sidebar);
+		}
 		const nextMain = document.getElementById("main-content");
 		window.htmx?.process(nextMain || replacement);
+		initializeAlpine(nextMain || replacement);
 		window.consoleShell?.reconcileNavigation?.(nextMain || replacement);
 		window.dispatchEvent(new CustomEvent("consoleshell:navigated"));
 		focusMain();

@@ -264,6 +264,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	t.Log("awaiting Goshtoso dependency readiness before global search")
 	awaitGoshtosoDependencies(t, ctx)
+	assertCollapsedMonitorRows(t, ctx)
 	t.Log("Goshtoso dependencies ready; exercising global search")
 	assertGlobalSearchJourney(t, ctx, screenshotDir, monitorID.String())
 	consoleMu.Lock()
@@ -365,6 +366,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`location.pathname === '/monitors'`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
 		t.Fatalf("selected monitor Back to list: %v", err)
 	}
+	assertCollapsedMonitorRows(t, ctx)
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`history.back()`, nil), chromedp.Poll(`location.pathname === '/monitors/`+monitorID.String()+`'`, nil, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
 		t.Fatalf("selected monitor Back to prior detail: %v", err)
 	}
@@ -626,6 +628,21 @@ func awaitGoshtosoDependencies(t *testing.T, ctx context.Context) {
 		t.Fatal("Goshtoso dependencies settled without ready=true")
 	}
 	awaitTwoAnimationFrames(t, ctx)
+}
+
+func assertCollapsedMonitorRows(t *testing.T, ctx context.Context) {
+	t.Helper()
+	var state struct {
+		Rows           int `json:"rows"`
+		Expanded       int `json:"expanded"`
+		VisibleDetails int `json:"visibleDetails"`
+	}
+	if err := chromedp.Run(ctx, chromedp.Poll(`(()=>{const rows=[...document.querySelectorAll('#monitor-table tbody tr[data-monitor-id]')],details=[...document.querySelectorAll('#monitor-table tbody tr:not([data-monitor-id])')];return rows.length > 0 && {rows:rows.length,expanded:rows.filter(row=>row.getAttribute('aria-expanded')==='true').length,visibleDetails:details.filter(row=>getComputedStyle(row).display!=='none'&&row.getBoundingClientRect().height>0).length}})()`, &state, chromedp.WithPollingTimeout(5*time.Second))); err != nil {
+		t.Fatalf("monitor accordion did not settle closed: %v", err)
+	}
+	if state.Expanded != 0 || state.VisibleDetails != 0 {
+		t.Fatalf("monitor accordion restored open rows: %#v", state)
+	}
 }
 
 func awaitTwoAnimationFrames(t *testing.T, ctx context.Context) {
