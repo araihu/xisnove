@@ -587,7 +587,8 @@ func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Reques
 	send := func() bool {
 		windowEnd := time.Now().UTC()
 		historyWindow := availability.HistoryWindow
-		if r.URL.Query().Get("compact") == "1" {
+		compact := r.URL.Query().Get("compact") == "1"
+		if compact {
 			historyWindow = availability.CompactWindow
 		}
 		history := availability.NewHistory(historyWindow)
@@ -608,6 +609,15 @@ func (s *server) monitorAvailabilityEvents(w http.ResponseWriter, r *http.Reques
 			)
 		}
 		if historyErr == nil {
+			if compact && len(availabilityHistory.Samples) < historyWindow && len(availabilityHistory.Samples) > 0 {
+				firstObservedAt := availabilityHistory.Samples[0].ObservedAt
+				for _, sample := range availabilityHistory.Samples[1:] {
+					if sample.ObservedAt.Before(firstObservedAt) {
+						firstObservedAt = sample.ObservedAt
+					}
+				}
+				history.AddUnknownBefore(historyWindow-len(availabilityHistory.Samples), firstObservedAt)
+			}
 			for _, sample := range availabilityHistory.Samples {
 				history.AddOutcome(sample.Outcome, sample.ObservedAt)
 			}

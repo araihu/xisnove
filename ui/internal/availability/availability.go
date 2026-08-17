@@ -110,6 +110,22 @@ func (h *History) AddUnknownWindow(start, end time.Time) {
 	}
 }
 
+// AddUnknownBefore fills a bounded compact window before the first confirmed
+// observation. It keeps sparse history visually stable without claiming that
+// an absent observation was a failed probe.
+func (h *History) AddUnknownBefore(count int, before time.Time) {
+	if h == nil || count <= 0 {
+		return
+	}
+	if before.IsZero() {
+		before = time.Now().UTC()
+	}
+	start := before.UTC().Add(-time.Duration(count) * HistoryStep)
+	for index := 0; index < count; index++ {
+		h.Add(Unknown, start.Add(time.Duration(index)*HistoryStep))
+	}
+}
+
 // Snapshot returns a complete renderer-neutral payload for goshtoso-charts.
 func (h *History) Snapshot() interactive.CartesianSnapshot {
 	if h == nil {

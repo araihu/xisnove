@@ -87,3 +87,27 @@ func TestHistoryUnknownWindowKeepsCurrentStateAtRightEdge(t *testing.T) {
 		}
 	}
 }
+
+func TestHistoryUnknownBeforePadsSparseCompactWindow(t *testing.T) {
+	history := NewHistory(CompactWindow)
+	first := time.Date(2026, time.August, 15, 12, 0, 0, 0, time.UTC)
+	history.AddUnknownBefore(CompactWindow-2, first)
+	history.Add(sdk.Up, first)
+	history.Add(sdk.Down, first.Add(HistoryStep))
+
+	snapshot := history.Snapshot()
+	if got, want := len(snapshot.Categories), CompactWindow; got != want {
+		t.Fatalf("padded compact categories = %d, want %d", got, want)
+	}
+	for index := 0; index < CompactWindow-2; index++ {
+		if got := snapshot.Series[3].Values[index]; got != 1 {
+			t.Fatalf("unknown padding[%d] = %v, want 1", index, got)
+		}
+	}
+	if got := snapshot.Series[0].Values[CompactWindow-2]; got != 1 {
+		t.Fatalf("up sample = %v, want 1", got)
+	}
+	if got := snapshot.Series[2].Values[CompactWindow-1]; got != 1 {
+		t.Fatalf("down sample = %v, want 1", got)
+	}
+}

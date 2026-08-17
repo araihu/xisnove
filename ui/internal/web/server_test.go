@@ -252,6 +252,57 @@ func TestMonitorAvailabilityEventsStreamsCompactChartSnapshot(t *testing.T) {
 	}
 }
 
+func TestMonitorAvailabilityEventsPadsSparseCompactChartSnapshot(t *testing.T) {
+	monitorID := uuid.MustParse("10000000-0000-0000-0000-000000000096")
+	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
+	first := time.Date(2026, time.August, 15, 11, 0, 0, 0, time.UTC)
+	client.History[monitorID] = sdk.MonitorAvailabilityHistory{MonitorId: monitorID, Samples: []sdk.MonitorAvailabilitySample{
+		{Id: uuid.New(), LocationId: uuid.New(), ObservedAt: first, Outcome: sdk.MonitorAvailabilitySampleOutcomePassed},
+		{Id: uuid.New(), LocationId: uuid.New(), ObservedAt: first.Add(5 * time.Minute), Outcome: sdk.MonitorAvailabilitySampleOutcomeFailed},
+	}}
+	handler, _ := newTestHandlerWithModes(t, client, 10*time.Millisecond, []AuthMode{AuthModeNone})
+	testServer := httptest.NewServer(handler)
+	defer testServer.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, testServer.URL+"/monitors/"+monitorID.String()+"/availability/events?compact=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := testServer.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	event, err := readSSEEvent(bufio.NewReader(response.Body))
+	if err != nil || event.Name != "chart" {
+		t.Fatalf("compact sparse SSE event = %#v, err=%v", event, err)
+	}
+	var snapshot struct {
+		Categories []string `json:"categories"`
+		Series     []struct {
+			Name   string    `json:"name"`
+			Values []float64 `json:"values"`
+		} `json:"series"`
+	}
+	if err := json.Unmarshal([]byte(event.Data), &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(snapshot.Categories), availability.CompactWindow; got != want {
+		t.Fatalf("sparse compact categories = %d, want %d", got, want)
+	}
+	if got := snapshot.Series[3].Values[0]; got != 1 {
+		t.Fatalf("sparse compact first value = %v, want unknown 1", got)
+	}
+	if got := snapshot.Series[0].Values[availability.CompactWindow-2]; got != 1 {
+		t.Fatalf("sparse compact passed value = %v, want 1", got)
+	}
+	if got := snapshot.Series[2].Values[availability.CompactWindow-1]; got != 1 {
+		t.Fatalf("sparse compact failed value = %v, want 1", got)
+	}
+}
+
 func TestMonitorAvailabilityEventsStreamsStateTickProvenanceSnapshot(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000098")
 	client := controlplane.NewFake("unused", "unused", DevelopmentNoneCredential)
