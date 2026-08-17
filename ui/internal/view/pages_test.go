@@ -359,8 +359,12 @@ func TestMonitorContentDistinguishesEmptyFilteredAndPartialStates(t *testing.T) 
 func TestMonitorTableIncludesExpandableCompactLiveAvailability(t *testing.T) {
 	monitorID := uuid.MustParse("10000000-0000-4000-8000-000000000021")
 	data := MonitorList{
-		Monitors: []sdk.Monitor{{Id: monitorID, Name: "Table monitor", Kind: sdk.MonitorKindHttp, Enabled: true}},
-		Health:   map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
+		Monitors: []sdk.Monitor{{
+			Id: monitorID, Name: "Table monitor", Description: "Resolver reachability",
+			Kind: sdk.MonitorKindHttp, Enabled: true, IntervalSeconds: 30, TimeoutMillis: 2000,
+			FailureThreshold: 3, RecoveryThreshold: 2,
+		}},
+		Health: map[string]sdk.MonitorHealth{monitorID.String(): {MonitorId: monitorID, State: sdk.Up}},
 	}
 
 	var rendered strings.Builder
@@ -372,7 +376,17 @@ func TestMonitorTableIncludesExpandableCompactLiveAvailability(t *testing.T) {
 		`role="button"`,
 		`tabindex="0"`,
 		`x-show="openRows[&#39;` + monitorID.String() + `&#39;]"`,
-		`Recent availability · latest 10 ticks`,
+		`>Monitor</th>`,
+		`>Availability</th>`,
+		`>Status</th>`,
+		`Configuration`,
+		`Resolver reachability`,
+		`<dt>Kind</dt>`,
+		`<dt>Enabled</dt>`,
+		`30 seconds`,
+		`2000 ms`,
+		`3 failures`,
+		`2 successes`,
 		`Open monitor details`,
 		`xis-availability-chart xis-availability-mini-chart`,
 		`style="width:100%;height:32px;"`,
@@ -382,8 +396,13 @@ func TestMonitorTableIncludesExpandableCompactLiveAvailability(t *testing.T) {
 			t.Errorf("monitor table compact availability chart missing %q", want)
 		}
 	}
-	if strings.Contains(body, ">Availability</th>") {
-		t.Fatal("monitor table still renders availability as a fixed column")
+	for _, absent := range []string{`>Kind</th>`, `>Health</th>`, `>Enabled</th>`} {
+		if strings.Contains(body, absent) {
+			t.Fatalf("monitor table still renders %s as a fixed column", absent)
+		}
+	}
+	if got := strings.Count(body, `data-goshtoso-charts-live-url="/monitors/`+monitorID.String()+`/availability/events?compact=1"`); got != 1 {
+		t.Fatalf("monitor table should render one fixed-row compact availability chart, got %d", got)
 	}
 }
 

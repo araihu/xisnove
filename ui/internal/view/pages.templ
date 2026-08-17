@@ -199,7 +199,10 @@ templ AppStyles() {
 		.xis-monitor-row-detail { display: grid; gap: .5rem; padding: .75rem 1rem 1rem; }
 		.xis-monitor-row-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 		.xis-monitor-row-detail-heading p { margin: 0; }
-		.xis-monitor-row-detail .xis-availability-mini-chart { width: min(100%, 24rem); min-width: 0; max-width: none; margin: 0; }
+		.xis-monitor-row-detail-facts { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .35rem 1rem; margin: 0; }
+		.xis-monitor-row-detail-facts dt { color: var(--color-on-surface-muted); }
+		.dark .xis-monitor-row-detail-facts dt { color: var(--color-on-surface-dark-muted); }
+		.xis-monitor-row-detail-facts dd { margin: 0; overflow-wrap: anywhere; }
 		.xis-password { width: 100%; }
 		.xis-skeleton { display: none; width: 100%; min-height: 16rem; }
 		.xis-skeleton.htmx-request, .htmx-request .xis-skeleton { display: block; }
@@ -1020,26 +1023,35 @@ func monitorTable(data MonitorList) table.Config {
 		rows = append(rows, table.Row{
 			ID:         id,
 			Expandable: true,
-			Detail:     monitorAvailabilityRowDetail(data, monitor, health),
+			Detail:     monitorRowDetail(data, monitor),
 			AlpineAttrs: attrs,
 			Cells: map[string]table.Cell{
-				"name":    {Text: name},
-				"kind":    {Text: strings.ToUpper(string(monitor.Kind))},
-				"health":  {Component: healthBadge(state)},
-				"enabled": {Text: enabledLabel(monitor.Enabled)},
+				"name":         {Text: name},
+				"availability": {Component: monitorAvailabilityMiniChart(monitor, health)},
+				"status":       {Component: healthBadge(state)},
 			},
 		})
 	}
-	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current health", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "kind", Label: "Kind"}, {Key: "health", Label: "Health"}, {Key: "enabled", Label: "Enabled"}}, Rows: rows}
+	return table.Config{ID: "monitor-table", Caption: "Configured monitors and current status", Columns: []table.Column{{Key: "name", Label: "Monitor"}, {Key: "availability", Label: "Availability", Width: "w-56", Align: "center"}, {Key: "status", Label: "Status", Align: "center"}}, Rows: rows}
 }
 
-templ monitorAvailabilityRowDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHealth) {
-	<div class="xis-monitor-row-detail" aria-label={ "Recent availability for " + monitor.Name }>
+templ monitorRowDetail(data MonitorList, monitor sdk.Monitor) {
+	<div class="xis-monitor-row-detail" aria-label={ "Details for " + monitor.Name }>
 		<div class="xis-monitor-row-detail-heading">
-			<p class="xis-meta">Recent availability · latest 10 ticks</p>
+			<p class="xis-meta">Configuration</p>
 			<a class="xis-native-link" href={ templ.SafeURL(monitorURL(data.Query, data.Cursor, monitor.Id.String())) } hx-get={ monitorURL(data.Query, data.Cursor, monitor.Id.String()) } hx-target="#main-content" hx-swap="outerHTML" hx-push-url="true">Open monitor details</a>
 		</div>
-		@monitorAvailabilityMiniChart(monitor, health)
+		if monitor.Description != "" {
+			<p>{ monitor.Description }</p>
+		}
+		<dl class="xis-monitor-row-detail-facts">
+			<dt>Kind</dt><dd>{ strings.ToUpper(string(monitor.Kind)) }</dd>
+			<dt>Enabled</dt><dd>{ enabledLabel(monitor.Enabled) }</dd>
+			<dt>Interval</dt><dd>{ fmt.Sprintf("%d seconds", monitor.IntervalSeconds) }</dd>
+			<dt>Timeout</dt><dd>{ fmt.Sprintf("%d ms", monitor.TimeoutMillis) }</dd>
+			<dt>Open after</dt><dd>{ fmt.Sprintf("%d failures", monitor.FailureThreshold) }</dd>
+			<dt>Recover after</dt><dd>{ fmt.Sprintf("%d successes", monitor.RecoveryThreshold) }</dd>
+		</dl>
 	</div>
 }
 
