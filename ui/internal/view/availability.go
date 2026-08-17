@@ -30,11 +30,11 @@ func monitorAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth) tem
 // inventory table. The compact SSE stream keeps the row readable while the
 // detail page continues to expose the complete three-hour history.
 func monitorAvailabilityMiniChart(monitor sdk.Monitor, health sdk.MonitorHealth) templ.Component {
-	return renderAvailabilityChart(monitor, health, "32px", "xis-availability-chart xis-availability-mini-chart", false, false, "2px", "?compact=1")
+	return renderAvailabilityChart(monitor, health, "32px", "xis-availability-chart xis-availability-mini-chart", false, false, "2px", "?compact=1", availability.CompactWindow)
 }
 
-func renderAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth, height, class string, showLegend, showTooltip bool, barWidth, streamQuery string) templ.Component {
-	snapshot := availabilitySeedSnapshot(health.State, time.Now().UTC())
+func renderAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth, height, class string, showLegend, showTooltip bool, barWidth, streamQuery string, compactPoints ...int) templ.Component {
+	snapshot := availabilitySeedSnapshot(health.State, time.Now().UTC(), compactPoints...)
 
 	series := make([]interactive.BarSeries, 0, len(snapshot.Series))
 	for _, snapshotSeries := range snapshot.Series {
@@ -81,19 +81,24 @@ func renderAvailabilityChart(monitor sdk.Monitor, health sdk.MonitorHealth, heig
 // renderer-neutral CartesianSnapshot consumed by Goshtoso Charts. The latest
 // observation is placed at the right edge; the live SSE stream then replaces
 // this seed with historical samples without changing the chart component.
-func availabilitySeedSnapshot(state sdk.HealthState, now time.Time) interactive.CartesianSnapshot {
+func availabilitySeedSnapshot(state sdk.HealthState, now time.Time, compactPoints ...int) interactive.CartesianSnapshot {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 	now = now.UTC().Truncate(time.Second)
-	sampleCount := int(availabilityLookback/availabilitySeedStep) + 1
+	lookback := availabilityLookback
+	sampleCount := int(lookback/availabilitySeedStep) + 1
+	if len(compactPoints) > 0 && compactPoints[0] > 0 {
+		sampleCount = compactPoints[0]
+		lookback = time.Duration(sampleCount-1) * availabilitySeedStep
+	}
 	categories := make([]string, sampleCount)
 	series := make([]interactive.CartesianSnapshotSeries, len(availability.SeriesNames()))
 	for index, name := range availability.SeriesNames() {
 		series[index] = interactive.CartesianSnapshotSeries{Name: name, Values: make([]float64, sampleCount)}
 	}
 	for index := range categories {
-		categories[index] = now.Add(-availabilityLookback + time.Duration(index)*availabilitySeedStep).Format("15:04:05")
+		categories[index] = now.Add(-lookback + time.Duration(index)*availabilitySeedStep).Format("15:04:05")
 	}
 	values := availability.StateSeries(state)
 	for index, value := range values {

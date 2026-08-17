@@ -8,6 +8,7 @@ import (
 	"github.com/a-h/templ"
 	chartsassets "github.com/araihu/goshtoso-charts/assets"
 	"github.com/araihu/xisnove/sdk"
+	"github.com/araihu/xisnove/ui/internal/availability"
 	"github.com/araihu/xisnove/ui/internal/seasonalassets"
 	"github.com/google/uuid"
 )
@@ -534,6 +535,23 @@ func TestAvailabilitySeedSnapshotPlacesCurrentStateAtRightEdge(t *testing.T) {
 	}
 	if got := snapshot.Series[2].Values[len(snapshot.Categories)-1]; got != 1 {
 		t.Fatalf("down latest value = %v, want 1", got)
+	}
+}
+
+func TestAvailabilitySeedSnapshotUsesCompactWindowForInventoryRows(t *testing.T) {
+	now := time.Date(2026, time.August, 15, 12, 0, 0, 0, time.UTC)
+	snapshot := availabilitySeedSnapshot(sdk.Up, now, availability.CompactWindow)
+	if got, want := len(snapshot.Categories), availability.CompactWindow; got != want {
+		t.Fatalf("compact seed categories = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Categories[0], "10:25:00"; got != want {
+		t.Fatalf("compact seed first category = %q, want %q", got, want)
+	}
+	if got, want := snapshot.Categories[len(snapshot.Categories)-1], "12:00:00"; got != want {
+		t.Fatalf("compact seed latest category = %q, want %q", got, want)
+	}
+	if got := snapshot.Series[0].Values[len(snapshot.Categories)-1]; got != 1 {
+		t.Fatalf("up latest value = %v, want 1", got)
 	}
 }
 
