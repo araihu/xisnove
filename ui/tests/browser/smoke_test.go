@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -132,7 +133,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	defer ui.Close()
 
 	browser := browserBinary(t)
-	allocator, cancelAllocator := chromedp.NewExecAllocator(t.Context(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(browser), chromedp.Flag("headless", true), chromedp.Flag("ignore-certificate-errors", true), chromedp.Flag("disable-background-networking", true), chromedp.NoFirstRun, chromedp.NoDefaultBrowserCheck)...)
+	allocator, cancelAllocator := newBrowserExecAllocator(t.Context(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(browser), chromedp.Flag("headless", true), chromedp.Flag("ignore-certificate-errors", true), chromedp.Flag("disable-background-networking", true), chromedp.NoFirstRun, chromedp.NoDefaultBrowserCheck)...)
 	defer cancelAllocator()
 	ctx, cancel := chromedp.NewContext(allocator)
 	defer cancel()
@@ -1145,14 +1146,10 @@ func browserBinary(t *testing.T) string {
 	if configured := os.Getenv("XISNOVE_UI_BROWSER_BIN"); configured != "" {
 		return configured
 	}
-	for _, candidate := range []string{"chromium", "chromium-browser", "google-chrome", "chrome"} {
+	for _, candidate := range browserCandidates(runtime.GOOS) {
 		if path, err := exec.LookPath(candidate); err == nil {
 			return path
 		}
-	}
-	const macChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-	if _, err := os.Stat(macChrome); err == nil {
-		return macChrome
 	}
 	t.Fatal("no Chromium browser found; set XISNOVE_UI_BROWSER_BIN")
 	return ""

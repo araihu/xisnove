@@ -155,7 +155,7 @@ func unavailableScript(w http.ResponseWriter, _ *http.Request) {
 
 func dependencyBrowser(t *testing.T) (context.Context, context.CancelFunc) {
 	t.Helper()
-	allocator, cancelAllocator := chromedp.NewExecAllocator(t.Context(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(browserBinary(t)), chromedp.Flag("headless", true), chromedp.Flag("disable-background-networking", true), chromedp.Flag("host-resolver-rules", "MAP unpkg.com 127.0.0.1"), chromedp.NoFirstRun, chromedp.NoDefaultBrowserCheck)...)
+	allocator, cancelAllocator := newBrowserExecAllocator(t.Context(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(browserBinary(t)), chromedp.Flag("headless", true), chromedp.Flag("disable-background-networking", true), chromedp.Flag("host-resolver-rules", "MAP unpkg.com 127.0.0.1"), chromedp.NoFirstRun, chromedp.NoDefaultBrowserCheck)...)
 	ctx, cancelBrowser := chromedp.NewContext(allocator)
 	ctx, cancelTimeout := context.WithTimeout(ctx, 90*time.Second)
 	return ctx, func() { cancelTimeout(); cancelBrowser(); cancelAllocator() }
