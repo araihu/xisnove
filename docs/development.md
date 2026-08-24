@@ -1,6 +1,6 @@
 # Development
 
-Xisnove requires Go 1.26.1. Generated OpenAPI and sqlc code is committed and
+Xisnove requires Go 1.27.0. Generated OpenAPI and sqlc code is committed and
 must remain reproducible.
 
 ```bash
