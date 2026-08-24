@@ -1,8 +1,6 @@
 module github.com/araihu/xisnove
 
-go 1.26.0
-
-toolchain go1.26.1
+go 1.27.0
 
 require (
 	github.com/getkin/kin-openapi v0.146.0

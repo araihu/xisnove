@@ -12,9 +12,9 @@ import {
 } from "@dagger.io/dagger";
 
 const GO_IMAGE =
-  "golang:1.26.1-bookworm@sha256:ab3d6955bbc813a0f3fdf220c1d817dd89c0b3f283777db8ece4a32fe7858edd";
+  "golang:1.27.0-bookworm@sha256:484ef6066fa69acb059fdfeda7ba2b8f7391f2ef6abc6f9b8411e669ebd56466";
 const SITE_GO_IMAGE =
-  "golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd";
+  "golang:1.27.0-bookworm@sha256:484ef6066fa69acb059fdfeda7ba2b8f7391f2ef6abc6f9b8411e669ebd56466";
 const NODE_IMAGE =
   "node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff";
 const JQ_IMAGE =
@@ -453,7 +453,7 @@ export class Xisnove {
     source: Directory,
     partition: CachePartition,
     goImage = GO_IMAGE,
-    goVersion = "go1.26.1",
+    goVersion = "go1.27.0",
   ): Container {
     const node = dag.container().from(NODE_IMAGE);
     const project = this.base(source, partition, goImage, goVersion)
@@ -489,7 +489,7 @@ export class Xisnove {
     partition: CachePartition,
     runNonce: string,
   ): Container {
-    return this.nodeProject(source, partition, SITE_GO_IMAGE, "go1.26.5")
+    return this.nodeProject(source, partition, SITE_GO_IMAGE, "go1.27.0")
       .withWorkdir("/src/site")
       .withEnvVariable("GOWORK", "off")
       .withEnvVariable("XISNOVE_RUN_NONCE", runNonce);
@@ -499,7 +499,7 @@ export class Xisnove {
     source: Directory,
     partition: CachePartition,
     goImage = GO_IMAGE,
-    goVersion = "go1.26.1",
+    goVersion = "go1.27.0",
   ): Container {
     const jq = dag.container().from(JQ_IMAGE);
     const project = dag
