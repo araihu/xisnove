@@ -4,8 +4,8 @@ go 1.27.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/miekg/dns v1.1.72
-	github.com/oapi-codegen/runtime v1.6.0
+	github.com/miekg/dns v1.1.73
+	github.com/oapi-codegen/runtime v1.7.0
 )
 
 require (
@@ -13,7 +13,7 @@ require (
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/getkin/kin-openapi v0.146.0 // indirect
+	github.com/getkin/kin-openapi v0.147.0 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.0 // indirect
