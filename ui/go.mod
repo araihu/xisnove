@@ -4,12 +4,12 @@ go 1.27.0
 
 require (
 	github.com/a-h/templ v0.3.1020
-	github.com/araihu/goshtoso v0.1.14
-	github.com/araihu/xisnove v0.0.0-20260726092612-07467ccf39e6
+	github.com/araihu/goshtoso v0.2.6
+	github.com/araihu/xisnove v0.0.1
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
 	github.com/google/uuid v1.6.0
-	github.com/oapi-codegen/runtime v1.6.0
+	github.com/oapi-codegen/runtime v1.7.0
 )
 
 require (
@@ -29,7 +29,7 @@ require (
 	github.com/mattn/go-isatty v0.0.23 // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect
 	golang.org/x/mod v0.38.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
