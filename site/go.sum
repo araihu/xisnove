@@ -1,6 +1,6 @@
 github.com/a-h/templ v0.3.1020 h1:ypAT/L5ySWEnZ6Zft/5yfoWXYYkhFNvEFOeeqecg4tw=
 github.com/a-h/templ v0.3.1020/go.mod h1:A2DlK61v+K+NRoGnhmYbNYVmtYHcFO5/AisMvBdDxTM=
-github.com/araihu/goshtoso v0.2.7 h1:9XBxBUYKrTbyIQ3K9fbCqGDT+61RMsYQZ2tseR98C+Y=
-github.com/araihu/goshtoso v0.2.7/go.mod h1:G/6KrWIXUC33KMlo0u/rt9Grd5erMh9ozpm0gPg1Tc4=
+github.com/araihu/goshtoso v0.3.3 h1:5I5VxwfP+wiz0zmGuk2YjWfU0R9GaussxrFhdZ3xT1Q=
+github.com/araihu/goshtoso v0.3.3/go.mod h1:l/mIkhkc9fqRy6OMAZ0jIYhiCgTba391m0m7iTm4GEc=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
