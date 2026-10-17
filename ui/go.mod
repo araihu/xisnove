@@ -4,10 +4,10 @@ go 1.27.0
 
 require (
 	github.com/a-h/templ v0.3.1070
-	github.com/araihu/goshtoso v0.3.3
+	github.com/araihu/goshtoso v0.4.0
 	github.com/araihu/xisnove v0.0.2
-	github.com/chromedp/cdproto v0.157.9
-	github.com/chromedp/chromedp v0.20.1
+	github.com/chromedp/cdproto v0.158.0
+	github.com/chromedp/chromedp v0.21.0
 	github.com/google/uuid v1.6.0
 	github.com/oapi-codegen/runtime v1.7.0
 )
