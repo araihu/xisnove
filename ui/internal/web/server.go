@@ -78,6 +78,8 @@ func New(cfg Config) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", assets.Handler())
+	mux.HandleFunc("GET "+view.BrandThemeURL(), serveCurrentAraiHuThemeCSS)
+	mux.HandleFunc("GET "+view.BrandIconURL(), serveCurrentX9Icon)
 	mux.HandleFunc("GET /ui/araihu-a8a9647.css", serveAraiHuThemeCSS)
 	mux.HandleFunc("GET /ui/x9-v11-icon-9aef3646.svg", serveX9V11Icon)
 	mux.HandleFunc("GET /ui/xisnove-bffc2ac.svg", servePreviousV3XisnoveFavicon)
@@ -108,6 +110,16 @@ var previousXisnoveFavicon string
 
 func serveX9V11Icon(w http.ResponseWriter, _ *http.Request) {
 	serveImmutableSVG(w, x9V11Icon)
+}
+
+func serveCurrentX9Icon(w http.ResponseWriter, _ *http.Request) {
+	serveImmutableSVG(w, view.BrandIconSVG())
+}
+
+func serveCurrentAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	_, _ = io.WriteString(w, view.BrandThemeCSS())
 }
 
 func servePreviousV3XisnoveFavicon(w http.ResponseWriter, _ *http.Request) {

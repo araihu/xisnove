@@ -1,0 +1,79 @@
+name: Update Arai Hu assets
+
+on:
+  repository_dispatch:
+    types: [araihu-assets-released]
+  workflow_dispatch:
+    inputs:
+      assets_repository: {description: Release repository, required: true, default: araihu/assets, type: string}
+      assets_revision: {description: Full release commit SHA, required: true, type: string}
+      release: {description: Release tag, required: true, type: string}
+      release_url: {description: Immutable tar.gz release URL, required: true, type: string}
+      release_sha256: {description: Release archive SHA-256, required: true, type: string}
+      release_json_sha256: {description: release.json SHA-256, required: true, type: string}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: araihu-assets-${{ github.event.client_payload.release || inputs.release }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out consumer read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out reviewed Go updater
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: araihu/assets
+          ref: 61d6cd70036ef0a258583b19a5b740094808cbef
+          path: assets-consumer-tools
+          persist-credentials: false
+      - name: Verify release and export allowlisted patch through Dagger
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          version: '0.21.8'
+          verb: call
+          args: >-
+            update-araihu-assets --source=. --tools=assets-consumer-tools
+            --event=${{ github.event_path }} --github-token=env:ASSETS_GITHUB_TOKEN
+            --run-nonce=${{ github.run_id }}-${{ github.run_attempt }}
+            export --path=.
+        env:
+          ASSETS_GITHUB_TOKEN: ${{ github.token }}
+      - name: Create selected-repository App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.ARAIHU_ASSETS_APP_ID }}
+          private-key: ${{ secrets.ARAIHU_ASSETS_APP_PRIVATE_KEY }}
+          owner: araihu
+          repositories: xisnove
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Create or update asset PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: automation/araihu-assets-${{ github.event.client_payload.release || inputs.release }}
+          base: main
+          delete-branch: false
+          commit-message: 'build(assets): update X-9 assets to ${{ github.event.client_payload.release || inputs.release }}'
+          title: 'build(assets): update X-9 assets to ${{ github.event.client_payload.release || inputs.release }}'
+          body: |
+            Refresh X-9 assets from the immutable Arai Hu release pinned in `araihu-assets.json`.
+
+            The Go updater verified GitHub provenance, archive and inventory hashes, and catalog selections. Mappings remain consumer-owned. This workflow never auto-merges.
+          add-paths: |
+            araihu-assets.json
+            site/assets/x9-logo.svg
+            site/assets/x9-icon.svg
+            ui/internal/view/static/x9-logo-transparent.svg
+            ui/internal/view/static/x9-icon.svg
+            ui/internal/view/static/araihu.css

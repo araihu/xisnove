@@ -25,11 +25,11 @@ func TestDocumentLoadsAraiHuThemeAfterGoshtosoAndUsesItByDefault(t *testing.T) {
 		t.Fatalf("render document: %v", err)
 	}
 	body := rendered.String()
-	if !strings.Contains(body, `<link rel="icon" type="image/svg+xml" href="/ui/x9-v11-icon-9aef3646.svg">`) {
+	if !strings.Contains(body, `<link rel="icon" type="image/svg+xml" href="`+BrandIconURL()+`">`) {
 		t.Fatalf("document does not reference the approved v11 X-9 favicon: %s", body)
 	}
 	goshtoso := strings.Index(body, `/assets/styles.css`)
-	araihu := strings.Index(body, `/ui/araihu-a8a9647.css`)
+	araihu := strings.Index(body, BrandThemeURL())
 	if goshtoso < 0 || araihu < 0 || araihu <= goshtoso {
 		t.Fatalf("Arai Hû stylesheet must follow Goshtoso: %s", body)
 	}

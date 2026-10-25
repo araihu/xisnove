@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "assets_repository": "araihu/assets",
+    "assets_revision": "da708ce30a3806757644278df421ae39fa4ec37c",
+    "release": "v0.2.5",
+    "release_url": "https://github.com/araihu/assets/releases/download/v0.2.5/araihu-assets-v0.2.5.tar.gz",
+    "release_sha256": "9f5331dc4b6c075aa2dee9b653b0fd7e5ea67d64069155f20da93777fa1df857",
+    "release_json_sha256": "b749ac93b9a56a0884fa9345a4906b99e6b96df903311a5835af3cc4768b79c6"
+  },
+  "mappings": [
+    {
+      "source": "brand/x9/logo/adaptive-transparent-optical.svg",
+      "destination": "site/assets/x9-logo.svg",
+      "canonicalName": "x9-logo-adaptive-transparent-optical"
+    },
+    {
+      "source": "icons/brand/x9-icon-adaptive-plate-optical.svg",
+      "destination": "site/assets/x9-icon.svg",
+      "canonicalName": "x9-icon-adaptive-plate-optical"
+    },
+    {
+      "source": "brand/x9/logo/adaptive-transparent-optical.svg",
+      "destination": "ui/internal/view/static/x9-logo-transparent.svg",
+      "canonicalName": "x9-logo-adaptive-transparent-optical"
+    },
+    {
+      "source": "icons/brand/x9-icon-adaptive-plate-optical.svg",
+      "destination": "ui/internal/view/static/x9-icon.svg",
+      "canonicalName": "x9-icon-adaptive-plate-optical"
+    },
+    {
+      "source": "themes/araihu.css",
+      "destination": "ui/internal/view/static/araihu.css"
+    }
+  ]
+}

@@ -61,6 +61,33 @@ type CIInput = {
 
 @object()
 export class Xisnove {
+  /** Verify immutable Assets provenance and export only the consumer-owned patch. */
+  @func({ cache: "never" })
+  async updateAraihuAssets(
+    @argument({ defaultPath: ".", ignore: [".git", "assets-consumer-tools", "site/public", ".dagger/node_modules", ".dagger/sdk"] }) source: Directory,
+    @argument({ ignore: [".git", "dist", "source", "site", "review", ".dagger"] }) tools: Directory,
+    event: File,
+    githubToken: Secret,
+    runNonce: string,
+  ): Promise<Directory> {
+    this.nonce(runNonce);
+    const binary = dag.container().from(GO_IMAGE)
+      .withDirectory("/tool", tools)
+      .withWorkdir("/tool")
+      .withEnvVariable("GOWORK", "off")
+      .withEnvVariable("CGO_ENABLED", "0")
+      .withExec(["go", "build", "-o", "/consumerupdate", "./cmd/consumerupdate"])
+      .file("/consumerupdate");
+    return dag.container().from(GO_IMAGE)
+      .withFile("/usr/local/bin/consumerupdate", binary, { permissions: 0o755 })
+      .withFile("/consumer/araihu-assets.json", source.file("araihu-assets.json"))
+      .withFile("/event.json", event)
+      .withEnvVariable("NETWORK_NONCE", runNonce)
+      .withMountedSecret("/run/secrets/github-token", githubToken)
+      .withExec(["consumerupdate", "--manifest", "/consumer/araihu-assets.json", "--event-file", "/event.json", "--token-file", "/run/secrets/github-token", "--output-dir", "/out"])
+      .directory("/out");
+  }
+
   /** Root code generation, OpenAPI, database, test, and backup/restore gates. */
   @func({ cache: "never" })
   async rootCi(
