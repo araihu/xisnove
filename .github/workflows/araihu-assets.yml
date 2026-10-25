@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: araihu/assets
-          ref: ccad5195a6be9a9092d8ff1e135ecae608d0849a
+          ref: 61d6cd70036ef0a258583b19a5b740094808cbef
           path: assets-consumer-tools
           persist-credentials: false
       - name: Verify release and export allowlisted patch through Dagger
