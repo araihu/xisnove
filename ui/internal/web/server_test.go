@@ -20,6 +20,7 @@ import (
 	"github.com/araihu/goshtoso/assets"
 	"github.com/araihu/xisnove/sdk"
 	"github.com/araihu/xisnove/ui/internal/controlplane"
+	"github.com/araihu/xisnove/ui/internal/view"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -96,6 +97,26 @@ func TestHandlerServesApprovedV11X9Favicon(t *testing.T) {
 	}
 }
 
+func TestCurrentBrandAssetsUseContentAddressedImmutableURLs(t *testing.T) {
+	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
+	for _, asset := range []struct{ url, body, contentType string }{
+		{view.BrandIconURL(), view.BrandIconSVG(), "image/svg+xml"},
+		{view.BrandThemeURL(), view.BrandThemeCSS(), "text/css; charset=utf-8"},
+	} {
+		if !strings.Contains(asset.url, fmt.Sprintf("%x", sha256.Sum256([]byte(asset.body)))) {
+			t.Fatalf("URL does not pin content: %s", asset.url)
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "https://ui.example.test"+asset.url, nil))
+		if recorder.Code != http.StatusOK || recorder.Body.String() != asset.body {
+			t.Fatalf("GET %s = %d", asset.url, recorder.Code)
+		}
+		if recorder.Header().Get("Content-Type") != asset.contentType || recorder.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Fatalf("headers for %s: %v", asset.url, recorder.Header())
+		}
+	}
+}
+
 func TestHandlerRetainsPreviousV3XisnoveFaviconDuringRollout(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
 	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/xisnove-bffc2ac.svg", nil)
@@ -135,7 +156,7 @@ func TestLoginPageUsesBundledHeadAndDoesNotRenderCredentials(t *testing.T) {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, `/ui/araihu-a8a9647.css`, `/ui/x9-v11-icon-9aef3646.svg`, `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
+	for _, want := range []string{"<!doctype html>", `/assets/styles.css`, view.BrandThemeURL(), view.BrandIconURL(), `data-theme="araihu"`, `type="password"`, `name="_csrf"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("login body missing %q", want)
 		}

@@ -12,12 +12,15 @@ served by `assets.Handler()`; it deliberately does not use local-only runtime
 mode because Xisnove is a networked BFF. See
 [`../docs/ui/goshtoso-snags.md`](../docs/ui/goshtoso-snags.md).
 
-The default theme and X-9 v11 identity are pinned from `araihu/assets` commit
-`a8a9647a6e803586c556859eb20f95ef9fcb20a1`. The theme is served same-origin
+The default theme and X-9 v11 identity are pinned from `araihu/assets` release
+`v0.2.5` in the root `araihu-assets.json`. The theme is served same-origin
 after Goshtoso's stylesheet. Header and public-status branding inline the
 approved transparent v11 logo, allowing Goshtoso's usual `.dark` class to
 provide the canonical surface, ink, and signal values. The favicon uses the
-approved background icon at immutable `/ui/x9-v11-icon-9aef3646.svg`.
+canonical adaptive background icon. Both theme and favicon URLs include the
+SHA-256 of their embedded bytes. Previous immutable URLs retain their original
+bytes. The Assets workflow verifies the release tag, archive, inventory, and
+catalog selections before opening a PR restricted to the manifest's mappings.
 
 The public display name is exactly **X-9**. Goshtoso and Minimal remain
 available through the theme selector; their base styles are not modified.
