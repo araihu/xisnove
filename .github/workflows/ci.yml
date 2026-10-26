@@ -5,6 +5,9 @@ on:
   push:
     branches: [master]
 
+env:
+  _EXPERIMENTAL_DAGGER_RUNNER_HOST: docker-image://registry.dagger.io/engine:v0.21.11@sha256:6b557cc8b5fdfee0e2e8c82d451ac922097a1255482143e1b96c0be3ff2a303c
+
 jobs:
   root:
     runs-on: >-
@@ -58,17 +61,16 @@ jobs:
           export DAGGER_HAS_BASELINE
           bash scripts/materialize-dagger-input.sh ci .dagger-inputs/root.json
 
-      - name: Install exact Dagger CLI on GitHub-hosted runner
-        if: runner.environment == 'github-hosted'
+      - name: Install exact Dagger CLI
         uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:
-          version: "0.21.8"
+          version: "0.21.11"
 
       - name: Require exact Dagger CLI
         shell: bash
         run: |
           set -euo pipefail
-          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.11
 
       - name: Root Dagger gates
         shell: bash
@@ -104,17 +106,16 @@ jobs:
           DAGGER_HAS_BASELINE: "false"
         run: bash scripts/materialize-dagger-input.sh ci .dagger-inputs/agent.json
 
-      - name: Install exact Dagger CLI on GitHub-hosted runner
-        if: runner.environment == 'github-hosted'
+      - name: Install exact Dagger CLI
         uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:
-          version: "0.21.8"
+          version: "0.21.11"
 
       - name: Require exact Dagger CLI
         shell: bash
         run: |
           set -euo pipefail
-          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.11
 
       - name: Agent Dagger gates
         shell: bash
@@ -150,17 +151,16 @@ jobs:
           DAGGER_HAS_BASELINE: "false"
         run: bash scripts/materialize-dagger-input.sh ci .dagger-inputs/agent-workspace.json
 
-      - name: Install exact Dagger CLI on GitHub-hosted runner
-        if: runner.environment == 'github-hosted'
+      - name: Install exact Dagger CLI
         uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:
-          version: "0.21.8"
+          version: "0.21.11"
 
       - name: Require exact Dagger CLI
         shell: bash
         run: |
           set -euo pipefail
-          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.8
+          test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.11
 
       - name: Agent workspace Dagger gate
         shell: bash

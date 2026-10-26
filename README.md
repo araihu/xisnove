@@ -30,7 +30,7 @@ make check
 go test -race ./integration -run 'TestFirstObservation|TestProtocolBreadth|TestStorageMatrix'
 ```
 
-Portable local CI uses Dagger CLI `v0.21.8` and same module as GitHub Actions:
+Portable local CI uses Dagger CLI `v0.21.11` and same module as GitHub Actions:
 
 ```bash
 make dagger-ci

@@ -11,7 +11,7 @@ make check
 
 ## Portable CI
 
-Use Dagger CLI `v0.21.8` for the same root, Agent, workspace, site, database,
+Use Dagger CLI `v0.21.11` for the same root, Agent, workspace, site, database,
 and generated-file gates used by CI:
 
 ```bash
