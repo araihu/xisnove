@@ -443,7 +443,7 @@ export class Xisnove {
         .withExposedPort(8080)
         .asService({ useEntrypoint: true });
       await project.withServiceBinding("libsql", server)
-        .withEnvVariable("XISNOVE_TEST_TURSO_URL", "http://libsql:8080")
+        .withEnvVariable("XISNOVE_TEST_TURSO_URL", "libsql://libsql:8080?tls=0")
         // This isolated service has authentication disabled; the adapter's
         // required nonempty token is a test placeholder, not a cloud credential.
         .withEnvVariable("XISNOVE_TEST_TURSO_TOKEN", "isolated-libsql-ci")

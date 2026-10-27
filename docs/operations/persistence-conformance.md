@@ -53,7 +53,7 @@ without a Turso Cloud account. The existing SQLite, local Turso and PostgreSQL
 tests remain required. To use a fresh externally managed server locally:
 
 ```bash
-XISNOVE_TEST_TURSO_URL='http://127.0.0.1:8080' \
+XISNOVE_TEST_TURSO_URL='libsql://127.0.0.1:8080?tls=0' \
 XISNOVE_TEST_TURSO_TOKEN='isolated-libsql-ci' \
   go test -race ./integration -run '^TestStorageMatrix/LibSQLServer$' -count=1
 ```
