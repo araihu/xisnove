@@ -33,6 +33,24 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Require managed Turso configuration
+        shell: bash
+        env:
+          TURSO_GROUP: ${{ vars.TURSO_GROUP }}
+          TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
+        run: |
+          set -euo pipefail
+          missing=false
+          if [[ -z "$TURSO_GROUP" ]]; then
+            echo '::error::Configure repository variable TURSO_GROUP with a dedicated CI group.'
+            missing=true
+          fi
+          if [[ -z "$TURSO_API_KEY" ]]; then
+            echo '::error::Configure repository secret TURSO_API_KEY with the test organization API token.'
+            missing=true
+          fi
+          test "$missing" = false
+
       - name: Materialize managed Turso Dagger input
         shell: bash
         env:
@@ -56,6 +74,7 @@ jobs:
           test "$(dagger version | awk 'NR == 1 { print $2 }')" = v0.21.11
 
       - name: Run managed Turso conformance through Dagger
+        id: conformance
         shell: bash
         env:
           TURSO_API_KEY: ${{ secrets.TURSO_API_KEY }}
@@ -64,7 +83,7 @@ jobs:
           --turso-api-key=env:TURSO_API_KEY export --path=turso-output
 
       - name: Upload managed Turso test report
-        if: always()
+        if: ${{ !cancelled() && steps.conformance.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: managed-turso-storage-matrix
@@ -72,6 +91,6 @@ jobs:
           if-no-files-found: error
 
       - name: Propagate managed Turso test status
-        if: always()
+        if: ${{ !cancelled() && steps.conformance.outcome == 'success' }}
         shell: bash
         run: test "$(cat turso-output/status)" = 0
