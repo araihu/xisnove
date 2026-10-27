@@ -3,7 +3,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 env:
   _EXPERIMENTAL_DAGGER_RUNNER_HOST: docker-image://registry.dagger.io/engine:v0.21.11@sha256:6b557cc8b5fdfee0e2e8c82d451ac922097a1255482143e1b96c0be3ff2a303c
