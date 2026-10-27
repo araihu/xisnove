@@ -35,10 +35,15 @@ after the migration job succeeds.
 
 ## Protected conformance workflow
 
-The `managed Turso conformance` workflow runs weekly, manually, and for release
-events. It runs both repository conformance and the same full storage journey
-used for SQLite, local Turso, and PostgreSQL, then retains a JUnit report.
-Configure:
+The `libSQL and optional managed Turso conformance` workflow runs weekly and
+manually against disposable libSQL servers, without cloud credentials. Normal
+root CI also runs the remote adapter conformance and the full storage journey
+on separate fresh libSQL instances. The services use a pinned official image,
+are reachable only inside the Dagger run, and are discarded with the run.
+
+To additionally verify the real Turso Cloud provisioning, token issuance and
+exact deletion behavior, dispatch the workflow with `managed: true`. That
+optional job retains its JUnit report and requires:
 
 - repository secret `TURSO_API_KEY`, scoped to the test organization;
 - repository variable `TURSO_ORG` when the token can see multiple
