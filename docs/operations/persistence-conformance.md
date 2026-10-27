@@ -44,9 +44,28 @@ XISNOVE_TEST_POSTGRES_URL='postgres://postgres:password@127.0.0.1:5432/xisnove?s
   go test -race ./integration -run TestStorageMatrix -count=10
 ```
 
+## Disposable remote libSQL runs
+
+Normal root CI and the weekly conformance workflow run the remote adapter and
+`TestStorageMatrix/LibSQLServer` against separate disposable libSQL services.
+This tests the actual libSQL network protocol and the complete storage journey
+without a Turso Cloud account. The existing SQLite, local Turso and PostgreSQL
+tests remain required. To use a fresh externally managed server locally:
+
+```bash
+XISNOVE_TEST_TURSO_URL='http://127.0.0.1:8080' \
+XISNOVE_TEST_TURSO_TOKEN='isolated-libsql-ci' \
+  go test -race ./integration -run '^TestStorageMatrix/LibSQLServer$' -count=1
+```
+
+The placeholder token is only for an isolated test server with authentication
+disabled; use its real database token when the server requires authentication.
+The caller owns that server's lifecycle. Never point these destructive suites
+at an application database. Each suite needs a separate empty database.
+
 ## Managed Turso run
 
-Managed Turso uses a protected workflow because the test creates a real remote
+Managed Turso is an explicit opt-in (`managed: true`) in the protected workflow because the test creates a real remote
 database. `TURSO_GROUP` must identify a dedicated CI group with delete
 protection disabled. Provisioning fails before creation for a protected or
 missing group; it never changes group protection. Cleanup closes both remote

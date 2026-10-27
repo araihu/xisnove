@@ -30,6 +30,9 @@ func TestStorageMatrix(t *testing.T) {
 	t.Run("Postgres", func(t *testing.T) {
 		runStorageJourney(t, newPostgresStorageHarness(t))
 	})
+	t.Run("LibSQLServer", func(t *testing.T) {
+		runStorageJourney(t, newLibSQLStorageHarness(t))
+	})
 	t.Run("TursoCloud", func(t *testing.T) {
 		runStorageJourney(t, newTursoCloudStorageHarness(t))
 	})
@@ -74,6 +77,25 @@ func newPostgresStorageHarness(t *testing.T) *storageHarness {
 	return openStorageHarness(t, database.Config{
 		Profile: database.ProfilePostgres,
 		URL:     parsed.String(),
+	})
+}
+
+// The caller owns this isolated server's lifecycle. This exercises the remote
+// adapter without claiming Turso's provisioning/token/deletion API was tested.
+func newLibSQLStorageHarness(t *testing.T) *storageHarness {
+	t.Helper()
+	rawURL := os.Getenv("XISNOVE_TEST_TURSO_URL")
+	token := os.Getenv("XISNOVE_TEST_TURSO_TOKEN")
+	if rawURL == "" && token == "" {
+		t.Skip("external libSQL test server is not set")
+	}
+	if rawURL == "" || token == "" {
+		t.Fatal("XISNOVE_TEST_TURSO_URL and XISNOVE_TEST_TURSO_TOKEN must be set together")
+	}
+	return openStorageHarness(t, database.Config{
+		Profile:   database.ProfileTursoCloud,
+		URL:       rawURL,
+		AuthToken: token,
 	})
 }
 

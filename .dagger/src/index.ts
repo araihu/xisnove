@@ -22,6 +22,10 @@ const JQ_IMAGE =
 const POSTGRES_IMAGE =
   "postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7";
 
+// Official libSQL server, pinned to the multi-platform index.
+const LIBSQL_IMAGE =
+  "ghcr.io/tursodatabase/libsql-server@sha256:6dd3eb276d9d3604e4a48ac4a999a2e267814732d57d7e94c04ba71482333a67";
+
 const SOURCE_EXCLUDES = [
   ".git",
   ".git/**",
@@ -197,6 +201,19 @@ export class Xisnove {
       .stdout();
   }
 
+  /** Real remote libSQL adapter and storage journey, with disposable local services. */
+  @func({ cache: "never" })
+  async libsqlConformance(
+    @argument({ defaultPath: ".", ignore: SOURCE_EXCLUDES }) source: Directory,
+    input: File,
+  ): Promise<string> {
+    const config = await this.ciInput(input);
+    this.requirePartition(config.cachePartition, ["trusted-main", "untrusted-pr", "local"], "libSQL conformance");
+    await this.auditDagger(source, config.cachePartition);
+    await this.libsqlChecks(this.project(source, config.cachePartition, config.runNonce), config.runNonce);
+    return "libSQL adapter conformance and full storage journey passed";
+  }
+
   /** Protected managed-Turso conformance; always returns a JUnit/status directory. */
   @func({ cache: "never" })
   async tursoConformance(
@@ -318,6 +335,8 @@ export class Xisnove {
       ])
       .stdout();
 
+    await this.libsqlChecks(project, config.runNonce);
+
     await this.postgresBackupRestore(project, postgres);
 
     if (!config.hasBaseline)
@@ -410,6 +429,29 @@ export class Xisnove {
         'restored_count=$(psql --host postgres --port 5432 --username postgres --dbname xisnove_restore_smoke --tuples-only --no-align --command "SELECT COUNT(*) FROM admins WHERE email=\'restore-smoke@example.com\'"); test "$restored_count" = 1',
       ])
       .stdout();
+  }
+
+  private async libsqlChecks(project: Container, runNonce: string): Promise<void> {
+    // Each suite starts with its own empty database; packages must not race
+    // against one shared set of tables or inherit a preceding suite's rows.
+    for (const suite of ["adapter", "matrix"]) {
+      const server = dag.container().from(LIBSQL_IMAGE)
+        .withEnvVariable("SQLD_NODE", "standalone")
+        .withEnvVariable("SQLD_HTTP_LISTEN_ADDR", "0.0.0.0:8080")
+        .withEnvVariable("SQLD_DB_PATH", `/var/lib/sqld/${suite}`)
+        .withEnvVariable("XISNOVE_RUN_NONCE", runNonce)
+        .withExposedPort(8080)
+        .asService({ useEntrypoint: true });
+      await project.withServiceBinding("libsql", server)
+        .withEnvVariable("XISNOVE_TEST_TURSO_URL", "http://libsql:8080")
+        // This isolated service has authentication disabled; the adapter's
+        // required nonempty token is a test placeholder, not a cloud credential.
+        .withEnvVariable("XISNOVE_TEST_TURSO_TOKEN", "isolated-libsql-ci")
+        .withExec(suite === "adapter"
+          ? ["go", "test", "-race", "./internal/adapters/tursocloud", "-run", "Conformance", "-count=1"]
+          : ["go", "test", "-race", "./integration", "-run", "^TestStorageMatrix/LibSQLServer$", "-count=1"])
+        .stdout();
+    }
   }
 
   private postgres(): Service {
