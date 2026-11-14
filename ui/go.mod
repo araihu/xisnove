@@ -4,12 +4,12 @@ go 1.27.3
 
 require (
 	github.com/a-h/templ v0.3.1100
-	github.com/araihu/goshtoso v0.6.0
+	github.com/araihu/goshtoso v0.6.1
 	github.com/araihu/xisnove v0.0.2
-	github.com/chromedp/cdproto v0.159.1
-	github.com/chromedp/chromedp v0.22.0
+	github.com/chromedp/cdproto v0.159.3
+	github.com/chromedp/chromedp v0.23.0
 	github.com/google/uuid v1.6.0
-	github.com/oapi-codegen/runtime v1.8.0
+	github.com/oapi-codegen/runtime v1.9.0
 )
 
 require (
