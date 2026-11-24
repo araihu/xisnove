@@ -11,8 +11,8 @@ github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7D
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/araihu/goshtoso v0.6.4 h1:nnSL7snrtFtNtrDO8zmu1l6v+l1PfUa0hSSnJIr1078=
 github.com/araihu/goshtoso v0.6.4/go.mod h1:PFmKxrnO73XvOv4hPwaxEByTTQ7d9bUHqZhSBoSyVZ8=
-github.com/araihu/xisnove v0.0.2 h1:FcJEvdMLsAR1eRLUyqIPytFL5uVKyIr+HEgj/jlyTV4=
-github.com/araihu/xisnove v0.0.2/go.mod h1:5s7XyjrwJeQVVL0QID1ot5BYkOlzl8fwkFXcsGJZyQI=
+github.com/araihu/xisnove v0.0.0-20260726092612-07467ccf39e6 h1:BFPAicpeenqFi3jkntKKqw7v0i5BC/thd+O4Qb5Pop0=
+github.com/araihu/xisnove v0.0.0-20260726092612-07467ccf39e6/go.mod h1:o/PLl80dOFAek1cy+K5deBnJRXNUL8j+VVQxT3I2Pnk=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=

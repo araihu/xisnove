@@ -6,14 +6,15 @@ by the public generated Go SDK. No root database,
 sqlc, domain, application, or server-internal package is imported.
 
 The SDK dependency is pinned to frozen Xisnove commit `07467ccf39e67c5cd7a68878db8c2023318e6189`.
-Goshtoso is pinned exactly to the released `v0.0.13`. The UI uses the default
+The UI requires a control plane implementing that SDK contract.
+Goshtoso is selected by `ui/go.mod`. The UI uses the default
 CDN-first `head.Dependencies()` contract with version-matched embedded fallback
 served by `assets.Handler()`; it deliberately does not use local-only runtime
 mode because Xisnove is a networked BFF. See
 [`../docs/ui/goshtoso-snags.md`](../docs/ui/goshtoso-snags.md).
 
 The default theme and X-9 v11 identity are pinned from `araihu/assets` release
-`v0.2.5` in the root `araihu-assets.json`. The theme is served same-origin
+listed in the root `araihu-assets.json`. The theme is served same-origin
 after Goshtoso's stylesheet. Header and public-status branding inline the
 approved transparent v11 logo, allowing Goshtoso's usual `.dark` class to
 provide the canonical surface, ink, and signal values. The favicon uses the

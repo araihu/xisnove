@@ -14,7 +14,7 @@ func TestBrandUsesX9DisplayName(t *testing.T) {
 	if err := Brand().Render(t.Context(), &rendered); err != nil {
 		t.Fatalf("render brand: %v", err)
 	}
-	if body := rendered.String(); !strings.Contains(body, `aria-label="X-9"`) || !strings.Contains(body, `class="v11-signal"`) || strings.Contains(body, "Xisnove") {
+	if body := rendered.String(); !strings.Contains(body, `role="img" aria-label="X-9"`) || x9LogoSVG == "" || !strings.Contains(body, x9LogoSVG) || strings.Contains(body, "Xisnove") {
 		t.Fatalf("unexpected display brand: %s", body)
 	}
 }
