@@ -1,7 +1,7 @@
 .PHONY: build check deploy deploy-dry-run
 
 build:
-	GOWORK=off go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate
+	GOWORK=off go tool templ generate
 	GOWORK=off go run ./cmd/x9-site build
 
 check: build

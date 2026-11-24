@@ -152,12 +152,7 @@ export class Xisnove {
     );
     await this.auditDagger(source, config.cachePartition);
     return this.siteProject(source, config.cachePartition, config.runNonce)
-      .withExec([
-        "go",
-        "run",
-        "github.com/a-h/templ/cmd/templ@v0.3.1020",
-        "generate",
-      ])
+      .withExec(["go", "tool", "templ", "generate"])
       .withExec(["go", "run", "./cmd/x9-site", "build"])
       .withExec(["go", "test", "./...", "-count=1"])
       .withExec(["npx", "--yes", "wrangler@4.114.0", "deploy", "--dry-run"])
@@ -287,12 +282,7 @@ export class Xisnove {
     await this.agentWorkspaceChecks(source, config);
     await this.auditDagger(source, config.cachePartition);
     await this.siteProject(source, config.cachePartition, config.runNonce)
-      .withExec([
-        "go",
-        "run",
-        "github.com/a-h/templ/cmd/templ@v0.3.1020",
-        "generate",
-      ])
+      .withExec(["go", "tool", "templ", "generate"])
       .withExec(["go", "run", "./cmd/x9-site", "build"])
       .withExec(["go", "test", "./...", "-count=1"])
       .withExec(["npx", "--yes", "wrangler@4.114.0", "deploy", "--dry-run"])
@@ -317,7 +307,7 @@ export class Xisnove {
       );
 
     await project
-      .withExec(["go", "tool", "vacuum", "lint", "-d", "api/openapi.yaml"])
+      .withExec(["./scripts/vacuum", "lint", "-d", "api/openapi.yaml"])
       .withExec(["go", "generate", "./..."])
       .withExec(["go", "tool", "sqlc", "generate"])
       .withExec(["go", "tool", "sqlc", "diff"])

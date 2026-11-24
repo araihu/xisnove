@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+version=0.30.0
+member=vacuum
+case $(uname -s) in
+    Linux) os=linux ;;
+    Darwin) os=darwin ;;
+    MINGW*|MSYS*|CYGWIN*) os=windows; member=vacuum.exe ;;
+    *) echo "Unsupported Vacuum operating system: $(uname -s)" >&2; exit 1 ;;
+esac
+case $(uname -m) in
+    aarch64|arm64) arch=arm64 ;;
+    x86_64|amd64) arch=x86_64 ;;
+    i?86) arch=i386 ;;
+    *) echo "Unsupported Vacuum architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+asset="vacuum_${version}_${os}_${arch}.tar.gz"
+manifest=$(dirname "$0")/vacuum.sha256
+expected=$(awk -v asset="$asset" '$2 == asset {print $1}' "$manifest")
+if [ -z "$expected" ]; then
+    echo "No pinned Vacuum release for $asset" >&2
+    exit 1
+fi
+
+umask 077
+cache=${XDG_CACHE_HOME:-"$HOME/.cache"}/xisnove/vacuum
+mkdir -p "$cache"
+tmp=$(mktemp -d "$cache/.run.XXXXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 1' HUP INT TERM
+
+verify() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum < "$1") || return 1
+    else
+        actual=$(shasum -a 256 < "$1") || return 1
+    fi
+    [ "${actual%% *}" = "$expected" ]
+}
+
+archive="$cache/$asset"
+if [ ! -f "$archive" ] || ! verify "$archive"; then
+    curl -fsSL --retry 3 "https://github.com/daveshanley/vacuum/releases/download/v$version/$asset" -o "$tmp/$asset"
+    if ! verify "$tmp/$asset"; then
+        echo "Vacuum checksum mismatch for $asset" >&2
+        exit 1
+    fi
+    mv -f "$tmp/$asset" "$archive"
+fi
+tar -xzOf "$archive" "$member" > "$tmp/$member"
+chmod 700 "$tmp/$member"
+"$tmp/$member" "$@"

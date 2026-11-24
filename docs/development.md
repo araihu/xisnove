@@ -9,6 +9,10 @@ make test
 make check
 ```
 
+Make and Dagger run the same prebuilt Vacuum release through `scripts/vacuum`.
+The wrapper verifies the release archive against `scripts/vacuum.sha256` and
+caches it under `$XDG_CACHE_HOME/xisnove/vacuum` (default `~/.cache/xisnove/vacuum`).
+
 ## Portable CI
 
 Use Dagger CLI `v0.21.11` for the same root, Agent, workspace, site, database,

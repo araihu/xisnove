@@ -14,7 +14,7 @@ storage-check:
 
 check: generate
 	git diff --exit-code
-	go tool vacuum lint -d api/openapi.yaml
+	./scripts/vacuum lint -d api/openapi.yaml
 	go tool sqlc diff
 	go vet ./...
 	$(MAKE) storage-check
