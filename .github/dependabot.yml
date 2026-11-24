@@ -8,6 +8,9 @@ updates:
       - "/ui"
     schedule:
       interval: "weekly"
+    # The standalone UI targets the frozen control-plane SDK documented in ui/INTEGRATION.md.
+    ignore:
+      - dependency-name: "github.com/araihu/xisnove"
     groups:
       go-minor-patch:
         patterns: ["*"]

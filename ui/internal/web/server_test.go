@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/araihu/goshtoso/assets"
@@ -35,7 +36,7 @@ var csrfValuePattern = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
 func TestHandlerMountsEveryGoshtosoRuntimeAssetDirectly(t *testing.T) {
 	handler, _ := newTestHandler(t, controlplane.NewFake(testUsername, testPassword, testCredential), time.Second)
-	for _, path := range []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL} {
+	for _, path := range []string{"/assets/styles.css", "/assets/js/dependency-loader.js", "/assets/js/combobox.js", assets.AlpineCollapseURL, assets.AlpineFocusURL, assets.AlpineMaskURL, assets.AlpineJSURL, assets.HTMXURL, assets.HTMXAlpineCompatURL, assets.FirstPartyBundleURL} {
 		request := httptest.NewRequest(http.MethodGet, "https://ui.example.test"+path, nil)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
@@ -311,7 +312,7 @@ func TestLoginPageUsesOrderedCDNFirstDependenciesWithNonceAndFallback(t *testing
 	if err := json.Unmarshal([]byte(html.UnescapeString(match[1])), &config); err != nil {
 		t.Fatalf("decode dependency config: %v", err)
 	}
-	wantNames := []string{"alpine-collapse", "alpine-focus", "alpine-mask", "alpine", "htmx", "combobox"}
+	wantNames := []string{"alpine-collapse", "alpine-focus", "alpine-mask", "first-party", "htmx", "htmx-alpine-compat", "alpine"}
 	if len(config.Dependencies) != len(wantNames) {
 		t.Fatalf("dependency count = %d, want %d", len(config.Dependencies), len(wantNames))
 	}
@@ -319,12 +320,12 @@ func TestLoginPageUsesOrderedCDNFirstDependenciesWithNonceAndFallback(t *testing
 		if dependency.Name != wantNames[index] {
 			t.Errorf("dependency[%d] = %q, want %q", index, dependency.Name, wantNames[index])
 		}
-		if index < 5 {
+		if dependency.Name != "first-party" {
 			if !strings.HasPrefix(dependency.PrimaryURL, "https://unpkg.com/") || !strings.HasPrefix(dependency.FallbackURL, "/assets/") || !strings.HasPrefix(dependency.Integrity, "sha384-") {
 				t.Errorf("dependency[%d] is not pinned CDN-first with SRI and fallback: %#v", index, dependency)
 			}
-		} else if dependency.PrimaryURL != "/assets/js/combobox.js" || dependency.FallbackURL != "" {
-			t.Errorf("combobox source = %#v", dependency)
+		} else if dependency.PrimaryURL != assets.FirstPartyBundleURL || dependency.FallbackURL != "" {
+			t.Errorf("first-party source = %#v", dependency)
 		}
 	}
 	nonceMatch := regexp.MustCompile(`src="/assets/js/dependency-loader.js"[^>]* nonce="([^"]+)"`).FindStringSubmatch(body)
@@ -523,51 +524,55 @@ func TestMethodProblemUsesRFC9457ShapeAndCorrelation(t *testing.T) {
 }
 
 func TestLoginTimeoutIsPresentedWithoutLoggingCredentialsOrQuery(t *testing.T) {
-	client := blockingClient{}
-	handler, logs := newTestHandler(t, client, 5*time.Millisecond)
-	loginCSRF, loginCSRFCookie := getLoginCSRF(t, handler)
-	form := url.Values{
-		"email":    {testUsername},
-		"password": {testPassword},
-		"_csrf":    {loginCSRF},
-	}
-	request := httptest.NewRequest(http.MethodPost, "https://ui.example.test/login?token=query-secret", strings.NewReader(form.Encode()))
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.Header.Set("Accept", "application/problem+json")
-	request.AddCookie(loginCSRFCookie)
-	recorder := httptest.NewRecorder()
-
-	handler.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusGatewayTimeout {
-		t.Fatalf("status = %d, want 504: %s", recorder.Code, recorder.Body.String())
-	}
-	for _, secret := range []string{testUsername, testPassword, testCredential, "query-secret"} {
-		if strings.Contains(recorder.Body.String(), secret) || strings.Contains(logs.String(), secret) {
-			t.Errorf("response or log exposed %q", secret)
+	synctest.Test(t, func(t *testing.T) {
+		client := blockingClient{}
+		handler, logs := newTestHandler(t, client, 5*time.Millisecond)
+		loginCSRF, loginCSRFCookie := getLoginCSRF(t, handler)
+		form := url.Values{
+			"email":    {testUsername},
+			"password": {testPassword},
+			"_csrf":    {loginCSRF},
 		}
-	}
-	for _, field := range []string{`"method":"POST"`, `"path":"/login"`, `"correlation_id":`} {
-		if !strings.Contains(logs.String(), field) {
-			t.Errorf("access log missing %s: %s", field, logs.String())
+		request := httptest.NewRequest(http.MethodPost, "https://ui.example.test/login?token=query-secret", strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Header.Set("Accept", "application/problem+json")
+		request.AddCookie(loginCSRFCookie)
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, request)
+
+		if recorder.Code != http.StatusGatewayTimeout {
+			t.Fatalf("status = %d, want 504: %s", recorder.Code, recorder.Body.String())
 		}
-	}
+		for _, secret := range []string{testUsername, testPassword, testCredential, "query-secret"} {
+			if strings.Contains(recorder.Body.String(), secret) || strings.Contains(logs.String(), secret) {
+				t.Errorf("response or log exposed %q", secret)
+			}
+		}
+		for _, field := range []string{`"method":"POST"`, `"path":"/login"`, `"correlation_id":`} {
+			if !strings.Contains(logs.String(), field) {
+				t.Errorf("access log missing %s: %s", field, logs.String())
+			}
+		}
+	})
 }
 
 func TestLoginTimeoutRendersHTMLAfterRequestContextDeadline(t *testing.T) {
-	handler, _ := newTestHandler(t, blockingClient{}, 5*time.Millisecond)
-	loginCSRF, loginCSRFCookie := getLoginCSRF(t, handler)
-	form := url.Values{"email": {testUsername}, "password": {testPassword}, "_csrf": {loginCSRF}}
-	request := httptest.NewRequest(http.MethodPost, "https://ui.example.test/login", strings.NewReader(form.Encode()))
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.AddCookie(loginCSRFCookie)
-	recorder := httptest.NewRecorder()
+	synctest.Test(t, func(t *testing.T) {
+		handler, _ := newTestHandler(t, blockingClient{}, 5*time.Millisecond)
+		loginCSRF, loginCSRFCookie := getLoginCSRF(t, handler)
+		form := url.Values{"email": {testUsername}, "password": {testPassword}, "_csrf": {loginCSRF}}
+		request := httptest.NewRequest(http.MethodPost, "https://ui.example.test/login", strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(loginCSRFCookie)
+		recorder := httptest.NewRecorder()
 
-	handler.ServeHTTP(recorder, request)
+		handler.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusGatewayTimeout || !strings.Contains(recorder.Body.String(), `id="problem-content"`) || !strings.Contains(recorder.Body.String(), "Control plane timed out") {
-		t.Fatalf("timeout HTML = %d %s", recorder.Code, recorder.Body.String())
-	}
+		if recorder.Code != http.StatusGatewayTimeout || !strings.Contains(recorder.Body.String(), `id="problem-content"`) || !strings.Contains(recorder.Body.String(), "Control plane timed out") {
+			t.Fatalf("timeout HTML = %d %s", recorder.Code, recorder.Body.String())
+		}
+	})
 }
 
 func TestLogoutRejectsMissingCSRFWithProblemPresentation(t *testing.T) {

@@ -14,6 +14,7 @@ storage-check:
 
 check: generate
 	git diff --exit-code
+	$(MAKE) -C ui check
 	./scripts/vacuum lint -d api/openapi.yaml
 	go tool sqlc diff
 	go vet ./...

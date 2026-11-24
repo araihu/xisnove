@@ -307,6 +307,7 @@ export class Xisnove {
       );
 
     await project
+      .withExec(["make", "-C", "ui", "check"])
       .withExec(["./scripts/vacuum", "lint", "-d", "api/openapi.yaml"])
       .withExec(["go", "generate", "./..."])
       .withExec(["go", "tool", "sqlc", "generate"])
