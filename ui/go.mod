@@ -6,10 +6,10 @@ require (
 	github.com/a-h/templ v0.3.1118
 	github.com/araihu/goshtoso v0.6.4
 	github.com/araihu/xisnove v0.0.0-20260726092612-07467ccf39e6
-	github.com/chromedp/cdproto v0.160.4
+	github.com/chromedp/cdproto v0.160.8
 	github.com/chromedp/chromedp v0.24.0
 	github.com/google/uuid v1.6.0
-	github.com/oapi-codegen/runtime v1.9.0
+	github.com/oapi-codegen/runtime v1.9.1
 )
 
 require (
