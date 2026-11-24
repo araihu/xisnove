@@ -26,5 +26,5 @@ wire model or handwritten endpoint client.
   unpublished local SDK code.
 
 The root `make check` target and the Dagger root job both run `make -C ui check`,
-which regenerates the UI templates, checks for drift, tests the UI, and runs
+which checks for missing or stale generated templates, tests the UI, and runs
 `go vet` with the workspace disabled.

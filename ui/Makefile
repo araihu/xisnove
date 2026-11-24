@@ -6,8 +6,8 @@ generate:
 test:
 	GOWORK=off go test ./... -count=1
 
-check: generate
-	git diff --exit-code -- .
+check:
+	GOWORK=off go tool templ generate -check
 	GOWORK=off go test ./... -count=1
 	GOWORK=off go vet ./...
 
