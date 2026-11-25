@@ -398,7 +398,13 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 		captureState(t, ctx, screenshotDir, state, "#status-content")
 	}
 	scenario.Store("success")
-	if err := chromedp.Do(ctx, chromedp.Click(`a[hx-get="/status"]`), chromedp.WaitVisible("#status-content")); err != nil {
+	if err := chromedp.Do(ctx,
+		chromedp.Evaluate[chromedp.Void](`window.__statusBeforeRetry = document.querySelector('#status-content')`),
+		chromedp.Click(`a[hx-get="/status"]`),
+		chromedp.PollFunction[chromedp.Void](`monitorID => window.__statusBeforeRetry?.isConnected === false &&
+			document.querySelector('#status-content #monitor-' + monitorID)?.getClientRects().length > 0`,
+			chromedp.WithPollingArgs(monitorID.String()), chromedp.WithPollingTimeout(5*time.Second)),
+	); err != nil {
 		t.Fatalf("HTMX status refresh: %v", err)
 	}
 
