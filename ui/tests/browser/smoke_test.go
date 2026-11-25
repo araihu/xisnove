@@ -19,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/araihu/xisnove/sdk"
@@ -209,11 +210,14 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	captureMatrix(t, ctx, screenshotDir, "login", "#login-content")
 	t.Log("captured login happy matrix; rendering controlled login failures")
 	invalidHTML := loginStateHTML(t, handler, "invalid")
-	timeoutHandler, err := web.New(web.Config{ControlPlane: timeoutControlPlane{}, CookieSecret: []byte("0123456789abcdef0123456789abcdef"), CookieSecure: true, RequestTimeout: 10 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	timeoutHTML := loginStateHTML(t, timeoutHandler, "timeout")
+	var timeoutHTML string
+	synctest.Test(t, func(t *testing.T) {
+		timeoutHandler, err := web.New(web.Config{ControlPlane: timeoutControlPlane{}, CookieSecret: []byte("0123456789abcdef0123456789abcdef"), CookieSecure: true, RequestTimeout: time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		timeoutHTML = loginStateHTML(t, timeoutHandler, "timeout")
+	})
 	if err := replaceBody(ctx, invalidHTML); err != nil {
 		t.Fatalf("invalid login evidence: %v", err)
 	}
