@@ -13,4 +13,4 @@ check:
 	GOWORK=off go vet ./...
 
 browser-smoke:
-	GOWORK=off go test -tags=browser ./tests/browser -count=1 -timeout=2m
+	GOWORK=off go test -tags=browser ./tests/browser -count=1 -timeout=10m

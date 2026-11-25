@@ -143,8 +143,7 @@ func serveAraiHuThemeCSS(w http.ResponseWriter, _ *http.Request) {
 }
 
 const applicationJS = `(() => {
-  let pendingFocus = null;
-  let pendingDrawerReturnFocus = null;
+  const searchFocus = new WeakMap();
   let refreshGeneration = 0;
   let refreshController = null;
 
@@ -158,22 +157,20 @@ const applicationJS = `(() => {
     if (heading) document.title = heading.textContent.trim() + " · X-9";
   }
 
-  function rememberFocus(event) {
-    const source = event.detail?.elt;
+  function rememberFocus(source) {
     if (!source?.closest?.("[data-preserve-focus]")) return;
     const active = document.activeElement;
     if (!active?.id) return;
-    pendingFocus = {
+    searchFocus.set(source, {
       id: active.id,
       start: typeof active.selectionStart === "number" ? active.selectionStart : null,
       end: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
-    };
+    });
   }
 
-  function settle(event) {
-	if (pendingDrawerReturnFocus) {
-	  const id = pendingDrawerReturnFocus;
-	  pendingDrawerReturnFocus = null;
+  function settle(source) {
+	const id = source?.closest?.("[data-monitor-drawer-close]")?.dataset.monitorId;
+	if (id) {
 	  const row = Array.from(document.querySelectorAll("#main-content tr[data-monitor-id]")).find(candidate => candidate.dataset.monitorId === id);
 	  const target = row?.querySelector("a[href]");
 	  if (target) {
@@ -181,19 +178,19 @@ const applicationJS = `(() => {
 		return;
 	  }
 	}
+    const pendingFocus = searchFocus.get(source);
     if (pendingFocus) {
+      searchFocus.delete(source);
       const target = document.getElementById(pendingFocus.id);
       if (target) {
         target.focus({preventScroll: true});
         if (pendingFocus.start !== null && target.setSelectionRange) {
           target.setSelectionRange(pendingFocus.start, pendingFocus.end);
         }
-        pendingFocus = null;
         return;
       }
-      pendingFocus = null;
     }
-    if (event.detail?.elt?.closest?.("[data-preserve-focus]")) return;
+    if (source?.closest?.("[data-preserve-focus]")) return;
     focusMain();
   }
 
@@ -303,20 +300,15 @@ const applicationJS = `(() => {
 	}));
   });
 
-  document.addEventListener("click", event => {
-	const close = event.target?.closest?.("[data-monitor-drawer-close]");
-	if (close?.dataset.monitorId) pendingDrawerReturnFocus = close.dataset.monitorId;
-  }, true);
-
-  document.addEventListener("htmx:beforeRequest", event => {
+  document.addEventListener("htmx:before:request", event => {
     invalidateAuthoritativeRefresh();
-    rememberFocus(event);
+    rememberFocus(event.detail.ctx.sourceElement);
   });
-  document.addEventListener("htmx:afterSettle", settle);
-  document.addEventListener("htmx:historyRestore", () => setTimeout(() => {
-	openMonitorDrawer();
-	refreshAuthoritative();
-  }, 0));
+  document.addEventListener("htmx:before:history:restore", event => {
+    if (location.pathname !== "/monitors" || !document.getElementById("main-content")) return;
+    event.preventDefault();
+    refreshAuthoritative();
+  });
   document.addEventListener("alpine:initialized", openMonitorDrawer);
   window.addEventListener("popstate", invalidateAuthoritativeRefresh);
   window.addEventListener("pageshow", event => { if (event.persisted) refreshAuthoritative(); });
@@ -325,7 +317,8 @@ const applicationJS = `(() => {
     openMonitorDrawer();
     if (document.querySelector("#main-content [data-autofocus]")) focusMain();
   }).catch(() => {});
-  document.addEventListener("htmx:afterSettle", () => {
+  document.addEventListener("htmx:after:settle", event => {
+    settle(event.detail.task.sourceElement);
 	configureMobileNavigation();
 	openMonitorDrawer();
   });

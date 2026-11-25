@@ -19,7 +19,7 @@ wire model or handwritten endpoint client.
 ## Remaining control-plane integration work
 
 - add `./ui` to the development workspace once the root SDK supports the UI contract;
-- expose the frozen mock browser smoke through the root Makefile and CI;
+- expose the frozen mock browser smoke through the root Makefile;
 - pass the production API base URL, cookie HMAC secret, TLS/cookie policy, and
   timeout settings through release/Compose/Helm packaging; and
 - ensure release checks build the UI with `GOWORK=off`, so it cannot resolve
@@ -28,3 +28,6 @@ wire model or handwritten endpoint client.
 The root `make check` target and the Dagger root job both run `make -C ui check`,
 which checks for missing or stale generated templates, tests the UI, and runs
 `go vet` with the workspace disabled.
+
+The `ui-browser-smoke` job runs `make -C ui browser-smoke` with Google Chrome
+on a GitHub-hosted Ubuntu runner for pull requests and pushes to `main`.
