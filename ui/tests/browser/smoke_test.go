@@ -27,6 +27,7 @@ import (
 	cdinput "github.com/chromedp/cdproto/input"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/kb"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -55,6 +56,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	vpsEdge := sdk.Monitor{Id: unknownID, Name: "VPS edge", Description: "External ingress", Kind: sdk.MonitorKindHttp, Enabled: true, LocationId: locationID, IntervalSeconds: 30, TimeoutMillis: 1500, FailureThreshold: 2, RecoveryThreshold: 2, UpdatedAt: observedAt}
 	var scenario atomic.Value
 	scenario.Store("success")
+	heldSearch := make(chan chan struct{})
 	var monitorRequests atomic.Int32
 	var homeRevision atomic.Int64
 	var homeHealth atomic.Value
@@ -76,7 +78,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 				return
 			}
 			if request.Password != nil && *request.Password == "timeout" {
-				time.Sleep(time.Second)
+				<-r.Context().Done()
 				return
 			}
 			w.WriteHeader(http.StatusCreated)
@@ -96,7 +98,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = w.Write([]byte(`{"title":"upstream offline"}`))
 			case "public-timeout":
-				time.Sleep(time.Second)
+				<-r.Context().Done()
 			default:
 				_ = json.NewEncoder(w).Encode(sdk.PublicStatusPage{GeneratedAt: time.Now(), State: sdk.Degraded, Monitors: []sdk.PublicStatusMonitor{{Id: monitorID, Name: "Home DNS", Description: "Resolver reachability", State: sdk.Up}}, ActiveIncidents: []sdk.PublicIncidentSummary{{Id: uuid.New(), MonitorId: monitorID, MonitorName: "Home DNS", OpenedAt: time.Now(), LastTransitionAt: time.Now(), Severity: sdk.Critical, State: sdk.PublicIncidentSummaryStateOpen}}})
 			}
@@ -109,7 +111,17 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 			currentHome.Description = fmt.Sprintf("Resolver reachability revision %d", revision)
 			switch scenario.Load().(string) {
 			case "monitors-loading":
-				time.Sleep(600 * time.Millisecond)
+				release := make(chan struct{})
+				select {
+				case heldSearch <- release:
+				case <-r.Context().Done():
+					return
+				}
+				select {
+				case <-release:
+				case <-r.Context().Done():
+					return
+				}
 				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Items: []sdk.Monitor{currentHome}, Page: sdk.PageMetadata{}})
 			case "monitors-empty":
 				_ = json.NewEncoder(w).Encode(sdk.MonitorPage{Page: sdk.PageMetadata{}})
@@ -140,7 +152,7 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := web.New(web.Config{ControlPlane: adapter, CookieSecret: []byte("0123456789abcdef0123456789abcdef"), CookieSecure: true, RequestTimeout: 900 * time.Millisecond})
+	handler, err := web.New(web.Config{ControlPlane: adapter, CookieSecret: []byte("0123456789abcdef0123456789abcdef"), CookieSecure: true, RequestTimeout: 10 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +337,8 @@ func TestIntegratedBrowserSmoke(t *testing.T) {
 	}
 	assertShellGeometry(t, ctx)
 	assertMobileNavigation(t, ctx)
-	captureHeldSearchLoading(t, ctx, ui.URL, screenshotDir, &scenario, &monitorRequests)
+	assertKeyboardSearch(t, ctx, ui.URL)
+	captureHeldSearchLoading(t, ctx, ui.URL, screenshotDir, &scenario, &monitorRequests, heldSearch)
 	var monitorHTML string
 	if err := chromedp.Do(ctx, storeResult(&monitorHTML, chromedp.OuterHTML("html"))); err != nil {
 		t.Fatal(err)
@@ -991,7 +1004,26 @@ func assertMobileNavigation(t *testing.T, ctx context.Context) {
 	}
 }
 
-func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir string, scenario *atomic.Value, monitorRequests *atomic.Int32) {
+func assertKeyboardSearch(t *testing.T, ctx context.Context, baseURL string) {
+	t.Helper()
+	if err := chromedp.Do(ctx, chromedp.Navigate(baseURL+"/monitors"), chromedp.WaitVisible("#monitor-search")); err != nil {
+		t.Fatal(err)
+	}
+	awaitGoshtosoDependencies(t, ctx)
+	if err := chromedp.Do(ctx,
+		chromedp.SendKeys("#monitor-search", "dns"),
+		chromedp.Evaluate[chromedp.Void](`document.querySelector('#monitor-search').setSelectionRange(1, 2)`),
+		chromedp.KeyEvent(kb.Enter),
+		chromedp.Poll[chromedp.Void](`new URL(location.href).searchParams.get('q') === 'dns' &&
+			document.activeElement?.id === 'monitor-search' && document.activeElement.value === 'dns' &&
+			document.activeElement.selectionStart === 1 && document.activeElement.selectionEnd === 2 &&
+			document.activeElement.getAttribute('value') === 'dns'`, chromedp.WithPollingTimeout(5*time.Second)),
+	); err != nil {
+		t.Fatalf("keyboard search lost the submitted query, focus or selection after the swap: %v", err)
+	}
+}
+
+func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir string, scenario *atomic.Value, monitorRequests *atomic.Int32, heldSearch <-chan chan struct{}) {
 	t.Helper()
 	widths, themes, modes := acceptanceAxes()
 	for _, width := range widths {
@@ -1001,12 +1033,12 @@ func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir st
 				if err := chromedp.Do(ctx, chromedp.Navigate(baseURL+"/monitors"), chromedp.WaitVisible("#monitor-results"), chromedp.EmulateViewport(width, 900), chromedp.Evaluate[chromedp.Void](themeModeScript(theme, mode))); err != nil {
 					t.Fatalf("prepare held search at %dpx/%s/%s: %v", width, theme, mode, err)
 				}
+				awaitGoshtosoDependencies(t, ctx)
 				scenario.Store("monitors-loading")
 				before := monitorRequests.Load()
 				var pending struct {
 					Loading, ResultsHidden, Disabled, PendingCopy bool
 				}
-				var screenshot []byte
 				if err := chromedp.Do(ctx,
 					chromedp.Evaluate[chromedp.Void](`(()=>{const input=document.querySelector('#monitor-search'),button=document.querySelector('form[data-preserve-focus] button[type="submit"]');input.value='dns';input.focus();input.setSelectionRange(1,2);button.click();button.click();return true})()`),
 					chromedp.Poll[chromedp.Void](`document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === true`, chromedp.WithPollingInterval(10*time.Millisecond)),
@@ -1014,10 +1046,20 @@ func captureHeldSearchLoading(t *testing.T, ctx context.Context, baseURL, dir st
 				); err != nil {
 					t.Fatalf("held search at %dpx/%s/%s: %v", width, theme, mode, err)
 				}
+				var release chan struct{}
+				select {
+				case release = <-heldSearch:
+				case <-time.After(5 * time.Second):
+					t.Fatal("search request did not reach the mock control plane")
+				}
 				assertP1Accessibility(t, ctx)
 				assertInteractiveActions(t, ctx)
+				screenshot, err := chromedp.Run(ctx, chromedp.FullScreenshot(100))
+				if err != nil {
+					t.Fatalf("capture pending search: %v", err)
+				}
+				close(release)
 				if err := chromedp.Do(ctx,
-					storeResult(&screenshot, chromedp.FullScreenshot(100)),
 					chromedp.Poll[chromedp.Void](`location.search.includes('q=dns') && document.querySelector('form[data-preserve-focus] button[type="submit"]')?.disabled === false`),
 				); err != nil {
 					t.Fatalf("finish held search at %dpx/%s/%s: %v", width, theme, mode, err)
