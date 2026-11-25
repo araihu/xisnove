@@ -340,7 +340,7 @@ templ MonitorDetail(data MonitorList, monitor sdk.Monitor, health sdk.MonitorHea
 }
 
 templ MonitorSearch(query string) {
-	<form method="get" action="/monitors" hx-get="/monitors" hx-target="#main-content" hx-push-url="true" hx-indicator=".xis-search-indicator" hx-disabled-elt="find button[type='submit']" data-preserve-focus class="xis-theme-controls xis-search-indicator">
+	<form method="get" action="/monitors" hx-get="/monitors" hx-target="#main-content" hx-push-url="true" hx-indicator=".xis-search-indicator" hx-sync="drop" hx-disable="find button[type='submit']" data-preserve-focus class="xis-theme-controls xis-search-indicator">
 		<label class="xis-field xis-monitor-search-field" for="monitor-search">Search monitors
 			<input class="xis-input" id="monitor-search" type="search" name="q" value={ query } placeholder="Name, kind, or description"/>
 		</label>

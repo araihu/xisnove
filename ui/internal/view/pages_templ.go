@@ -1182,7 +1182,7 @@ func MonitorSearch(query string) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<form method=\"get\" action=\"/monitors\" hx-get=\"/monitors\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\".xis-search-indicator\" hx-disabled-elt=\"find button[type='submit']\" data-preserve-focus class=\"xis-theme-controls xis-search-indicator\"><label class=\"xis-field xis-monitor-search-field\" for=\"monitor-search\">Search monitors <input class=\"xis-input\" id=\"monitor-search\" type=\"search\" name=\"q\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<form method=\"get\" action=\"/monitors\" hx-get=\"/monitors\" hx-target=\"#main-content\" hx-push-url=\"true\" hx-indicator=\".xis-search-indicator\" hx-sync=\"drop\" hx-disable=\"find button[type='submit']\" data-preserve-focus class=\"xis-theme-controls xis-search-indicator\"><label class=\"xis-field xis-monitor-search-field\" for=\"monitor-search\">Search monitors <input class=\"xis-input\" id=\"monitor-search\" type=\"search\" name=\"q\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
