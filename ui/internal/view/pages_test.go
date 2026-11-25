@@ -111,7 +111,7 @@ func TestLoadingSurfacesPrecedeAndReplaceResults(t *testing.T) {
 			t.Errorf("missing %q", want)
 		}
 	}
-	for _, want := range []string{`data-preserve-focus`, `hx-disabled-elt="find button[type='submit']"`, `data-goshtoso-loading`, "Searching…"} {
+	for _, want := range []string{`data-preserve-focus`, `hx-swap="innerHTML settle:0"`, `hx-sync="drop"`, `hx-disable="find button[type='submit']"`, `data-goshtoso-loading`, "Searching…"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("real search loading contract missing %q", want)
 		}

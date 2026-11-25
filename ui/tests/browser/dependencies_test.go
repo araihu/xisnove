@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -24,14 +25,14 @@ func TestDefaultDependenciesCDNFailureUsesOrderedEmbeddedFallback(t *testing.T) 
 	ctx, cancel := dependencyBrowser(t)
 	defer cancel()
 	installDependencyObserver(t, ctx)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL),
-		chromedp.Poll(`window.__xisDependencies?.ready === true`, nil),
+		chromedp.Poll[chromedp.Void](`window.__xisDependencies?.ready === true`),
 	); err != nil {
 		t.Fatalf("wait for default dependency fallback: %v", err)
 	}
 
-	var result struct {
+	type dependencyResult struct {
 		Fallbacks []string          `json:"fallbacks"`
 		Sources   map[string]string `json:"sources"`
 		Ready     int               `json:"ready"`
@@ -39,18 +40,19 @@ func TestDefaultDependenciesCDNFailureUsesOrderedEmbeddedFallback(t *testing.T) 
 		Nonces    []string          `json:"nonces"`
 		SRI       bool              `json:"sri"`
 	}
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(()=>({
+	result, err := chromedp.Run(ctx, chromedp.Evaluate[dependencyResult](`(()=>({
 		fallbacks: window.__xisDependencies.fallbacks,
 		sources: window.goshtosoDependencies.sources,
 		ready: window.__xisDependencies.readyEvents,
 		errors: window.__xisDependencies.errors,
 		nonces: [...document.querySelectorAll('script[data-goshtoso-dependency]')].map(script => script.nonce),
-		sri: [...document.querySelectorAll('script[data-goshtoso-dependency]:not([data-goshtoso-dependency="combobox"])')].every(script => script.integrity.startsWith('sha384-')),
-	}))()`, &result)); err != nil {
+		sri: [...document.querySelectorAll('script[data-goshtoso-dependency]:not([data-goshtoso-dependency="first-party"])')].every(script => script.integrity.startsWith('sha384-')),
+	}))()`))
+	if err != nil {
 		t.Fatal(err)
 	}
-	wantOrder := []string{"alpine-collapse", "alpine-focus", "alpine-mask", "alpine", "htmx"}
-	if fmt.Sprint(result.Fallbacks) != fmt.Sprint(wantOrder) {
+	wantOrder := []string{"alpine-collapse", "alpine-focus", "alpine-mask", "htmx", "htmx-alpine-compat", "alpine"}
+	if !slices.Equal(result.Fallbacks, wantOrder) {
 		t.Fatalf("fallback order = %v, want %v", result.Fallbacks, wantOrder)
 	}
 	for _, name := range wantOrder {
@@ -58,11 +60,11 @@ func TestDefaultDependenciesCDNFailureUsesOrderedEmbeddedFallback(t *testing.T) 
 			t.Errorf("%s source = %q, want fallback", name, result.Sources[name])
 		}
 	}
-	if result.Sources["combobox"] != "primary" || result.Ready != 1 || result.Errors != 0 || !result.SRI {
+	if result.Sources["first-party"] != "primary" || result.Ready != 1 || result.Errors != 0 || !result.SRI {
 		t.Fatalf("dependency ledger = %#v", result)
 	}
-	if len(result.Nonces) != 6 {
-		t.Fatalf("dynamic script nonce count = %d, want 6", len(result.Nonces))
+	if len(result.Nonces) != 7 {
+		t.Fatalf("dynamic script nonce count = %d, want 7", len(result.Nonces))
 	}
 	for _, nonce := range result.Nonces {
 		if nonce != "xisnove-probe-nonce" {
@@ -70,18 +72,20 @@ func TestDefaultDependenciesCDNFailureUsesOrderedEmbeddedFallback(t *testing.T) 
 		}
 	}
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Click("#alpine-toggle"), chromedp.WaitVisible("#collapse-panel"),
 		chromedp.SendKeys("#mask-input", "123456"),
-		chromedp.Click("#trap-toggle"), chromedp.Poll(`document.activeElement?.id === 'trapped-input'`, nil),
+		chromedp.Click("#trap-toggle"), chromedp.Poll[chromedp.Void](`document.activeElement?.id === 'trapped-input'`),
 		chromedp.Click("#trap-close"),
 		chromedp.Click("#htmx-trigger"), chromedp.WaitVisible("#htmx-result"),
-		chromedp.Focus("#combobox"), chromedp.KeyEvent(kb.ArrowDown),
+		chromedp.Focus("#combobox-trigger"), chromedp.KeyEvent(kb.ArrowDown),
+		chromedp.Poll[chromedp.Void](`document.activeElement?.id === 'combobox-first'`),
 	); err != nil {
 		t.Fatalf("fallback runtime behavior: %v", err)
 	}
-	var behavior struct{ Mask, Focus string }
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`({mask:document.querySelector('#mask-input').value,focus:document.activeElement?.id||''})`, &behavior)); err != nil {
+	type runtimeBehavior struct{ Mask, Focus string }
+	behavior, err := chromedp.Run(ctx, chromedp.Evaluate[runtimeBehavior](`({mask:document.querySelector('#mask-input').value,focus:document.activeElement?.id||''})`))
+	if err != nil {
 		t.Fatal(err)
 	}
 	if behavior.Mask != "123-456" || behavior.Focus != "combobox-first" {
@@ -94,18 +98,20 @@ func TestDependencyTerminalFailureEmitsErrorAndRejectsReadyWithoutUnhandledExcep
 	ctx, cancel := dependencyBrowser(t)
 	defer cancel()
 	installDependencyObserver(t, ctx)
-	if err := chromedp.Run(ctx, chromedp.Navigate(server.URL), chromedp.Poll(`window.__xisDependencies?.caught === true`, nil)); err != nil {
+	if err := chromedp.Do(ctx, chromedp.Navigate(server.URL), chromedp.Poll[chromedp.Void](`window.__xisDependencies?.caught === true`)); err != nil {
 		t.Fatalf("wait for terminal dependency failure: %v", err)
 	}
-	var result struct {
+	type terminalResult struct {
 		Fallbacks []string `json:"fallbacks"`
-		Ready     int      `json:"ready"`
+		Ready     int      `json:"readyEvents"`
 		Errors    int      `json:"errors"`
+		Unhandled int      `json:"unhandled"`
 	}
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`window.__xisDependencies`, &result)); err != nil {
+	result, err := chromedp.Run(ctx, chromedp.Evaluate[terminalResult](`window.__xisDependencies`))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(result.Fallbacks) != "[alpine-mask]" || result.Ready != 0 || result.Errors != 1 {
+	if !slices.Equal(result.Fallbacks, []string{"alpine-mask"}) || result.Ready != 0 || result.Errors != 1 || result.Unhandled != 0 {
 		t.Fatalf("terminal dependency events = %#v", result)
 	}
 }
@@ -141,7 +147,7 @@ func dependencyProbeServer(t *testing.T, terminal bool) *httptest.Server {
 <div x-data><label for="mask-input">Masked value</label><input id="mask-input" x-mask="999-999"></div>
 <div x-data="{trapped:false}"><button id="trap-toggle" x-on:click="trapped=true">Trap</button><div x-show="trapped" x-trap="trapped"><input id="trapped-input"><button id="trap-close" x-on:click="trapped=false">Close</button></div></div>
 <button id="htmx-trigger" hx-get="/fragment" hx-target="#htmx-target">Load</button><div id="htmx-target"></div>
-<div id="combobox" data-combobox tabindex="0"><button id="combobox-first" role="option" tabindex="-1">First</button><button role="option" tabindex="-1">Second</button></div>
+<div data-combobox><button id="combobox-trigger" role="combobox" aria-expanded="true" aria-controls="options">Options</button><div id="options" role="listbox"><button id="combobox-first" role="option" tabindex="-1">First</button><button role="option" tabindex="-1">Second</button></div></div>
 </body></html>`, dependencies.String())
 	})
 	server := httptest.NewServer(mux)
@@ -163,15 +169,13 @@ func dependencyBrowser(t *testing.T) (context.Context, context.CancelFunc) {
 
 func installDependencyObserver(t *testing.T, ctx context.Context) {
 	t.Helper()
-	script := `window.__xisDependencies={fallbacks:[],readyEvents:0,errors:0,caught:false};
+	script := `window.__xisDependencies={fallbacks:[],readyEvents:0,errors:0,unhandled:0,caught:false};
 window.addEventListener('goshtoso:dependency-fallback',event=>window.__xisDependencies.fallbacks.push(event.detail.dependency));
 window.addEventListener('goshtoso:dependencies-ready',()=>window.__xisDependencies.readyEvents++);
+window.addEventListener('unhandledrejection',()=>window.__xisDependencies.unhandled++);
 window.addEventListener('goshtoso:dependency-error',()=>window.__xisDependencies.errors++);
 document.addEventListener('DOMContentLoaded',()=>window.goshtosoDependencies.ready.then(()=>window.__xisDependencies.ready=true).catch(()=>window.__xisDependencies.caught=true));`
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		_, err := page.AddScriptToEvaluateOnNewDocument(script).Do(ctx)
-		return err
-	})); err != nil {
+	if _, err := chromedp.Call(ctx, page.AddScriptToEvaluateOnNewDocument, page.AddScriptToEvaluateOnNewDocumentParams{Source: script}); err != nil {
 		t.Fatal(err)
 	}
 }
