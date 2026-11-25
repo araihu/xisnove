@@ -60,13 +60,13 @@ make check          # generation drift, tests, and vet
 make browser-smoke  # real Chromium smoke; local TLS server by default
 ```
 
-The browser smoke includes a dedicated failure harness that proves all five
-versioned CDN dependencies fall back in order, including Mask, nonce/SRI/event
-behavior and a terminal primary+fallback failure. The integrated smoke holds
-the real monitor search request to verify pending copy and deduplication.
+The browser smoke starts a local TLS UI and a mock control plane. It checks
+the six CDN scripts’ ordered fallbacks, their integrity metadata, nonce
+propagation, and the terminal failure path. The integrated test exercises
+login, monitor search and history, the detail drawer, and public status across
+the supported themes and viewport sizes.
 
-Set `XISNOVE_UI_BROWSER_BASE_URL` to run the browser smoke against an already
-running UI, `XISNOVE_UI_BROWSER_BIN` to select Chromium, and
-`XISNOVE_UI_BROWSER_SCREENSHOT_DIR` to retain login/status screenshots. The
-mock-server wiring that will configure that running UI is tracked in
-[`INTEGRATION.md`](INTEGRATION.md).
+Set `XISNOVE_UI_BROWSER_BIN` to select a Chromium executable and
+`XISNOVE_UI_BROWSER_SCREENSHOT_DIR` to retain the screenshots. For a quicker
+local debugging run, `XISNOVE_UI_BROWSER_FAST=1` selects one viewport,
+theme, and color mode. CI runs the full matrix.

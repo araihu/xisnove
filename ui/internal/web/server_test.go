@@ -280,7 +280,7 @@ func TestApplicationScriptIsSameOriginAndCSPCompatible(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://ui.example.test/ui/app.js", nil)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:afterSettle") {
+	if recorder.Code != http.StatusOK || !strings.HasPrefix(recorder.Header().Get("Content-Type"), "text/javascript") || !strings.Contains(recorder.Body.String(), "htmx:after:settle") {
 		t.Fatalf("application script = %d %q %q", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
 	}
 	for _, want := range []string{"script-src 'nonce-", "'strict-dynamic'", "'unsafe-eval'", "https://unpkg.com", "'self'", "connect-src 'self'"} {
