@@ -13,7 +13,7 @@ require (
 	github.com/sqlc-dev/pqtype v0.3.0
 	github.com/tursodatabase/libsql-client-go v0.0.0-20260528064733-9d5d30a29a60
 	golang.org/x/crypto v0.59.0
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.63.0
 	turso.tech/database/tursogo v0.8.4
 )
 
